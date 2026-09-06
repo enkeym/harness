@@ -301,6 +301,8 @@ node ~/.ai-hooks/test/test-guards.mjs
 node ~/.ai-hooks/test/test-ragsave-reminder.mjs
 node ~/.ai-hooks/test/test-ask-mode.mjs
 node ~/.ai-hooks/test/test-subagent-context.mjs
+node ~/.ai-hooks/test/test-project-bootstrap.mjs
+node ~/.ai-hooks/test/test-security.mjs
 ```
 
 Каждый сценарий проверяется в обоих агентах — вердикты должны совпадать.
