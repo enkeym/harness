@@ -23,7 +23,11 @@ import { findSecretValue } from '../security-core.mjs';
 const HOME = process.env.HOME || os.homedir();
 const STATE_DIR = path.join(HOME, '.ai-hooks', 'state');
 const HEALTH_FILE = path.join(STATE_DIR, 'cli-health.json');
-const HEALTH_TTL_MS = 6 * 3600 * 1000;
+// Успех кэшируем надолго, отказ — ненадолго. Отказ бывает плавающим: во время
+// обновления CLI бинарь на секунды исчезает, и один такой промах, записанный
+// на шесть часов, выключил бы рабочего провайдера до конца дня.
+const OK_TTL_MS = 6 * 3600 * 1000;
+const FAIL_TTL_MS = 10 * 60 * 1000;
 // Нейтральный рабочий каталог: иначе opencode подтянет AGENTS.md и плагины
 // проекта — лишние токены у провайдера и лишний контекст наружу.
 const NEUTRAL_CWD = path.join(STATE_DIR, 'delegate-cwd');
@@ -46,9 +50,24 @@ export const PROVIDERS = {
 
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
 
+// Хуки и субагенты запускаются с урезанным окружением, где PATH может не
+// содержать каталога nvm, поэтому бинарь ищем сами и запоминаем на процесс.
+let opencodeBin = null;
+function resolveOpencode() {
+  if (opencodeBin) return opencodeBin;
+  const candidates = [
+    ...String(process.env.PATH || '').split(':').filter(Boolean).map((d) => path.join(d, 'opencode')),
+    path.join(HOME, '.local', 'bin', 'opencode'),
+    '/usr/local/bin/opencode',
+  ];
+  opencodeBin = candidates.find((c) => { try { fs.accessSync(c, fs.constants.X_OK); return true; } catch { return false; } })
+    || 'opencode';
+  return opencodeBin;
+}
+
 function opencode(model, prompt, timeoutSec) {
   fs.mkdirSync(NEUTRAL_CWD, { recursive: true });
-  const out = execFileSync('opencode',
+  const out = execFileSync(resolveOpencode(),
     ['run', '--pure', '--dir', NEUTRAL_CWD, '-m', model, prompt],
     { encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   return clean(out, model);
@@ -94,7 +113,8 @@ export function probe(name) {
 function healthy(name, { force = false } = {}) {
   const h = readHealth();
   const entry = h[name];
-  const fresh = entry && Date.now() - new Date(entry.checked).getTime() < HEALTH_TTL_MS;
+  const age = entry ? Date.now() - new Date(entry.checked).getTime() : Infinity;
+  const fresh = entry && age < (entry.ok ? OK_TTL_MS : FAIL_TTL_MS);
   if (fresh && !force) return entry;
   const result = probe(name);
   h[name] = result;
