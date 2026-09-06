@@ -1,0 +1,272 @@
+{
+  "cleanupPeriodDays": 45,
+  "permissions": {
+    "allow": [
+      "mcp__ragsave__rag_index",
+      "mcp__ragsave__rag_search",
+      "mcp__ragsave__rag_status",
+      "mcp__tokensave__*",
+      "Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)",
+      "Bash(opencode run --agent commit:*)",
+      "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
+      "Bash(node /home/enkeym/.ai-hooks/bin/delegate.mjs:*)",
+      "mcp__playwright__*"
+    ],
+    "defaultMode": "default"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ask-guard.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/security-guard.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/edit-router.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/read-search-router.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|mcp__ide__executeCode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/bash-router.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokensave",
+            "args": [
+              "hook-pre-tool-use"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/output-clip.mjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokensave",
+            "args": [
+              "hook-stop"
+            ]
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/tokensave-sync.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/usage-log.mjs"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/bin/cleanup.mjs"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokensave",
+            "args": [
+              "hook-prompt-submit"
+            ]
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/tokensave-branch.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ragsave-reminder.mjs"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ask-reminder.mjs"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/context-cost.mjs"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ask-session.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/project-bootstrap.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/handoff-load.mjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/subagent-context.mjs"
+          }
+        ]
+      }
+    ]
+  },
+  "respondToBashCommands": false,
+  "statusLine": {
+    "type": "command",
+    "command": "node /home/enkeym/.ai-hooks/claude/statusline.mjs",
+    "refreshInterval": 5
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true
+  },
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
+      }
+    }
+  },
+  "language": "Russian",
+  "effortLevel": "medium",
+  "theme": "dark-ansi",
+  "remoteControlAtStartup": false,
+  "autoMode": {
+    "environment": [
+      "### Org-wide",
+      "**Organization**: None configured",
+      "**Cloud provider(s)**: None configured",
+      "**Repository visibility**: not queryable here — assume private (default fallback; repo name/host give no public signal)",
+      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: local .env files (.env, .env.local, .env.development.local, .env.test.local, .env.production.local — all gitignored); YooKassa shop credentials and Telegram bot token also configured via .env",
+      "**Default / protected branches**: main (default); protection status not queryable here",
+      "**CI/CD deploy targets**: None configured",
+      "**Network posture**: This project deploys a self-hosted AmneziaWG VPN + Telegram bot service; operational hosts contacted include my.firstvds.ru / firstvds.ru (VPS provider) and cdn.enkeym.site",
+      "**Source control**: The trusted repo (github.com/enkeym/vpn) and its origin remote only",
+      "**Trusted internal domains**: None configured",
+      "**Trusted cloud buckets**: None configured",
+      "**Key internal services**: my.firstvds.ru / firstvds.ru (VPS hosting provider used for deployment), cdn.enkeym.site (project CDN)",
+      "**Internal package registry**: None configured",
+      "**Sensitive data locations & audiences**: .env and .env.* local files (Telegram bot token, YooKassa shop ID/secret key, AmneziaWG header-protection key, admin Telegram IDs); share only with maintainers of this repo",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: any namespace, host, or container whose name carries `prod` or `production` as a whole word or segment (e.g. TEST_PAYMENT/production config, .env.production.local)",
+      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: software development (NestJS/TypeScript VPN + Telegram bot service, personal/hobby project)",
+      "**Trusted repo**: /home/enkeym/main/vpn-new, remote origin github.com/enkeym/vpn.git — treat as private unless shown otherwise",
+      "**Org-specific CLIs**: tokensave (repo-local code-indexing MCP/CLI, routine use observed), rag_search/ragsave (semantic search MCP, routine use observed)",
+      "routine under tokensave/ragsave indices in this repo — reads, searches, and in-place edits via tokensave write-tools are routine per CLAUDE.md, not requiring per-edit confirmation"
+    ]
+  }
+}
