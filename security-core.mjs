@@ -218,6 +218,19 @@ export function guardBashSecurity(command) {
   for (const seg of segments(raw)) {
     const toks = tokenize(seg);
     const cmd = commandName(toks);
+
+    // Имя берём сырое и до отсева пустого cmd: commandName пропускает `env`
+    // как обёртку, и голый `env` — тот самый случай, когда печатается всё
+    // окружение, — иначе выпал бы из проверки вместе с пустым именем.
+    const first = path.basename(toks[0] || '');
+    if (toks.length === 1 && (first === 'env' || first === 'printenv' || first === 'set')) {
+      return {
+        level: ASK,
+        reason: `\`${first}\` печатает переменные окружения целиком — среди них могут быть токены. ` +
+          'Нужна одна переменная — назови её явно.',
+      };
+    }
+
     if (!cmd) continue;
 
     // Секреты проверяем первыми: `curl -T .env` — это не «отправка данных,
@@ -232,6 +245,18 @@ export function guardBashSecurity(command) {
         reason: `\`${secret}\` — хранилище секретов, и через shell его содержимое попадёт в транскрипт навсегда. ` +
           'Нужно проверить наличие переменной — смотри `.env.example` или спроси имя у пользователя; ' +
           'нужно значение — пусть пользователь пришлёт именно его.',
+      };
+    }
+
+    // Команды, печатающие окружение целиком. Секрет в них приходит не из
+    // файла, а из вывода, и по имени файла его не поймать: `printenv` в
+    // проекте с экспортированным токеном кладёт его в транскрипт так же
+    // надёжно, как `cat .env`.
+    if (/^docker(-compose)?$/.test(cmd) && toks.includes('config') && !toks.includes('--services')) {
+      return {
+        level: ASK,
+        reason: '`docker compose config` печатает конфигурацию с подставленными переменными окружения — ' +
+          'среди них могут быть токены. Нужен один сервис — `--services`.',
       };
     }
 
@@ -291,6 +316,15 @@ export function guardReadSecurity(filePath) {
   };
 }
 
+// MCP-инструменты, которые отдают содержимое файла. Они идут мимо Read, и без
+// этого списка гард закрывал бы парадную дверь при открытом чёрном ходе.
+// Имя файла у них лежит в разных полях, поэтому проверяем все правдоподобные.
+const MCP_FILE_READERS = /^mcp__\w+__\w*(read|body|signature|context|cat|open|file)\w*$/i;
+
+function mcpFileTarget(ti) {
+  return ti.file || ti.file_path || ti.path || ti.symbol || '';
+}
+
 // Единая точка для адаптера хука.
 export function securityGuard(toolName, toolInput = {}) {
   const name = String(toolName || '');
@@ -302,6 +336,10 @@ export function securityGuard(toolName, toolInput = {}) {
   if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code);
   if (name === 'Grep') {
     const target = ti.path || ti.glob || '';
+    return isSecretPath(target) ? guardReadSecurity(target) : null;
+  }
+  if (MCP_FILE_READERS.test(name)) {
+    const target = mcpFileTarget(ti);
     return isSecretPath(target) ? guardReadSecurity(target) : null;
   }
   return null;

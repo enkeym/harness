@@ -364,18 +364,42 @@ const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
 // Разбиение по операторам shell: каждый сегмент — отдельная команда.
 // Помним, пришёл ли сегмент из пайпа: такая команда читает stdin, а не файлы
 // (`ps aux | grep foo`), и к поиску по индексу отношения не имеет.
+//
+// Разбор учитывает кавычки и экранирование. Без этого `grep -rn "a\|b" файл`
+// рвался по альтернации на куски, первый из которых выглядел как рекурсивный
+// grep без пути, — и гард запрещал поиск даже вне проекта. Ложный запрет там,
+// где альтернативы нет, — худший из отказов: из него уходят в обход.
 function segments(command) {
-  const parts = String(command).split(/(\|\||&&|[|;\n])/g);
+  const text = String(command || '');
   const out = [];
+  let buf = '';
+  let quote = null;
   let piped = false;
-  for (const part of parts) {
-    if (part === '|') { piped = true; continue; }
-    if (/^(\|\||&&|[;\n])$/.test(part)) { piped = false; continue; }
-    const text = part.trim();
-    if (!text) continue;
-    out.push({ text, piped });
-    piped = false;
+  let nextPiped = false;
+
+  const flush = () => {
+    const t = buf.trim();
+    if (t) out.push({ text: t, piped });
+    buf = '';
+    piped = nextPiped;
+    nextPiped = false;
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      buf += c;
+      if (c === quote && text[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (c === '\\' && i + 1 < text.length) { buf += c + text[++i]; continue; }
+    if (c === '"' || c === "'") { quote = c; buf += c; continue; }
+    if ((c === '|' && text[i + 1] === '|') || (c === '&' && text[i + 1] === '&')) { i++; flush(); continue; }
+    if (c === '|') { nextPiped = true; flush(); continue; }
+    if (c === ';' || c === '\n') { flush(); continue; }
+    buf += c;
   }
+  flush();
   return out;
 }
 
