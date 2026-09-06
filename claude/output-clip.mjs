@@ -58,6 +58,11 @@ const NOISY = new Map([
 // целиком в реальном времени). Обрезать такое — значит спрятать происходящее.
 const STREAMING = /(^|\s)(-f|-w|--follow|--watch|--watchAll|--tail)(\s|=|$)/;
 
+// Команда может попросить ввод: пароль, OTP, ответ генератора. Вывод уходит в
+// файл, приглашения не видно, и вместо экономии получаем повисший вызов. Для
+// `sudo` это ещё и приглашение ввести пароль вслепую.
+const INTERACTIVE = /(^|\s)(sudo|su)(\s|$)|(^|\s)(login|logout|adduser|init|prune)(\s|$)|(^|\s)(-i|--interactive)(\s|=|$)|create-/;
+
 // Всё, что делает команду составной: свой конвейер, редирект, подстановка,
 // фон, последовательность, вторая строка. Классификатор смотрит на первую
 // команду, поэтому составное не оборачиваем вовсе — иначе решение по `npm test`
@@ -100,6 +105,7 @@ export function clipCommand(command, opts = {}) {
   if (opts.background) return null;
   if (cmd.includes('clip-output.sh')) return null;
   if (STREAMING.test(cmd)) return null;
+  if (INTERACTIVE.test(cmd)) return null;
   if (COMPLEX.test(cmd)) return null;
   if (!isNoisy(cmd)) return null;
 

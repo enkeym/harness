@@ -45,6 +45,10 @@ for (const cmd of ['git diff main...HEAD', 'git log --oneline', 'git show HEAD',
 
 // --- интерактивное: приглашение ввода ушло бы в файл, команда зависла бы
 check('не трогает npm publish', wrapped('npm publish'), false);
+// `sudo` — ещё и приглашение ввести пароль вслепую, если попадёт в файл
+for (const cmd of ['sudo npm ci', 'sudo make install', 'docker system prune', 'npx create-react-app x']) {
+  check(`не трогает интерактивное: ${cmd}`, wrapped(cmd), false);
+}
 
 // --- команда со своим конвейером или редиректом уже ограничена автором
 for (const cmd of ['npm test | tail -5', 'npm test > out.txt', 'npm test 2> err.log',

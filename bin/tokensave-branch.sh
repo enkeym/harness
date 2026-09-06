@@ -14,6 +14,10 @@ repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || ex
 
 ts_bin="/usr/local/bin/tokensave"
 [ -x "$ts_bin" ] || exit 0
+
+# Явный отказ от индексации проекта: touch .tokensave-disable в корне репозитория.
+[ -f "$repo_root/.tokensave-disable" ] && exit 0
+
 mkdir -p "$repo_root/.tokensave" 2>/dev/null
 
 log="$repo_root/.tokensave/sync.log"
