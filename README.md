@@ -63,6 +63,9 @@ test/test-project-bootstrap.mjs # список пропусков проекта
 test/test-security.mjs          # что deny, что ask, что проходит молча
 test/test-agents.mjs            # определения ролей и скиллов: имена, модели, инструменты
 test/test-delegate.mjs          # секрет не уходит наружу, кеш здоровья, коды выхода
+test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
+test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
+test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -206,6 +209,13 @@ apply`, команды через `ssh`, `curl`/`wget` с телом запро�
 `docker compose config`): секрет приходит там не из файла, а из вывода, и по
 имени файла его не поймать.
 
+Обёртки разбираются рекурсивно, иначе гард ловил бы `cat .env`, но пропускал
+всё, чем эту же команду пишут естественно: `bash -c "…"`, удалённую команду
+`ssh`, тело `find -exec`, команду внутри контейнера. Отдельно закрыт git:
+`git show HEAD:.env` и `git cat-file` читают секрет из истории, даже когда
+файла нет в рабочей копии. Читающая команда из пайпа ищет путь по всей строке —
+в `echo .env | xargs cat` путь и читатель лежат в разных сегментах.
+
 Чего гард не умеет принципиально: он судит о команде, а не о её выводе. `git
 diff`, показывающий строку с ключом, или чужой скрипт, печатающий токен,
 пройдут — от этого защищает не гард, а то, что секреты лежат в gitignored
@@ -346,6 +356,10 @@ node ~/.ai-hooks/test/test-subagent-context.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
 node ~/.ai-hooks/test/test-security.mjs
 node ~/.ai-hooks/test/test-agents.mjs
+node ~/.ai-hooks/test/test-security-bypass.mjs
+node ~/.ai-hooks/test/test-cleanup.mjs
+node ~/.ai-hooks/test/test-usage-log.mjs
+node ~/.ai-hooks/test/test-delegate.mjs
 ```
 
 `test-agents.mjs` не запускает агентов: живой прогон стоит токенов и проверяет

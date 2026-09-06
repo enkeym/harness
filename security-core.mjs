@@ -70,11 +70,25 @@ export function findSecretValue(text) {
 // Shell. Сегменты режем так же, как в guard-core: по операторам, с учётом
 // кавычек, чтобы `git push` внутри строки не считался отдельной командой.
 
+// Возвращает сегменты вместе с признаком «пришёл из пайпа»: такая команда
+// читает stdin, и путь к файлу у неё может лежать в соседнем сегменте
+// (`echo .env | xargs cat`).
 function segments(command) {
+  const text = String(command || '');
   const out = [];
   let buf = '';
   let quote = null;
-  const text = String(command || '');
+  let piped = false;
+  let nextPiped = false;
+
+  const flush = () => {
+    const t = buf.trim();
+    if (t) out.push({ text: t, piped });
+    buf = '';
+    piped = nextPiped;
+    nextPiped = false;
+  };
+
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (quote) {
@@ -82,15 +96,15 @@ function segments(command) {
       if (c === quote && text[i - 1] !== '\\') quote = null;
       continue;
     }
+    if (c === '\\' && i + 1 < text.length) { buf += c + text[++i]; continue; }
     if (c === '"' || c === "'") { quote = c; buf += c; continue; }
-    if (c === ';' || c === '\n' || c === '|' || (c === '&' && text[i + 1] === '&')) {
-      if (c === '&') i++;
-      out.push(buf); buf = ''; continue;
-    }
+    if ((c === '|' && text[i + 1] === '|') || (c === '&' && text[i + 1] === '&')) { i++; flush(); continue; }
+    if (c === '|') { nextPiped = true; flush(); continue; }
+    if (c === ';' || c === '\n') { flush(); continue; }
     buf += c;
   }
-  out.push(buf);
-  return out.map((s) => s.trim()).filter(Boolean);
+  flush();
+  return out;
 }
 
 function tokenize(seg) {
@@ -173,6 +187,15 @@ const READS_FILE = new Set([
 // Копирование и передача: опасен источник, а не назначение.
 const TRANSFER = new Set(['cp', 'mv', 'scp', 'rsync', 'tar', 'zip', 'install', 'ln']);
 
+function secretReason(file) {
+  return {
+    level: DENY,
+    reason: `\`${file}\` — хранилище секретов, и через shell его содержимое попадёт в транскрипт навсегда. ` +
+      'Нужно проверить наличие переменной — смотри `.env.example` или спроси имя у пользователя; ' +
+      'нужно значение — пусть пользователь пришлёт именно его.',
+  };
+}
+
 function secretPathsIn(seg, toks) {
   const found = new Set([...(String(seg).match(/[\w@.\-/\\]*\.\w+|[\w./-]*\.env[\w.]*/g) || []), ...toks]);
   // `@файл` — синтаксис curl для «взять тело из файла», сама «собака» частью
@@ -211,11 +234,63 @@ function readsSecret(seg, toks, cmd) {
   return null;
 }
 
-export function guardBashSecurity(command) {
-  const raw = String(command || '');
-  if (!raw.trim()) return null;
+// Обёртки, за которыми прячется другая команда. Без их разбора гард ловит
+// `cat .env`, но пропускает `bash -c "cat .env"` и `ssh vps "cat .env"` —
+// а это не изощрённый обход, а то, как команда пишется естественно.
+const SHELL_WRAPPERS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'fish']);
+const CONTAINER_CMDS = new Set(['docker', 'docker-compose', 'podman', 'kubectl']);
 
-  for (const seg of segments(raw)) {
+// Подкоманды git, которые печатают содержимое файла. Секрет, однажды попавший
+// в историю, читается ими и без рабочей копии.
+const GIT_READ_SUBCMDS = new Set(['show', 'cat-file', 'diff', 'log', 'blame']);
+
+// Команды, спрятанные внутри аргументов: `-c "…"`, удалённая команда ssh,
+// тело `find -exec`, команда внутри контейнера.
+function nestedCommands(toks, cmd) {
+  const out = [];
+
+  if (SHELL_WRAPPERS.has(cmd)) {
+    for (let i = 1; i < toks.length; i++) {
+      if (/^-[a-z]*c$/i.test(toks[i]) && toks[i + 1]) out.push(toks[i + 1]);
+    }
+  }
+
+  if (cmd === 'ssh') {
+    // ssh [опции] host команда… — первый свободный аргумент это хост.
+    const free = toks.slice(1).filter((t) => !t.startsWith('-'));
+    if (free.length > 1) out.push(free.slice(1).join(' '));
+  }
+
+  if (CONTAINER_CMDS.has(cmd)) {
+    const i = toks.indexOf('exec');
+    if (i !== -1) {
+      // …exec [опции] контейнер команда… — первый свободный после exec это цель.
+      const free = toks.slice(i + 1).filter((t) => !t.startsWith('-'));
+      if (free.length > 1) out.push(free.slice(1).join(' '));
+    }
+  }
+
+  if (cmd === 'find') {
+    const i = toks.findIndex((t) => t === '-exec' || t === '-execdir' || t === '-ok');
+    if (i !== -1) {
+      out.push(toks.slice(i + 1).filter((t) => !['{}', ';', '\\;', '+'].includes(t)).join(' '));
+    }
+  }
+
+  return out.filter((c) => c && c.trim());
+}
+
+// Первое слово вложенной команды — чтобы понять, читает ли она файл, когда
+// путь остался снаружи (`find . -name .env -exec cat {} \;`).
+function nestedReadsFile(nested) {
+  return nested.some((c) => READS_FILE.has(path.basename(tokenize(c)[0] || '')));
+}
+
+export function guardBashSecurity(command, depth = 0) {
+  const raw = String(command || '');
+  if (!raw.trim() || depth > 3) return null;
+
+  for (const { text: seg, piped } of segments(raw)) {
     const toks = tokenize(seg);
     const cmd = commandName(toks);
 
@@ -233,20 +308,36 @@ export function guardBashSecurity(command) {
 
     if (!cmd) continue;
 
+    // Вложенные команды разбираем до всего остального: обёртка сама по себе
+    // безобидна, опасно то, что она запускает.
+    const nested = nestedCommands(toks, cmd);
+    for (const inner of nested) {
+      const verdict = guardBashSecurity(inner, depth + 1);
+      if (verdict) return verdict;
+    }
+
+    // Путь снаружи, чтение внутри: `find . -name .env -exec cat {} \;`.
+    if (nested.length && nestedReadsFile(nested)) {
+      const outer = secretPathsIn(seg, toks)[0];
+      if (outer) return secretReason(outer);
+    }
+
+    // git читает содержимое из истории, даже когда файла нет в рабочей копии.
+    if (cmd === 'git' && toks.some((t) => GIT_READ_SUBCMDS.has(t))) {
+      const hit = secretPathsIn(seg, toks)[0];
+      if (hit) return secretReason(hit);
+    }
+
     // Секреты проверяем первыми: `curl -T .env` — это не «отправка данных,
     // подтверди», а утечка ключей, и подтверждать её нечем.
     // Запрещаем только чтение: содержимое попадает в транскрипт навсегда.
     // Запись безвредна — `cp .env.example .env` и `echo X >> .env` ничего не
     // раскрывают, и блокировать их значит мешать обычной настройке проекта.
-    const secret = readsSecret(seg, toks, cmd);
-    if (secret) {
-      return {
-        level: DENY,
-        reason: `\`${secret}\` — хранилище секретов, и через shell его содержимое попадёт в транскрипт навсегда. ` +
-          'Нужно проверить наличие переменной — смотри `.env.example` или спроси имя у пользователя; ' +
-          'нужно значение — пусть пользователь пришлёт именно его.',
-      };
-    }
+    // Читающая команда из пайпа берёт путь из соседнего сегмента
+    // (`echo .env | xargs cat`), поэтому кандидатов ищем по всей строке.
+    const scope = piped && READS_FILE.has(cmd) ? raw : seg;
+    const secret = readsSecret(scope, toks, cmd);
+    if (secret) return secretReason(secret);
 
     // Команды, печатающие окружение целиком. Секрет в них приходит не из
     // файла, а из вывода, и по имени файла его не поймать: `printenv` в

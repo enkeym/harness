@@ -89,6 +89,11 @@ function rollupUsage(keepDays = 90) {
   const cutoff = Date.now() - keepDays * DAY;
   const fresh = [];
   const months = new Map();
+  // Считаем именно свёрнутые записи, а не разницу в длине файла. Две старые
+  // сессии из разных месяцев дают две месячные строки — длина не меняется, но
+  // подробности уже отброшены, и результат обязан быть записан. Гейт по длине
+  // молча выбрасывал такую свёртку, и файл рос дальше.
+  let converted = 0;
 
   for (const line of lines) {
     let rec;
@@ -98,14 +103,14 @@ function rollupUsage(keepDays = 90) {
     if (!when || when >= cutoff) { fresh.push(rec); continue; }
     const key = new Date(when).toISOString().slice(0, 7);
     months.set(key, mergeRollup(months.get(key), toRollup(key, rec)));
+    converted += 1;
   }
 
   const out = [...months.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v).concat(fresh);
-  const collapsed = lines.length - out.length;
-  if (collapsed > 0 && !dryRun) {
+  if (converted > 0 && !dryRun) {
     fs.writeFileSync(file, out.map((r) => JSON.stringify(r)).join('\n') + '\n');
   }
-  return { collapsed, kept: out.length };
+  return { collapsed: converted, kept: out.length };
 }
 
 function toRollup(key, rec) {
