@@ -51,7 +51,18 @@ function findRoot(startDir) {
 export function projectRoot(cwd, filePath) {
   const base = cwd ? path.resolve(cwd) : process.cwd();
   if (filePath) {
-    const fromFile = findRoot(path.dirname(path.resolve(base, String(filePath))));
+    // Каталог — начинаем поиск с него самого, файл — с его каталога. Без
+    // различения `grep ... .` уводил поиск корня на уровень выше проекта: для
+    // `.` брался dirname, то есть родитель. Пока родительский каталог не был
+    // сам проектом, ошибка не проявлялась.
+    const abs = path.resolve(base, String(filePath));
+    let start;
+    try {
+      start = fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
+    } catch {
+      start = path.dirname(abs); // не существует — считаем файлом
+    }
+    const fromFile = findRoot(start);
     if (fromFile) return fromFile;
   }
   return findRoot(base);
