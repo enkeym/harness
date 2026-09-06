@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Делегирование задачи внешней модели через её CLI.
 //
-//   delegate.mjs [--provider glm|deepseek|auto] [--mode fast|deep|jury]
+//   delegate.mjs [--provider glm|deepseek|codex|auto] [--mode fast|deep|jury]
 //                [--out FILE] [--timeout SEC] "текст задачи"
 //   delegate.mjs --health          — проверить провайдеров и обновить кэш
 //   delegate.mjs --list            — что доступно сейчас
@@ -46,6 +46,16 @@ export const PROVIDERS = {
     deep: 'zai-coding-plan/glm-5.3',
     run: (model, prompt, timeout) => opencode(model, prompt, timeout),
   },
+  codex: {
+    label: 'Codex',
+    // Не модель, а режим: Codex CLI переключает не имя модели, а глубину
+    // рассуждения (config-ключ model_reasoning_effort), имя дефолтной модели
+    // выбирает сам аккаунт и меняется вместе с ним — фиксировать его здесь
+    // означало бы держать строку, которая устареет сама.
+    fast: 'default',
+    deep: 'high-effort',
+    run: (tier, prompt, timeout) => codexExec(tier, prompt, timeout),
+  },
 };
 
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -71,6 +81,41 @@ function opencode(model, prompt, timeoutSec) {
     ['run', '--pure', '--dir', NEUTRAL_CWD, '-m', model, prompt],
     { encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   return clean(out, model);
+}
+
+let codexBin = null;
+function resolveCodex() {
+  if (codexBin) return codexBin;
+  const candidates = [
+    ...String(process.env.PATH || '').split(':').filter(Boolean).map((d) => path.join(d, 'codex')),
+    path.join(HOME, '.local', 'bin', 'codex'),
+    '/usr/local/bin/codex',
+  ];
+  codexBin = candidates.find((c) => { try { fs.accessSync(c, fs.constants.X_OK); return true; } catch { return false; } })
+    || 'codex';
+  return codexBin;
+}
+
+// Codex не печатает чистый ответ на stdout (шапка сессии, эхо промпта, счётчик
+// токенов) — `--output-last-message` пишет только финальный текст в файл, тот
+// же приём, что `clean()` делает вручную для opencode. `--ephemeral` не
+// оставляет сессию на диске: разовый вызов, история не нужна.
+function codexExec(tier, prompt, timeoutSec) {
+  fs.mkdirSync(NEUTRAL_CWD, { recursive: true });
+  const outFile = path.join(STATE_DIR, `codex-last-${process.pid}-${Date.now()}.txt`);
+  const args = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral',
+    '--color', 'never', '-C', NEUTRAL_CWD, '--output-last-message', outFile];
+  if (tier === 'high-effort') args.push('-c', 'model_reasoning_effort=high');
+  args.push(prompt);
+  try {
+    execFileSync(resolveCodex(), args, {
+      encoding: 'utf8', timeout: timeoutSec * 1000, maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return fs.readFileSync(outFile, 'utf8').trim();
+  } finally {
+    fs.rmSync(outFile, { force: true });
+  }
 }
 
 // opencode печатает шапку «> build · model» и ANSI-раскраску — в ответе они шум.
@@ -190,7 +235,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
   const positional = args.filter((a, i) => !a.startsWith('--') && !String(args[i - 1] || '').startsWith('--'));
   const prompt = positional.join(' ').trim();
   if (!prompt) {
-    process.stderr.write('нужен текст задачи. usage: delegate.mjs [--provider glm|deepseek] [--mode fast|deep|jury] [--out FILE] "задача"\n');
+    process.stderr.write('нужен текст задачи. usage: delegate.mjs [--provider glm|deepseek|codex] [--mode fast|deep|jury] [--out FILE] "задача"\n');
     process.exit(2);
   }
 

@@ -74,6 +74,7 @@ try {
 }
 check('--list называет DeepSeek', /DeepSeek/.test(listed) ? 'да' : 'нет', 'да');
 check('--list называет GLM', /GLM/.test(listed) ? 'да' : 'нет', 'да');
+check('--list называет Codex', /Codex/.test(listed) ? 'да' : 'нет', 'да');
 
 // --- пустая задача отклоняется с подсказкой, а не падает молча
 let emptyCode = 0;
