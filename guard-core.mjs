@@ -1,0 +1,530 @@
+// Общая логика гард-хуков tokensave — единая точка истины для всех harness'ов
+// (Claude Code, OpenCode). Модуль чистый: не читает stdin, не пишет stdout,
+// не знает про формат хуков. Возвращает причину запрета (string) или null.
+//
+// Единственный критерий: файл есть в индексе tokensave (таблица files в
+// .tokensave/tokensave.db). Есть — значит tokensave его отдаст, и читать/править
+// его надо через tokensave. Нет — гарду там делать нечего: пусть работают
+// обычные инструменты агента. Списка расширений нет: что считать кодом, решает
+// сам индекс, а не догадка хука.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
+
+const HOME = process.env.HOME || os.homedir();
+const TS_DIR = '.tokensave';
+const DEFAULT_DB = 'tokensave.db';
+const DB_REL = path.join(TS_DIR, DEFAULT_DB);
+
+// Сколько ждать идущий tokensave sync, прежде чем замолчать (см. syncBusy).
+const SYNC_WAIT_MS = Number(process.env.TS_GUARD_SYNC_WAIT_MS || 6000);
+const SYNC_POLL_MS = 200;
+
+// Конфиг/тулинг самих агентов (.claude/…, .opencode/…, ~/.config/opencode/…,
+// ~/.ai-hooks/…) — гарды его не трогают, иначе нельзя читать/править
+// собственные хуки (источник «цикла»).
+const HARNESS_CONFIG_RE =
+  /(^|[\\/])(\.claude|\.opencode|\.ai-hooks)([\\/]|$)|[\\/]\.config[\\/]opencode([\\/]|$)/;
+
+export function isHarnessConfigPath(p) {
+  return HARNESS_CONFIG_RE.test(String(p || ''));
+}
+
+// Корень tokensave-проекта: ближайший каталог вверх по дереву с БД.
+// $HOME не считается: ~/.tokensave существует всегда (global.db + config.toml),
+// иначе весь домашний каталог был бы «проектом».
+function findRoot(startDir) {
+  let dir = startDir;
+  while (dir) {
+    if (fs.existsSync(path.join(dir, DB_REL))) {
+      return path.resolve(dir) === path.resolve(HOME) ? null : dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
+export function projectRoot(cwd, filePath) {
+  const base = cwd ? path.resolve(cwd) : process.cwd();
+  if (filePath) {
+    const fromFile = findRoot(path.dirname(path.resolve(base, String(filePath))));
+    if (fromFile) return fromFile;
+  }
+  return findRoot(base);
+}
+
+// Ветка. tokensave держит отдельную БД на ветку (branch-meta.json), и MCP
+// отвечает из БД текущей ветки. Гард обязан смотреть в тот же файл: иначе на
+// ветке dev он судит по графу main — файл, добавленный в dev, «не в индексе»
+// (запрета нет там, где он нужен), а удалённый в dev — «в индексе» (запрет
+// там, где tokensave отдаст чужое содержимое).
+function currentBranch(root) {
+  try {
+    let gitDir = path.join(root, '.git');
+    if (fs.statSync(gitDir).isFile()) {
+      const m = fs.readFileSync(gitDir, 'utf8').match(/gitdir:\s*(.+)/);
+      if (!m) return null;
+      gitDir = path.resolve(root, m[1].trim());
+    }
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+    const ref = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+    return ref ? ref[1] : null; // detached HEAD — ветки нет
+  } catch {
+    return null;
+  }
+}
+
+// Путь к БД активной ветки или null, если гарду тут делать нечего.
+// null означает «tokensave сейчас не является достоверным источником»:
+// ветка не отслеживается (branch add ещё не прошёл или упал) либо detached HEAD.
+// Заставлять tokensave в такой ситуации — загонять правку в граф чужой ветки.
+const dbPathCache = new Map();
+function dbPath(root) {
+  if (dbPathCache.has(root)) return dbPathCache.get(root);
+  let file = DEFAULT_DB;
+  try {
+    const metaPath = path.join(root, TS_DIR, 'branch-meta.json');
+    if (fs.existsSync(metaPath)) {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      const branches = meta.branches || {};
+      const isRepo = fs.existsSync(path.join(root, '.git'));
+      const branch = currentBranch(root);
+      const entry = isRepo
+        ? (branch ? branches[branch] : null)
+        : branches[meta.default_branch];
+      file = entry?.db_file || null;
+    }
+  } catch {
+    file = DEFAULT_DB; // сломанный meta — работаем по одной БД, как раньше
+  }
+  const resolved = file ? path.join(root, TS_DIR, file) : null;
+  dbPathCache.set(root, resolved);
+  return resolved;
+}
+
+// Идёт ли прямо сейчас tokensave sync/init/branch add по этому проекту.
+// /proc, а не flock: проверка без порождения процесса на каждый вызов хука.
+function syncRunning(root) {
+  try {
+    const target = path.resolve(root);
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid)) continue;
+      let raw;
+      try { raw = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8'); } catch { continue; }
+      // Имя ищем в любом аргументе, а не только в argv[0]: фоновые задачи
+      // запускают бинарь через bash/setsid/flock, и argv[0] там — обёртка.
+      const argv = raw.split('\0').filter(Boolean);
+      if (!argv.some((a) => path.basename(a) === 'tokensave')) continue;
+      if (!argv.some((a) => a === 'sync' || a === 'init' || a === 'add')) continue;
+      if (argv.slice(1).some((a) => !a.startsWith('-') && path.resolve(a) === target)) return true;
+    }
+  } catch { /* нет /proc — считаем, что sync не идёт */ }
+  return false;
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// Пока идёт sync, граф неполон, а write-tools отвечают ошибкой. Запрет в этот
+// момент даёт цикл «запрет → tokensave падает → тот же запрет». Обычный sync
+// укладывается в доли секунды — ждём его и дальше судим по свежему графу.
+// Не уложился за SYNC_WAIT_MS (первичный init, большой репозиторий) — гард
+// молчит: ждать дольше дороже, чем разово пропустить обычный инструмент.
+// Результат мемоизируется: процесс хука живёт один вызов, ждать надо один раз.
+const syncChecked = new Map();
+function syncBusy(root) {
+  if (syncChecked.has(root)) return syncChecked.get(root);
+  let busy = syncRunning(root);
+  if (busy) {
+    const deadline = Date.now() + SYNC_WAIT_MS;
+    while (busy && Date.now() < deadline) {
+      sleepSync(SYNC_POLL_MS);
+      busy = syncRunning(root);
+    }
+  }
+  syncChecked.set(root, busy);
+  return busy;
+}
+
+// Любая проблема с БД (нет файла, залочена, сменилась схема) → null, и гард
+// молчит. Fail-open осознанно: запретить, не дав рабочей альтернативы, — тупик,
+// из которого агент начинает искать обходные пути. Пропущенный запрет дешевле.
+function query(root, fn) {
+  const file = dbPath(root);
+  if (!file || syncBusy(root)) return null;
+  let db;
+  try {
+    db = new DatabaseSync(file, { readOnly: true });
+    return fn(db);
+  } catch {
+    return null;
+  } finally {
+    try { db?.close(); } catch { /* уже закрыта */ }
+  }
+}
+
+// Пути в files — относительные от корня проекта, всегда через '/'.
+function relKey(root, cwd, filePath) {
+  const abs = path.resolve(cwd || process.cwd(), String(filePath));
+  const rel = path.relative(root, abs);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join('/');
+}
+
+// Файл есть в индексе tokensave? Нового файла там нет — поэтому создание
+// через Write разрешено автоматически, без отдельной проверки existsSync.
+export function isIndexed(cwd, filePath) {
+  if (!filePath) return false;
+  if (isHarnessConfigPath(filePath)) return false;
+  const root = projectRoot(cwd, filePath);
+  if (!root) return false;
+  const key = relKey(root, cwd, filePath);
+  if (!key) return false;
+  return query(root, (db) => !!db.prepare('SELECT 1 FROM files WHERE path = ?').get(key)) ?? false;
+}
+
+// Есть ли под данным путём (файлом или каталогом) хоть один проиндексированный
+// файл? Ключ — относительный от корня, через '/'. Нужен для grep с конкретной
+// целью: поиск по node_modules/dist/любой вендорной папке уходит мимо индекса и
+// блокировать его нельзя, даже если расширение цели (.css/.js) совпадает с тем,
+// что индексируется в src.
+function hasIndexedUnder(root, relPath) {
+  return query(root, (db) => {
+    if (db.prepare('SELECT 1 FROM files WHERE path = ?').get(relPath)) return true;
+    const prefix = (relPath.endsWith('/') ? relPath : relPath + '/').replace(/([%_\\])/g, '\\$1');
+    return !!db.prepare("SELECT 1 FROM files WHERE path LIKE ? ESCAPE '\\' LIMIT 1").get(prefix + '%');
+  }) ?? false;
+}
+
+// Расширения, которые tokensave реально проиндексировал в этом проекте.
+// Нужны для grep: у поиска нет одного конкретного файла, есть только маска.
+// Экспортируется для тестов: состав индекса зависит от ветки, и ожидания
+// нельзя зашивать константой.
+export function indexedExtensions(root) {
+  return indexedExts(root);
+}
+
+function indexedExts(root) {
+  return query(root, (db) => {
+    const set = new Set();
+    for (const r of db.prepare('SELECT path FROM files').all()) {
+      const ext = path.extname(r.path).toLowerCase();
+      if (ext) set.add(ext);
+    }
+    return set;
+  });
+}
+
+// Имена инструментов различаются между harness'ами — подставляем их в текст
+// запрета, чтобы сообщение указывало на реально доступный агенту инструмент.
+// prefix — префикс MCP-инструментов tokensave: Claude показывает их как
+// tokensave_context, OpenCode добавляет ещё и имя MCP-сервера → tokensave_tokensave_context.
+export const CLAUDE_LABELS = {
+  read: 'Read', grep: 'Grep', edit: 'Edit/Write',
+  prefix: 'tokensave_',
+  editNote: 'Они уже в allow-list — применяются без запроса подтверждения. ' +
+    'Полное имя вызова — mcp__tokensave__tokensave_<tool>; нет его в списке инструментов — ' +
+    "сначала ToolSearch('select:mcp__tokensave__tokensave_str_replace').",
+};
+
+export const OPENCODE_LABELS = {
+  read: 'read', grep: 'grep', edit: 'edit/write',
+  prefix: 'tokensave_tokensave_',
+  editNote: 'MCP-инструменты tokensave не требуют подтверждения — применяй сразу.',
+};
+
+const FALLBACK =
+  'Если tokensave вернёт ошибку или пусто — скажи об этом и работай обычными инструментами: ' +
+  'ровно тот же вызов гард пропустит со второй попытки. Повторять его больше одного раза бессмысленно.';
+
+// ---------------------------------------------------------------------------
+// Предохранитель. Запрет полезен, пока у агента есть рабочая альтернатива.
+// Когда её нет (tokensave отвечает ошибкой, зовётся с неверными аргументами,
+// граф не той ветки), агент повторяет тот же вызов и получает тот же отказ —
+// в логах это семь одинаковых Edit подряд. Второй запрет на ту же цель ничего
+// не сообщает сверх первого, поэтому его не выдаём: пропускаем вызов.
+
+const STATE_DIR = path.join(HOME, '.ai-hooks', 'state');
+const BREAKER_FILE = path.join(STATE_DIR, 'guard-breaker.json');
+const BREAKER_WINDOW_MS = 3 * 60 * 1000;
+
+export function denialKey(toolName, toolInput = {}) {
+  const ti = toolInput || {};
+  const target =
+    ti.file_path || ti.path || ti.command || ti.code || ti.pattern || ti.glob || '';
+  return `${toolName}:${String(target).replace(/\s+/g, ' ').slice(0, 200)}`;
+}
+
+// true → запрет на эту цель уже выдавался, пропускаем вызов. Сработавший
+// предохранитель держится до конца окна: иначе запреты пошли бы через один и
+// цикл вернулся бы в другом виде. Любая ошибка состояния → false (запрещаем
+// как обычно): потерянная метка безопаснее пропущенного запрета.
+export function breakerAllows(sessionId, key) {
+  const id = `${sessionId || 'default'}|${key}`;
+  const now = Date.now();
+  let state = {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(BREAKER_FILE, 'utf8'));
+    if (parsed && typeof parsed === 'object') state = parsed;
+  } catch { /* первого запрета ещё не было */ }
+
+  for (const [k, v] of Object.entries(state)) {
+    if (!v || typeof v.t !== 'number' || now - v.t > BREAKER_WINDOW_MS) delete state[k];
+  }
+
+  const entry = state[id];
+  const open = Boolean(entry); // цель уже запрещали в этом окне
+  state[id] = { t: entry?.t ?? now };
+
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(BREAKER_FILE, JSON.stringify(state));
+  } catch { /* не записали — в худшем случае запретим ещё раз */ }
+
+  return open;
+}
+
+// Чтение файла: есть в индексе → только tokensave.
+export function guardRead(filePath, cwd, labels) {
+  if (!isIndexed(cwd, filePath)) return null;
+  const p = labels.prefix;
+  return (
+    `Файл есть в индексе tokensave — читай через него, а не через ${labels.read}: ` +
+    `${p}context (понимание), ${p}read (файл целиком), ${p}body/${p}signature (символ). ${FALLBACK}`
+  );
+}
+
+// Поиск: цель явно ограничена тем, чего нет в индексе (json/yaml/конфиги) → можно.
+// Иначе это поиск по проиндексированному коду → tokensave.
+export function guardGrep({ path: searchPath, glob, type }, cwd, labels) {
+  if (isHarnessConfigPath(searchPath)) return null;
+  const root = projectRoot(cwd, searchPath);
+  if (!root) return null;
+
+  // Поиск направлен в конкретный путь → решаем по индексу, а не по расширению:
+  // вне корня или без единого проиндексированного файла под ним (node_modules,
+  // dist, вендор) — блокировать нечего. Пустой rel = сам корень, под ним индекс
+  // есть → проходим дальше к маске.
+  if (searchPath) {
+    const rel = path.relative(root, path.resolve(cwd || process.cwd(), String(searchPath)));
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    if (rel !== '' && !hasIndexedUnder(root, rel.split(path.sep).join('/'))) return null;
+  }
+
+  const exts = indexedExts(root);
+  if (!exts || exts.size === 0) return null;
+
+  if (type) {
+    if (!exts.has('.' + String(type).toLowerCase())) return null;
+  } else if (glob && /\.\w+/.test(String(glob))) {
+    const globExts = [...String(glob).matchAll(/\.\w+/g)].map((m) => m[0].toLowerCase());
+    if (globExts.every((e) => !exts.has(e))) return null;
+  }
+
+  const p = labels.prefix;
+  return (
+    `Поиск по проиндексированному коду через ${labels.grep} запрещён — используй tokensave: ` +
+    `${p}search (символ; literal:true для строки), ${p}callers/${p}field_sites (использования), ${p}context. ` +
+    `Поиск по тому, чего нет в индексе, разрешён — ограничь glob/type (напр. type:"json"). ${FALLBACK}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shell. Read/Grep/Edit закрыты по имени инструмента, но те же действия
+// выражаются командой: `cat file`, `sed -i`, `node -e "fs.writeFileSync(…)"`,
+// `> file`. Без этого гарда shell — не обход по недосмотру, а единственная
+// открытая дверь, и агент в неё уходит, как только упрётся в запрет.
+//
+// Критерий тот же: в команде упомянут файл из индекса. Разбор нарочно грубый —
+// не парсер shell, а распознавание форм. Всё, что не распозналось, проходит:
+// лучше пропустить обход, чем заблокировать `git`, `tsc`, `eslint` над теми же
+// путями (они читают файл легитимно, замены в tokensave для них нет).
+
+// Команды, которые читают содержимое файла.
+const READ_CMDS = new Set([
+  'cat', 'head', 'tail', 'less', 'more', 'bat', 'nl', 'tac', 'rev',
+  'od', 'xxd', 'strings',
+]);
+
+// Команды, которые пишут в файл на месте. sed/perl/awk — только с -i.
+const WRITE_CMDS = new Set(['tee', 'dd', 'truncate', 'install']);
+const INPLACE_CMDS = new Set(['sed', 'perl', 'awk', 'gawk']);
+
+// Интерпретаторы: путь прячется внутри строки кода, поэтому у них смотрим
+// весь сегмент целиком, а не отдельные аргументы.
+const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun', 'jq']);
+
+const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
+
+// Разбиение по операторам shell: каждый сегмент — отдельная команда.
+// Помним, пришёл ли сегмент из пайпа: такая команда читает stdin, а не файлы
+// (`ps aux | grep foo`), и к поиску по индексу отношения не имеет.
+function segments(command) {
+  const parts = String(command).split(/(\|\||&&|[|;\n])/g);
+  const out = [];
+  let piped = false;
+  for (const part of parts) {
+    if (part === '|') { piped = true; continue; }
+    if (/^(\|\||&&|[;\n])$/.test(part)) { piped = false; continue; }
+    const text = part.trim();
+    if (!text) continue;
+    out.push({ text, piped });
+    piped = false;
+  }
+  return out;
+}
+
+// Токенизация с учётом кавычек. Кавычки снимаем: они разделяют слова, но не
+// являются частью пути.
+function tokenize(seg) {
+  const out = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(seg))) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}
+
+// Имя команды: первый токен, пропуская префиксные присваивания (FOO=bar cmd)
+// и обёртки вида `sudo`/`env`/`command`.
+function commandName(toks) {
+  let i = 0;
+  while (i < toks.length && (/^[A-Za-z_]\w*=/.test(toks[i]) || ['sudo', 'env', 'command', 'nohup', 'time'].includes(toks[i]))) i++;
+  return path.basename(toks[i] || '');
+}
+
+// Кандидаты в пути: всё, что похоже на файл с расширением. Ловит и голые
+// аргументы, и пути внутри строк кода — поэтому применяется к сырому сегменту.
+function pathCandidates(text) {
+  return new Set(String(text).match(/[\w@.\-/\\]*\.\w+/g) || []);
+}
+
+function anyIndexed(text, cwd) {
+  for (const c of pathCandidates(text)) if (isIndexed(cwd, c)) return c;
+  return null;
+}
+
+// rg/ag/ack без аргументов-путей обходят текущий каталог; обычный grep в такой
+// ситуации читает stdin. Разница определяет, есть ли что проверять.
+const RECURSIVE_BY_DEFAULT = new Set(['rg', 'ag', 'ack']);
+
+// grep внутри shell — та же семантика, что и у инструмента Grep: цель, явно
+// ограниченная непроиндексированным расширением, разрешена.
+//
+// Важно: команда, читающая stdin, файлов не касается. Из пайпа (`ps aux | grep`,
+// `git log | grep fix`) или без путей-аргументов — блокировать нечего, иначе
+// запрет ловит обычную работу с выводом команд и толкает в обход.
+function bashGrep(toks, cwd, labels, cmd, piped) {
+  if (piped) return null;
+
+  const globs = [];
+  const rest = [];
+  let recursive = RECURSIVE_BY_DEFAULT.has(cmd);
+  for (let i = 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.startsWith('--include=')) globs.push(t.slice('--include='.length));
+    else if (t === '-g' || t === '--glob' || t === '--include') globs.push(toks[++i] || '');
+    else if (t === '-e' || t === '-f') i++; // паттерн, не путь
+    else if (t === '--recursive' || (/^-[a-zA-Z]{1,4}$/.test(t) && /[rR]/.test(t))) recursive = true;
+    else if (t.startsWith('-')) continue;
+    else rest.push(t);
+  }
+  rest.shift(); // первый свободный аргумент — паттерн
+
+  // Нет ни путей, ни рекурсии → читает stdin.
+  if (rest.length === 0 && !recursive) return null;
+  return guardGrep({ path: rest[0], glob: globs[0] }, cwd, labels);
+}
+
+// Возвращает причину запрета или null. Любая неожиданность → null (fail-open).
+export function guardBash(command, cwd, labels) {
+  if (!command) return null;
+  try {
+    for (const { text: seg, piped } of segments(command)) {
+      const toks = tokenize(seg);
+      const cmd = commandName(toks);
+
+      if (GREP_CMDS.has(cmd)) {
+        const reason = bashGrep(toks, cwd, labels, cmd, piped);
+        if (reason) return reason;
+        continue;
+      }
+
+      // Перенаправление в файл — независимо от команды слева.
+      const redirect = seg.match(/>>?\s*([\w@.\-/\\]+)/);
+      if (redirect && isIndexed(cwd, redirect[1])) return bashEditReason(redirect[1], labels);
+
+      if (READ_CMDS.has(cmd)) {
+        const hit = anyIndexed(seg, cwd);
+        if (hit) return bashReadReason(hit, labels);
+      }
+
+      if (WRITE_CMDS.has(cmd) || (INPLACE_CMDS.has(cmd) && toks.some((t) => /^-i/.test(t) || t === '--in-place'))) {
+        const hit = anyIndexed(seg, cwd);
+        if (hit) return bashEditReason(hit, labels);
+      }
+
+      if (EVAL_CMDS.has(cmd)) {
+        const hit = anyIndexed(seg, cwd);
+        if (hit) return bashEvalReason(hit, labels);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+// mcp__ide__executeCode — исполнение кода в Jupyter-ядре. Канал мимо Bash,
+// но результат тот же, поэтому и правило то же.
+export function guardExec(code, cwd, labels) {
+  if (!code) return null;
+  try {
+    const hit = anyIndexed(code, cwd);
+    return hit ? bashEvalReason(hit, labels) : null;
+  } catch {
+    return null;
+  }
+}
+
+function bashReadReason(file, labels) {
+  const p = labels.prefix;
+  return (
+    `\`${file}\` есть в индексе tokensave — читать его через shell нельзя: ` +
+    `${p}read (файл целиком), ${p}body/${p}signature (символ), ${p}context (понимание). ` +
+    `Shell — не fallback для tokensave. ${FALLBACK}`
+  );
+}
+
+function bashEditReason(file, labels) {
+  const p = labels.prefix;
+  return (
+    `\`${file}\` есть в индексе tokensave — править его через shell нельзя: ` +
+    `${p}str_replace / ${p}multi_str_replace, ${p}replace_symbol, ${p}insert_at. ` +
+    `${labels.editNote} Shell — не fallback для tokensave. ${FALLBACK}`
+  );
+}
+
+function bashEvalReason(file, labels) {
+  const p = labels.prefix;
+  return (
+    `Команда обращается к \`${file}\` — этот файл есть в индексе tokensave. ` +
+    `Читай через ${p}read/${p}body, правь через ${p}str_replace/${p}replace_symbol. ` +
+    `Подмена tokensave на интерпретатор — обход, а не fallback. ${FALLBACK}`
+  );
+}
+
+// Правка файла: есть в индексе → только tokensave write-tools.
+export function guardEdit(filePath, cwd, labels) {
+  if (!isIndexed(cwd, filePath)) return null;
+  const p = labels.prefix;
+  return (
+    `Файл есть в индексе tokensave — меняй через write-tools, а не через ${labels.edit}: ` +
+    `${p}str_replace / ${p}multi_str_replace (точечно), ${p}replace_symbol (символ целиком), ` +
+    `${p}insert_at / ${p}insert_at_symbol (вставка). ${labels.editNote} ${FALLBACK}`
+  );
+}

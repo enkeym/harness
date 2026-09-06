@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+// Тест SessionStart-хука project-bootstrap: пустой node-репозиторий с GitHub
+// remote даёт полный список пропусков, вне репозитория хук молчит,
+// а недельная метка не мешает первому напоминанию (каталог метки временный).
+
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const SCRIPT = path.join(ROOT, 'claude', 'project-bootstrap.mjs');
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bootstrap-test-'));
+const repo = path.join(tmp, 'repo');
+fs.mkdirSync(repo);
+execFileSync('git', ['-C', repo, 'init', '-q']);
+execFileSync('git', ['-C', repo, 'remote', 'add', 'origin', 'https://github.com/x/y.git']);
+fs.writeFileSync(path.join(repo, 'package.json'), '{}');
+fs.writeFileSync(path.join(repo, '.env'), 'A=1\n');
+
+function run(cwd) {
+  const out = execFileSync('node', [SCRIPT], {
+    input: JSON.stringify({ session_id: 't', cwd, hook_event_name: 'SessionStart', source: 'startup' }),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: tmp },
+  });
+  return out.trim() ? JSON.parse(out).hookSpecificOutput.additionalContext : null;
+}
+
+let failed = 0;
+const check = (name, ok, detail = '') => {
+  process.stdout.write(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}\n`);
+  if (!ok) failed++;
+};
+
+const first = run(repo) || '';
+check('нет CLAUDE.md', /CLAUDE\.md/.test(first), first);
+check('нет .env.example', /\.env\.example/.test(first));
+check('нет husky', /husky/.test(first));
+check('нет CI для GitHub', /workflows/.test(first));
+check('нет dependabot', /dependabot/.test(first));
+
+const second = run(repo) || '';
+check('повтор: CLAUDE.md напоминается снова', /CLAUDE\.md/.test(second));
+check('повтор: husky/CI молчат неделю', !/husky|workflows/.test(second), second);
+
+fs.writeFileSync(path.join(repo, 'CLAUDE.md'), '# x');
+fs.writeFileSync(path.join(repo, '.env.example'), 'A=\n');
+check('всё на месте: хук молчит', run(repo) === null);
+
+check('вне репозитория: молчит', run(tmp) === null);
+
+fs.rmSync(tmp, { recursive: true, force: true });
+process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки прошли\n');
+process.exit(failed ? 1 : 0);
