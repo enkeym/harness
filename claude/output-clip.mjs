@@ -21,10 +21,20 @@ const CLIP = path.join(HOME, '.ai-hooks', 'bin', 'clip-output.sh');
 
 // Команда шумная, если длинный вывод для неё штатен. Ключ — имя команды,
 // значение — набор подкоманд (пустой набор означает «любая»).
+//
+// Чего здесь намеренно нет:
+//
+// `git log|diff|show` и `npm audit` — команды верификации. Их середина и есть
+// содержание: обрезанный `git diff main...HEAD` показал бы начало и конец, а
+// правка посреди ветки уехала бы в push непросмотренной. Экономить на том, чем
+// проверяешь, нельзя.
+//
+// `npm publish` и прочее, что спрашивает OTP или пароль: вывод уходит в файл,
+// приглашение не видно, команда виснет.
 const NOISY = new Map([
-  ['npm', new Set(['install', 'i', 'ci', 'test', 'run', 'audit', 'outdated', 'update', 'ls', 'publish'])],
-  ['pnpm', new Set(['install', 'i', 'test', 'run', 'audit', 'outdated', 'update', 'ls', 'add'])],
-  ['yarn', new Set(['install', 'test', 'run', 'audit', 'outdated', 'upgrade', 'list', 'add'])],
+  ['npm', new Set(['install', 'i', 'ci', 'test', 'run', 'outdated', 'update', 'ls'])],
+  ['pnpm', new Set(['install', 'i', 'test', 'run', 'outdated', 'update', 'ls', 'add'])],
+  ['yarn', new Set(['install', 'test', 'run', 'outdated', 'upgrade', 'list', 'add'])],
   ['bun', new Set(['install', 'test', 'run', 'add'])],
   ['npx', new Set()],
   ['tsc', new Set()],
@@ -42,7 +52,6 @@ const NOISY = new Map([
   ['gradle', new Set()],
   ['mvn', new Set()],
   ['find', new Set()],
-  ['git', new Set(['log', 'diff', 'show', 'blame'])],
 ]);
 
 // Флаги, после которых команда не завершается сама (или её вывод и нужен
@@ -50,8 +59,15 @@ const NOISY = new Map([
 const STREAMING = /(^|\s)(-f|-w|--follow|--watch|--watchAll|--tail)(\s|=|$)/;
 
 // Всё, что делает команду составной: свой конвейер, редирект, подстановка,
-// фон, последовательность. Единственное исключение — `&&`, разобранное ниже.
-const COMPLEX = /[|<>;`]|\$\(|(^|[^&])&($|[^&])/;
+// фон, последовательность, вторая строка. Классификатор смотрит на первую
+// команду, поэтому составное не оборачиваем вовсе — иначе решение по `npm test`
+// распространилось бы на приписанное следом.
+//
+// `&&` тоже здесь. Обёртка выполняет команду в дочернем `bash -c`, а `cd`
+// внутри него не переживает вызов: `cd client && npm ci` оставил бы cwd сессии
+// прежним, и следующая команда ушла бы не в тот каталог. Менять семантику ради
+// объёма — не тот размен.
+const COMPLEX = /[|<>;`&\n\r]|\$\(/;
 
 function commandOf(segment) {
   // Ведущие присваивания окружения (`CI=1 npm test`) командой не являются.
@@ -85,16 +101,19 @@ export function clipCommand(command, opts = {}) {
   if (cmd.includes('clip-output.sh')) return null;
   if (STREAMING.test(cmd)) return null;
   if (COMPLEX.test(cmd)) return null;
+  if (!isNoisy(cmd)) return null;
 
-  // `cd client && npm test` — частый и безопасный случай: цепочка из переходов
-  // по каталогам, заканчивающаяся шумной командой.
-  const parts = cmd.split('&&').map((p) => p.trim()).filter(Boolean);
-  if (parts.length === 0) return null;
-  const last = parts[parts.length - 1];
-  const leadingAreCd = parts.slice(0, -1).every((p) => /^cd\s/.test(p));
-  if (!leadingAreCd || !isNoisy(last)) return null;
-
-  return `${CLIP} ${shellQuote(cmd)}`;
+  // Перед `--` идёт метка из имени команды и подкоманды, после `--` —
+  // единственное, что исполняется. Без метки все обёрнутые команды выглядели бы
+  // одинаково, и разрешение «больше не спрашивать» для `npm test` молча
+  // распространилось бы на `npm run deploy` и `make`: правило разрешений
+  // строится по префиксу строки.
+  // Только имя и подкоманда: флаг `--` в метке съел бы разделитель, а
+  // присваивания окружения метку не описывают.
+  const label = cmd.split(/\s+/).slice(0, 2)
+    .filter((t) => /^[\w.@/-]+$/.test(t) && !t.startsWith('-'))
+    .join(' ');
+  return `${CLIP} ${label} -- ${shellQuote(cmd)}`;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {

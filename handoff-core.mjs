@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 
 const HOME = process.env.HOME || os.homedir();
 export const HANDOFF_DIR = path.join(HOME, '.claude', 'handoff');
@@ -36,12 +37,16 @@ function rootFor(cwd) {
   return start;
 }
 
-// Имя читаемое (чтобы файл можно было найти глазами) плюс хвост ключа от
-// полного пути: одноимённые каталоги в разных местах — обычное дело.
+// Имя читаемое (чтобы файл можно было найти глазами) плюс ключ от полного пути.
+//
+// Ключ — хеш, а не хвост base64 этого же пути: хвост определяется последними
+// байтами, то есть тем же basename, что уже стоит в имени. `~/main/vpn-new` и
+// `~/work/vpn-new` получали один файл, и состояние приватного проекта уехало бы
+// в контекст чужой сессии до первого слова пользователя.
 export function handoffPath(cwd) {
   const root = rootFor(cwd);
   const slug = path.basename(root).replace(/[^\w.-]/g, '-') || 'root';
-  const key = Buffer.from(root).toString('base64url').slice(-8);
+  const key = createHash('sha256').update(root).digest('hex').slice(0, 12);
   return path.join(HANDOFF_DIR, `${slug}-${key}.md`);
 }
 

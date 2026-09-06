@@ -27,7 +27,7 @@ const wrapped = (cmd, opts) => clipCommand(cmd, opts) !== null;
 // --- шумное оборачивается
 for (const cmd of ['npm test', 'npm ci', 'npm run build', 'npx tsc --noEmit', 'pnpm install',
   'docker build .', 'cargo test', 'pytest', 'go test ./...', 'make', 'find . -name "*.ts"',
-  'git log --oneline', 'git diff', 'eslint .', 'CI=1 npm test']) {
+  'eslint .', 'CI=1 npm test']) {
   check(`оборачивает: ${cmd}`, wrapped(cmd), true);
 }
 
@@ -37,20 +37,48 @@ for (const cmd of ['ls -la', 'git status --short', 'echo hi', 'node -v', 'git pu
   check(`не трогает: ${cmd}`, wrapped(cmd), false);
 }
 
+// --- чем проверяют, то не обрезают: середина диффа и есть содержание
+for (const cmd of ['git diff main...HEAD', 'git log --oneline', 'git show HEAD', 'git blame x.ts',
+  'npm audit', 'pnpm audit']) {
+  check(`не трогает верификацию: ${cmd}`, wrapped(cmd), false);
+}
+
+// --- интерактивное: приглашение ввода ушло бы в файл, команда зависла бы
+check('не трогает npm publish', wrapped('npm publish'), false);
+
 // --- команда со своим конвейером или редиректом уже ограничена автором
 for (const cmd of ['npm test | tail -5', 'npm test > out.txt', 'npm test 2> err.log',
   'npm test; ls', 'npm test &', 'echo $(npm test)', 'npm test `date`']) {
   check(`не трогает составное: ${cmd}`, wrapped(cmd), false);
 }
 
+// --- вторая строка: классификатор смотрит первую команду, решение по ней
+// нельзя распространять на приписанное следом
+check('не трогает многострочное', wrapped('npm test\nrm -rf dist'), false);
+check('не трогает многострочное (CRLF)', wrapped('npm test\r\nls'), false);
+
 // --- следящие команды: обрезать нечего, они не заканчиваются
 for (const cmd of ['vitest --watch', 'docker logs -f api', 'jest --watchAll', 'npm test -- --watch']) {
   check(`не трогает следящее: ${cmd}`, wrapped(cmd), false);
 }
 
-// --- цепочка через && : только переходы по каталогам
-check('оборачивает cd + шумное', wrapped('cd client && npm test'), true);
+// --- цепочка через && не оборачивается: `cd` в дочернем шелле не переживает
+// вызов, и следующая команда сессии ушла бы не в тот каталог
+check('не оборачивает cd + шумное', wrapped('cd client && npm test'), false);
 check('не оборачивает чужую цепочку', wrapped('rm -rf dist && npm test'), false);
+
+// --- метка перед `--` различает команды в правилах разрешений
+{
+  const cmd = clipCommand('npm run build');
+  check('метка названа до разделителя', /clip-output\.sh npm run -- /.test(cmd), true);
+  check('исполняемое — после разделителя', cmd.endsWith(`'npm run build'`), true);
+  check('другая команда — другая метка', /clip-output\.sh make -- /.test(clipCommand('make')), true);
+  // Флаг в метке съел бы разделитель, и исполнилось бы не то.
+  const dashed = clipCommand('npm test -- -t x');
+  check('метка без флагов', dashed.slice(0, dashed.indexOf(' -- ')).endsWith('npm test'), true);
+  check('исполняемое целиком после разделителя',
+    dashed.slice(dashed.indexOf(' -- ') + 4), `'npm test -- -t x'`);
+}
 
 // --- фоновая команда читается отдельным вызовом, ограничитель ей помешает
 check('не трогает фоновое', wrapped('npm test', { background: true }), false);
@@ -62,11 +90,19 @@ check('не оборачивает дважды', wrapped(clipCommand('npm test'
 check('пустая команда', clipCommand(''), null);
 check('undefined', clipCommand(undefined), null);
 
-// --- кавычки внутри команды переживают обёртку
-{
-  const cmd = `npm test -- -t 'имя с пробелом'`;
-  const out = execFileSync('bash', ['-c', `${clipCommand(cmd).replace(CLIP, 'echo')}`], { encoding: 'utf8' });
-  check('кавычки не рвут команду', out.trim(), cmd);
+// --- экранирование: шелл, разобрав аргумент, должен получить ровно исходную
+// команду — ни склеенную, ни разорванную
+for (const cmd of [
+  `npm test -- -t 'имя с пробелом'`,
+  `npm test -- -t "двойные кавычки"`,
+  `npm run build -- --define $VAR --path a\\b`,
+  `npx eslint 'src/**/*.ts'`,
+]) {
+  // Разделитель — первое ` -- `: сама команда может содержать своё (`npm test -- -t`).
+  const wrapper = clipCommand(cmd);
+  const quoted = wrapper.slice(wrapper.indexOf(' -- ') + 4);
+  const parsed = execFileSync('bash', ['-c', `printf '%s' ${quoted}`], { encoding: 'utf8' });
+  check(`экранирование: ${cmd}`, parsed, cmd);
 }
 
 // --- хук отдаёт updatedInput в формате Claude Code
@@ -128,6 +164,39 @@ const runClip = (cmd, env = {}) => spawnSync('bash', [CLIP, cmd], {
 {
   const r = spawnSync('bash', [CLIP], { encoding: 'utf8' });
   check('без аргументов: понятная ошибка', r.status, 2);
+}
+
+// --- разделитель: метка не исполняется, исполняется то, что после `--`
+{
+  const r = spawnSync('bash', [CLIP, 'npm', 'test', '--', 'echo метка не исполнилась'], {
+    encoding: 'utf8', env: { ...process.env, CLIP_DIR: store },
+  });
+  check('исполняется аргумент после --', r.stdout.trim(), 'метка не исполнилась');
+  check('метка не попала в вывод', /npm/.test(r.stdout), false);
+}
+
+// --- пределы приходят из окружения и вычисляются как арифметика: без проверки
+// подстановка в $(( )) выполнила бы команду
+{
+  const canary = path.join(store, 'canary');
+  const r = spawnSync('bash', [CLIP, '--', 'echo ok'], {
+    encoding: 'utf8',
+    env: { ...process.env, CLIP_DIR: store, CLIP_HEAD: `x[$(touch ${canary})]` },
+  });
+  check('мусор в CLIP_HEAD не исполняется', fs.existsSync(canary), false);
+  check('мусор в CLIP_HEAD не ломает вызов', r.stdout.trim(), 'ok');
+}
+
+// --- предел на размер сохраняемого файла
+{
+  const r = spawnSync('bash', [CLIP, '--', 'seq 1 100000'], {
+    encoding: 'utf8',
+    env: { ...process.env, CLIP_DIR: store, CLIP_MAX_BYTES: '1000', CLIP_HEAD: '2', CLIP_TAIL: '2' },
+  });
+  check('длинный вывод не роняет', r.status, 0);
+  const saved = fs.readdirSync(store).filter((f) => f.endsWith('.log'));
+  const big = saved.map((f) => fs.statSync(path.join(store, f)).size).some((s) => s > 2000);
+  check('файл ограничен по размеру', big, false);
 }
 
 fs.rmSync(store, { recursive: true, force: true });

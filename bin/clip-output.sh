@@ -12,23 +12,58 @@
 #
 # Код возврата — исходной команды, а не последней в конвейере. Иначе `npm test`
 # с упавшими тестами вернул бы 0, и агент отчитался бы о зелёном прогоне.
+#
+# Вызов: clip-output.sh [метка ...] -- '<команда>'
+# Метка до `--` не исполняется: она нужна, чтобы обёрнутые команды различались
+# в правилах разрешений, где сопоставление идёт по префиксу строки.
 
 set -uo pipefail
 
-head_n=${CLIP_HEAD:-40}
-tail_n=${CLIP_TAIL:-120}
-store=${CLIP_DIR:-${HOME}/.claude/state/clip-output}
+# Пределы приходят из окружения, а `$(( ))` вычисляет содержимое переменной как
+# выражение: без проверки `CLIP_HEAD='x[$(cmd)]'` выполнил бы cmd.
+num() {
+  case "$2" in
+    '' | *[!0-9]*) printf '%s' "$1" ;;
+    *) printf '%s' "$2" ;;
+  esac
+}
 
-if [ $# -eq 0 ]; then
-  echo "usage: clip-output.sh <command>" >&2
+head_n=$(num 40 "${CLIP_HEAD:-}")
+tail_n=$(num 120 "${CLIP_TAIL:-}")
+store=${CLIP_DIR:-${HOME}/.claude/state/clip-output}
+# Полный вывод не должен становиться способом забить диск: `find /` или
+# зациклившийся процесс пишут бесконечно.
+max_bytes=$(num 5242880 "${CLIP_MAX_BYTES:-}")
+
+cmd=''
+seen_sep=0
+for arg in "$@"; do
+  if [ "$seen_sep" = 1 ]; then cmd=$arg; break; fi
+  if [ "$arg" = '--' ]; then seen_sep=1; fi
+done
+# Без разделителя работаем по первому аргументу: так скрипт остаётся вызываемым
+# руками.
+if [ "$seen_sep" = 0 ] && [ $# -gt 0 ]; then cmd=$1; fi
+
+if [ -z "$cmd" ]; then
+  echo "usage: clip-output.sh [метка ...] -- <command>" >&2
   exit 2
 fi
 
 mkdir -p "$store" 2>/dev/null || store=${TMPDIR:-/tmp}
 full=$(mktemp "${store}/out-$(date +%Y%m%d-%H%M%S)-XXXXXX.log" 2>/dev/null) || full=$(mktemp)
 
-bash -c "$1" >"$full" 2>&1
+# Без конвейера: `head -c` закрыл бы поток, команда получила бы SIGPIPE, и код
+# возврата стал бы 141 вместо настоящего — то самое искажение статуса, ради
+# защиты от которого этот скрипт и написан. Размер ограничиваем после.
+bash -c "$cmd" >"$full" 2>&1
 status=$?
+
+if [ "$(wc -c <"$full" | tr -d ' ')" -gt "$max_bytes" ]; then
+  truncate -s "$max_bytes" "$full" 2>/dev/null ||
+    { dd if="$full" of="$full.cut" bs=1 count="$max_bytes" 2>/dev/null && mv "$full.cut" "$full"; }
+  printf '… clip-output: файл полного вывода усечён до %s байт …\n' "$max_bytes" >&2
+fi
 
 total=$(wc -l <"$full" | tr -d ' ')
 
@@ -42,4 +77,4 @@ else
   tail -n "$tail_n" "$full"
 fi
 
-exit $status
+exit "$status"

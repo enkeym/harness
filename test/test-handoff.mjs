@@ -52,6 +52,16 @@ check('имя читаемое', path.basename(handoffPath(repo)).startsWith('pr
   check('разные проекты — разные файлы', handoffPath(other) === handoffPath(repo), false);
 }
 
+// --- одноимённые каталоги в разных местах: состояние приватного проекта не
+// должно подставиться в сессию рабочего
+{
+  const a = path.join(home, 'main', 'vpn-new');
+  const b = path.join(home, 'work', 'vpn-new');
+  check('одноимённые проекты — разные файлы', handoffPath(a) === handoffPath(b), false);
+  check('пути одной длины — тоже разные', a.length === b.length && handoffPath(a) !== handoffPath(b), true);
+  check('имя всё ещё читаемое', path.basename(handoffPath(a)).startsWith('vpn-new-'), true);
+}
+
 // --- нет файла: молчим
 check('нет передачи: null', readHandoff(repo), null);
 check('нет передачи: хук молчит', runHook(repo), null);
