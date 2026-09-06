@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { handoffPath } from '../handoff-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const STATE_DIR = path.join(HOME, '.claude', 'state', 'context-cost');
@@ -34,9 +35,14 @@ const CACHE_READ_PRICE = {
 };
 
 // Ниже этого молчим: обычная рабочая сессия и должна держать контекст.
-const WARN_TOKENS = Number(process.env.CONTEXT_COST_WARN || 200_000);
+//
+// Порог низкий намеренно. Цена хода — это весь контекст целиком, поэтому
+// разница между «сказать на 80 КТокенах» и «сказать на 200» не в громкости
+// совета, а в том, что сотня ходов между этими точками уже оплачена по
+// втрое большей ставке. Предупреждать надо там, где ещё есть что спасать.
+const WARN_TOKENS = Number(process.env.CONTEXT_COST_WARN || 80_000);
 // Второй порог — когда пора не советовать, а настаивать.
-const LOUD_TOKENS = Number(process.env.CONTEXT_COST_LOUD || 500_000);
+const LOUD_TOKENS = Number(process.env.CONTEXT_COST_LOUD || 200_000);
 // Не чаще раза в N ходов на сессию, иначе подсказка станет фоном.
 const REMIND_EVERY = 12;
 
@@ -72,7 +78,7 @@ function shouldSpeak(sessionId) {
   return speak;
 }
 
-export function contextCostNote({ transcript_path, session_id }) {
+export function contextCostNote({ transcript_path, session_id, cwd }) {
   const last = lastUsage(transcript_path);
   if (!last) return null;
 
@@ -83,13 +89,15 @@ export function contextCostNote({ transcript_path, session_id }) {
   const price = priceFor(last.model);
   const perTurn = price ? `≈ $${((cacheRead / 1e6) * price).toFixed(2)} за ход` : `${Math.round(cacheRead / 1000)} КТокенов за ход`;
   const loud = cacheRead >= LOUD_TOKENS;
+  const file = handoffPath(cwd);
 
   return loud
     ? `Контекст сессии ${Math.round(cacheRead / 1000)} КТокенов, перечитывается целиком на каждом ходу (${perTurn}). ` +
-      'Если следующая задача не связана с предыдущей — `/clear` окупится сразу. ' +
+      `Пора закрывать сессию: запиши передачу в ${file} (состояние, открытые вопросы, следующий шаг) и предложи \`/clear\` — ` +
+      'на старте она подставится обратно. ' +
       'Менять модель на ходу смысла нет: кеш привязан к модели, и возврат обойдётся дороже экономии.'
     : `Контекст сессии вырос до ${Math.round(cacheRead / 1000)} КТокенов (${perTurn}). ` +
-      'Для несвязанной задачи дешевле начать с `/clear`.';
+      `Для несвязанной задачи дешевле начать с \`/clear\`, записав передачу в ${file}.`;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {

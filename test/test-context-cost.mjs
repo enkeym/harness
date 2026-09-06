@@ -43,13 +43,16 @@ function run(file, sessionId) {
 
 // --- молчит на обычной сессии
 check('50 КТокенов: молчит', run(transcript('small', 'claude-opus-5', 50_000), 's-small'), null);
-check('199 КТокенов: молчит', run(transcript('edge', 'claude-opus-5', 199_000), 's-edge'), null);
+check('79 КТокенов: молчит', run(transcript('edge', 'claude-opus-5', 79_000), 's-edge'), null);
 
 // --- говорит на выросшей
-const warn = run(transcript('warn', 'claude-opus-5', 300_000), 's-warn');
-check('300 КТокенов: предупреждает', warn !== null, true);
+const warn = run(transcript('warn', 'claude-opus-5', 100_000), 's-warn');
+check('100 КТокенов: предупреждает', warn !== null, true);
 check('называет деньги', /\$\d/.test(warn || ''), true);
 check('советует /clear', /\/clear/.test(warn || ''), true);
+// Совет без механики бесполезен: очистка не страшна ровно тогда, когда
+// состояние работы есть куда положить.
+check('называет файл передачи', /handoff\/.+\.md/.test(warn || ''), true);
 
 // --- на очень большой добавляет довод против смены модели
 const loud = run(transcript('loud', 'claude-opus-5', 900_000), 's-loud');

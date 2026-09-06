@@ -44,6 +44,10 @@ claude/subagent-context.mjs     # правило tokensave/ragsave в конте
 claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты по сессии → logs/usage.jsonl (Stop)
 claude/context-cost.mjs         # предупреждение о выросшем контексте (UserPromptSubmit)
+handoff-core.mjs                # передача между сессиями: путь по корню репозитория, срок годности
+claude/handoff-load.mjs         # подстановка передачи прошлой сессии (SessionStart)
+claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
+bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
 bin/delegate.mjs                # делегирование задачи внешним CLI (DeepSeek, GLM) + health
@@ -66,6 +70,9 @@ test/test-agents.mjs            # определения ролей и скил�
 test/test-delegate.mjs          # секрет не уходит наружу, кеш здоровья, коды выхода
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
+test/test-context-cost.mjs      # пороги предупреждения, цена по модели, дроссель
+test/test-handoff.mjs           # ключ по репозиторию, срок годности, обрезка длинной передачи
+test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
 test/test-context-cost.mjs      # когда подсказка о стоимости молчит, когда говорит
 ```
@@ -296,6 +303,10 @@ Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 `node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
 Субагенты: `node ~/.ai-hooks/claude/subagent-context.mjs` на `SubagentStart`
 (без matcher — все типы агентов).
+Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
+(matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
+`node ~/.ai-hooks/claude/handoff-load.mjs` на `SessionStart` (matcher
+`startup|clear`).
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs`. Плагины OpenCode грузятся автоматически из
@@ -323,11 +334,36 @@ Matcher переживает `tokensave reinstall`: install дописывает
 длинная сессия по инфраструктуре стоила дороже, чем все рабочие сессии месяца
 вместе.
 
+Замер за следующую неделю уточнил механику: 66.6 МТокена чтения кеша на ~540
+вызовов инструментов. Значит счёт — это произведение «размер контекста × число
+шагов», и каждый лишний вызов стоит всего накопленного контекста целиком.
+Отсюда три меры ниже.
+
 `claude/context-cost.mjs` на `UserPromptSubmit` берёт фактическое
 `cache_read_input_tokens` из последнего ответа в транскрипте и, когда оно
-переваливает 200 КТокенов, показывает пользователю цену хода в долларах и
+переваливает 80 КТокенов, показывает пользователю цену хода в долларах и
 предлагает `/clear` перед несвязанной задачей. Не чаще раза в 12 ходов, иначе
 подсказка становится фоном. Пороги — `CONTEXT_COST_WARN` и `CONTEXT_COST_LOUD`.
+Порог низкий намеренно: разница между 80 и 200 КТокенами — это не громкость
+совета, а сотня ходов, оплаченных по втрое большей ставке.
+
+**Передача между сессиями.** `/clear` дешевеет ровно настолько, насколько не
+страшно его нажать, поэтому предупреждение называет файл
+`~/.claude/handoff/<проект>-<ключ>.md`: агент пишет туда состояние работы
+обычным `Write`, а `claude/handoff-load.mjs` на `SessionStart` подставляет файл
+обратно в новую сессию. Ключ — корень репозитория, как у ask mode. Передача
+старше двух недель не подставляется (описывает работу, которой уже нет), длиннее
+6000 знаков — обрезается, чтобы сама не стала статьёй расхода.
+
+**Ограничитель вывода.** `claude/output-clip.mjs` на `PreToolUse(Bash)` заменяет
+команду на вызов `bin/clip-output.sh`, если она из шумных (`npm`, `tsc`,
+`docker`, `cargo`, `git log`, `find` и подобные). Скрипт печатает голову и
+хвост, а середину складывает в файл, путь к которому называет: понадобилась —
+`grep`, а не чтение целиком. Обрезка идёт только по простым командам:
+собственные конвейеры, редиректы, подстановки, фоновый запуск и следящие режимы
+(`--watch`, `-f`) не трогаются, иначе хук менял бы семантику команды вместо её
+объёма. Код возврата сохраняется исходный — иначе `npm test` с упавшими тестами
+вернул бы ноль, и агент отчитался бы о зелёном прогоне.
 
 Совета «возьми модель дешевле» там намеренно нет. Кеш привязан к модели:
 переключение сбрасывает его, и на выросшем контексте возврат стоит дороже
@@ -383,6 +419,9 @@ node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-delegate.mjs
+node ~/.ai-hooks/test/test-context-cost.mjs
+node ~/.ai-hooks/test/test-handoff.mjs
+node ~/.ai-hooks/test/test-output-clip.mjs
 ```
 
 `test-agents.mjs` не запускает агентов: живой прогон стоит токенов и проверяет
