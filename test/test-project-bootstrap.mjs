@@ -59,6 +59,21 @@ check('.env в подпакете без примера — пропуск', /se
 fs.writeFileSync(path.join(pkg, '.env.example'), 'A=\n');
 check('всё на месте: хук молчит', run(repo) === null);
 
+// Осознанный отказ: удалённый CLAUDE.md не должен напоминать о себе вечно.
+fs.rmSync(path.join(repo, 'CLAUDE.md'));
+check('CLAUDE.md удалён — хук говорит', /CLAUDE\.md/.test(run(repo) || ''));
+
+fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
+fs.writeFileSync(path.join(repo, '.claude', 'bootstrap-ignore'), '# осознанно\nclaude-md\n');
+check('bootstrap-ignore: про CLAUDE.md молчит', run(repo) === null);
+
+fs.writeFileSync(path.join(repo, '.env.extra'), 'B=1\n');
+fs.rmSync(path.join(repo, '.env.dev.example'));
+check('игнор точечный: env-example всё ещё сообщается', /env/.test(run(repo) || ''));
+
+fs.writeFileSync(path.join(repo, '.claude', 'bootstrap-ignore'), 'claude-md\nenv-example\n');
+check('два пункта в игноре: хук молчит', run(repo) === null);
+
 check('вне репозитория: молчит', run(tmp) === null);
 
 fs.rmSync(tmp, { recursive: true, force: true });

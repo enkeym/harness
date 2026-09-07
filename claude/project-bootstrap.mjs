@@ -11,6 +11,12 @@
 // Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI и husky
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
 // про CLAUDE.md — каждый раз, пока файла нет.
+//
+// Отсутствие бывает осознанным: проект может не хотеть CLAUDE.md или husky.
+// Тогда `.claude/bootstrap-ignore` в корне перечисляет по строке на пункт
+// (`claude-md`, `husky`, `ci`, `dependabot`, `env-example`), и о них хук
+// молчит. Без этого напоминание про намеренно удалённый файл превращается
+// в постоянный шум, ради устранения которого хук и писался.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -67,6 +73,17 @@ function envGaps(root) {
   return gaps;
 }
 
+// Пункты, которые проект объявил осознанно ненужными.
+function ignoredItems(root) {
+  let raw = '';
+  try { raw = fs.readFileSync(path.join(root, '.claude', 'bootstrap-ignore'), 'utf8'); } catch { return new Set(); }
+  return new Set(
+    raw.split('\n')
+      .map((line) => line.replace(/#.*$/, '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
 function remindedRecently(root) {
   const file = path.join(STATE_DIR, Buffer.from(root).toString('base64url').slice(0, 200));
   try {
@@ -86,19 +103,22 @@ export function bootstrapContext(cwd) {
   if (!root || root === HOME) return null;
 
   const isNode = exists(root, 'package.json');
+  const ignored = ignoredItems(root);
   const always = [];
   const weekly = [];
 
-  if (!exists(root, 'CLAUDE.md')) always.push('нет CLAUDE.md проекта');
-  const gaps = envGaps(root);
-  if (gaps.length) always.push(`есть .env без .env.example (${gaps.join(', ')})`);
+  if (!ignored.has('claude-md') && !exists(root, 'CLAUDE.md')) always.push('нет CLAUDE.md проекта');
+  if (!ignored.has('env-example')) {
+    const gaps = envGaps(root);
+    if (gaps.length) always.push(`есть .env без .env.example (${gaps.join(', ')})`);
+  }
 
   if (isNode) {
-    if (!exists(root, '.husky')) weekly.push('нет husky (pre-commit: lint-staged + tsc)');
+    if (!ignored.has('husky') && !exists(root, '.husky')) weekly.push('нет husky (pre-commit: lint-staged + tsc)');
     const remote = remoteUrl(root);
-    if (/github\.com/.test(remote) && !exists(root, '.github', 'workflows')) weekly.push('GitHub-remote без .github/workflows (CI)');
-    if (/github\.com/.test(remote) && !exists(root, '.github', 'dependabot.yml')) weekly.push('нет .github/dependabot.yml');
-    if (/gitlab/.test(remote) && !exists(root, '.gitlab-ci.yml')) weekly.push('GitLab-remote без .gitlab-ci.yml');
+    if (!ignored.has('ci') && /github\.com/.test(remote) && !exists(root, '.github', 'workflows')) weekly.push('GitHub-remote без .github/workflows (CI)');
+    if (!ignored.has('dependabot') && /github\.com/.test(remote) && !exists(root, '.github', 'dependabot.yml')) weekly.push('нет .github/dependabot.yml');
+    if (!ignored.has('ci') && /gitlab/.test(remote) && !exists(root, '.gitlab-ci.yml')) weekly.push('GitLab-remote без .gitlab-ci.yml');
   }
 
   const items = [...always];
