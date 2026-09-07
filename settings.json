@@ -219,9 +219,6 @@
     "command": "node /home/enkeym/.ai-hooks/claude/statusline.mjs",
     "refreshInterval": 5
   },
-  "enabledPlugins": {
-    "superpowers@superpowers-marketplace": false
-  },
   "extraKnownMarketplaces": {
     "superpowers-marketplace": {
       "source": {
@@ -235,6 +232,9 @@
   "modelSettings": {
     "claude-sonnet-5": {
       "effortLevel": "medium"
+    },
+    "claude-opus-5": {
+      "effortLevel": "high"
     }
   },
   "theme": "dark-ansi",
