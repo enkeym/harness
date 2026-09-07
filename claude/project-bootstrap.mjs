@@ -3,7 +3,10 @@
 //
 // Смотрит корень git-репозитория текущего каталога и кладёт в контекст список
 // пропусков: нет CLAUDE.md, нет husky, нет CI для GitHub-remote, нет
-// .env.example при наличии .env. Что с этим делать — решает правило в
+// примера env при наличии .env. Пример ищется по маске `.env*.example`
+// (`.env.dev.example` тоже считается) и отдельно в каждом каталоге со своим
+// package.json — иначе монорепо ругается на пропуск, которого нет.
+// Что с этим делать — решает правило в
 // CLAUDE.md (раздел «Автоматизация проекта»), хук только сообщает факты.
 // Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI и husky
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
@@ -37,6 +40,33 @@ function remoteUrl(root) {
 
 const exists = (...p) => fs.existsSync(path.join(...p));
 
+const ENV_EXAMPLE = /^\.env.*\.example$/;
+const ENV_FILE = /^\.env(\..+)?$/;
+
+// Не workspaces: каталоги с собственным package.json держат свои .env.
+function envDirs(root) {
+  const dirs = [root];
+  let entries = [];
+  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return dirs; }
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
+    if (exists(root, e.name, 'package.json')) dirs.push(path.join(root, e.name));
+  }
+  return dirs;
+}
+
+function envGaps(root) {
+  const gaps = [];
+  for (const dir of envDirs(root)) {
+    let names = [];
+    try { names = fs.readdirSync(dir); } catch { continue; }
+    const hasEnv = names.some((n) => ENV_FILE.test(n) && !ENV_EXAMPLE.test(n));
+    if (!hasEnv || names.some((n) => ENV_EXAMPLE.test(n))) continue;
+    gaps.push(dir === root ? '.' : path.relative(root, dir));
+  }
+  return gaps;
+}
+
 function remindedRecently(root) {
   const file = path.join(STATE_DIR, Buffer.from(root).toString('base64url').slice(0, 200));
   try {
@@ -60,7 +90,8 @@ export function bootstrapContext(cwd) {
   const weekly = [];
 
   if (!exists(root, 'CLAUDE.md')) always.push('нет CLAUDE.md проекта');
-  if (exists(root, '.env') && !exists(root, '.env.example')) always.push('есть .env, но нет .env.example');
+  const gaps = envGaps(root);
+  if (gaps.length) always.push(`есть .env без .env.example (${gaps.join(', ')})`);
 
   if (isNode) {
     if (!exists(root, '.husky')) weekly.push('нет husky (pre-commit: lint-staged + tsc)');

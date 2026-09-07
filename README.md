@@ -43,7 +43,6 @@ claude/statusline.mjs           # каталог, ветка, модель, ин
 claude/subagent-context.mjs     # правило tokensave/ragsave в контекст субагента (SubagentStart)
 claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты по сессии → logs/usage.jsonl (Stop)
-claude/context-cost.mjs         # предупреждение о выросшем контексте (UserPromptSubmit)
 handoff-core.mjs                # передача между сессиями: путь по корню репозитория, срок годности
 claude/handoff-load.mjs         # подстановка передачи прошлой сессии (SessionStart)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
@@ -70,11 +69,9 @@ test/test-agents.mjs            # определения ролей и скил�
 test/test-delegate.mjs          # секрет не уходит наружу, кеш здоровья, коды выхода
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
-test/test-context-cost.mjs      # пороги предупреждения, цена по модели, дроссель
 test/test-handoff.mjs           # ключ по репозиторию, срок годности, обрезка длинной передачи
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
-test/test-context-cost.mjs      # когда подсказка о стоимости молчит, когда говорит
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -152,11 +149,12 @@ sync, и дальше MCP отвечал графом родительской �
 при `resume`/`compact` — иначе режим менялся бы под руками. Переключение:
 `/ask`, `/ask-off` или `bin/ask-mode.mjs on|off|toggle|reset|default on|off`.
 
-## Субагенты и Superpowers
+## Субагенты
 
-Плагин Superpowers (`claude plugin install superpowers@superpowers-marketplace`)
-выполняет планы через субагентов: имплементер и ревьюер на каждую задачу,
-`general-purpose` с явной моделью. Субагент стартует с пустым контекстом —
+Ролевые агенты (`~/.claude/agents/`) и скилл `/team` выполняют задачу через
+субагентов: имплементер и ревьюер на каждую подзадачу. Плагин Superpowers,
+делавший то же самое своим слоем скиллов, отключён — он предписывал больше
+ходов, чем окупалось. Субагент стартует с пустым контекстом —
 CLAUDE.md, напоминания `UserPromptSubmit` и `hook-prompt-submit` tokensave до
 него не доходят, а гарды `PreToolUse` действуют на него так же, как на основную
 сессию (в их вход приходят `agent_id` и `agent_type`). Без подготовки первый
@@ -260,10 +258,6 @@ opencode с прямым выбором модели (`-m provider/model`), у C
 и эха промпта, забирается через `--output-last-message <file>` — тот же приём,
 которым `clean()` вручную снимает шум с вывода opencode.
 
-`gemini` не подключён: на момент настройки не проходит авторизацию. Появится
-доступ — добавляется в `PROVIDERS` одной записью по образцу Codex или
-DeepSeek/GLM, смотря какой рантайм у него получится вызвать.
-
 ## Автоматизация проекта и учёт
 
 `claude/project-bootstrap.mjs` на `SessionStart` (`startup|clear`) смотрит
@@ -363,13 +357,10 @@ Matcher переживает `tokensave reinstall`: install дописывает
 шагов», и каждый лишний вызов стоит всего накопленного контекста целиком.
 Отсюда три меры ниже.
 
-`claude/context-cost.mjs` на `UserPromptSubmit` берёт фактическое
-`cache_read_input_tokens` из последнего ответа в транскрипте и, когда оно
-переваливает 80 КТокенов, показывает пользователю цену хода в долларах и
-предлагает `/clear` перед несвязанной задачей. Не чаще раза в 12 ходов, иначе
-подсказка становится фоном. Пороги — `CONTEXT_COST_WARN` и `CONTEXT_COST_LOUD`.
-Порог низкий намеренно: разница между 80 и 200 КТокенами — это не громкость
-совета, а сотня ходов, оплаченных по втрое большей ставке.
+Автоматического предупреждения о цене контекста здесь нет: хук `context-cost`
+удалён по просьбе пользователя как шум. Замер остаётся в силе, но вывод из него
+делает человек, а не подсказка на каждом двенадцатом ходу. Отчёт по факту —
+`bin/usage-report.mjs`.
 
 **Передача между сессиями.** `/clear` дешевеет ровно настолько, насколько не
 страшно его нажать, поэтому предупреждение называет файл
@@ -470,7 +461,6 @@ node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-delegate.mjs
-node ~/.ai-hooks/test/test-context-cost.mjs
 node ~/.ai-hooks/test/test-handoff.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 ```
