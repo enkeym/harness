@@ -10,7 +10,8 @@
       "Bash(opencode run --agent commit:*)",
       "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
       "Bash(node /home/enkeym/.ai-hooks/bin/delegate.mjs:*)",
-      "mcp__playwright__*"
+      "mcp__playwright__*",
+      "Edit(/home/enkeym/.ai-hooks/**)"
     ],
     "defaultMode": "default"
   },
@@ -153,14 +154,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "node /home/enkeym/.ai-hooks/claude/ragsave-reminder.mjs"
           }
         ]
@@ -176,6 +169,7 @@
     ],
     "SessionStart": [
       {
+        "matcher": "startup|clear",
         "hooks": [
           {
             "type": "command",
@@ -223,7 +217,7 @@
   "effortLevel": "medium",
   "modelSettings": {
     "claude-sonnet-5": {
-      "effortLevel": "medium"
+      "effortLevel": "high"
     },
     "claude-opus-5": {
       "effortLevel": "high"
