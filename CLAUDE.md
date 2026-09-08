@@ -161,6 +161,13 @@ feedback, not advice — a refusal is never a reason to look for a workaround.
   `opencode run --agent commit --dir "$(git rev-parse --show-toplevel)" "без push"`.
   Push and MR stay with the human. Never commit unfinished work, red tests,
   files outside the task, or secrets.
+- The commit agent owns the whole message: it writes the Conventional Commits
+  header from the diff, and — from the branch name — the Jira `Summary` /
+  `Description` and the MR. So the branch carries the ticket:
+  `feature/STR-620`, off `dev` where that is the repo's development branch. A
+  branch named without the ticket loses the Jira link silently, and no later
+  step can recover it. Don't hand-write Jira text or commit messages yourself
+  when this agent is available.
 - `node ~/.ai-hooks/bin/delegate.mjs "task"` (`--mode deep|jury`, `--out FILE`,
   `--health`) spends DeepSeek/GLM/Codex quotas instead of yours. Delegate without
   asking when the task is self-contained, the answer is bulky and verifiable:

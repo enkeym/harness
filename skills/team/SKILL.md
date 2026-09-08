@@ -16,7 +16,11 @@ the same work. If it fits a direct edit, leave the skill and say so in one line.
 
 ## 0. Branch and ledger
 
-- Not on `main`/`dev`: `git switch -c feat/<slug>` if needed. No worktrees.
+- Not on `main`/`dev`: branch as `feature/<TICKET>` (`feature/STR-620`) off the
+  branch the repo actually develops from — usually `dev`, not `main`. The ticket
+  number in the branch name is the only place the commit agent reads it from; a
+  branch without it silently loses the Jira link. No ticket — `feature/<slug>`.
+  No worktrees.
 - Ledger: `.team/<YYYY-MM-DD>-<slug>.md` (the directory is self-ignored — drop a
   `.gitignore` with `*` in it on creation). First line is the task in one
   sentence; every step below appends a line. After compaction the ledger and

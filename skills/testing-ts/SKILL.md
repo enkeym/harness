@@ -1,6 +1,6 @@
 ---
 name: testing-ts
-description: Test conventions for the user's TypeScript projects (Jest/Vitest, NestJS TestingModule, supertest, Testing Library) — what to assert, file structure and naming, mocking boundaries, clean output, focused runs. Load before writing, fixing or reviewing tests in any stack.
+description: Test conventions for the user's TypeScript projects (Jest/Vitest, NestJS TestingModule, supertest, Testing Library, Playwright e2e and visual regression) — what to assert, file structure and naming, mocking boundaries, clean output, focused runs. Load before writing, fixing or reviewing tests in any stack, unit or e2e.
 ---
 
 # TypeScript test conventions
@@ -35,6 +35,33 @@ description: Test conventions for the user's TypeScript projects (Jest/Vitest, N
   `main.ts`, plus `supertest`.
 - React: mock the API client, not the component's hook; query the DOM by role
   and text.
+
+## e2e — Playwright
+
+- Config and specs live on the client side: `client/playwright.config.ts`,
+  `testDir: './e2e'`, specs as `*.spec.ts`, shared setup in `e2e/fixtures`. A
+  specialised suite (visual regression) gets its own config file, not a flag
+  bolted onto the main one.
+- Run through the project's script (`npm run test:e2e`), never a bare
+  `npx playwright test`: the config brings up its own dev server on a fixed
+  port with `reuseExistingServer` and the module env flags the suite needs.
+- The run is serial on purpose (`fullyParallel: false`, `workers: 1`) — the
+  specs share one server and one canvas. Don't switch on parallelism to make a
+  suite faster.
+- Retries exist only on CI. A spec that needs a retry locally is a broken spec,
+  not a slow one.
+- Failure artefacts are kept on failure (trace, screenshot, video) — read the
+  trace before editing the test.
+- Wait with web-first assertions (`await expect(locator).toBeVisible()`) and
+  `page.waitForResponse`. `waitForTimeout` is never a synchronisation tool.
+- Locators by role, text or `getByTestId`, the same way as Testing Library — no
+  CSS chains tied to layout.
+- Visual regression: snapshots are committed. Regenerate with
+  `--update-snapshots` only when the visual change is intended, and review the
+  new image as part of the diff. A snapshot refreshed to turn a red test green
+  throws the regression away.
+- The Playwright MCP tools (`browser_*`) are for exploring a live page and
+  reproducing a bug by hand — not for running the suite.
 
 ## Running
 
