@@ -275,8 +275,10 @@ export function denialKey(toolName, toolInput = {}) {
 // предохранитель держится до конца окна: иначе запреты пошли бы через один и
 // цикл вернулся бы в другом виде. Любая ошибка состояния → false (запрещаем
 // как обычно): потерянная метка безопаснее пропущенного запрета.
-export function breakerAllows(sessionId, key) {
-  const id = `${sessionId || 'default'}|${key}`;
+export function breakerAllows(sessionId, key, family = null) {
+  const sid = sessionId || 'default';
+  const id = `${sid}|${key}`;
+  const famId = family ? `${sid}|fam:${family}` : null;
   const now = Date.now();
   let state = {};
   try {
@@ -289,8 +291,14 @@ export function breakerAllows(sessionId, key) {
   }
 
   const entry = state[id];
-  const open = Boolean(entry); // цель уже запрещали в этом окне
+  const famOpen = famId ? Boolean(state[famId]) : false;
+  // Пропускаем, если эту цель уже запрещали в окне, либо повтор случился на
+  // соседней цели того же класса — tokensave не работает на всём графе.
+  const open = Boolean(entry) || famOpen;
   state[id] = { t: entry?.t ?? now };
+  // Латч класса открывается только после реального повтора (entry уже был) и
+  // держится «живым», пока агент продолжает упираться в гард.
+  if (famId && (entry || famOpen)) state[famId] = { t: now };
 
   try {
     fs.mkdirSync(STATE_DIR, { recursive: true });

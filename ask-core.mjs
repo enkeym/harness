@@ -22,7 +22,13 @@ import os from 'node:os';
 const HOME = process.env.HOME || os.homedir();
 const STATE_DIR = path.join(HOME, '.claude', 'state', 'ask-mode');
 const DEFAULT_FILE = path.join(STATE_DIR, 'default');
-const FALLBACK_DEFAULT = true;
+// Файла `default` нет или он не читается — режим выключен. Ask mode не средство
+// защиты (за это отвечает security-guard), а удобство, поэтому отказ его
+// хранилища обязан ронять режим в «выключено». Обратный fallback означал бы
+// молча включённый ask mode во всех каталогах сразу, при этом statusline и
+// `ask-mode.mjs status` читают тот же файл и показали бы то же «включён» —
+// то есть симптом «правки запрещены без причины» без единого следа причины.
+const FALLBACK_DEFAULT = false;
 
 // Ключ — корень проекта, а не буквальный cwd: сессия ходит по подкаталогам
 // (`cd client && npm test`), и режим не должен от этого переключаться.

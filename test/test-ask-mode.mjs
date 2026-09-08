@@ -39,12 +39,25 @@ check('решение каталога перекрывает умолчание
 check('подкаталог наследует решение корня', isOn(sub), false);
 check('reset возвращает умолчание', resetMode(tmp), defaultOn());
 
-// ---- SessionStart ----
-setMode(tmp, false);
-execFileSync('node', [SESSION], { input: JSON.stringify({ cwd: tmp, source: 'compact' }) });
-check('compact не трогает режим', isOn(tmp), false);
-execFileSync('node', [SESSION], { input: JSON.stringify({ cwd: tmp, source: 'startup' }) });
-check('startup сбрасывает к умолчанию', isOn(tmp), defaultOn());
+// ---- SessionStart: сброс строго один раз на session_id ----
+const sess = (source, session_id) =>
+  execFileSync('node', [SESSION], { input: JSON.stringify({ cwd: tmp, source, session_id }) });
+
+setMode(tmp, true);
+sess('compact', `test-ask-c-${process.pid}`);
+check('compact не трогает режим', isOn(tmp), true);
+
+const sid = `test-ask-${process.pid}-${Date.now()}`;
+setMode(tmp, true);
+sess('startup', sid);
+check('первый startup сбрасывает к умолчанию', isOn(tmp), defaultOn());
+
+setMode(tmp, true);
+sess('startup', sid);
+check('повторный startup того же session_id режим не трогает', isOn(tmp), true);
+
+sess('startup', `${sid}-new`);
+check('startup новой сессии снова сбрасывает', isOn(tmp), defaultOn());
 
 // ---- классификация инструментов ----
 setMode(tmp, true);
@@ -95,5 +108,14 @@ check('ask off: Edit разрешён', hook({ cwd: tmp, tool_name: 'Edit', tool
 
 resetMode(tmp);
 fs.rmSync(tmp, { recursive: true, force: true });
+
+// убрать за собой тестовые session_id из общего файла дедупа
+try {
+  const sf = path.join(os.homedir(), '.claude', 'state', 'ask-mode', '.sessions.json');
+  const st = JSON.parse(fs.readFileSync(sf, 'utf8'));
+  for (const k of Object.keys(st)) if (k.startsWith('test-ask-')) delete st[k];
+  fs.writeFileSync(sf, JSON.stringify(st));
+} catch { /* файла нет — нечего чистить */ }
+
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

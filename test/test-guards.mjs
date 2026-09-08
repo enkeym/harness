@@ -12,9 +12,11 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import os from 'node:os';
 import {
   guardRead, guardGrep, guardEdit, guardBash, guardExec, OPENCODE_LABELS,
-  isIndexed, indexedExtensions,
+  isIndexed, indexedExtensions, breakerAllows,
 } from '../guard-core.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -279,6 +281,32 @@ bash('тупик №3: вывод команд фильтруется грепо
 read('тупик №4: вендорный файл с индексируемым расширением читается напрямую', 'allow',
   TS_PROJECT + '/client/node_modules/storm-ui/dist/index.css');
 bash('тупик №5: .env.example читается через shell', 'allow', 'cat .env.example');
+
+// ---- предохранитель: повтор гасит отказ, латч класса — соседние цели ----
+// Когда tokensave лёг (MCP на чужой ветке, лок БД), он лёг на весь граф, а не
+// на один файл. Первый файл всё равно стоит отказ+повтор — так узнаём, что
+// альтернативы нет; каждый следующий файл того же класса проходит сразу.
+const decide = (sid, key, fam) => (breakerAllows(sid, key, fam) ? 'allow' : 'deny');
+const SID = `test-breaker-${process.pid}-${Date.now()}`;
+
+check('[core] breaker: первая цель → отказ держим', decide(SID, 'Read:/a/x.ts', 'read'), 'deny');
+check('[core] breaker: повтор той же цели → пропуск', decide(SID, 'Read:/a/x.ts', 'read'), 'allow');
+check('[core] breaker: соседняя цель того же класса → пропуск (латч)',
+  decide(SID, 'Read:/a/y.ts', 'read'), 'allow');
+check('[core] breaker: другой класс латчем read не задет',
+  decide(SID, 'Edit:/a/z.ts', 'edit'), 'deny');
+check('[core] breaker: без family латча нет — только точное совпадение',
+  decide(SID, 'Bash:cat /a/q.ts', null), 'deny');
+check('[core] breaker: свежая сессия — отказ как обычно',
+  decide(`${SID}-other`, 'Read:/a/x.ts', 'read'), 'deny');
+
+// убрать за собой тестовые записи из общего файла предохранителя
+try {
+  const bf = path.join(os.homedir(), '.ai-hooks', 'state', 'guard-breaker.json');
+  const st = JSON.parse(fs.readFileSync(bf, 'utf8'));
+  for (const k of Object.keys(st)) if (k.startsWith('test-breaker-')) delete st[k];
+  fs.writeFileSync(bf, JSON.stringify(st));
+} catch { /* файла нет — нечего чистить */ }
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
