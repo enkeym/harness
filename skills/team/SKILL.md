@@ -1,96 +1,95 @@
 ---
 name: team
-description: Оркестрация ролевых агентов (scout, backend-dev, frontend-dev, tester, reviewer, security-reviewer, devops) для задачи на 3+ файла или два стека — разведка, декомпозиция, реализация, тесты, ревью, верификация. Только когда задача действительно не помещается в прямую правку: оркестрация стоит дороже самостоятельной работы.
+description: Orchestration of role agents (scout, backend-dev, frontend-dev, tester, reviewer, security-reviewer, devops) for a task spanning 3+ files or both stacks — recon, decomposition, implementation, tests, review, verification. Only when the task genuinely does not fit a direct edit: orchestration costs more than doing it yourself.
 ---
 
-# /team — оркестрация ролей
+# /team — role orchestration
 
-Ты контроллер. Ты не пишешь код руками и не читаешь модули целиком — ты
-режешь задачу, раздаёшь роли, проверяешь отчёты и держишь свой контекст
-чистым. Дизайн уже одобрен; если нет — сначала он.
+You are the controller. You don't write code by hand and you don't read whole
+modules — you slice the task, hand out roles, check reports and keep your own
+context clean. The design is already approved; if it isn't, do the design first.
 
-**Порог.** Оркестрация окупается только когда роли забирают себе объём чтения
-и прогонов. Задача на два файла, которую ты сделаешь сам за десяток ходов,
-через `/team` стоит дороже: диспетчеризация, brief'ы, отчёты и ревью — это
-ходы поверх той же работы. Помещается в прямую правку — выходи из скилла и
-скажи об этом одной строкой.
+**Threshold.** Orchestration pays off only when the roles absorb the reading and
+the test runs. A two-file task you would finish yourself in a dozen turns costs
+more through `/team`: dispatch, briefs, reports and review are turns on top of
+the same work. If it fits a direct edit, leave the skill and say so in one line.
 
-## 0. Ветка и ledger
+## 0. Branch and ledger
 
-- Ветка не `main`/`dev`: `git switch -c feat/<slug>` при необходимости.
-  Worktree не создавать.
-- Ledger: `.team/<YYYY-MM-DD>-<slug>.md` (каталог self-ignored:
-  при создании положи туда `.gitignore` с `*`). Первая строка — задача одной
-  фразой. Каждый шаг ниже дописывает строку. После compaction ledger и
-  `git log` — источник истины, не твоя память.
-- TodoWrite: по пункту на каждую подзадачу.
+- Not on `main`/`dev`: `git switch -c feat/<slug>` if needed. No worktrees.
+- Ledger: `.team/<YYYY-MM-DD>-<slug>.md` (the directory is self-ignored — drop a
+  `.gitignore` with `*` in it on creation). First line is the task in one
+  sentence; every step below appends a line. After compaction the ledger and
+  `git log` are the source of truth, not your memory.
+- TodoWrite: one item per subtask.
 
-## 1. Разведка — `scout`
+## 1. Recon — `scout`
 
-Один вызов, `model` из файла роли. В промпте: задача одной фразой, стеки
-(server / client / infra), что именно нужно узнать. Brief scout'а — в ledger
-целиком (≤40 строк), в свой контекст — только его.
+One call, `model` taken from the role file. The prompt carries: the task in one
+sentence, the stacks involved (server / client / infra), and exactly what needs
+to be found out. The scout's brief goes into the ledger in full (≤40 lines);
+only the brief enters your context.
 
-Область тебе уже известна и символы названы — scout не нужен, идёшь к шагу 2.
+If the area is already known to you and the symbols are named, skip to step 2.
 
-## 2. Декомпозиция
+## 2. Decomposition
 
-Разбей на подзадачи по владельцу файлов. Для каждой — brief-файл
+Split by file ownership. Each subtask gets a brief file
 `.team/<slug>/task-N-brief.md`:
 
 ```
-# Task N: <название>
-Роль: backend-dev | frontend-dev | devops | tester
-Файлы: <create / modify — точные пути>
-Интерфейсы: consumes <…> / produces <точные имена и типы>
-Требования: <по пунктам, с точными значениями>
-Проверка: <команды и ожидаемый результат>
-Ограничения: <из дизайна: версии, имена, что нельзя трогать>
-Отчёт: .team/<slug>/task-N-report.md
+# Task N: <name>
+Role: backend-dev | frontend-dev | devops | tester
+Files: <create / modify — exact paths>
+Interfaces: consumes <…> / produces <exact names and types>
+Requirements: <itemised, with exact values>
+Verification: <commands and expected result>
+Constraints: <from the design: versions, names, what not to touch>
+Report: .team/<slug>/task-N-report.md
 ```
 
-Правило параллельности: параллельно только подзадачи с непересекающимися
-файлами. Общий файл или одна produces → другая consumes — последовательно.
-Несколько мелких однотипных правок — один brief на всю пачку, не по агенту
-на каждую.
+Parallelism rule: only subtasks with non-overlapping files run in parallel. A
+shared file, or one producing what another consumes, means sequential. Several
+small edits of the same kind share one brief instead of one agent each.
 
-## 3. Реализация
+## 3. Implementation
 
-Диспетчер: `Agent(subagent_type: <роль>)`, промпт — одна строка контекста +
-«прочитай brief первым: <путь>» + путь отчёта. Не вставляй в промпт историю
-предыдущих задач; интерфейсы из них — в brief.
+Dispatch with `Agent(subagent_type: <role>)`; the prompt is one line of context
+plus "read the brief first: `<path>`" plus the report path. Never paste the
+history of previous tasks into a prompt — their interfaces belong in the brief.
 
-Статусы: `DONE` → шаг 4; `DONE_WITH_CONCERNS` → прочитай concerns, реши,
-запиши решение в ledger как `Ruling: … — почему — цена ошибки`; `NEEDS_CONTEXT`
-→ дай контекст и перезапусти; `BLOCKED` → разбей, уточни или подними модель
-(`opus`), но не повторяй то же самое.
+Statuses: `DONE` → step 4; `DONE_WITH_CONCERNS` → read the concerns, decide, and
+write the decision into the ledger as `Ruling: … — why — cost of being wrong`;
+`NEEDS_CONTEXT` → supply the context and re-run; `BLOCKED` → split it, clarify
+it, or raise the model (`opus`) — but don't repeat the same call.
 
-## 4. Тесты и ревью
+## 4. Tests and review
 
-- Имплементер не покрыл поведение тестами (нет тестов в отчёте или они
-  проверяют моки) — `tester` на ту же подзадачу.
-- Каждая подзадача → `reviewer` с тремя путями: brief, отчёт, дифф-файл
-  (`git diff BASE..HEAD > .team/<slug>/task-N-review.diff`, BASE —
-  коммит до диспетчера). Constraints из brief — в промпт ревьюера дословно.
-- Задача касается auth, платежей, секретов, внешних вызовов, docker/CI →
-  дополнительно `security-reviewer` на тот же дифф.
-- Critical/Important → возвращаешь тому же имплементеру findings дословно,
-  затем повторный `reviewer` только по этим findings. До трёх раундов; после
-  — сам решаешь по каждому пункту и пишешь `Ruling` в ledger. Minor — в
-  ledger, в цикл не идут.
-- Сам findings не чинишь: это засоряет контекст и обходит ревью.
+- The implementer left behaviour uncovered (no tests in the report, or tests
+  that assert mocks) → `tester` on the same subtask.
+- Every subtask → `reviewer` with three paths: brief, report, and diff file
+  (`git diff BASE..HEAD > .team/<slug>/task-N-review.diff`, BASE being the
+  commit before dispatch). Constraints from the brief go into the reviewer's
+  prompt verbatim.
+- The task touches auth, payments, secrets, outbound calls, docker or CI →
+  `security-reviewer` on the same diff as well.
+- Critical/Important findings go back to the same implementer verbatim, then a
+  repeat `reviewer` limited to those findings. Up to three rounds; after that
+  you decide each point yourself and write a `Ruling` in the ledger. Minor
+  findings are logged, not looped.
+- You don't fix findings yourself: it pollutes your context and bypasses review.
 
-## 5. Верификация и финиш
+## 5. Verification and finish
 
-- Полный прогон тестов, `tsc`, линтер — с выводом в чат, не с пересказом.
-- Финальное сообщение: что сделано по подзадачам, коммиты, все `Ruling:` из
-  ledger списком (это единственное место, где твои решения доходят до
-  человека), что осталось (Minor, ручные шаги devops).
-- Merge, push и `gh pr create` — только с подтверждением человека.
+- Full test run, `tsc`, linter — with the real output in chat, not a retelling.
+- Final message: what was done per subtask, the commits, every `Ruling` from the
+  ledger as a list (this is the only place your decisions reach the human), and
+  what remains (Minor findings, manual devops steps).
+- Merge, push and `gh pr create` only with the human's confirmation.
 
-## Стоп-условия
+## Stop conditions
 
-Останавливаешься и спрашиваешь только при: необратимой операции; действии с
-секретами или продом; выходе за пределы ветки (merge, push); дизайне, который
-оказался неверным настолько, что любой путь — догадка. Остальное — решаешь
-сам и фиксируешь `Ruling`.
+You stop and ask only on: an irreversible operation; anything touching secrets
+or production; leaving the branch (merge, push); or a design that turns out to
+be wrong enough that any path is a guess. Everything else you decide yourself
+and record as a `Ruling`.

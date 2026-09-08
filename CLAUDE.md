@@ -97,20 +97,28 @@ not a fallback in any of these cases.
 
 ## Skills
 
-Load a skill by task, before implementing or reviewing — not after. Their rules
-live in the skill, not here.
+**Load the skill before the first edit or review in its area, not after.** Its
+conventions are deliberately not repeated here, so working from memory instead of
+loading it is the exact failure this rule prevents.
 
-| Task                                       | Skill            |
-| ------------------------------------------ | ---------------- |
-| Server-side work                           | `nestjs-backend` |
-| Client-side work                           | `react-frontend` |
-| Writing or reviewing tests                 | `testing-ts`     |
-| 3+ files or two stacks, no direct edit fits | `team`           |
+| Trigger — you are about to touch                                       | Load             |
+| ---------------------------------------------------------------------- | ---------------- |
+| Server code: module, controller, service, DTO, entity, guard, migration | `nestjs-backend` |
+| Client code: component, page, hook, store, form, styles                 | `react-frontend` |
+| Tests in any stack — writing, fixing, reviewing                         | `testing-ts`     |
+| 3+ files or both stacks, and no direct edit fits                        | `team`           |
+
+Reviewing code counts as touching it. A full-stack task loads both stack skills,
+plus `testing-ts` as soon as tests are in scope. Load once per area per session,
+not per file. A project-level skill covering the same area wins over the global
+one. Role agents (`backend-dev`, `frontend-dev`, `tester`) carry these skills in
+their frontmatter — don't re-inline the conventions into their prompts.
 
 `/commit`, `/doctor`, `/optimize`, `/usage`, `/ask`, `/ask-off` are user-invoked
-and never self-triggered — offer one in a line when it fits: `/doctor` when the
-agent system itself misbehaves (loops, repeated refusals, dead index, expired
-provider auth), `/optimize` and `/usage` for spend and settings. Both only
+(`disable-model-invocation`) and never self-triggered — offer one in a line when
+it fits: `/doctor` when the agent system itself misbehaves (loops, repeated
+refusals, dead index, expired provider auth), `/optimize` and `/usage` for spend
+and settings. Both only
 propose; edits happen on an explicit yes.
 
 ## Hooks and guards

@@ -1,68 +1,69 @@
 ---
 name: nestjs-backend
-description: Конвенции серверного кода на NestJS/TypeScript в проектах пользователя — структура модуля, DI, DTO и валидация, исключения, конфиг, работа с БД, тесты. Загружать перед реализацией или ревью серверной части.
+description: NestJS/TypeScript server conventions — module layout, DI, DTOs and validation, exceptions, config, database, tests. Load before writing or reviewing any server-side code: a module, controller, service, provider, DTO, entity or schema, guard, interceptor, migration, or a Nest test.
 ---
 
-# NestJS backend — конвенции
+# NestJS backend conventions
 
-Сначала смотри, как сделано в этом проекте (`tokensave_context` по соседнему
-модулю); проект главнее этого списка. Список — для случаев, когда образца нет.
+The project outranks this list: look at a neighbouring module first
+(`tokensave_context` scoped to the server) and repeat its way. This list is for
+when there is no example to copy. Global rules — no `any`, reuse before writing
+new, KISS/SOLID/DRY — live in CLAUDE.md and are not repeated here.
 
-## Структура
+## Structure
 
-- Один модуль — одна предметная область: `x.module.ts`, `x.controller.ts`,
-  `x.service.ts`, `dto/`, `entities/` или `schemas/`, `x.service.spec.ts`
-  рядом с кодом.
-- Контроллер тонкий: парсинг входа, вызов сервиса, маппинг ответа. Логика —
-  в сервисе. Сервис не знает про HTTP.
-- Зависимости только через конструктор и DI. Никаких `new Service()` в коде,
-  никаких импортов сервиса из чужого модуля в обход `exports`.
-- Общее (guards, interceptors, pipes, filters, декораторы) — в `common/`;
-  переиспользуй существующее, прежде чем писать своё.
+- One module per domain: `x.module.ts`, `x.controller.ts`, `x.service.ts`,
+  `dto/`, `entities/` or `schemas/`, `x.service.spec.ts` next to the code.
+- Thin controller: parse input, call the service, map the response. Logic lives
+  in the service, and the service knows nothing about HTTP.
+- Dependencies only through the constructor and DI. No `new Service()`, no
+  importing another module's service around its `exports`.
+- Shared guards, interceptors, pipes, filters and decorators live in `common/`.
 
-## Вход и выход
+## Input and output
 
-- Вход — DTO-класс с `class-validator`/`class-transformer`; глобальный
-  `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
-  Числовые параметры пути и query — через `ParseIntPipe` или `@Type(() => Number)`.
-- Ответ — интерфейс или класс с явными полями; сущность БД наружу не отдаётся
-  целиком. Чувствительные поля (`passwordHash`, токены) исключены на уровне
-  маппинга, а не «забыты».
-- Производные типы — через `PartialType`/`PickType`/`OmitType` из
-  `@nestjs/mapped-types` или `Pick`/`Omit`, не копированием полей.
+- Input is a DTO class with `class-validator`/`class-transformer`, behind a
+  global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
+  Numeric path and query params go through `ParseIntPipe` or `@Type(() => Number)`.
+- Output is an interface or class with explicit fields; a DB entity never leaves
+  whole. Sensitive fields (`passwordHash`, tokens) are excluded in the mapping,
+  not forgotten.
+- Derived DTOs come from `PartialType`/`PickType`/`OmitType`
+  (`@nestjs/mapped-types`), never from copied field lists.
 
-## Ошибки
+## Errors
 
-- Ожидаемые — `HttpException` и наследники (`NotFoundException`,
-  `ConflictException`); тексты для клиента без внутренних деталей.
-- Неожиданные — не ловить и не глотать; их обрабатывает глобальный filter.
-  `try/catch` только там, где есть осмысленная реакция.
-- Логирование через `Logger` из `@nestjs/common` с контекстом класса; в лог не
-  попадают токены, пароли, тела платежей.
+- Expected failures — `HttpException` subclasses (`NotFoundException`,
+  `ConflictException`); client-facing text carries no internal detail.
+- Unexpected ones are neither caught nor swallowed; the global filter handles
+  them. `try/catch` only where there is a meaningful reaction.
+- Log through `Logger` from `@nestjs/common` with the class context. Tokens,
+  passwords and payment bodies never reach the log.
 
-## Конфиг
+## Config
 
-- Всё окружение через `ConfigService` с валидацией схемы при старте (`Joi` или
-  `class-validator`); `process.env` в коде модулей не читается.
-- Новая переменная — сразу в `.env.example` с именем и комментарием, без значения.
+- Environment only through `ConfigService`, with the schema validated at startup
+  (Joi or class-validator). Module code never reads `process.env`.
+- A new variable goes into `.env.example` in the same change — name and comment,
+  no value.
 
-## БД
+## Database
 
-- Транзакция там, где меняется больше одной сущности согласованно.
-- Запросы параметризованные; конкатенации строк в SQL нет.
-- Миграции — отдельными файлами, обратимые; схему в проде «синхронизацией» не
-  меняют.
+- A transaction wherever more than one entity changes consistently.
+- Parameterised queries; no string concatenation in SQL.
+- Migrations are separate reversible files; a production schema is never changed
+  by `synchronize`.
 
-## Тесты
+## Tests
 
-- Unit сервиса: `Test.createTestingModule` с моками зависимостей через
-  `useValue`; проверяется поведение (результат, вызов репозитория с нужными
-  аргументами, выброшенное исключение), не внутренние шаги.
-- e2e: `supertest` против `INestApplication`, с теми же глобальными pipes и
-  filters, что в `main.ts`.
+- Unit: `Test.createTestingModule` with dependencies mocked through `useValue`;
+  assert behaviour — result, repository called with the right arguments,
+  exception thrown — not internal steps.
+- e2e: `supertest` against `INestApplication` with the same global pipes and
+  filters as `main.ts`.
+- Everything else about tests is in the `testing-ts` skill.
 
-## Типы
+## Domain types
 
-- `any` запрещён — точный тип или `unknown` с сужением.
-- Перечисления домена — `enum` или `as const`-объект в одном месте; строковые
-  литералы по коду не раскидывать.
+- Domain enumerations live once, as an `enum` or an `as const` object; string
+  literals are not scattered through the code.

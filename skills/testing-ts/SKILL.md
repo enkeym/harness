@@ -1,54 +1,56 @@
 ---
 name: testing-ts
-description: Как писать и прогонять тесты в TypeScript-проектах пользователя (Jest/Vitest, NestJS TestingModule, supertest, Testing Library) — структура, именование, моки границ, чистый вывод, сфокусированный прогон. Загружать перед написанием или ревью тестов.
+description: Test conventions for the user's TypeScript projects (Jest/Vitest, NestJS TestingModule, supertest, Testing Library) — what to assert, file structure and naming, mocking boundaries, clean output, focused runs. Load before writing, fixing or reviewing tests in any stack.
 ---
 
-# Тесты в TypeScript — конвенции
+# TypeScript test conventions
 
-## Что тестировать
+## What to test
 
-- Поведение через публичный интерфейс: вход → результат, вызов зависимости с
-  нужными аргументами, выброшенная ошибка. Не приватные методы, не порядок
-  внутренних вызовов.
-- На каждую функцию минимум: обычный случай, граница (пусто, ноль, максимум),
-  ошибка. Баг-фикс начинается с теста, который воспроизводит баг.
-- Тест, который не может упасть (моки возвращают то, что и проверяется), —
-  не тест. Проверь, что он падает при сломанной реализации.
+- Behaviour through the public interface: input → result, dependency called with
+  the right arguments, error thrown. Not private methods, not the order of
+  internal calls.
+- Per function, at minimum: the normal case, a boundary (empty, zero, max), and
+  the error. A bug fix starts with the test that reproduces the bug.
+- A test that cannot fail — mocks returning exactly what is asserted — is not a
+  test. Check that it goes red against a broken implementation.
 
-## Структура
+## Structure
 
-- Файл рядом с кодом: `x.service.spec.ts`, `X.test.tsx`; `describe` по
-  символу, `it` читается как утверждение: `it('returns 404 when user is missing')`.
-- Arrange / Act / Assert, разделённые пустой строкой; общая подготовка — в
-  `beforeEach`, а не скопирована.
-- Фабрики тестовых данных (`makeUser(overrides)`) вместо длинных литералов в
-  каждом тесте; фикстуры — в `__fixtures__` или `test/`, как принято в проекте.
+- File next to the code: `x.service.spec.ts`, `X.test.tsx`. `describe` per
+  symbol; `it` reads as an assertion:
+  `it('returns 404 when user is missing')`.
+- Arrange / Act / Assert separated by blank lines; shared setup in `beforeEach`
+  rather than copied into each test.
+- Data factories (`makeUser(overrides)`) instead of long literals in every test;
+  fixtures in `__fixtures__` or `test/`, whichever the project uses.
 
-## Моки
+## Mocks
 
-- Мокаются границы: сеть, БД, файловая система, время (`jest.useFakeTimers`
-  или инъекция часов), внешние SDK (Telegram, YooKassa). Внутренние модули
-  проекта — нет, иначе тест проверяет мок.
+- Mock boundaries: network, DB, filesystem, time (`jest.useFakeTimers` or an
+  injected clock), external SDKs (Telegram, YooKassa). Never internal project
+  modules — the test would be asserting the mock.
 - NestJS: `Test.createTestingModule({ providers: [Service, { provide: Repo, useValue: mock }] })`;
-  для e2e — настоящий `INestApplication` с теми же глобальными pipes/filters,
-  что в `main.ts`, и `supertest`.
-- React: мокается API-клиент, а не хук компонента; запросы к DOM — по роли и
-  тексту.
+  e2e uses a real `INestApplication` with the same global pipes and filters as
+  `main.ts`, plus `supertest`.
+- React: mock the API client, not the component's hook; query the DOM by role
+  and text.
 
-## Прогон
+## Running
 
-- Пока пишешь — только затронутый файл: `npx jest path/to/x.spec.ts -t 'name'`
-  (или `vitest run path`). Полный набор — один раз перед коммитом.
-- Вывод чистый: без `console.error`, предупреждений про `act`, открытых
-  хендлов (`--detectOpenHandles` при подозрении). Шум — это дефект.
-- Флаки от времени и порядка — чинятся детерминизмом (фейковые таймеры,
-  явные `await`), не ретраями.
+- While writing, run only the touched file:
+  `npx jest path/to/x.spec.ts -t 'name'` (or `vitest run path`). The full suite
+  runs once, before the commit.
+- Output stays clean: no `console.error`, no `act` warnings, no open handles
+  (`--detectOpenHandles` when suspected). Noise is a defect.
+- Flakiness from time or ordering is fixed with determinism (fake timers,
+  explicit `await`), never with retries.
 
-## Что не делать
+## Never
 
-- Не подгонять ожидание под текущее неверное поведение — оставить тест
-  падающим и сообщить.
-- Не менять продакшн-код ради тестируемости молча — описать, что нужно
-  изменить (инъекция зависимости, вынос `new Date()`), и передать.
-- Не тестировать библиотеку (что `class-validator` валидирует email) — только
-  свою логику поверх.
+- Don't bend an expectation to match current wrong behaviour — leave the test
+  red and report it.
+- Don't change production code for testability silently — describe what needs to
+  change (inject the dependency, extract `new Date()`) and hand it over.
+- Don't test the library (that `class-validator` validates an email) — only your
+  own logic on top of it.

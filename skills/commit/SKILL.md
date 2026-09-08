@@ -1,29 +1,29 @@
 ---
 name: commit
-description: Оформить коммит текущих изменений через агент commit из OpenCode (модель GLM 5.3) — сообщение по диффу в стиле репозитория, push ветки, MR в GitLab и блок для Jira. Вызывается пользователем как /commit; сам по себе не срабатывает.
+description: Commit the current changes through the OpenCode `commit` agent (GLM 5.3) — message written from the diff in the repo's style, branch push, GitLab MR and a Jira block. User-invoked as /commit; never self-triggered.
 disable-model-invocation: true
 allowed-tools: Bash(opencode run --agent commit:*), Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*)
-argument-hint: [текст сообщения или указания агенту]
+argument-hint: [commit message, or instructions for the agent]
 ---
 
 # /commit
 
-Коммит делает не Claude, а агент `commit` из OpenCode: он читает дифф, пишет
-сообщение в стиле репозитория, пушит текущую ветку и обновляет MR в GitLab.
-Вызов `/commit` пользователем — его решение на коммит и push этой ветки.
+Claude does not write the commit — the OpenCode `commit` agent does: it reads
+the diff, writes the message in the repo's style, pushes the current branch and
+updates the GitLab MR. The user typing `/commit` is their decision to commit and
+push this branch.
 
-1. Покажи одной строкой ветку и список изменённых файлов:
-   `git branch --show-current`, `git status --short`. Изменений нет — скажи об
-   этом и остановись, агента не запускай.
-2. Запусти агента из корня репозитория (timeout 300000, идёт 1–3 минуты):
+1. Show the branch and changed files in one line: `git branch --show-current`,
+   `git status --short`. Nothing changed — say so and stop, don't run the agent.
+2. Run the agent from the repo root (timeout 300000, it takes 1–3 minutes):
 
 ```
 opencode run --agent commit --dir "$(git rev-parse --show-toplevel)" "$ARGUMENTS"
 ```
 
-   Аргументы пусты — передай строку `закоммить`. Текст после `/commit` уходит
-   агенту как есть: это либо готовое сообщение коммита, либо указания
-   («без push», «подробнее для Jira»).
-3. Вывод агента (хеш, результат push, MR, блок для Jira) покажи дословно, без
-   пересказа. Сам ничего не коммить и не исправляй за агентом: упал — покажи
-   ошибку и предложи повторить.
+   Empty arguments — pass the string `закоммить`. Text after `/commit` goes to
+   the agent as is: either a ready commit message or instructions ("без push",
+   "подробнее для Jira").
+3. Show the agent's output (hash, push result, MR, Jira block) verbatim, no
+   retelling. Don't commit anything yourself and don't fix things up after the
+   agent: if it fails, show the error and offer to retry.

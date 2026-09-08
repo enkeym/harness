@@ -1,18 +1,18 @@
 ---
 name: doctor
-description: Диагностика сбоев самой агентской системы — зацикливания, повторные отказы гардов, упавшие фоновые индексации, слетевшая авторизация внешних CLI, MCP не отвечает, странное поведение сессии. Читает журналы и состояние, находит причину, предлагает правку хуков или правил. Вызывается пользователем как /doctor.
+description: Diagnose failures of the agent system itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. User-invoked as /doctor.
 disable-model-invocation: true
 allowed-tools: Bash(tail:*), Bash(node /home/enkeym/.ai-hooks/bin/delegate.mjs --health), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(git -C /home/enkeym/.ai-hooks *), Read, Grep, Glob
-argument-hint: [что сломалось, своими словами]
+argument-hint: [what broke, in your own words]
 ---
 
 # /doctor
 
-Чинишь не код проекта, а систему, которая тебя обслуживает: хуки, гарды,
-индексы, внешние CLI. Симптом пользователя — в `$ARGUMENTS`; пусто — проверь
-всё по списку и доложи, что нашёл.
+You are fixing the system that serves you — hooks, guards, indexes, external
+CLIs — not the project's code. The user's symptom is in `$ARGUMENTS`; if it is
+empty, walk the whole list and report what you found.
 
-## 1. Состояние
+## 1. State
 
 ```
 tail -40 ~/.ai-hooks/logs/errors.log
@@ -20,33 +20,33 @@ node ~/.ai-hooks/bin/delegate.mjs --health
 claude mcp list
 ```
 
-Плюс по симптому: `~/.ai-hooks/state/guard-breaker.json` (какие запреты
-сработали повторно), `~/.ai-hooks/state/cli-health.json`, `.tokensave/sync.log`
-и `.ragsave/sync.log` в проекте, `~/.claude/state/`.
+Then, per symptom: `~/.ai-hooks/state/guard-breaker.json` (which blocks fired
+twice), `~/.ai-hooks/state/cli-health.json`, the project's `.tokensave/sync.log`
+and `.ragsave/sync.log`, `~/.claude/state/`.
 
-## 2. Частые причины
+## 2. Common causes
 
-| Симптом | Куда смотреть |
+| Symptom | Where to look |
 |---|---|
-| Один и тот же вызов повторяется, ответа нет | `guard-breaker.json`: гард запретил, а альтернатива не сработала. Причина обычно в tokensave — идёт `sync`, ветка не в графе, detached HEAD |
-| «Файл есть в индексе» на файле, которого там нет | ветка графа разошлась с рабочей: `branch-meta.json`, лог `branch add` |
-| MCP не подключается | сервер запускали вне проекта: у tokensave несколько корней и он просит `-p`. Проверь из каталога проекта |
-| Внешняя модель молчит | `--health`: слетела авторизация провайдера или модель переименована |
-| Фоновая индексация не идёт | `errors.log`; конкурентный `sync` — штатный пропуск, не отказ |
-| Сессия «забыла» правило | правку CLAUDE.md или хуков подхватывает только новая сессия |
+| The same call repeats, no answer comes | `guard-breaker.json`: a guard blocked it and the alternative didn't work. The cause is usually tokensave — a `sync` in flight, the branch missing from the graph, detached HEAD |
+| "File is in the index" for a file that isn't | the graph branch drifted from the working one: `branch-meta.json`, the `branch add` log |
+| MCP won't connect | the server was started outside the project: tokensave has several roots and asks for `-p`. Check from the project directory |
+| The external model stays silent | `--health`: provider auth expired or the model was renamed |
+| Background indexing isn't running | `errors.log`; a concurrent `sync` is a normal skip, not a failure |
+| The session "forgot" a rule | edits to CLAUDE.md or hooks are only picked up by a new session |
 
-## 3. Что делать с находкой
+## 3. What to do with a finding
 
-Причину называй одной фразой и подтверждай строкой из журнала — без неё это
-догадка. Дальше:
+Name the cause in one sentence and back it with a line from a log — without one
+it is a guess. Then:
 
-- **Правка хуков или правил** — покажи диффом и жди «да». Пользователь выбрал
-  режим «только предлагать»: ошибка в ядре гардов ломает все сессии молча.
-- После применённой правки обязательно прогони тесты:
+- **A hook or rule fix** — show it as a diff and wait for "yes". The user chose
+  propose-only mode: a bug in the guard core breaks every session silently.
+- After an applied fix, always run the tests:
   `node ~/.ai-hooks/test/test-guards.mjs`, `test-ask-mode.mjs`,
   `test-security.mjs`, `test-subagent-context.mjs`, `test-project-bootstrap.mjs`.
-  Красный тест — откатывай, а не «дочинивай».
-- **Сбой не в системе, а в задаче** — скажи прямо и верни пользователя к
-  обычному ходу работы.
-- **Причина не нашлась** — так и скажи, перечислив, что проверил. Правка
-  наугад в гардах хуже, чем открытый вопрос.
+  A red test means roll back, not patch further.
+- **The failure is in the task, not the system** — say so plainly and return the
+  user to normal work.
+- **No cause found** — say that, listing what you checked. A blind edit in the
+  guards is worse than an open question.
