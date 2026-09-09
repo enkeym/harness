@@ -6,16 +6,30 @@
 import os from 'node:os';
 import { isOn } from '../ask-core.mjs';
 import { repoRoot, headLabel } from '../state-core.mjs';
+import { contextUsed, level } from '../context-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 const LIME = '\x1b[1;38;2;154;230;0m'; // салатовый
+const AMBER = '\x1b[1;38;2;230;180;0m';
+const RED = '\x1b[1;38;2;230;80;60m';
 
 function branch(dir) {
   const root = repoRoot(dir);
   return root ? headLabel(root) : '';
+}
+
+// Занятость контекстного окна. Пока её не видно, «сессия стала дорогой» заметно
+// только по счёту в конце месяца; цвета — те же пороги, на которых срабатывает
+// context-meter, чтобы предупреждение агенту и индикатор не расходились.
+function contextBadge(transcriptPath) {
+  const used = contextUsed(transcriptPath);
+  if (!used) return '';
+  const lvl = level(used.pct);
+  const color = lvl === 'act' ? RED : lvl === 'warn' ? AMBER : DIM;
+  return `${color}ctx ${used.pct}%${RESET}`;
 }
 
 let raw = '';
@@ -41,8 +55,10 @@ process.stdin.on('end', () => {
 
   // Режим показываем всегда: он включён по умолчанию, и «ничего не написано»
   // читалось бы как «правки разрешены».
-  const line = `${DIM}${parts.join('  ')}${RESET}  ` +
-    (isOn(anchor) ? `${LIME}ask mode on${RESET}` : `${DIM}ask mode off${RESET}`);
+  const mode = isOn(anchor) ? `${LIME}ask mode on${RESET}` : `${DIM}ask mode off${RESET}`;
+  const line = [`${DIM}${parts.join('  ')}${RESET}`, contextBadge(input.transcript_path), mode]
+    .filter(Boolean)
+    .join('  ');
 
   process.stdout.write(line);
 });

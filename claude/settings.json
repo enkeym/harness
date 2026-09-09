@@ -163,6 +163,14 @@
             "command": "node /home/enkeym/.ai-hooks/claude/ask-reminder.mjs"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/context-meter.mjs"
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -222,5 +230,6 @@
     }
   },
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false
+  "remoteControlAtStartup": false,
+  "model": "opus"
 }
