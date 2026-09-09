@@ -20,7 +20,12 @@ const DEFAULT_DB = 'tokensave.db';
 const DB_REL = path.join(TS_DIR, DEFAULT_DB);
 
 // Сколько ждать идущий tokensave sync, прежде чем замолчать (см. syncBusy).
-const SYNC_WAIT_MS = Number(process.env.TS_GUARD_SYNC_WAIT_MS || 6000);
+// 800 мс, а не 6000: на большом проекте sync идёт десятки секунд (на web_groza
+// замерено 21.4 с), и шесть секунд ожидания в каждом вызове инструмента
+// превращались в видимое «залипание» ответа — при том что дождаться конца
+// такого sync всё равно нельзя. Короткая пауза ловит быстрый sync, а на
+// длинном гард честно отступает.
+const SYNC_WAIT_MS = Number(process.env.TS_GUARD_SYNC_WAIT_MS || 800);
 const SYNC_POLL_MS = 200;
 
 // Конфиг/тулинг самих агентов (.claude/…, .opencode/…, ~/.config/opencode/…,
