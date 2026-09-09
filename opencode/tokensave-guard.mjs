@@ -9,11 +9,15 @@
 // Срабатывает ТОЛЬКО для файлов, которые есть в индексе tokensave.
 
 import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   guardRead, guardGrep, guardEdit, guardBash, OPENCODE_LABELS,
 } from '../guard-core.mjs';
 
-const BIN = '/home/enkeym/.ai-hooks/bin';
+// Каталог bin рядом с этим файлом (../bin), а не зашитый абсолютный путь с
+// именем пользователя — плагин ставится в чужой $HOME.
+const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin');
 
 // Скрипты сами уходят в фон (setsid) и берут лок — ждать их не нужно.
 // Ошибки игнорируем: индексация не должна ломать сессию.

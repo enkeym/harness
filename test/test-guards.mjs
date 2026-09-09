@@ -13,11 +13,13 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import os from 'node:os';
 import {
   guardRead, guardGrep, guardEdit, guardBash, guardExec, OPENCODE_LABELS,
   isIndexed, indexedExtensions, breakerAllows,
 } from '../guard-core.mjs';
+import { statePath } from '../state-core.mjs';
+
+const BREAKER_FILE = statePath('guard-breaker.json');
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const READ = path.join(ROOT, 'claude', 'read-search-router.mjs');
@@ -102,7 +104,11 @@ read('read .ts из индекса → deny', 'deny', TS_PROJECT + '/client/src/
 read('read README.md из индекса → deny (tokensave индексирует md)', 'deny', TS_PROJECT + '/README.md');
 
 // ---- READ: нет в индексе → allow (тот самый баг: раньше был тупик) ----
-read('read .css вне индекса → allow', 'allow', TS_PROJECT + '/client/src/index.css');
+// .css в src: попадёт в граф или нет — зависит от состава ветки, поэтому вердикт
+// берём из той же БД (как для package.json), а не литералом. Регрессию «тупика»
+// стережёт кейс .css в node_modules ниже — тот не будет в индексе никогда.
+read('read .css в src → по индексу активной ветки',
+  wantFile(TS_PROJECT + '/client/src/index.css'), TS_PROJECT + '/client/src/index.css');
 read('read package.json → по индексу активной ветки', JSON_VERDICT, PKG_JSON);
 read('read несуществующего .ts → allow', 'allow', TS_PROJECT + '/client/src/__nope__.ts');
 read('read конфига агента (.ai-hooks) → allow', 'allow', '/home/enkeym/.ai-hooks/guard-core.mjs');
@@ -239,7 +245,7 @@ both('write НОВОГО файла → allow (в индексе его нет)'
   { tool_name: 'Write', tool_input: { file_path: TS_PROJECT + '/client/src/__brand_new__.ts' }, cwd: TS_PROJECT },
   { tool: 'write', args: { filePath: TS_PROJECT + '/client/src/__brand_new__.ts' }, directory: TS_PROJECT });
 
-both('edit .css вне индекса → allow', 'allow',
+both('edit .css в src → по индексу активной ветки', wantFile(TS_PROJECT + '/client/src/index.css'),
   { tool_name: 'Edit', tool_input: { file_path: TS_PROJECT + '/client/src/index.css' }, cwd: TS_PROJECT },
   { tool: 'edit', args: { filePath: TS_PROJECT + '/client/src/index.css' }, directory: TS_PROJECT });
 
@@ -300,9 +306,22 @@ check('[core] breaker: без family латча нет — только точн
 check('[core] breaker: свежая сессия — отказ как обычно',
   decide(`${SID}-other`, 'Read:/a/x.ts', 'read'), 'deny');
 
+// Латч класса не должен продлеваться соседними целями: одна ранняя осечка не
+// обязана отравлять всю сессию — окно живёт от реального повтора, не от каждого
+// пропущенного чтения.
+{
+  const bf = BREAKER_FILE;
+  const famKey = `${SID}|fam:read`;
+  const t1 = JSON.parse(fs.readFileSync(bf, 'utf8'))[famKey]?.t;
+  decide(SID, 'Read:/a/neighbor-1.ts', 'read'); // соседняя цель, не повтор
+  decide(SID, 'Read:/a/neighbor-2.ts', 'read');
+  const t2 = JSON.parse(fs.readFileSync(bf, 'utf8'))[famKey]?.t;
+  check('[core] breaker: соседняя цель не двигает окно латча', t2 === t1 && !!t1, true);
+}
+
 // убрать за собой тестовые записи из общего файла предохранителя
 try {
-  const bf = path.join(os.homedir(), '.ai-hooks', 'state', 'guard-breaker.json');
+  const bf = BREAKER_FILE;
   const st = JSON.parse(fs.readFileSync(bf, 'utf8'));
   for (const k of Object.keys(st)) if (k.startsWith('test-breaker-')) delete st[k];
   fs.writeFileSync(bf, JSON.stringify(st));

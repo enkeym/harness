@@ -17,10 +17,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { STATE_ROOT, projectKey } from './state-core.mjs';
 
-const HOME = process.env.HOME || os.homedir();
-const STATE_DIR = path.join(HOME, '.claude', 'state', 'ask-mode');
+const STATE_DIR = path.join(STATE_ROOT, 'ask-mode');
 const DEFAULT_FILE = path.join(STATE_DIR, 'default');
 // Файла `default` нет или он не читается — режим выключен. Ask mode не средство
 // защиты (за это отвечает security-guard), а удобство, поэтому отказ его
@@ -30,22 +29,11 @@ const DEFAULT_FILE = path.join(STATE_DIR, 'default');
 // то есть симптом «правки запрещены без причины» без единого следа причины.
 const FALLBACK_DEFAULT = false;
 
-// Ключ — корень проекта, а не буквальный cwd: сессия ходит по подкаталогам
-// (`cd client && npm test`), и режим не должен от этого переключаться.
-function rootFor(cwd) {
-  let dir = path.resolve(cwd || process.cwd());
-  const start = dir;
-  while (dir && dir !== HOME) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return start;
-}
-
+// Ключ — корень проекта (projectKey из state-core), а не буквальный cwd: сессия
+// ходит по подкаталогам (`cd client && npm test`), и режим не должен от этого
+// переключаться.
 function keyFor(cwd) {
-  return `dir-${Buffer.from(rootFor(cwd)).toString('base64url').slice(0, 200)}`;
+  return `dir-${projectKey(cwd)}`;
 }
 
 function read(file) {

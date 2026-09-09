@@ -23,9 +23,10 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { isHarnessConfigPath } from '../guard-core.mjs';
+import { statePath, projectKey } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
-const STATE_DIR = path.join(HOME, '.claude', 'state', 'bootstrap');
+const STATE_DIR = statePath('bootstrap');
 const REMIND_MS = 7 * 24 * 3600 * 1000;
 
 function gitRoot(cwd) {
@@ -85,7 +86,7 @@ function ignoredItems(root) {
 }
 
 function remindedRecently(root) {
-  const file = path.join(STATE_DIR, Buffer.from(root).toString('base64url').slice(0, 200));
+  const file = path.join(STATE_DIR, projectKey(root));
   try {
     if (Date.now() - fs.statSync(file).mtimeMs < REMIND_MS) return true;
   } catch { /* первое напоминание */ }

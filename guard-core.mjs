@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
+import { currentBranch, statePath, readJSON, writeJSON } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const TS_DIR = '.tokensave';
@@ -68,26 +69,11 @@ export function projectRoot(cwd, filePath) {
   return findRoot(base);
 }
 
-// Ветка. tokensave держит отдельную БД на ветку (branch-meta.json), и MCP
-// отвечает из БД текущей ветки. Гард обязан смотреть в тот же файл: иначе на
-// ветке dev он судит по графу main — файл, добавленный в dev, «не в индексе»
-// (запрета нет там, где он нужен), а удалённый в dev — «в индексе» (запрет
-// там, где tokensave отдаст чужое содержимое).
-function currentBranch(root) {
-  try {
-    let gitDir = path.join(root, '.git');
-    if (fs.statSync(gitDir).isFile()) {
-      const m = fs.readFileSync(gitDir, 'utf8').match(/gitdir:\s*(.+)/);
-      if (!m) return null;
-      gitDir = path.resolve(root, m[1].trim());
-    }
-    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
-    const ref = head.match(/^ref:\s*refs\/heads\/(.+)$/);
-    return ref ? ref[1] : null; // detached HEAD — ветки нет
-  } catch {
-    return null;
-  }
-}
+// Ветка (currentBranch из state-core). tokensave держит отдельную БД на ветку
+// (branch-meta.json), и MCP отвечает из БД текущей ветки. Гард обязан смотреть
+// в тот же файл: иначе на ветке dev он судит по графу main — файл, добавленный
+// в dev, «не в индексе» (запрета нет там, где он нужен), а удалённый в dev —
+// «в индексе» (запрет там, где tokensave отдаст чужое содержимое).
 
 // Путь к БД активной ветки или null, если гарду тут делать нечего.
 // null означает «tokensave сейчас не является достоверным источником»:
@@ -260,8 +246,7 @@ const FALLBACK =
 // в логах это семь одинаковых Edit подряд. Второй запрет на ту же цель ничего
 // не сообщает сверх первого, поэтому его не выдаём: пропускаем вызов.
 
-const STATE_DIR = path.join(HOME, '.ai-hooks', 'state');
-const BREAKER_FILE = path.join(STATE_DIR, 'guard-breaker.json');
+const BREAKER_FILE = statePath('guard-breaker.json');
 const BREAKER_WINDOW_MS = 3 * 60 * 1000;
 
 export function denialKey(toolName, toolInput = {}) {
@@ -280,11 +265,7 @@ export function breakerAllows(sessionId, key, family = null) {
   const id = `${sid}|${key}`;
   const famId = family ? `${sid}|fam:${family}` : null;
   const now = Date.now();
-  let state = {};
-  try {
-    const parsed = JSON.parse(fs.readFileSync(BREAKER_FILE, 'utf8'));
-    if (parsed && typeof parsed === 'object') state = parsed;
-  } catch { /* первого запрета ещё не было */ }
+  const state = readJSON(BREAKER_FILE, {}); // первого запрета ещё не было → {}
 
   for (const [k, v] of Object.entries(state)) {
     if (!v || typeof v.t !== 'number' || now - v.t > BREAKER_WINDOW_MS) delete state[k];
@@ -296,14 +277,14 @@ export function breakerAllows(sessionId, key, family = null) {
   // соседней цели того же класса — tokensave не работает на всём графе.
   const open = Boolean(entry) || famOpen;
   state[id] = { t: entry?.t ?? now };
-  // Латч класса открывается только после реального повтора (entry уже был) и
-  // держится «живым», пока агент продолжает упираться в гард.
-  if (famId && (entry || famOpen)) state[famId] = { t: now };
+  // Латч класса открывается на ПЕРВОМ реальном повторе (entry уже был) и живёт
+  // фиксированное окно от него. Раньше таймстамп двигался вперёд на каждой
+  // соседней цели, пока латч открыт, — в активной сессии окно не закрывалось
+  // никогда, и подсказка «tokensave пропущен» липла до конца работы. Соседние
+  // цели (entry не было) латч только читают, но не продлевают.
+  if (famId && entry) state[famId] = { t: state[famId]?.t ?? now };
 
-  try {
-    fs.mkdirSync(STATE_DIR, { recursive: true });
-    fs.writeFileSync(BREAKER_FILE, JSON.stringify(state));
-  } catch { /* не записали — в худшем случае запретим ещё раз */ }
+  writeJSON(BREAKER_FILE, state); // не записали — в худшем случае запретим ещё раз
 
   return open;
 }

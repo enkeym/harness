@@ -12,12 +12,10 @@
 // Первый SessionStart любого рода закрепляет session_id за собой; сбрасывает
 // только он и только при startup/clear.
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { resetMode } from '../ask-core.mjs';
+import { statePath, readJSON, writeJSON } from '../state-core.mjs';
 
-const SEEN_FILE = path.join(os.homedir(), '.claude', 'state', 'ask-mode', '.sessions.json');
+const SEEN_FILE = statePath('ask-mode', '.sessions.json');
 const SEEN_TTL_MS = 2 * 86400 * 1000;
 
 // Помечает session_id как виденный, возвращает, был ли он там раньше.
@@ -25,11 +23,7 @@ const SEEN_TTL_MS = 2 * 86400 * 1000;
 function markSeen(sessionId) {
   if (!sessionId) return false;
   const now = Date.now();
-  let seen = {};
-  try {
-    const parsed = JSON.parse(fs.readFileSync(SEEN_FILE, 'utf8'));
-    if (parsed && typeof parsed === 'object') seen = parsed;
-  } catch { /* первого старта ещё не было */ }
+  const seen = readJSON(SEEN_FILE, {}); // первого старта ещё не было → {}
 
   for (const [id, ts] of Object.entries(seen)) {
     if (typeof ts !== 'number' || now - ts > SEEN_TTL_MS) delete seen[id];
@@ -38,10 +32,7 @@ function markSeen(sessionId) {
   const was = Object.prototype.hasOwnProperty.call(seen, sessionId);
   seen[sessionId] = now;
 
-  try {
-    fs.mkdirSync(path.dirname(SEEN_FILE), { recursive: true });
-    fs.writeFileSync(SEEN_FILE, JSON.stringify(seen));
-  } catch { /* не записали — в худшем случае сбросим ещё раз */ }
+  writeJSON(SEEN_FILE, seen); // не записали — в худшем случае сбросим ещё раз
 
   return was;
 }

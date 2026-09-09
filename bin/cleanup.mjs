@@ -9,17 +9,18 @@
 // делает проход раз в сутки, всё остальное — обход нескольких каталогов.
 //
 // Что здесь НЕ чистится и почему: транскрипты (~/.claude/projects) — ими
-//管ляет сам Claude Code через cleanupPeriodDays, и удалить их значит потерять
-// возможность вернуться в сессию; file-history — на нём держится отмена
+// управляет сам Claude Code через cleanupPeriodDays, и удалить их значит
+// потерять возможность вернуться в сессию; file-history — на нём держится отмена
 // правок; индексы .tokensave/.ragsave — их чистят собственные GC, а внешнее
 // удаление стоит переиндексации.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { STATE_ROOT, statePath } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
-const STAMP = path.join(HOME, '.ai-hooks', 'state', '.cleanup-stamp');
+const STAMP = statePath('.cleanup-stamp');
 const THROTTLE_MS = 24 * 3600 * 1000;
 const DAY = 86400 * 1000;
 
@@ -27,11 +28,19 @@ const DAY = 86400 * 1000;
 const TARGETS = [
   // Метка «подсказку про rag_search в этой сессии уже показывали». Дроссель
   // внутри — 15 минут, так что метка старше суток мертва по определению.
-  [path.join(HOME, '.claude', 'state', 'ragsave-reminder'), 2, 'метки подсказок ragsave'],
+  [statePath('ragsave-reminder'), 2, 'метки подсказок ragsave'],
   // Метка «про недостающий CI этому проекту уже говорили» — недельный цикл.
-  [path.join(HOME, '.claude', 'state', 'bootstrap'), 90, 'метки диагностики проектов'],
+  [statePath('bootstrap'), 90, 'метки диагностики проектов'],
+  // Метки режима ask mode по каталогам (dir-<hash>). Файла `default` в этом
+  // каталоге нет — он лежит в подкаталоге ask-mode/, а pruneDir не рекурсивен,
+  // так что бессрочная метка режима по умолчанию не пострадает.
+  [statePath('ask-mode'), 120, 'метки ask mode по каталогам'],
   // Счётчик ходов до следующей подсказки о стоимости — живёт внутри сессии.
-  [path.join(HOME, '.claude', 'state', 'context-cost'), 2, 'счётчики стоимости контекста'],
+  [statePath('context-cost'), 2, 'счётчики стоимости контекста'],
+  // Служебные метки в корне состояния: guard-breaker.json (сам себя чистит за
+  // 3 мин), cli-health.json (перепроверяется), временные codex-last-* от
+  // делегирования. Всё пересоздаётся; .cleanup-stamp свежий по определению.
+  [STATE_ROOT, 7, 'служебные метки состояния'],
   // Неотправленная телеметрия Claude Code: если её не приняли за неделю, не примут.
   [path.join(HOME, '.claude', 'telemetry'), 7, 'неотправленная телеметрия'],
   // Содержимое вставок в промпт — нужно только внутри своей сессии.
@@ -42,7 +51,7 @@ const TARGETS = [
   // Полные выводы обрезанных команд. Срок короткий не ради места: вывод сборки
   // или compose-конфига может содержать секрет, а здесь он лежал бы открытым
   // текстом дольше, чем сам транскрипт (cleanupPeriodDays: 45).
-  [path.join(HOME, '.claude', 'state', 'clip-output'), 2, 'полные выводы команд'],
+  [statePath('clip-output'), 2, 'полные выводы команд'],
   // Передачи между сессиями. Старше двух недель уже не подставляются
   // (handoff-core.mjs), но продолжают лежать — а это состояние работы.
   [path.join(HOME, '.claude', 'handoff'), 30, 'передачи между сессиями'],

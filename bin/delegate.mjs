@@ -19,9 +19,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { findSecretValue } from '../security-core.mjs';
+import { STATE_ROOT } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
-const STATE_DIR = path.join(HOME, '.ai-hooks', 'state');
+const STATE_DIR = STATE_ROOT;
 const HEALTH_FILE = path.join(STATE_DIR, 'cli-health.json');
 // Успех кэшируем надолго, отказ — ненадолго. Отказ бывает плавающим: во время
 // обновления CLI бинарь на секунды исчезает, и один такой промах, записанный

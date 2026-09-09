@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { projectRoot } from '../guard-core.mjs';
+import { repoRoot } from '../state-core.mjs';
 import { readInput } from './hook-io.mjs';
 
 const TOKENSAVE_RULES = [
@@ -33,19 +34,8 @@ const RAGSAVE_RULE =
   'Вопрос по смыслу без имени файла или символа (как / где / почему; конфиги, доки, миграции, CI) — ' +
   'сначала mcp__ragsave__rag_search, а не догадка имени в tokensave_search и не Grep.';
 
-function gitRoot(cwd) {
-  let dir = path.resolve(cwd || process.cwd());
-  while (dir) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-  return null;
-}
-
 function hasRagsave(cwd) {
-  const root = gitRoot(cwd);
+  const root = repoRoot(cwd);
   return Boolean(root && fs.existsSync(path.join(root, '.ragsave', 'rag.db')));
 }
 

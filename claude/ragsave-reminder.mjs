@@ -19,11 +19,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { statePath, projectKey } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const DB_REL = path.join('.ragsave', 'rag.db');
 const THROTTLE_MS = 15 * 60 * 1000;
-const STATE_DIR = path.join(HOME, '.claude', 'state', 'ragsave-reminder');
+const STATE_DIR = statePath('ragsave-reminder');
 
 // Границы слова через \b не годятся: \w — это [A-Za-z0-9_], поэтому для кириллицы
 // \bкак\b не срабатывает. Берём lookaround по букве любого алфавита.
@@ -81,8 +82,12 @@ function findRagRoot(startDir) {
 
 // Один и тот же проект в одной сессии напоминаем не чаще THROTTLE_MS.
 // Метка не критична: не смогли записать — напомним ещё раз, это безобидно.
+// Ключ = сессия + projectKey(root): раньше строку `${sid}-${base64(root)}`
+// резали по общей длине 120, и у длинного пути отваливался хвост — два разных
+// проекта в одной сессии получали одну метку, и напоминание для второго молча
+// глохло.
 function throttled(sessionId, root) {
-  const key = `${sessionId}-${Buffer.from(root).toString('base64url')}`.slice(0, 120);
+  const key = `${sessionId}-${projectKey(root)}`;
   const stamp = path.join(STATE_DIR, key);
   try {
     const age = Date.now() - fs.statSync(stamp).mtimeMs;

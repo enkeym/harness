@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
+import { repoRootOr } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 export const HANDOFF_DIR = path.join(HOME, '.claude', 'handoff');
@@ -25,17 +26,7 @@ export const STALE_MS = 14 * 24 * 3600 * 1000;
 // а не пересказ сессии.
 export const MAX_CHARS = 6000;
 
-function rootFor(cwd) {
-  let dir = path.resolve(cwd || process.cwd());
-  const start = dir;
-  while (dir && dir !== HOME) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return start;
-}
+// Корень репозитория (repoRootOr из state-core), тот же, что у ask mode.
 
 // Имя читаемое (чтобы файл можно было найти глазами) плюс ключ от полного пути.
 //
@@ -44,7 +35,7 @@ function rootFor(cwd) {
 // `~/work/vpn-new` получали один файл, и состояние приватного проекта уехало бы
 // в контекст чужой сессии до первого слова пользователя.
 export function handoffPath(cwd) {
-  const root = rootFor(cwd);
+  const root = repoRootOr(cwd);
   const slug = path.basename(root).replace(/[^\w.-]/g, '-') || 'root';
   const key = createHash('sha256').update(root).digest('hex').slice(0, 12);
   return path.join(HANDOFF_DIR, `${slug}-${key}.md`);

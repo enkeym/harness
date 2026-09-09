@@ -7,7 +7,6 @@
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findSecretValue } from '../security-core.mjs';
@@ -55,7 +54,8 @@ for (const prompt of safe) {
 }
 
 // --- кеш здоровья: отказ живёт недолго, успех долго
-const HEALTH = path.join(os.homedir(), '.ai-hooks', 'state', 'cli-health.json');
+const { STATE_ROOT } = await import('../state-core.mjs');
+const HEALTH = path.join(STATE_ROOT, 'cli-health.json');
 let health = null;
 try { health = JSON.parse(fs.readFileSync(HEALTH, 'utf8')); } catch { /* ещё не было проверок */ }
 if (health) {

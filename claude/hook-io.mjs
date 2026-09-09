@@ -43,9 +43,11 @@ export function respond(input, reason) {
   if (input.session_id && breakerAllows(input.session_id, key, family)) {
     finish({
       systemMessage:
-        `tokensave-гард: ${input.tool_name} пропущен — у tokensave нет рабочего ответа ` +
-        '(частая причина — MCP-сервер остался на родительской ветке графа: ' +
-        'переподключи /mcp, сверься с tokensave_status).',
+        `tokensave-гард: ${input.tool_name} пропущен — запрет снят, потому что тот же ` +
+        'вызов уже отклонялся и повторился (защита от цикла). Причина не диагностируется: ' +
+        'если tokensave_* отвечает корректно (сверься с tokensave_status) — просто продолжай ' +
+        'через tokensave; если пусто/ошибка — работай обычными инструментами и не повторяй вызов. ' +
+        'MCP на родительской ветке графа — лишь одна из возможных причин, проверяется через /mcp.',
     });
   }
 
