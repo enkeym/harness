@@ -1,29 +1,28 @@
 ---
 name: commit
-description: Commit the current changes through the OpenCode `commit` agent (GLM 5.3) — message written from the diff in the repo's style, branch push, GitLab MR and a Jira block. User-invoked as /commit; never self-triggered.
+description: Commit the current changes and push the branch — message written from the diff in the user's own style, plus a Jira Summary/Description block to paste. User-invoked as /commit; never self-triggered.
 disable-model-invocation: true
-allowed-tools: Bash(opencode run --agent commit:*), Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*)
-argument-hint: [commit message, or instructions for the agent]
+allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git merge-base:*), Bash(git show:*)
+argument-hint: [commit message, or instructions]
 ---
 
 # /commit
 
-Claude does not write the commit — the OpenCode `commit` agent does: it reads
-the diff, writes the message in the repo's style, pushes the current branch and
-updates the GitLab MR. The user typing `/commit` is their decision to commit and
-push this branch.
+The user typing `/commit` is their decision to commit **and push** this branch.
+You write the commit yourself — no agent, no delegation.
 
-1. Show the branch and changed files in one line: `git branch --show-current`,
-   `git status --short`. Nothing changed — say so and stop, don't run the agent.
-2. Run the agent from the repo root (timeout 300000, it takes 1–3 minutes):
+Load `git-flow` first: message style, the ban on signing commits, the Jira block
+format and the rule that merge requests are never opened on your own all live
+there, and they apply here unchanged.
 
-```
-opencode run --agent commit --dir "$(git rev-parse --show-toplevel)" "$ARGUMENTS"
-```
+1. Show branch and changed files in one line (`git branch --show-current`,
+   `git status --short`). Nothing to commit — say so and stop.
+2. `git add -A`, then commit. Multi-line message via `git commit -F -`.
+3. Push the current branch (`git push -u origin <branch>` on the first push).
+   **Push only — no merge request**, even if none exists yet.
+4. Print the Jira block for the user to paste.
 
-   Empty arguments — pass the string `закоммить`. Text after `/commit` goes to
-   the agent as is: either a ready commit message or instructions ("без push",
-   "подробнее для Jira").
-3. Show the agent's output (hash, push result, MR, Jira block) verbatim, no
-   retelling. Don't commit anything yourself and don't fix things up after the
-   agent: if it fails, show the error and offer to retry.
+`$ARGUMENTS` overrides your judgement, not the rules: a quoted message is used
+verbatim as the header (no rewriting, no added `feat:` prefix), instructions like
+"без push" or "подробнее для Jira" are followed as given. The commit-signing ban
+holds regardless of what the arguments say.

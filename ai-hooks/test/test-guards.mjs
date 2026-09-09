@@ -359,7 +359,19 @@ check('[core] breaker: свежая сессия — отказ как обыч�
 // другом проекте или другой ветке замены не даёт — запрет там становится
 // тупиком, из которого агент уходит в повторы. Свежий процесс на каждый кейс:
 // результат serverState кэшируется внутри процесса.
+// Метки дедупа журнала живут минуту и переживают прогон: без сброса второй
+// запуск сьюта подряд не увидел бы записи и упал бы на ровном месте.
+function clearLogDedup() {
+  try {
+    const df = statePath('guard-log.json');
+    const st = JSON.parse(fs.readFileSync(df, 'utf8'));
+    for (const k of Object.keys(st)) if (k.includes(TS_PROJECT)) delete st[k];
+    fs.writeFileSync(df, JSON.stringify(st));
+  } catch { /* файла нет — нечего чистить */ }
+}
+
 {
+  clearLogDedup();
   const cc = { tool_name: 'Read', tool_input: { file_path: TS_PROJECT + '/client/src/App.tsx' }, cwd: TS_PROJECT };
 
   const alien = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-alien-'));
@@ -407,12 +419,7 @@ try {
 
 // и метки дедупа журнала: иначе первый настоящий рассинхрон в ближайшую минуту
 // будет молча съеден как «уже записанный»
-try {
-  const df = statePath('guard-log.json');
-  const st = JSON.parse(fs.readFileSync(df, 'utf8'));
-  for (const k of Object.keys(st)) if (k.includes(TS_PROJECT)) delete st[k];
-  fs.writeFileSync(df, JSON.stringify(st));
-} catch { /* файла нет — нечего чистить */ }
+clearLogDedup();
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

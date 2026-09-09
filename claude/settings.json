@@ -7,7 +7,6 @@
       "mcp__ragsave__rag_status",
       "mcp__tokensave__*",
       "Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)",
-      "Bash(opencode run --agent commit:*)",
       "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
       "mcp__playwright__*",
       "Edit(/home/enkeym/.ai-hooks/**)"
