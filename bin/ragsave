@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Обёртка CLI ragsave — запускает пакет в его собственном venv.
+# Venv нужен: fastembed/onnxruntime тяжёлые и не должны попадать в системный python.
+set -euo pipefail
+
+RAGSAVE_HOME="${RAGSAVE_HOME:-$HOME/.rag-mcp}"
+PYTHON="$RAGSAVE_HOME/venv/bin/python"
+
+if [ ! -x "$PYTHON" ]; then
+  echo "ragsave: не найден venv в $RAGSAVE_HOME/venv" >&2
+  exit 1
+fi
+
+export PYTHONPATH="$RAGSAVE_HOME${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PYTHON" -m ragsave.cli "$@"

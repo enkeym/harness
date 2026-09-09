@@ -1,0 +1,19 @@
+# Рантайм и артефакты, которые не переносятся между машинами.
+# Ветки конфигурации лежат в claude/, ai-hooks/, ragsave/, opencode/ —
+# у каждой свой .gitignore, этот файл только про корень.
+
+# Резервные копии, которые оставляет install.sh
+*.bak-*
+*.pre-harness
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Модели fastembed (3.4 ГБ) — качаются сами при первом запуске ragsave
+models/
