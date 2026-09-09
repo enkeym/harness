@@ -17,7 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { STATE_ROOT, projectKey } from './state-core.mjs';
+import { STATE_ROOT, projectKey, repoRootOr } from './state-core.mjs';
 
 const STATE_DIR = path.join(STATE_ROOT, 'ask-mode');
 const DEFAULT_FILE = path.join(STATE_DIR, 'default');
@@ -29,11 +29,20 @@ const DEFAULT_FILE = path.join(STATE_DIR, 'default');
 // то есть симптом «правки запрещены без причины» без единого следа причины.
 const FALLBACK_DEFAULT = false;
 
-// Ключ — корень проекта (projectKey из state-core), а не буквальный cwd: сессия
-// ходит по подкаталогам (`cd client && npm test`), и режим не должен от этого
-// переключаться.
+// Каталог, к которому привязан режим. Не буквальный cwd: рабочий каталог
+// сессии дрейфует (`cd` внутри Bash сдвигает его на весь остаток сессии), и
+// стоило агенту зайти в соседний репозиторий, как statusline читал режим одного
+// каталога, а PreToolUse-гард — другого. Отсюда «в статусбаре off, а правки
+// запрещены». CLAUDE_PROJECT_DIR — корень сессии, он не дрейфует; там, где его
+// нет, остаётся cwd, как было.
+export function anchorDir(cwd) {
+  return process.env.CLAUDE_PROJECT_DIR || cwd;
+}
+
+// Ключ — корень проекта (projectKey из state-core): внутри одного репозитория
+// подкаталоги делят режим.
 function keyFor(cwd) {
-  return `dir-${projectKey(cwd)}`;
+  return `dir-${projectKey(anchorDir(cwd))}`;
 }
 
 function read(file) {
@@ -59,11 +68,14 @@ export function setDefault(on) {
   return on;
 }
 
-// Откуда взято состояние — нужно statusline и команде status.
+// Откуда взято состояние — нужно statusline и команде status. dir возвращаем
+// явно: когда statusline и гард всё же разойдутся, вопрос «к какому каталогу
+// привязан режим» должен иметь ответ, а не догадку.
 export function state(cwd) {
+  const dir = repoRootOr(anchorDir(cwd));
   const v = read(path.join(STATE_DIR, keyFor(cwd)));
-  if (v === 'on' || v === 'off') return { on: v === 'on', source: 'каталог' };
-  return { on: defaultOn(), source: 'по умолчанию' };
+  if (v === 'on' || v === 'off') return { on: v === 'on', source: 'каталог', dir };
+  return { on: defaultOn(), source: 'по умолчанию', dir };
 }
 
 export function isOn(cwd) {

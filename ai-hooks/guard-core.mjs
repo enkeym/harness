@@ -148,12 +148,110 @@ function syncBusy(root) {
   return busy;
 }
 
+// ---------------------------------------------------------------------------
+// Совпадение с MCP-сервером. Гард запрещает Read/Grep/Edit только потому, что то
+// же самое отдаст tokensave. Если сервер обслуживает другой проект или другую
+// ветку, замены нет: запрет упирается в пустой ответ, агент повторяет вызов и
+// получает тот же отказ.
+//
+// Сервер регистрирует себя в ~/.tokensave/servers/<pid>.json (project_path,
+// db_path). Сверяем с тем, по чему судит гард. Ни один живой сервер не совпал —
+// гард молчит и пишет причину в guard.log.
+
+// Читается на каждый вызов, а не в константу при импорте: тесты подменяют
+// реестр переменной окружения уже после того, как модуль загружен.
+function serversDir() {
+  return process.env.TS_SERVERS_DIR || path.join(HOME, TS_DIR, 'servers');
+}
+
+// { ok } либо { ok:false, servers:[…] } — список нужен логу, чтобы рассинхрон
+// читался по записи целиком, без ручного обхода реестра.
+const serverCache = new Map();
+function serverState(root, wantDb) {
+  const cacheKey = `${root}\0${wantDb}`;
+  if (serverCache.has(cacheKey)) return serverCache.get(cacheKey);
+
+  let result;
+  try {
+    const seen = [];
+    let ok = false;
+    const dir = serversDir();
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.endsWith('.json')) continue;
+      const s = readJSON(path.join(dir, name), null);
+      // Мёртвый pid — запись осталась от прошлой сессии, её просто нет.
+      if (!s?.pid || !fs.existsSync(`/proc/${s.pid}`)) continue;
+      seen.push({ pid: s.pid, project: s.project_path || null, db: s.db_path || null });
+      if (path.resolve(s.project_path || '') !== path.resolve(root)) continue;
+      if (s.db_path && path.resolve(s.db_path) !== path.resolve(wantDb)) continue;
+      ok = true;
+    }
+    result = ok ? { ok } : { ok, servers: seen };
+  } catch {
+    // Нет реестра (старая версия tokensave) — сверять нечем, ведём себя как
+    // раньше: судим по БД. Отсутствие данных не повод снимать запреты везде.
+    result = { ok: true };
+  }
+
+  serverCache.set(cacheKey, result);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Диагностический лог. Пишется только там, где гард отступает от своего
+// правила, — этих событий в норме ноль, поэтому файл не шумит. Всё, что нужно
+// для разбора («по какой БД судил гард, что обслуживал сервер»), в одной строке.
+
+// Путь и дедуп читаются на каждый вызов: тестам нужен свой файл, иначе прогон
+// сьюта дописывает выдуманные рассинхроны в журнал, по которому потом
+// разбирают настоящие.
+const guardLog = () =>
+  process.env.AI_HOOKS_GUARD_LOG || path.join(HOME, '.ai-hooks', 'logs', 'guard.log');
+const LOG_DEDUP_MS = 60 * 1000;
+
+export function logGuard(event, data = {}) {
+  try {
+    const now = Date.now();
+    // Рассинхрон срабатывает на каждом кандидате пути внутри одного вызова —
+    // без дедупа одна команда даёт десяток одинаковых строк.
+    const key = `${event}|${data.root || ''}|${data.guard_db || ''}|${data.tool || ''}`;
+    const dedupFile = statePath('guard-log.json');
+    const seen = readJSON(dedupFile, {});
+    for (const [k, t] of Object.entries(seen)) {
+      if (typeof t !== 'number' || now - t > LOG_DEDUP_MS) delete seen[k];
+    }
+    if (seen[key]) return false;
+    seen[key] = now;
+    writeJSON(dedupFile, seen);
+
+    const file = guardLog();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file,
+      JSON.stringify({ ts: new Date(now).toISOString(), event, ...data }) + '\n');
+    return true;
+  } catch {
+    return false; // лог не обязан работать, чтобы работал гард
+  }
+}
+
 // Любая проблема с БД (нет файла, залочена, сменилась схема) → null, и гард
 // молчит. Fail-open осознанно: запретить, не дав рабочей альтернативы, — тупик,
 // из которого агент начинает искать обходные пути. Пропущенный запрет дешевле.
 function query(root, fn) {
   const file = dbPath(root);
   if (!file || syncBusy(root)) return null;
+
+  const srv = serverState(root, file);
+  if (!srv.ok) {
+    logGuard('server-mismatch', {
+      root,
+      branch: currentBranch(root),
+      guard_db: path.relative(root, file),
+      servers: srv.servers,
+    });
+    return null;
+  }
+
   let db;
   try {
     db = new DatabaseSync(file, { readOnly: true });
@@ -256,14 +354,24 @@ export function denialKey(toolName, toolInput = {}) {
   return `${toolName}:${String(target).replace(/\s+/g, ' ').slice(0, 200)}`;
 }
 
-// true → запрет на эту цель уже выдавался, пропускаем вызов. Сработавший
-// предохранитель держится до конца окна: иначе запреты пошли бы через один и
-// цикл вернулся бы в другом виде. Любая ошибка состояния → false (запрещаем
-// как обычно): потерянная метка безопаснее пропущенного запрета.
+// Что делать с вызовом:
+//   false      — запрещаем как обычно (запрета на эту цель ещё не было);
+//   'announce' — пропускаем и объясняем почему (первый пропуск в окне);
+//   'silent'   — пропускаем молча (объяснение уже прозвучало).
+//
+// Различие между 'announce' и 'silent' и есть лекарство от спама: пока латч
+// открыт, пропускается КАЖДОЕ чтение, и текст «запрет снят…» печатался к
+// каждому из них — до тридцати одинаковых простыней за три минуты. Сказать это
+// один раз достаточно: второе такое сообщение не добавляет ничего к первому.
+//
+// Любая ошибка состояния → false (запрещаем как обычно): потерянная метка
+// безопаснее пропущенного запрета.
 export function breakerAllows(sessionId, key, family = null) {
   const sid = sessionId || 'default';
   const id = `${sid}|${key}`;
   const famId = family ? `${sid}|fam:${family}` : null;
+  // Об одном классе говорим один раз; без family — по конкретной цели.
+  const sayId = `${sid}|say:${family || key}`;
   const now = Date.now();
   const state = readJSON(BREAKER_FILE, {}); // первого запрета ещё не было → {}
 
@@ -284,9 +392,13 @@ export function breakerAllows(sessionId, key, family = null) {
   // цели (entry не было) латч только читают, но не продлевают.
   if (famId && entry) state[famId] = { t: state[famId]?.t ?? now };
 
+  const announced = open && Boolean(state[sayId]);
+  if (open && !announced) state[sayId] = { t: now };
+
   writeJSON(BREAKER_FILE, state); // не записали — в худшем случае запретим ещё раз
 
-  return open;
+  if (!open) return false;
+  return announced ? 'silent' : 'announce';
 }
 
 // Чтение файла: есть в индексе → только tokensave.

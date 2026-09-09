@@ -11,6 +11,7 @@
 
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import {
@@ -30,6 +31,20 @@ const BASH = path.join(ROOT, 'claude', 'bash-router.mjs');
 const TS_PROJECT = '/home/enkeym/main/web_groza';
 const NON_PROJECT = '/tmp';
 
+// Реестр MCP-серверов подменяем своим: гард запрещает только тогда, когда живой
+// сервер обслуживает тот же проект, и на настоящем реестре вердикты зависели бы
+// от того, какой проект открыт в соседнем окне. Запись без db_path — сверка БД
+// пропускается, проверяем именно правило «проект совпал».
+const SERVERS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-'));
+fs.writeFileSync(path.join(SERVERS_DIR, `${process.pid}.json`),
+  JSON.stringify({ pid: process.pid, project_path: TS_PROJECT }));
+process.env.TS_SERVERS_DIR = SERVERS_DIR;
+
+// Диагностический журнал уводим в temp: выдуманные рассинхроны из тестов не
+// должны лежать в файле, по которому разбирают настоящие.
+const GUARD_LOG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guardlog-')), 'guard.log');
+process.env.AI_HOOKS_GUARD_LOG = GUARD_LOG;
+
 // Состав индекса зависит от ветки: на main в графе только ts/js/tsx/md, на
 // рабочих ветках туда попадают ещё json, sql, yml. Поэтому вердикт для таких
 // файлов не константа — берём его из той же БД, по которой судит гард.
@@ -40,11 +55,14 @@ const wantFile = (file) => (isIndexed(TS_PROJECT, file) ? 'deny' : 'allow');
 const JSON_VERDICT = wantFile(PKG_JSON);
 
 // --- Claude: запуск реального хук-скрипта ---
-function claude(script, input) {
+// env — для сценариев с подменённым реестром серверов: кэш serverState живёт в
+// процессе, поэтому такие проверки должны идти в свежем.
+function claude(script, input, env = null) {
   try {
     const out = execFileSync('node', [script], {
       input: JSON.stringify(input),
       encoding: 'utf8',
+      env: env ? { ...process.env, ...env } : process.env,
     });
     if (!out.trim()) return 'allow';
     return JSON.parse(out)?.hookSpecificOutput?.permissionDecision || 'allow';
@@ -319,12 +337,81 @@ check('[core] breaker: свежая сессия — отказ как обыч�
   check('[core] breaker: соседняя цель не двигает окно латча', t2 === t1 && !!t1, true);
 }
 
+// ---- предохранитель: объяснение звучит один раз ----
+// Пока латч открыт, пропускается каждое чтение. Текст «запрет снят…» к каждому
+// из них — это и был спам, ради которого всё затевалось: одно объяснение несёт
+// столько же информации, сколько тридцать.
+{
+  const SID2 = `test-breaker-say-${process.pid}-${Date.now()}`;
+  check('[core] breaker: первая цель — отказ', breakerAllows(SID2, 'Read:/b/x.ts', 'read'), false);
+  check('[core] breaker: повтор — пропуск с объяснением',
+    breakerAllows(SID2, 'Read:/b/x.ts', 'read'), 'announce');
+  check('[core] breaker: соседняя цель — пропуск молча',
+    breakerAllows(SID2, 'Read:/b/y.ts', 'read'), 'silent');
+  check('[core] breaker: и дальше молча',
+    breakerAllows(SID2, 'Read:/b/z.ts', 'read'), 'silent');
+  check('[core] breaker: другой класс объясняется отдельно',
+    breakerAllows(SID2, 'Edit:/b/x.ts', 'edit'), false);
+}
+
+// ---- рассинхрон с MCP-сервером ----
+// Гард запрещает Read/Grep только потому, что то же отдаст tokensave. Сервер на
+// другом проекте или другой ветке замены не даёт — запрет там становится
+// тупиком, из которого агент уходит в повторы. Свежий процесс на каждый кейс:
+// результат serverState кэшируется внутри процесса.
+{
+  const cc = { tool_name: 'Read', tool_input: { file_path: TS_PROJECT + '/client/src/App.tsx' }, cwd: TS_PROJECT };
+
+  const alien = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-alien-'));
+  fs.writeFileSync(path.join(alien, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, project_path: '/home/enkeym/main/other-project' }));
+  check('[claude] сервер на чужом проекте → гард молчит',
+    claude(READ, cc, { TS_SERVERS_DIR: alien }), 'allow');
+
+  const wrongBranch = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-branch-'));
+  fs.writeFileSync(path.join(wrongBranch, `${process.pid}.json`),
+    JSON.stringify({
+      pid: process.pid,
+      project_path: TS_PROJECT,
+      db_path: TS_PROJECT + '/.tokensave/branches/__parent__.db',
+    }));
+  check('[claude] сервер на чужой ветке графа → гард молчит',
+    claude(READ, cc, { TS_SERVERS_DIR: wrongBranch }), 'allow');
+
+  const dead = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-dead-'));
+  fs.writeFileSync(path.join(dead, '999999.json'),
+    JSON.stringify({ pid: 999999, project_path: TS_PROJECT }));
+  check('[claude] мёртвая запись реестра сервером не считается',
+    claude(READ, cc, { TS_SERVERS_DIR: dead }), 'allow');
+
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-none-'));
+  check('[claude] реестра нет (старый tokensave) → судим по БД, как раньше',
+    claude(READ, cc, { TS_SERVERS_DIR: path.join(empty, 'missing') }), 'deny');
+
+  for (const d of [alien, wrongBranch, dead, empty]) fs.rmSync(d, { recursive: true, force: true });
+}
+
+check('[core] журнал гардов: запись ушла в тестовый файл, не в общий',
+  fs.existsSync(GUARD_LOG), true);
+
+fs.rmSync(SERVERS_DIR, { recursive: true, force: true });
+fs.rmSync(path.dirname(GUARD_LOG), { recursive: true, force: true });
+
 // убрать за собой тестовые записи из общего файла предохранителя
 try {
   const bf = BREAKER_FILE;
   const st = JSON.parse(fs.readFileSync(bf, 'utf8'));
   for (const k of Object.keys(st)) if (k.startsWith('test-breaker-')) delete st[k];
   fs.writeFileSync(bf, JSON.stringify(st));
+} catch { /* файла нет — нечего чистить */ }
+
+// и метки дедупа журнала: иначе первый настоящий рассинхрон в ближайшую минуту
+// будет молча съеден как «уже записанный»
+try {
+  const df = statePath('guard-log.json');
+  const st = JSON.parse(fs.readFileSync(df, 'utf8'));
+  for (const k of Object.keys(st)) if (k.includes(TS_PROJECT)) delete st[k];
+  fs.writeFileSync(df, JSON.stringify(st));
 } catch { /* файла нет — нечего чистить */ }
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);

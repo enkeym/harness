@@ -37,7 +37,11 @@ prompt, or the harness mode classifier. Name the real one; don't prescribe
 `/ask-off` for something ask mode never blocked.
 
 State is bound to the directory (git root) until the end of the session, and is
-not inherited by a new one.
+not inherited by a new one. The anchor is the session root (`CLAUDE_PROJECT_DIR`,
+`workspace.project_dir`), not the working directory, which `cd` inside Bash moves
+for the rest of the session — that drift used to leave the statusline and the
+guard reading two different directories. `ask-mode.mjs status` prints the anchor
+it used; compare it with the statusline when the two seem to disagree.
 
 ## Routers
 
@@ -49,8 +53,16 @@ so and use plain tools rather than retrying into the router.
 
 ## Background hooks
 
-They keep the tokensave and ragsave indexes in sync. **Never run `init` or `sync`
-yourself.**
+They keep an **existing** tokensave/ragsave index in sync — nothing more. Never
+run `sync` yourself. First-time indexing is the user's call alone: no hook runs
+`init` and none creates `.tokensave` / `.ragsave`. A project without an index
+stays without one until the user runs `tokensave init <path>`; say so instead of
+offering to do it.
+
+MCP servers are started through `~/.ai-hooks/bin/mcp-serve.sh`, which pins the
+project to the session's directory. Started outside a project, tokensave used to
+pick the alphabetically first neighbouring project in silence; now the server
+simply doesn't come up, and its tools are absent rather than wrong.
 
 `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI, dependabot
 or `.env.example` — offer it in one line in the first reply and act on "yes". If
@@ -62,8 +74,14 @@ why those rules don't belong in an agent prompt.
 ## When something is broken
 
 Background failures land in `~/.ai-hooks/logs/errors.log` — read it first on any
-tokensave or ragsave bug report; an empty file is also an answer. Which blocks
-fired twice is in `~/.ai-hooks/state/guard-breaker.json`.
+tokensave or ragsave bug report; an empty file is also an answer.
+
+`~/.ai-hooks/logs/guard.log` (JSONL) is the second file to open: it records only
+where a guard stepped back, so anything in it is a real event. `server-mismatch`
+— the MCP server serves another project or branch than the guard judges by (the
+record names both, with the server registry from `~/.tokensave/servers/`);
+`breaker-open` — the repeat breaker fired. Marks live in `~/.claude/state/`
+(`guard-breaker.json`, `guard-log.json`), not under `~/.ai-hooks`.
 
 Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. The hook test suite
 is `~/.ai-hooks/test/test-*.mjs`; after any edit under `~/.ai-hooks` it is run,

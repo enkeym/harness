@@ -2,7 +2,7 @@
 // предохранитель от повторных запретов. Три роутера (edit, read/search, bash)
 // отличаются только тем, какую функцию guard-core они зовут.
 
-import { breakerAllows, denialKey } from '../guard-core.mjs';
+import { breakerAllows, denialKey, logGuard } from '../guard-core.mjs';
 
 // tokensave падает не на одном файле, а на всём графе (MCP на чужой ветке, лок
 // БД, смена схемы). Раз повтор случился — гасим первый отказ и для соседних
@@ -40,16 +40,31 @@ export function respond(input, reason) {
   // харнес): считать разные прогоны одной сессией — значит терять запреты.
   const key = denialKey(input.tool_name, input.tool_input);
   const family = GUARD_FAMILY[input.tool_name] || null;
-  if (input.session_id && breakerAllows(input.session_id, key, family)) {
+  const verdict = input.session_id && breakerAllows(input.session_id, key, family);
+
+  if (verdict) {
+    logGuard('breaker-open', {
+      tool: input.tool_name,
+      target: key.slice(input.tool_name.length + 1),
+      cwd: input.cwd || null,
+      family,
+      announced: verdict === 'announce',
+    });
+  }
+
+  // Объясняем один раз за окно; дальше пропускаем молча — повторение того же
+  // текста к каждому чтению было шумом, а не информацией.
+  if (verdict === 'announce') {
     finish({
       systemMessage:
         `tokensave-гард: ${input.tool_name} пропущен — запрет снят, потому что тот же ` +
-        'вызов уже отклонялся и повторился (защита от цикла). Причина не диагностируется: ' +
-        'если tokensave_* отвечает корректно (сверься с tokensave_status) — просто продолжай ' +
-        'через tokensave; если пусто/ошибка — работай обычными инструментами и не повторяй вызов. ' +
-        'MCP на родительской ветке графа — лишь одна из возможных причин, проверяется через /mcp.',
+        'вызов уже отклонялся и повторился (защита от цикла). Дальнейшие пропуски в ближайшие ' +
+        'три минуты будут молчаливыми. Если tokensave_* отвечает корректно (сверься с ' +
+        'tokensave_status) — продолжай через tokensave; если пусто/ошибка — работай обычными ' +
+        'инструментами и не повторяй вызов. Разбор причины: ~/.ai-hooks/logs/guard.log.',
     });
   }
+  if (verdict === 'silent') finish(null);
 
   finish({
     hookSpecificOutput: {

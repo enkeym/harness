@@ -167,10 +167,10 @@ function mergeRollup(acc, next) {
   };
 }
 
-// Журнал отказов фоновых задач: обрезаем хвостом, а не целиком — последние
-// записи и есть то, ради чего в него смотрят.
-function trimLog(maxBytes = 2 * 1024 * 1024, keepLines = 500) {
-  const file = path.join(HOME, '.ai-hooks', 'logs', 'errors.log');
+// Журналы (отказы фоновых задач, диагностика гардов): обрезаем хвостом, а не
+// целиком — последние записи и есть то, ради чего в них смотрят.
+function trimLog(name = 'errors.log', maxBytes = 2 * 1024 * 1024, keepLines = 500) {
+  const file = path.join(HOME, '.ai-hooks', 'logs', name);
   try {
     if (fs.statSync(file).size <= maxBytes) return 0;
     const lines = fs.readFileSync(file, 'utf8').split('\n');
@@ -204,6 +204,10 @@ const usage = rollupUsage();
 if (usage?.collapsed) report.push(`журнал расходов: свёрнуто ${usage.collapsed} записей, осталось ${usage.kept}`);
 const droppedLines = trimLog();
 if (droppedLines) report.push(`журнал отказов: обрезано ${droppedLines} строк`);
+// guard.log в норме пуст — порог ниже: если он дорос до полумегабайта, там
+// уже давно одно и то же, и хвоста хватает.
+const droppedGuard = trimLog('guard.log', 512 * 1024, 500);
+if (droppedGuard) report.push(`журнал гардов: обрезано ${droppedGuard} строк`);
 
 if (!dryRun) stamp();
 

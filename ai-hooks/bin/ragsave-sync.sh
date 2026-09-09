@@ -22,18 +22,18 @@ rag_bin="$HOME/.local/bin/ragsave"
 # Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория.
 [ -f "$repo_root/.ragsave-disable" ] && exit 0
 
-mkdir -p "$repo_root/.ragsave" 2>/dev/null || exit 0
+# Индекса нет — выходим. Первичный init хуком не запускается: решение
+# «индексировать этот репозиторий» принимает человек, командой `ragsave init`.
+# Каталог .ragsave здесь тоже не создаётся — пустой каталог ничего не значит,
+# а появлялся он в любом репозитории, где просто открыли сессию.
+[ -f "$repo_root/.ragsave/rag.db" ] || exit 0
+
 log="$repo_root/.ragsave/sync.log"
 
 setsid bash -c '
   root="$1"; bin="$2"; log="$3"
-  if [ -f "$root/.ragsave/rag.db" ]; then
-    "$bin" sync "$root" --quiet >"$log" 2>&1 \
-      || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$log" "$?"
-  else
-    "$bin" init "$root" >"$log" 2>&1 \
-      || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave init" "$root" "$log" "$?"
-  fi
+  "$bin" sync "$root" --quiet >"$log" 2>&1 \
+    || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$log" "$?"
 ' _ "$repo_root" "$rag_bin" "$log" </dev/null >/dev/null 2>&1 &
 
 exit 0

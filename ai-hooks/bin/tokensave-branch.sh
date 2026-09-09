@@ -18,23 +18,16 @@ ts_bin="/usr/local/bin/tokensave"
 # Явный отказ от индексации проекта: touch .tokensave-disable в корне репозитория.
 [ -f "$repo_root/.tokensave-disable" ] && exit 0
 
-mkdir -p "$repo_root/.tokensave" 2>/dev/null
+# Индекса нет — выходим. Первичный init хуком не запускается: решение
+# «индексировать этот репозиторий» принимает человек, командой `tokensave init`.
+# Автоматический init нельзя было отменить и он не различал проект и контейнер:
+# ~/main — сам git-репозиторий с вложенными проектами, и сессия, начатая в нём,
+# запускала индексацию всего дерева (в errors.log это `tokensave init |
+# /home/enkeym/main | exit=101`). Каталог .tokensave здесь тоже больше не
+# создаётся — пустой каталог заставлял хуки считать проект инициализированным.
+[ -f "$repo_root/.tokensave/tokensave.db" ] || exit 0
 
 log="$repo_root/.tokensave/sync.log"
-
-# Нет БД — первичная индексация (может быть долгой).
-# Лок .sync.lock общий с tokensave-sync.sh → init/sync/branch-add взаимно
-# исключаются, параллельные промпты не плодят конкурирующие init и не портят БД.
-if [ ! -f "$repo_root/.tokensave/tokensave.db" ]; then
-  setsid bash -c '
-    root="$1"; bin="$2"; log="$3"
-    exec 9>"$root/.tokensave/.sync.lock"
-    flock -n 9 || exit 0
-    "$bin" init "$root" >"$log" 2>&1 \
-      || "$HOME/.ai-hooks/bin/log-error.sh" "tokensave init" "$root" "$log" "$?"
-  ' _ "$repo_root" "$ts_bin" "$log" </dev/null >/dev/null 2>&1 &
-  exit 0
-fi
 
 # Detached HEAD — ветки нет, нечего добавлять
 branch="$(git -C "$repo_root" symbolic-ref --short HEAD 2>/dev/null)"

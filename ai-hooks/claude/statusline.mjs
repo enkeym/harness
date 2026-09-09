@@ -25,7 +25,11 @@ process.stdin.on('end', () => {
   let input = {};
   try { input = JSON.parse(raw); } catch { /* нет ввода — покажем что есть */ }
 
+  // Показываем текущий каталог, но режим спрашиваем про корень сессии — тот же
+  // якорь, что у PreToolUse-гарда (см. anchorDir в ask-core). Иначе индикатор
+  // и запреты расходятся, стоит агенту уйти `cd` в соседний репозиторий.
   const dir = input.workspace?.current_dir || input.cwd || process.cwd();
+  const anchor = input.workspace?.project_dir || dir;
   const short = dir.startsWith(HOME) ? `~${dir.slice(HOME.length)}` : dir;
   const parts = [short];
 
@@ -38,7 +42,7 @@ process.stdin.on('end', () => {
   // Режим показываем всегда: он включён по умолчанию, и «ничего не написано»
   // читалось бы как «правки разрешены».
   const line = `${DIM}${parts.join('  ')}${RESET}  ` +
-    (isOn(dir) ? `${LIME}ask mode on${RESET}` : `${DIM}ask mode off${RESET}`);
+    (isOn(anchor) ? `${LIME}ask mode on${RESET}` : `${DIM}ask mode off${RESET}`);
 
   process.stdout.write(line);
 });

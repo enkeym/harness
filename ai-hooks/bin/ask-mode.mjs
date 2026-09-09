@@ -36,7 +36,9 @@ switch (action) {
     process.stdout.write(`${label(setMode(dir, !isOn(dir)))}\n`);
     break;
   default: {
+    // Каталог печатаем всегда: расхождение «в статусбаре одно, гард считает
+    // другое» диагностируется только так — сравнением якорей.
     const s = state(dir);
-    process.stdout.write(`${label(s.on)} (${s.source})\n`);
+    process.stdout.write(`${label(s.on)} (${s.source}) — ${s.dir}\n`);
   }
 }
