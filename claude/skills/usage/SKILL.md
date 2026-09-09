@@ -1,0 +1,32 @@
+---
+name: usage
+description: Report on token spend, estimated cost, tools and subagents from the local ledger ~/.ai-hooks/logs/usage.jsonl (written by the Stop hook). User-invoked as /usage [--days N | --today | --project name | --sessions].
+disable-model-invocation: true
+allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*)
+argument-hint: [--days N | --today | --project <name> | --sessions]
+---
+
+# /usage
+
+Two sources; show both verbatim, without retelling.
+
+1. tokensave's built-in accounting — every agent on the machine, with the cache
+   hit rate. Ranges: `today`, `7d`, `30d`, `month`, `all`.
+
+```
+tokensave cost 7d --by-model
+```
+
+2. The local report — the breakdown by project, tool and subagent that tokensave
+   doesn't have:
+
+```
+node /home/enkeym/.ai-hooks/bin/usage-report.mjs $ARGUMENTS
+```
+
+Both costs are estimates, not the subscription bill, and they disagree: the
+local report uses the current per-million price list (`PRICES` in
+`~/.ai-hooks/claude/usage-log.mjs`), tokensave uses its own. Read the
+proportions between models, projects and sessions, not the absolute figure. If
+one observation is worth adding ("subagents ate half of it", "the cache is
+missing"), add one sentence after the output — no more.

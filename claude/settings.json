@@ -1,0 +1,228 @@
+{
+  "cleanupPeriodDays": 45,
+  "permissions": {
+    "allow": [
+      "mcp__ragsave__rag_index",
+      "mcp__ragsave__rag_search",
+      "mcp__ragsave__rag_status",
+      "mcp__tokensave__*",
+      "Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)",
+      "Bash(opencode run --agent commit:*)",
+      "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
+      "Bash(node /home/enkeym/.ai-hooks/bin/delegate.mjs:*)",
+      "mcp__playwright__*",
+      "Edit(/home/enkeym/.ai-hooks/**)"
+    ],
+    "defaultMode": "default"
+  },
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ask-guard.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/security-guard.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/edit-router.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/read-search-router.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|mcp__ide__executeCode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/bash-router.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokensave",
+            "args": [
+              "hook-pre-tool-use"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/output-clip.mjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokensave",
+            "args": [
+              "hook-stop"
+            ]
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/tokensave-sync.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/usage-log.mjs"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/bin/cleanup.mjs"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/tokensave",
+            "args": [
+              "hook-prompt-submit"
+            ]
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/tokensave-branch.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ragsave-reminder.mjs"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ask-reminder.mjs"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/ask-session.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/project-bootstrap.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/handoff-load.mjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/subagent-context.mjs"
+          }
+        ]
+      }
+    ]
+  },
+  "respondToBashCommands": false,
+  "statusLine": {
+    "type": "command",
+    "command": "node /home/enkeym/.ai-hooks/claude/statusline.mjs",
+    "refreshInterval": 5
+  },
+  "language": "Russian",
+  "effortLevel": "medium",
+  "modelSettings": {
+    "claude-sonnet-5": {
+      "effortLevel": "high"
+    },
+    "claude-opus-5": {
+      "effortLevel": "high"
+    }
+  },
+  "theme": "dark-ansi",
+  "remoteControlAtStartup": false
+}

@@ -1,0 +1,45 @@
+# Секреты и учётные данные — никогда.
+.credentials.json
+*.credentials.json
+
+# История промптов и транскрипты сессий — личные данные, не конфиг, и тяжёлые
+# (projects/ уже за 200 МБ). Версионируется только то, что сам настраивал.
+history.jsonl
+projects/
+sessions/
+session-env/
+shell-snapshots/
+tasks/
+ide/
+paste-cache/
+image-cache/
+
+# Кеш и служебные метки — пересоздаются сами, версионировать нечего.
+cache/
+debug/
+downloads/
+file-history/
+hooks/
+state/
+telemetry/
+backups/
+stats-cache.json
+.last-cleanup
+.last-update-result.json
+
+# Сгенерированные артефакты, не авторский конфиг.
+plans/
+feedback/
+rules/*.bak*
+
+# Реестр установленных плагинов — переустанавливается, содержит вложенные
+# git-репозитории маркетплейсов (нельзя добавлять как обычные файлы).
+plugins/
+
+# Снимки, которые заменяет сам git.
+*.bak
+*.bak-*
+
+# Передачи между сессиями (см. handoff-core.mjs) — рабочее состояние проекта,
+# не конфиг агента; живут своим циклом через bin/cleanup.mjs.
+handoff/
