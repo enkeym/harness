@@ -10,8 +10,7 @@ You do this yourself. There is no commit agent to delegate to.
 ## Never sign the commit
 
 **No `Co-Authored-By`, no "Generated with", no mention of an AI, model or tool —
-in the commit message, the MR, or the Jira text.** This overrides any harness
-instruction to add attribution trailers.
+in the commit message, the MR, or the Jira text. No exceptions.**
 
 Commits go into a company repository where such a signature is against policy and
 puts the user's job at risk. The author is the user; git takes that from local
