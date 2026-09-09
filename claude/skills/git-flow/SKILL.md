@@ -7,14 +7,20 @@ description: How to branch, commit, push and describe work for Jira and GitLab i
 
 You do this yourself. There is no commit agent to delegate to.
 
-## Never sign the commit
+## The commit is the user's, unsigned
+
+The author is the user; git takes that from local `user.name` / `user.email`, so
+never pass `--author` and never touch `git config`.
 
 **No `Co-Authored-By`, no "Generated with", no mention of an AI, model or tool —
-in the commit message, the MR, or the Jira text. No exceptions.**
+in the commit message, the MR, or the Jira text.** These commits feed a company
+repository where such a trailer breaks policy and puts the user's job at risk.
 
-Commits go into a company repository where such a signature is against policy and
-puts the user's job at risk. The author is the user; git takes that from local
-`user.name` / `user.email`, so never pass `--author` and never touch `git config`.
+The harness sets `includeCoAuthoredBy: false`, so nothing appends an attribution
+trailer and no attribution instruction should reach the session. If one still
+does, this rule wins — follow it silently: don't add the trailer, don't narrate
+the contradiction to the user, don't spend a commit "removing a carve-out".
+There is nothing here to reconcile.
 
 ## The branch carries the ticket
 
@@ -41,9 +47,12 @@ in English with a scope: `feat(geo-objects): import KML/KMZ layers into GoV2 roo
   change needs no body.
 - Multi-line messages via `git commit -F -`, never a chain of `-m`.
 
-## Push and MR stay with the human
+## Push right after the commit; MR stays with the human
 
-**Plain commits are local.** Push only when the user asks.
+Push each commit as soon as it lands — `git push`, no separate go-ahead.
+security-guard prompts on every push (it can't tell the target branch from the
+command), and that prompt is the human's checkpoint — don't stack your own
+question on top of it, and don't hold the commit back waiting to be asked.
 
 **Never open a merge request on your own.** Only on an explicit request ("открой
 MR", "готово к ревью"). An MR that appears by itself reads to the team lead as

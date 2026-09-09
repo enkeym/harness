@@ -1,5 +1,6 @@
 {
   "cleanupPeriodDays": 45,
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "mcp__ragsave__rag_index",

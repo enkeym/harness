@@ -10,8 +10,9 @@ when to load which.
 - **Outside ask mode, apply edits immediately.** Chat-only when ask mode is on or
   when asked: "покажи в чате", "не применяй", "только предложи". There is no
   magic permission word — with ask mode off you work, you don't ask.
-- Confirm only before irreversible or outbound actions: deleting files,
-  `git push`, deploy, destructive migration.
+- Confirm only before irreversible or outbound actions: deleting files, deploy,
+  destructive migration. `git push` is not one of these — it runs right after a
+  commit, and security-guard's prompt is the gate. Skill `git-flow`.
 - Re-check yourself before delivering code ("wait, what if…"). Found a mistake —
   fix it openly, not silently.
 - A hook refusal is user feedback, not an obstacle: never look for a way around
