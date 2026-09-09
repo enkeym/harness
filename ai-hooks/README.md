@@ -51,7 +51,6 @@ claude/output-clip.mjs          # шумные команды — через о�
 bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
-bin/delegate.mjs                # делегирование задачи внешним CLI (DeepSeek, GLM) + health
 bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
 bin/cleanup.mjs                 # уборка меток, кешей и журналов (Stop, раз в сутки)
 bin/ask-mode.mjs                # переключатель: on | off | toggle | reset | default
@@ -68,7 +67,6 @@ test/test-subagent-context.mjs  # контекст субагента есть �
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-security.mjs          # что deny, что ask, что проходит молча
 test/test-agents.mjs            # определения ролей и скиллов: имена, модели, инструменты
-test/test-delegate.mjs          # секрет не уходит наружу, кеш здоровья, коды выхода
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-handoff.mjs           # ключ по репозиторию, срок годности, обрезка длинной передачи
@@ -235,32 +233,6 @@ diff`, показывающий строку с ключом, или чужой 
 Разбор грубый, как и в гардах tokensave: распознаются формы команд, а не
 синтаксис shell, и нераспознанное проходит. Задача не поймать любой обход, а
 закрыть удобный путь и поставить человека там, где цена ошибки высока.
-
-## Делегирование внешним моделям
-
-`bin/delegate.mjs` уводит объёмную генерацию в чужие квоты через три CLI:
-opencode с DeepSeek (`v4-flash` для быстрых ответов, `v4-pro` для рассуждения)
-и GLM (`5.3-flash`, `5.3`), и напрямую Codex CLI. Режим `jury` спрашивает всех
-доступных и возвращает ответы рядом — выбирает вызывающий, потому что только
-он знает задачу.
-
-Три решения в устройстве. Промпт проверяется на секреты до отправки
-(`findSecretValue` из `security-core`) — у стороннего провайдера нет причин
-видеть токен бота или DSN. Запуск идёт с нейтральным рабочим каталогом и без
-сохранения истории (`--pure` у opencode, `--ephemeral` у Codex), иначе CLI
-подтянул бы AGENTS.md и плагины проекта: лишние токены у провайдера и лишний
-контекст наружу. Здоровье провайдеров кэшируется на 6 часов в
-`~/.claude/state/cli-health.json`, а при живой ошибке метка сбрасывается сразу — так
-слетевшая авторизация видна на первом же вызове, а не через таймауты.
-
-Codex подключён иначе, чем DeepSeek/GLM: те два идут через единый рантайм
-opencode с прямым выбором модели (`-m provider/model`), у Codex свой CLI и
-свой способ управлять глубиной ответа — не имя модели, а
-`-c model_reasoning_effort=high`, поэтому `fast`/`deep` у него не строки
-моделей, а метки режима (`default` / `high-effort`); имя модели по умолчанию
-выбирает сам аккаунт и меняется вместе с ним. Чистый ответ, без шапки сессии
-и эха промпта, забирается через `--output-last-message <file>` — тот же приём,
-которым `clean()` вручную снимает шум с вывода opencode.
 
 ## Автоматизация проекта и учёт
 
@@ -429,8 +401,8 @@ basename, что уже стоит в имени файла, и `~/main/vpn-new`
 `~/.claude/state/.cleanup-stamp`). Убирает то, что мертво по устройству: метки
 подсказок ragsave (дроссель внутри — 15 минут, метка старше двух суток
 бессмысленна), метки диагностики проектов и ask mode по каталогам, служебные
-метки в корне состояния (`guard-breaker.json`, `cli-health.json`, временные
-файлы делегирования), неотправленную телеметрию Claude Code, кеш вставок,
+метки в корне состояния (`guard-breaker.json`), неотправленную телеметрию
+Claude Code, кеш вставок,
 окружение и снимки shell завершённых сессий. Первый проход снял 160 файлов и
 14 МБ.
 
@@ -473,7 +445,6 @@ node ~/.ai-hooks/test/test-agents.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
-node ~/.ai-hooks/test/test-delegate.mjs
 node ~/.ai-hooks/test/test-handoff.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 ```

@@ -1,8 +1,8 @@
 ---
 name: optimize
-description: Analyse token spend and agent-system settings and propose optimisations — which models and subagents eat the budget, where the cache misses, what should be delegated to external models, which rules and hooks get in the way. Analysis and proposals only; edits are applied on an explicit yes. User-invoked as /optimize.
+description: Analyse token spend and agent-system settings and propose optimisations — which models and subagents eat the budget, where the cache misses, which rules and hooks get in the way. Analysis and proposals only; edits are applied on an explicit yes. User-invoked as /optimize.
 disable-model-invocation: true
-allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Bash(node /home/enkeym/.ai-hooks/bin/delegate.mjs --health), Read, Grep, Glob
+allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read, Grep, Glob
 argument-hint: [--days N | --project <name>]
 ---
 
@@ -17,7 +17,6 @@ breaks every session silently, and they notice a day later.
 ```
 tokensave cost 30d --by-model
 node ~/.ai-hooks/bin/usage-report.mjs --days 30 --sessions
-node ~/.ai-hooks/bin/delegate.mjs --health
 ```
 
 Then as needed: `~/.ai-hooks/logs/usage.jsonl` (raw per-session records),
@@ -40,8 +39,6 @@ otherwise it is a guess.
 - **Tools run for nothing.** The top calls in the report: a lot of `Grep` and
   `Read` with a live index means the tool-choice rule didn't fire; many repeats
   of one call means a guard or a loop — that is `/doctor`.
-- **Not delegated.** Bulk generation needing no repo context that would have
-  gone to DeepSeek or GLM in seconds, on someone else's quota.
 - **Rules working against themselves.** CLAUDE.md sections contradicting each
   other or the skills; skills never loaded because nothing triggers them; bans
   with no working alternative — the agent looks for a way around those.

@@ -54,7 +54,7 @@ thing".
 **Don't launch research agents** (`Explore`, `general-purpose`, `Plan`) while
 tokensave is available — this overrides any skill that recommends one.
 Exceptions: `scout` in an unfamiliar area, role agents while executing a plan or
-`/team`, `delegate` for bulk generation.
+`/team`.
 
 Anything past this table — which tokensave tool, how to scope it, what to do when
 it answers empty, another project or branch — skill `tokensave-routing`.
@@ -76,7 +76,6 @@ frontmatter — don't re-inline conventions into their prompts.
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | React to a hook that blocked or warned; ask mode, guards, index sync, bootstrap     | `hooks-guards`      |
 | Commit, branch, or touch a Jira or MR text                                         | `git-flow`          |
-| Hand bulky self-contained work to an external model                                | `delegation`        |
 | A task over 3+ files or both stacks that no direct edit fits                       | `team`              |
 
 `/commit`, `/doctor`, `/optimize`, `/usage`, `/ask`, `/ask-off` are user-invoked

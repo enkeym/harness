@@ -101,9 +101,9 @@ check('npm test', bash('pnpm test'), 'allow');
 check('tsc', bash('pnpm exec tsc --noEmit'), 'allow');
 check('git log с grep', bash('git log --oneline | grep fix'), 'allow');
 check('чтение обычного файла', read('src/app.module.ts'), 'allow');
-check('delegate через opencode', bash('opencode run -m deepseek/deepseek-v4-flash "объясни разницу"'), 'allow');
+check('opencode с выбором модели', bash('opencode run -m zai-coding-plan/glm-5.3 "объясни разницу"'), 'allow');
 
-// --- поиск секретов в тексте (для делегирования)
+// --- поиск секретов в тексте (исходящий канал)
 const values = [
   ['Telegram token', 'BOT_TOKEN=7123456789:AAF-abcdefghijklmnopqrstuvwxyz012345', true],
   ['GitHub token', 'ghp_abcdefghijklmnopqrstuvwxyz0123456789', true],

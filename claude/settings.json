@@ -9,7 +9,6 @@
       "Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)",
       "Bash(opencode run --agent commit:*)",
       "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
-      "Bash(node /home/enkeym/.ai-hooks/bin/delegate.mjs:*)",
       "mcp__playwright__*",
       "Edit(/home/enkeym/.ai-hooks/**)"
     ],
