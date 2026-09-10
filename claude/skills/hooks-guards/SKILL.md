@@ -70,7 +70,8 @@ pick the alphabetically first neighbouring project in silence; now the server
 simply doesn't come up, and its tools are absent rather than wrong.
 
 `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI, dependabot
-or `.env.example` — offer it in one line in the first reply and act on "yes". If
+or `.env.example` — offer it in one line in the first reply; it is the user's
+call, not a default. If
 the hook stayed silent, the skip is deliberate (`<project>/.claude/bootstrap-ignore`).
 
 `SubagentStart` injects the tokensave/ragsave rules into every subagent, which is
@@ -92,6 +93,10 @@ Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. The hook test suit
 is `~/.ai-hooks/test/test-*.mjs`; after any edit under `~/.ai-hooks` it is run,
 and a red test means roll back, not patch further.
 
-Editing a guard is propose-only: show the diff and wait for "yes", because a bug
-in the guard core breaks every session silently. A deeper diagnosis is `/doctor`
-— offer it in one line, don't improvise it.
+Everything under `~/.claude/` (`CLAUDE.md`, `skills`, `agents`, `commands`,
+`settings*.json`) is a symlink into `~/harness/claude/`; Edit/Write refuse a
+symlink, so always address the target path there.
+
+A guard edit is applied like any other edit (chat-only in ask mode); the test
+suite is the safety net — run it right after, a red test means roll back. A
+deeper diagnosis is `/doctor` — offer it in one line, don't improvise it.

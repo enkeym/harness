@@ -75,11 +75,9 @@ export function respond(input, reason) {
   if (verdict === 'announce') {
     finish({
       systemMessage:
-        `tokensave-гард: ${input.tool_name} пропущен (вызов повторился — защита от цикла). ` +
-        'Индекс не сломан. Дальше такие пропуски — молча. ' +
-        'Проверь tokensave_status, вернись на tokensave_* (нет в списке — ToolSearch). ' +
-        `Обычные инструменты — только при ошибке tokensave, только ${input.tool_name}, не shell. ` +
-        'Лог: ~/.ai-hooks/logs/guard.log.',
+        `tokensave-гард: ${input.tool_name} пропущен — повтор вызова, защита от цикла. Индекс цел. ` +
+        'Дальше: tokensave_status → вернись на tokensave_* (нет в списке → ToolSearch). ' +
+        `${input.tool_name} — только при ошибке tokensave. Shell — никогда. Лог: ~/.ai-hooks/logs/guard.log.`,
     });
   }
   if (verdict === 'silent') finish(null);

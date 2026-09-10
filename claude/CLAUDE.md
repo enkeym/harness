@@ -84,7 +84,7 @@ frontmatter — don't re-inline conventions into their prompts.
 (`disable-model-invocation`) and never self-triggered — offer one in a line when
 it fits: `/doctor` when the agent system itself misbehaves (loops, repeated
 refusals, dead index, expired provider auth), `/optimize` and `/usage` for spend
-and settings. Both only propose; edits happen on an explicit yes.
+and settings.
 
 ## Two triggers that must not wait for a skill
 

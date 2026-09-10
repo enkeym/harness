@@ -148,7 +148,7 @@ const PROD_TOKEN_RE = /(^|[^a-z])prod(uction)?([^a-z]|$)/i;
 
 function gitPushReason(toks, seg) {
   if (toks.some((t) => /^(-f|--force|--force-with-lease.*)$/.test(t))) {
-    return 'force push переписывает чужую историю';
+    return 'force push переписывает историю';
   }
   // git push [remote] [refspec] — цель это последний свободный аргумент.
   const free = toks.slice(toks.indexOf('push') + 1).filter((t) => !t.startsWith('-'));
@@ -156,8 +156,30 @@ function gitPushReason(toks, seg) {
   const branch = target.includes(':') ? target.split(':').pop() : target;
   if (branch && PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
   // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
-  if (free.length <= 1 && !/--dry-run/.test(seg)) return 'push уходит наружу, ветку из команды не видно';
+  if (free.length <= 1 && !/--dry-run/.test(seg)) return 'push в текущую ветку (refspec не указан)';
   return null;
+}
+
+// Подкоманда git: первый свободный токен после `git`, минуя глобальные опции
+// с аргументом (`git -C dir commit`, `git -c k=v push`). Без этого
+// `git log --grep commit` считался бы коммитом.
+function gitSubcommand(toks) {
+  const i = toks.findIndex((t) => path.basename(t) === 'git');
+  if (i === -1) return null;
+  for (let j = i + 1; j < toks.length; j++) {
+    const t = toks[j];
+    if (['-C', '-c', '--git-dir', '--work-tree'].includes(t)) { j++; continue; }
+    if (t.startsWith('-')) continue;
+    return t;
+  }
+  return null;
+}
+
+// Коммит — точка, где человек проверяет, что именно уходит в историю.
+function gitCommitReason(toks) {
+  if (toks.includes('--amend')) return 'amend переписывает последний коммит';
+  if (toks.includes('--no-verify') || toks.includes('-n')) return 'коммит с --no-verify обходит git-хуки';
+  return 'создание коммита';
 }
 
 // ---------------------------------------------------------------------------
@@ -194,9 +216,8 @@ const TRANSFER = new Set(['cp', 'mv', 'scp', 'rsync', 'tar', 'zip', 'install', '
 function secretReason(file) {
   return {
     level: DENY,
-    reason: `\`${file}\` — хранилище секретов, и через shell его содержимое попадёт в транскрипт навсегда. ` +
-      'Нужно проверить наличие переменной — смотри `.env.example` или спроси имя у пользователя; ' +
-      'нужно значение — пусть пользователь пришлёт именно его.',
+    reason: `\`${file}\` — хранилище секретов, чтение запрещено. ` +
+      'Имя переменной — из `.env.example`; значение — запроси у пользователя.',
   };
 }
 
@@ -305,8 +326,7 @@ export function guardBashSecurity(command, depth = 0) {
     if (toks.length === 1 && (first === 'env' || first === 'printenv' || first === 'set')) {
       return {
         level: ASK,
-        reason: `\`${first}\` печатает переменные окружения целиком — среди них могут быть токены. ` +
-          'Нужна одна переменная — назови её явно.',
+        reason: `\`${first}\` печатает всё окружение. Нужна одна переменная — назови её явно.`,
       };
     }
 
@@ -350,52 +370,55 @@ export function guardBashSecurity(command, depth = 0) {
     if (/^docker(-compose)?$/.test(cmd) && toks.includes('config') && !toks.includes('--services')) {
       return {
         level: ASK,
-        reason: '`docker compose config` печатает конфигурацию с подставленными переменными окружения — ' +
-          'среди них могут быть токены. Нужен один сервис — `--services`.',
+        reason: '`docker compose config` печатает конфиг с подставленными секретами. Список сервисов — `--services`.',
       };
     }
 
     if (DUMP_CMDS.has(cmd)) {
-      return { level: ASK, reason: `\`${cmd}\` выгружает базу целиком — подтверди, если это осознанный бэкап.` };
+      return { level: ASK, reason: `\`${cmd}\` выгружает базу целиком.` };
     }
 
     if (DB_CLIENTS.has(cmd)) {
       const external = hostsIn(seg, toks).filter((h) => !LOCAL_HOST_RE.test(h));
       if (external.length) {
-        return { level: ASK, reason: `\`${cmd}\` идёт на неместный хост ${external[0]} — это может быть боевая база.` };
+        return { level: ASK, reason: `\`${cmd}\` идёт на внешний хост ${external[0]} — возможно, боевая база.` };
       }
       if (/\.dump\b|--rdb\b|COPY\s+.*\bTO\b/i.test(seg)) {
-        return { level: ASK, reason: `\`${cmd}\` выгружает содержимое базы — подтверди.` };
+        return { level: ASK, reason: `\`${cmd}\` выгружает содержимое базы.` };
       }
     }
 
     if (cmd === 'sqlite3' && /\.dump\b/.test(seg)) {
-      return { level: ASK, reason: 'sqlite3 .dump выгружает базу целиком — подтверди.' };
+      return { level: ASK, reason: 'sqlite3 .dump выгружает базу целиком.' };
+    }
+
+    if (cmd === 'git' && gitSubcommand(toks) === 'commit') {
+      return { level: ASK, reason: gitCommitReason(toks) };
     }
 
     if (cmd === 'git' && toks.includes('push')) {
       const reason = gitPushReason(toks, seg);
-      if (reason) return { level: ASK, reason: `${reason}. Публикация наружу — только с твоего подтверждения.` };
+      if (reason) return { level: ASK, reason };
     }
 
     if (cmd === 'docker' || cmd === 'docker-compose') {
       const acts = ['up', 'down', 'restart', 'stack', 'push'];
       if (toks.some((t) => acts.includes(t)) && PROD_TOKEN_RE.test(seg)) {
-        return { level: ASK, reason: 'команда трогает прод-конфигурацию docker — подтверди.' };
+        return { level: ASK, reason: 'docker меняет прод-конфигурацию.' };
       }
     }
 
     if (cmd === 'kubectl' && toks.some((t) => ['apply', 'delete', 'scale', 'rollout', 'patch'].includes(t))) {
-      return { level: ASK, reason: 'kubectl меняет состояние кластера — подтверди.' };
+      return { level: ASK, reason: 'kubectl меняет состояние кластера.' };
     }
 
     if (cmd === 'ssh' && /\b(systemctl|docker|rm|deploy|migrate)\b/.test(seg)) {
-      return { level: ASK, reason: 'команда меняет состояние на удалённом хосте — подтверди.' };
+      return { level: ASK, reason: 'команда меняет состояние удалённого хоста.' };
     }
 
     if (cmd === 'curl' || cmd === 'wget' || cmd === 'http' || cmd === 'httpie') {
       const reason = outboundReason(toks, seg);
-      if (reason) return { level: ASK, reason: `${reason} — подтверди, что это не утечка.` };
+      if (reason) return { level: ASK, reason };
     }
 
   }
@@ -406,8 +429,8 @@ export function guardReadSecurity(filePath) {
   if (!isSecretPath(filePath)) return null;
   return {
     level: DENY,
-    reason: `\`${filePath}\` — хранилище секретов: прочитанное остаётся в транскрипте навсегда и уедет в любой ` +
-      'следующий запрос. Структура переменных есть в `.env.example`; конкретное значение пусть пришлёт пользователь.',
+    reason: `\`${filePath}\` — хранилище секретов, чтение запрещено. ` +
+      'Структура — `.env.example`; значение — запроси у пользователя.',
   };
 }
 

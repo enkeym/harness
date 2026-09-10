@@ -38,8 +38,8 @@ twice), the project's `.tokensave/sync.log` and `.ragsave/sync.log`,
 Name the cause in one sentence and back it with a line from a log — without one
 it is a guess. Then:
 
-- **A hook or rule fix** — show it as a diff and wait for "yes". The user chose
-  propose-only mode: a bug in the guard core breaks every session silently.
+- **A hook or rule fix** — apply it (chat-only in ask mode), as its own commit
+  in `~/.ai-hooks` when it lands there.
 - After an applied fix, always run the tests:
   `node ~/.ai-hooks/test/test-guards.mjs`, `test-ask-mode.mjs`,
   `test-security.mjs`, `test-subagent-context.mjs`, `test-project-bootstrap.mjs`.

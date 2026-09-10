@@ -327,22 +327,20 @@ function indexedExts(root) {
 export const CLAUDE_LABELS = {
   read: 'Read', grep: 'Grep', edit: 'Edit/Write',
   prefix: 'tokensave_',
-  editNote: 'Они уже в allow-list — применяются без запроса подтверждения. ' +
-    'Полное имя вызова — mcp__tokensave__tokensave_<tool>; нет его в списке инструментов — ' +
-    "сначала ToolSearch('select:mcp__tokensave__tokensave_str_replace').",
+  editNote: 'Подтверждения не требуют. Полное имя — mcp__tokensave__tokensave_<tool>; ' +
+    "нет в списке → ToolSearch('select:mcp__tokensave__tokensave_str_replace').",
 };
 
 export const OPENCODE_LABELS = {
   read: 'read', grep: 'grep', edit: 'edit/write',
   prefix: 'tokensave_tokensave_',
-  editNote: 'MCP-инструменты tokensave не требуют подтверждения — применяй сразу.',
+  editNote: 'Подтверждения не требуют — применяй сразу.',
 };
 
 const FALLBACK =
-  'Нет tokensave_* в списке — подгрузи: ' +
-  "ToolSearch('select:mcp__tokensave__tokensave_read,mcp__tokensave__tokensave_str_replace'). " +
-  'Блок ≠ сломанный индекс — проверь tokensave_status. ' +
-  'Обычные инструменты (Read/Edit/Write, не shell) — только когда tokensave_* вернул ошибку или пусто; приведи её.';
+  "Нет tokensave_* в списке → ToolSearch('select:mcp__tokensave__tokensave_read,mcp__tokensave__tokensave_str_replace'). " +
+  'Сомнение в индексе → tokensave_status. ' +
+  'Read/Edit/Write — только после ошибки или пустого ответа tokensave_*, с цитатой ошибки. Shell — никогда.';
 
 // ---------------------------------------------------------------------------
 // Предохранитель. Запрет полезен, пока у агента есть рабочая альтернатива.
@@ -413,8 +411,8 @@ export function guardRead(filePath, cwd, labels) {
   if (!isIndexed(cwd, filePath)) return null;
   const p = labels.prefix;
   return (
-    `Файл есть в индексе tokensave — читай через него, а не через ${labels.read}: ` +
-    `${p}context (понимание), ${p}read (файл целиком), ${p}body/${p}signature (символ). ${FALLBACK}`
+    `Файл в индексе tokensave. Вместо ${labels.read}: ${p}read (файл), ` +
+    `${p}body/${p}signature (символ), ${p}context (обзор). ${FALLBACK}`
   );
 }
 
@@ -447,9 +445,9 @@ export function guardGrep({ path: searchPath, glob, type }, cwd, labels) {
 
   const p = labels.prefix;
   return (
-    `Поиск по проиндексированному коду через ${labels.grep} запрещён — используй tokensave: ` +
-    `${p}search (символ; literal:true для строки), ${p}callers/${p}field_sites (использования), ${p}context. ` +
-    `Поиск по тому, чего нет в индексе, разрешён — ограничь glob/type (напр. type:"json"). ${FALLBACK}`
+    `Поиск по индексу tokensave. Вместо ${labels.grep}: ${p}search (символ; literal:true — строка), ` +
+    `${p}callers/${p}field_sites (использования), ${p}context. ` +
+    `Вне индекса — ограничь glob/type (напр. type:"json"). ${FALLBACK}`
   );
 }
 
@@ -637,27 +635,24 @@ export function guardExec(code, cwd, labels) {
 function bashReadReason(file, labels) {
   const p = labels.prefix;
   return (
-    `\`${file}\` есть в индексе tokensave — читать его через shell нельзя: ` +
-    `${p}read (файл целиком), ${p}body/${p}signature (символ), ${p}context (понимание). ` +
-    `Shell — не fallback для tokensave. ${FALLBACK}`
+    `\`${file}\` в индексе tokensave. Вместо shell: ${p}read (файл), ` +
+    `${p}body/${p}signature (символ), ${p}context (обзор). ${FALLBACK}`
   );
 }
 
 function bashEditReason(file, labels) {
   const p = labels.prefix;
   return (
-    `\`${file}\` есть в индексе tokensave — править его через shell нельзя: ` +
-    `${p}str_replace / ${p}multi_str_replace, ${p}replace_symbol, ${p}insert_at. ` +
-    `${labels.editNote} Shell — не fallback для tokensave. ${FALLBACK}`
+    `\`${file}\` в индексе tokensave. Вместо shell: ${p}str_replace / ${p}multi_str_replace, ` +
+    `${p}replace_symbol, ${p}insert_at. ${labels.editNote} ${FALLBACK}`
   );
 }
 
 function bashEvalReason(file, labels) {
   const p = labels.prefix;
   return (
-    `Команда обращается к \`${file}\` — этот файл есть в индексе tokensave. ` +
-    `Читай через ${p}read/${p}body, правь через ${p}str_replace/${p}replace_symbol. ` +
-    `Подмена tokensave на интерпретатор — обход, а не fallback. ${FALLBACK}`
+    `\`${file}\` в индексе tokensave. Вместо интерпретатора: читай ${p}read/${p}body, ` +
+    `правь ${p}str_replace/${p}replace_symbol. ${FALLBACK}`
   );
 }
 
@@ -666,8 +661,8 @@ export function guardEdit(filePath, cwd, labels) {
   if (!isIndexed(cwd, filePath)) return null;
   const p = labels.prefix;
   return (
-    `Файл есть в индексе tokensave — меняй через write-tools, а не через ${labels.edit}: ` +
-    `${p}str_replace / ${p}multi_str_replace (точечно), ${p}replace_symbol (символ целиком), ` +
-    `${p}insert_at / ${p}insert_at_symbol (вставка). ${labels.editNote} ${FALLBACK}`
+    `Файл в индексе tokensave. Вместо ${labels.edit}: ${p}str_replace / ${p}multi_str_replace (точечно), ` +
+    `${p}replace_symbol (символ целиком), ${p}insert_at / ${p}insert_at_symbol (вставка). ` +
+    `${labels.editNote} ${FALLBACK}`
   );
 }

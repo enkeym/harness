@@ -34,7 +34,9 @@ No worktrees; the user switches branches often and expects a switch back to be f
 ## Commit as soon as a unit is done
 
 A plan task, a verified bounded edit, a green fix — commit right away, without
-asking. Never commit unfinished work, red tests, files outside the task, or secrets.
+asking in chat: security-guard prompts on `git commit`, and that prompt is the
+human's checkpoint. Never commit unfinished work, red tests, files outside the
+task, or secrets.
 
 Message style follows the repo, and the repo means **the user's own recent
 commits** (`git log --author=<user> -12`), not the loudest style in `git log` —
@@ -50,9 +52,9 @@ in English with a scope: `feat(geo-objects): import KML/KMZ layers into GoV2 roo
 ## Push right after the commit; MR stays with the human
 
 Push each commit as soon as it lands — `git push`, no separate go-ahead.
-security-guard prompts on every push (it can't tell the target branch from the
-command), and that prompt is the human's checkpoint — don't stack your own
-question on top of it, and don't hold the commit back waiting to be asked.
+security-guard prompts on every commit and every push; those prompts are the
+human's checkpoints — don't stack your own question on top of them, and don't
+hold the commit back waiting to be asked.
 
 **Never open a merge request on your own.** Only on an explicit request ("открой
 MR", "готово к ревью"). An MR that appears by itself reads to the team lead as

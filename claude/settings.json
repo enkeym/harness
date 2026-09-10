@@ -14,6 +14,7 @@
     ],
     "defaultMode": "default"
   },
+  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
@@ -62,7 +63,15 @@
         ]
       },
       {
-        "matcher": "Agent",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/output-clip.mjs"
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",
@@ -71,16 +80,8 @@
               "hook-pre-tool-use"
             ]
           }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/output-clip.mjs"
-          }
-        ]
+        ],
+        "matcher": "Agent|Grep|Bash|Glob"
       }
     ],
     "Stop": [
@@ -230,6 +231,5 @@
     }
   },
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false,
-  "model": "opus"
+  "remoteControlAtStartup": false
 }

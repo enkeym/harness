@@ -24,7 +24,7 @@ readInput((input) => {
       hookEventName: 'PreToolUse',
       permissionDecision: verdict.level,
       permissionDecisionReason:
-        (verdict.level === DENY ? 'Гард безопасности: ' : 'Гард безопасности спрашивает: ') + verdict.reason,
+        (verdict.level === DENY ? 'security-guard, запрет: ' : 'security-guard: ') + verdict.reason,
     },
   }));
   process.exit(0);
