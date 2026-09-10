@@ -47,9 +47,14 @@ it used; compare it with the statusline when the two seem to disagree.
 
 The edit, read-search and bash routers steer calls to tokensave and ragsave and
 clip oversized output. They fire only on files in the tokensave index; agent
-configs (`.claude/`, `.opencode/`, `~/.ai-hooks/`) are excluded. A repeated
-identical blocked call is let through — so if tokensave already failed once, say
-so and use plain tools rather than retrying into the router.
+configs (`.claude/`, `.opencode/`, `~/.ai-hooks/`) are excluded.
+
+A router or breaker block is not evidence the index is gone. Before you say "нет
+индекса" and switch tools, call `tokensave_status`. Answers → use `tokensave_read`
+/ `tokensave_context` / `tokensave_str_replace` (deferred, not missing — load via
+`ToolSearch('select:mcp__tokensave__…')`). Only on a real `tokensave_*` error or
+empty result: retry once, quote the error, then fall back to `Read`/`Edit`/`Write`
+for that file — never the shell. Bash never gets the breaker's pass.
 
 ## Background hooks
 

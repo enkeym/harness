@@ -36,10 +36,28 @@ function finish(payload) {
 export function respond(input, reason) {
   if (!reason) finish(null);
 
+  const family = GUARD_FAMILY[input.tool_name] || null;
+
+  // Shell/eval — не санкционированная замена tokensave ни при каких условиях:
+  // для чтения и правки индексированного файла всегда есть Read/Edit и
+  // tokensave_*. Предохранитель (спасает Read/Edit от зацикливания) на bash не
+  // распространяется — повторный cat/sed/node -e по файлу из индекса остаётся
+  // под запретом. Реально лёгший tokensave отсекается раньше, в guard-core:
+  // serverState видит, что живого сервера на этот проект/ветку нет, и query
+  // возвращает null (fail-open) — сюда управление уже не доходит.
+  if (family === 'bash') {
+    finish({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: reason,
+      },
+    });
+  }
+
   // Без session_id предохранителю не на что опираться (так гарды зовёт тест-
   // харнес): считать разные прогоны одной сессией — значит терять запреты.
   const key = denialKey(input.tool_name, input.tool_input);
-  const family = GUARD_FAMILY[input.tool_name] || null;
   const verdict = input.session_id && breakerAllows(input.session_id, key, family);
 
   if (verdict) {
@@ -57,11 +75,11 @@ export function respond(input, reason) {
   if (verdict === 'announce') {
     finish({
       systemMessage:
-        `tokensave-гард: ${input.tool_name} пропущен — запрет снят, потому что тот же ` +
-        'вызов уже отклонялся и повторился (защита от цикла). Дальнейшие пропуски в ближайшие ' +
-        'три минуты будут молчаливыми. Если tokensave_* отвечает корректно (сверься с ' +
-        'tokensave_status) — продолжай через tokensave; если пусто/ошибка — работай обычными ' +
-        'инструментами и не повторяй вызов. Разбор причины: ~/.ai-hooks/logs/guard.log.',
+        `tokensave-гард: ${input.tool_name} пропущен (вызов повторился — защита от цикла). ` +
+        'Индекс не сломан. Дальше такие пропуски — молча. ' +
+        'Проверь tokensave_status, вернись на tokensave_* (нет в списке — ToolSearch). ' +
+        `Обычные инструменты — только при ошибке tokensave, только ${input.tool_name}, не shell. ` +
+        'Лог: ~/.ai-hooks/logs/guard.log.',
     });
   }
   if (verdict === 'silent') finish(null);
