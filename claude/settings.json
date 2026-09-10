@@ -221,5 +221,6 @@
     }
   },
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false
+  "remoteControlAtStartup": false,
+  "model": "sonnet"
 }
