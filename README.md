@@ -19,7 +19,7 @@
 | `claude/` | `~/.claude/{CLAUDE.md,skills,commands,settings*.json}` | глобальные правила, скиллы, слэш-команды, настройки и хуки Claude Code (ролевых агентов нет — только скиллы) |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, роутеры, фоновая синхронизация индексов, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
-| `opencode/` | `~/.config/opencode/` | конфиг OpenCode, агент `commit`, плагин tokensave-guard, тема |
+| `opencode/` | `~/.config/opencode/` | конфиг OpenCode, ask-режим, плагин tokensave-guard, тема |
 | `bin/` | `~/.local/bin/` | обёртка запуска `ragsave` |
 | `mcp/` | — | команды регистрации MCP-серверов |
 

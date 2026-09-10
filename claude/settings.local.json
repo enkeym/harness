@@ -8,7 +8,6 @@
       "Bash(tokensave reinstall *)",
       "Bash(opencode --version)",
       "Bash(opencode --help)",
-      "Bash(opencode agent *)",
       "Bash(systemctl status *)",
       "Bash(systemctl is-active *)",
       "Bash(systemctl is-enabled *)",

@@ -38,7 +38,6 @@ LINKS=(
   "$HOME/.rag-mcp/README.md|ragsave/README.md"
   "$HOME/.local/bin/ragsave|bin/ragsave"
   "$HOME/.config/opencode/AGENTS.md|opencode/AGENTS.md"
-  "$HOME/.config/opencode/agent|opencode/agent"
   "$HOME/.config/opencode/plugin|opencode/plugin"
   "$HOME/.config/opencode/themes|opencode/themes"
   "$HOME/.config/opencode/opencode.json|opencode/opencode.json"
@@ -142,7 +141,7 @@ externals() {
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
-  command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || bad "opencode — не найден (нужен для агента commit)"
+  command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (нужен только для ask-режима OpenCode)"
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$HOME/.rag-mcp/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
 }
