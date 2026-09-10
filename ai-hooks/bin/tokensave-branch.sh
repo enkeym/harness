@@ -29,6 +29,11 @@ ts_bin="/usr/local/bin/tokensave"
 
 log="$repo_root/.tokensave/sync.log"
 
+# Чистка устаревших веток индекса — в фоне, не чаще раза в сутки (свой дроссель).
+# Отдельно от логики ниже: работает и когда текущая ветка уже отслеживается
+# (тогда этот скрипт выходит рано) или HEAD в detached-состоянии.
+"$HOME/.ai-hooks/bin/tokensave-branch-prune.sh" "$repo_root" &
+
 # Detached HEAD — ветки нет, нечего добавлять
 branch="$(git -C "$repo_root" symbolic-ref --short HEAD 2>/dev/null)"
 [ -z "$branch" ] && exit 0
