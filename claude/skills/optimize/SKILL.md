@@ -1,6 +1,6 @@
 ---
 name: optimize
-description: Analyse token spend and agent-system settings and propose optimisations — which models and subagents eat the budget, where the cache misses, which rules and hooks get in the way. Analysis and proposals only; edits are applied on an explicit yes. User-invoked as /optimize.
+description: Analyse token spend and agent-system settings and propose optimisations — which models and subagents eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize.
 disable-model-invocation: true
 allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read, Grep, Glob
 argument-hint: [--days N | --project <name>]
@@ -9,8 +9,8 @@ argument-hint: [--days N | --project <name>]
 # /optimize
 
 You work out where the tokens go and what in the current setup works against the
-user. **You change nothing without their "yes"** — an edit to hooks or rules
-breaks every session silently, and they notice a day later.
+user. Every edit is backed by a number from the facts below — an edit to hooks
+or rules breaks every session silently, and they notice a day later.
 
 ## 1. Collect the facts
 
@@ -52,9 +52,8 @@ in this shape:
 <what to change> — <what it is based on, with a number> — <expected effect> — <what we risk>
 ```
 
-Don't apply the edits. Show what you propose as a diff and wait. On "yes", apply
-one at a time, each as its own commit in `~/.ai-hooks` if the edit lands there,
-and run the hook tests afterwards.
+Apply the edits one at a time (chat-only in ask mode), each as its own commit in
+`~/.ai-hooks` if the edit lands there, and run the hook tests afterwards.
 
 Nothing to optimise — say exactly that. A list of invented improvements is worse
 than an empty report: people start changing what works.

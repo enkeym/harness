@@ -11,8 +11,9 @@ when to load which.
   when asked: "покажи в чате", "не применяй", "только предложи". There is no
   magic permission word — with ask mode off you work, you don't ask.
 - Confirm only before irreversible or outbound actions: deleting files, deploy,
-  destructive migration. `git push` is not one of these — it runs right after a
-  commit, and security-guard's prompt is the gate. Skill `git-flow`.
+  destructive migration. `git commit` and `git push` have their own gate:
+  security-guard prompts the user on both, so don't add a chat question on top.
+  Skill `git-flow`.
 - Re-check yourself before delivering code ("wait, what if…"). Found a mistake —
   fix it openly, not silently.
 - A hook refusal is user feedback, not an obstacle: never look for a way around

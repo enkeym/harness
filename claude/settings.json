@@ -10,11 +10,11 @@
       "Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)",
       "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
       "mcp__playwright__*",
-      "Edit(/home/enkeym/.ai-hooks/**)"
+      "Edit(~/.ai-hooks/**)",
+      "Edit(~/harness/**)"
     ],
     "defaultMode": "default"
   },
-  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
@@ -72,16 +72,14 @@
         ]
       },
       {
+        "matcher": "Agent|Grep|Bash|Glob",
         "hooks": [
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": [
-              "hook-pre-tool-use"
-            ]
+            "args": ["hook-pre-tool-use"]
           }
-        ],
-        "matcher": "Agent|Grep|Bash|Glob"
+        ]
       }
     ],
     "Stop": [
@@ -90,9 +88,7 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": [
-              "hook-stop"
-            ]
+            "args": ["hook-stop"]
           }
         ]
       },
@@ -135,9 +131,7 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": [
-              "hook-prompt-submit"
-            ]
+            "args": ["hook-prompt-submit"]
           }
         ]
       },
