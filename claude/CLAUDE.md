@@ -76,7 +76,7 @@ frontmatter — don't re-inline conventions into their prompts.
 | Write, fix or review tests in any stack                                            | `testing-ts`        |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | React to a hook that blocked or warned; ask mode, guards, index sync, bootstrap     | `hooks-guards`      |
-| Hand the thread to a fresh session: the meter warned, or `/clear` is coming        | `handoff`           |
+| Carry the thread to a fresh session: the meter fired at 75%, or you run `/handoff` | `handoff`           |
 | Commit, branch, or touch a Jira or MR text                                         | `git-flow`          |
 | A task over 3+ files or both stacks that no direct edit fits                       | `team`              |
 

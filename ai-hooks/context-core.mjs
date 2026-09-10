@@ -1,11 +1,18 @@
-// Замер занятости контекстного окна и пороги перехода в новую сессию.
+// Замер занятости контекстного окна и единственный порог: сказать агенту
+// один раз собрать блок передачи прямо в чат.
 //
 // Считать нечего: в каждой записи ассистента Claude Code хранит usage запроса, и
-// input + cache_read + cache_write — это ровно то, что модель прочитала в этот
-// ход, то есть текущая занятость окна. Нужна только последняя такая запись.
+// input + cache_read + cache_write + output — это ровно то, что модель прочитала
+// и произвела в этот ход, то есть текущая занятость окна. Нужна только последняя
+// такая запись основной нити.
 //
 // Читаем хвост файла, а не файл: транскрипт длинной сессии — мегабайты, а замер
 // зовётся на каждый промпт и на каждую отрисовку статусной строки.
+//
+// Файлов передача больше не создаёт и `/clear` не зовёт. На пороге агент один
+// раз выдаёт markdown-блок состояния прямо в чат; пользователь переносит его
+// руками в новую сессию, если хочет продолжить, — иначе просто очищает контекст.
+// После единственного срабатывания хук молчит до конца сессии.
 //
 // Модуль чистый — без stdin и вывода: его импортируют и хук, и statusline.
 
@@ -16,15 +23,12 @@ import { statePath, readJSON, writeJSON } from './state-core.mjs';
 // включён длинный контекст: цифра нужна только как знаменатель процента.
 export const WINDOW = Number(process.env.AI_HOOKS_CONTEXT_WINDOW) || 200_000;
 
-// 60% — задачу ещё можно довести до границы и уйти на своих условиях.
-// 75% — уходить сейчас: дальше каждый ход оплачивает чтение всего накопленного,
-// а запас до автокомпакта нужен, чтобы передачу успел написать я, а не он.
-export const WARN = 0.6;
+// 75% — уходить пора: дальше каждый ход оплачивает чтение всего накопленного,
+// а запас до автокомпакта (~95%) нужен, чтобы блок успел собрать я, а не он.
 export const ACT = 0.75;
-
-// Напоминание об экономии контекста само лежит в контексте, поэтому повторяем
-// его не чаще, чем на каждые +5 п.п. роста.
-const REPEAT_STEP = 5;
+// Индикатор в статусной строке желтеет раньше — чтобы рост окна был виден
+// глазами до того, как хук что-то скажет. Это только цвет, не текст в контексте.
+export const WARN = 0.6;
 
 const TAIL_BYTES = 256 * 1024;
 const STATE_FILE = statePath('context-meter.json');
@@ -75,58 +79,54 @@ export function contextUsed(transcriptPath) {
   return null;
 }
 
+// Для цвета индикатора статусной строки: null | 'warn' | 'act'. Текстовое
+// предупреждение агенту завязано только на 'act'.
 export function level(pct) {
   if (pct >= ACT * 100) return 'act';
   if (pct >= WARN * 100) return 'warn';
   return null;
 }
 
-// Состояние — только чтобы не повторяться. Записи чужих сессий старше суток
-// выбрасываем: файл не журнал, а память одного дня.
+// Одно срабатывание на сессию. Состояние — только чтобы не повторяться; записи
+// чужих сессий старше суток выбрасываем: файл не журнал, а память одного дня.
 function announced(sessionId) {
   const all = readJSON(STATE_FILE);
-  const rec = all[sessionId];
-  return rec && typeof rec.pct === 'number' ? rec.pct : null;
+  return Boolean(all[sessionId]?.done);
 }
 
-function remember(sessionId, pct) {
+function remember(sessionId) {
   const now = Date.now();
   const all = readJSON(STATE_FILE);
   for (const [key, rec] of Object.entries(all)) {
     if (!rec || typeof rec.at !== 'number' || now - rec.at > KEEP_MS) delete all[key];
   }
-  all[sessionId] = { pct, at: now };
+  all[sessionId] = { done: true, at: now };
   writeJSON(STATE_FILE, all);
 }
 
-export function noticeText(lvl, pct) {
-  if (lvl === 'warn') {
-    return `Контекст занят на ${pct}% при пороге передачи 75%. Доводи текущую единицу работы `
-      + 'до коммита и не начинай новую крупную линию рассуждений: скоро уходим в новую сессию. '
-      + 'Пользователю об этом сообщать не нужно — это указание тебе.';
-  }
-  return `Контекст занят на ${pct}% — пора передавать. Закоммить текущую единицу работы, `
-    + 'загрузи скилл `handoff`, запиши по нему файл передачи и одной строкой позови '
-    + 'пользователя нажать `/clear`. Новая сессия получит файл сама. Если правка не доведена '
-    + 'до состояния, которое не стыдно бросить, — сначала доведи её, потом передавай.';
+export function noticeText(pct, sessionId) {
+  const resume = sessionId
+    ? ` История этой сессии остаётся доступной через \`claude --resume ${sessionId}\`.`
+    : '';
+  return `Контекст занят на ${pct}%. Собери блок передачи по скиллу \`handoff\` и выдай его `
+    + 'прямо в чат одним markdown-блоком для ручного копирования. Файлов не создавай, очистку '
+    + 'контекста не предлагай и сам не запускай: пользователь либо перенесёт блок в новую сессию '
+    + `руками, либо просто сбросит контекст сам.${resume} Это единственное напоминание — дальше `
+    + 'про занятость контекста молчи до конца сессии, даже если она вырастет. Пользователю про '
+    + 'сам порог сообщать не нужно, это указание тебе. Сначала доведи текущую единицу работы до '
+    + 'состояния, которое не стыдно бросить (коммит), потом собирай блок.';
 }
 
-// null — молчим. Иначе уровень, процент и текст для additionalContext.
+// null — молчим. Иначе процент, токены и текст для additionalContext.
 export function contextNotice(input) {
   const used = contextUsed(input?.transcript_path);
-  if (!used) return null;
-  const lvl = level(used.pct);
-  if (!lvl) return null;
+  if (!used || used.pct < ACT * 100) return null;
 
   const sessionId = input?.session_id;
   if (sessionId) {
-    const prev = announced(sessionId);
-    // Переход warn → act объявляем сразу, даже если рост меньше шага: это смена
-    // требования, а не ещё пять процентов.
-    const crossedIntoAct = lvl === 'act' && prev !== null && prev < ACT * 100;
-    if (prev !== null && !crossedIntoAct && used.pct < prev + REPEAT_STEP) return null;
-    remember(sessionId, used.pct);
+    if (announced(sessionId)) return null;
+    remember(sessionId);
   }
 
-  return { level: lvl, pct: used.pct, tokens: used.tokens, text: noticeText(lvl, used.pct) };
+  return { pct: used.pct, tokens: used.tokens, text: noticeText(used.pct, sessionId) };
 }
