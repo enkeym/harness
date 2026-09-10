@@ -16,7 +16,7 @@
 
 | Каталог | Куда раскатывается | Что это |
 | --- | --- | --- |
-| `claude/` | `~/.claude/{CLAUDE.md,skills,agents,commands,settings*.json}` | глобальные правила, скиллы, ролевые агенты, слэш-команды, настройки и хуки Claude Code |
+| `claude/` | `~/.claude/{CLAUDE.md,skills,commands,settings*.json}` | глобальные правила, скиллы, слэш-команды, настройки и хуки Claude Code (ролевых агентов нет — только скиллы) |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, роутеры, фоновая синхронизация индексов, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
 | `opencode/` | `~/.config/opencode/` | конфиг OpenCode, агент `commit`, плагин tokensave-guard, тема |

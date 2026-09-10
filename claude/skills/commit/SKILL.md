@@ -11,13 +11,17 @@ argument-hint: [commit message, or instructions]
 The user typing `/commit` is their decision to commit **and push** this branch.
 You write the commit yourself — no agent, no delegation.
 
-Load `git-flow` first: message style, the ban on signing commits, the Jira block
-format and the rule that merge requests are never opened on your own all live
-there, and they apply here unchanged.
+Load `review-standards`, `review-security`, then `git-flow` — in that order.
+The review skills run on the diff and on `git status` (step 2 stages everything,
+so an untracked secret file is caught here or never); `git-flow` carries the
+message style, the ban on signing commits, the Jira block format and the rule
+that merge requests are never opened on your own. All of it applies unchanged.
 
 1. Show branch and changed files in one line (`git branch --show-current`,
    `git status --short`). Nothing to commit — say so and stop.
-2. `git add -A`, then commit. Multi-line message via `git commit -F -`.
+2. Review pass: fix findings inside the diff; a secret or a Critical stops the
+   command and goes to the user. Then `git add -A` and commit. Multi-line
+   message via `git commit -F -`.
 3. Push the current branch (`git push -u origin <branch>` on the first push).
    **Push only — no merge request**, even if none exists yet.
 4. Print the Jira block for the user to paste.

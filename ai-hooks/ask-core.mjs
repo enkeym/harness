@@ -107,11 +107,11 @@ const ARTIFACT_WRITE_ACTIONS = new Set([
   'publish', 'reply', 'resolve', 'upload_asset', 'delete_asset', 'watch', 'resume_replies',
 ]);
 
-// Субагенты, которым нечем менять файлы. Остальные типы в ask mode запрещены:
-// запрет, который обходится через субагента, — не запрет.
+// Встроенные субагенты, которым нечем менять файлы. Остальные типы в ask mode
+// запрещены: запрет, который обходится через субагента, — не запрет. Своих
+// ролевых агентов в харнесе нет — только скиллы.
 const READONLY_AGENTS = new Set([
   'Explore', 'Plan', 'claude-code-guide', 'statusline-setup',
-  'scout', 'reviewer', 'security-reviewer',
 ]);
 
 // Команды, которые меняют состояние всегда.

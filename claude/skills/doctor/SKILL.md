@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Diagnose failures of the agent system itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. User-invoked as /doctor.
+description: Diagnose failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. User-invoked as /doctor.
 disable-model-invocation: true
 allowed-tools: Bash(tail:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(git -C /home/enkeym/.ai-hooks *), Read, Grep, Glob
 argument-hint: [what broke, in your own words]
@@ -42,7 +42,7 @@ it is a guess. Then:
   in `~/.ai-hooks` when it lands there.
 - After an applied fix, always run the tests:
   `node ~/.ai-hooks/test/test-guards.mjs`, `test-ask-mode.mjs`,
-  `test-security.mjs`, `test-subagent-context.mjs`, `test-project-bootstrap.mjs`.
+  `test-security.mjs`, `test-security-bypass.mjs`, `test-project-bootstrap.mjs`.
   A red test means roll back, not patch further.
 - **The failure is in the task, not the system** — say so plainly and return the
   user to normal work.

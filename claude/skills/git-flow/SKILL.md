@@ -38,6 +38,10 @@ asking in chat: security-guard prompts on `git commit`, and that prompt is the
 human's checkpoint. Never commit unfinished work, red tests, files outside the
 task, or secrets.
 
+The diff has been through `review-standards` and `review-security` before this
+skill is applied — they load first, their findings are fixed, and only then the
+commit is written. A commit that skipped them is the one that ships the `.env`.
+
 Message style follows the repo, and the repo means **the user's own recent
 commits** (`git log --author=<user> -12`), not the loudest style in `git log` —
 teammates here write four different ways. Currently that is Conventional Commits

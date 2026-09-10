@@ -1,6 +1,6 @@
 ---
 name: hooks-guards
-description: How the local hook system behaves — security-guard, ask-guard, the edit/read/bash routers, background index sync, project-bootstrap, subagent context — and how to react when one blocks or warns. Load when a hook refuses or warns about a call, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure.
+description: How the local hook system behaves — security-guard, ask-guard, the edit/read/bash routers, background index sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns about a call, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure.
 ---
 
 # Hooks and guards
@@ -20,15 +20,14 @@ Asks for confirmation on: database dumps, non-local databases, pushes to
 protected branches, force push, deploy, remote-host commands, sending data
 outward.
 
-The guard judges the **form** of a command; `security-reviewer` judges the
-**meaning** of code. Auth, payments, secrets and outbound calls still need the
-reviewer even when every command passed the guard.
+The guard judges the **form** of a command; the `review-security` skill judges
+the **meaning** of code. Auth, payments, secrets and outbound calls still need
+that review even when every command passed the guard.
 
 ## ask-guard
 
-In ask mode it blocks edits, mutating commands, publishing and writing subagents.
-Reading, search, tests and read-only roles stay available, and an edit is shown
-as a diff instead.
+In ask mode it blocks edits, mutating commands and publishing. Reading, search
+and tests stay available, and an edit is shown as a diff instead.
 
 **Ask mode is never assumed.** It is on only if the statusline says so, or
 `node ~/.ai-hooks/bin/ask-mode.mjs status` says so. A refusal whose text does not
@@ -74,9 +73,6 @@ or `.env.example` — offer it in one line in the first reply; it is the user's
 call, not a default. If
 the hook stayed silent, the skip is deliberate (`<project>/.claude/bootstrap-ignore`).
 
-`SubagentStart` injects the tokensave/ragsave rules into every subagent, which is
-why those rules don't belong in an agent prompt.
-
 ## When something is broken
 
 Background failures land in `~/.ai-hooks/logs/errors.log` — read it first on any
@@ -93,7 +89,7 @@ Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. The hook test suit
 is `~/.ai-hooks/test/test-*.mjs`; after any edit under `~/.ai-hooks` it is run,
 and a red test means roll back, not patch further.
 
-Everything under `~/.claude/` (`CLAUDE.md`, `skills`, `agents`, `commands`,
+Everything under `~/.claude/` (`CLAUDE.md`, `skills`, `commands`,
 `settings*.json`) is a symlink into `~/harness/claude/`; Edit/Write refuse a
 symlink, so always address the target path there.
 

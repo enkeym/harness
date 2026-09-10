@@ -42,7 +42,6 @@ claude/ask-guard.mjs            # адаптер Claude: PreToolUse(*) — за�
 claude/ask-reminder.mjs         # правило ask mode в промпт (UserPromptSubmit)
 claude/ask-session.mjs          # сброс режима к значению по умолчанию (SessionStart)
 claude/statusline.mjs           # каталог, ветка, модель, индикатор ask mode
-claude/subagent-context.mjs     # правило tokensave/ragsave в контекст субагента (SubagentStart)
 claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты по сессии → logs/usage.jsonl (Stop)
 handoff-core.mjs                # передача между сессиями: путь по корню репозитория, срок годности
@@ -65,10 +64,8 @@ logs/errors.log                 # журнал отказов обоих инс�
 logs/guard.log                  # рассинхрон гарда с MCP и снятые запреты (в норме пуст)
 test/test-guards.mjs            # прогоняет одни сценарии через оба адаптера
 test/test-ragsave-reminder.mjs  # когда напоминание про rag_search молчит, когда говорит
-test/test-subagent-context.mjs  # контекст субагента есть в проекте и отсутствует вне его
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-security.mjs          # что deny, что ask, что проходит молча
-test/test-agents.mjs            # определения ролей и скиллов: имена, модели, инструменты
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-handoff.mjs           # ключ по репозиторию, срок годности, обрезка длинной передачи
@@ -206,41 +203,24 @@ exit=101` в `errors.log`). Пустой каталог `.tokensave`, созда
 при `resume`/`compact` — иначе режим менялся бы под руками. Переключение:
 `/ask`, `/ask-off` или `bin/ask-mode.mjs on|off|toggle|reset|default on|off`.
 
-## Субагенты
+## Субагентов нет
 
-Ролевые агенты (`~/.claude/agents/`) и скилл `/team` выполняют задачу через
-субагентов: имплементер и ревьюер на каждую подзадачу. Плагин Superpowers,
-делавший то же самое своим слоем скиллов, отключён — он предписывал больше
-ходов, чем окупалось. Субагент стартует с пустым контекстом —
-CLAUDE.md, напоминания `UserPromptSubmit` и `hook-prompt-submit` tokensave до
-него не доходят, а гарды `PreToolUse` действуют на него так же, как на основную
-сессию (в их вход приходят `agent_id` и `agent_type`). Без подготовки первый
-`Read` по проиндексированному файлу — отказ, который субагент видит впервые.
+Ролевые агенты (`scout`, `backend-dev`, `frontend-dev`, `tester`, `reviewer`,
+`security-reviewer`, `devops`), скилл `/team` и хук `subagent-context.mjs` на
+`SubagentStart` удалены 10 сентября 2026: пользователь работает только
+скиллами, а субагент стартует с холодным контекстом и перечитывает то, что
+основная сессия уже знает, — токены уходили дважды. Ревью, которое делали
+`reviewer` и `security-reviewer`, теперь выполняет сама сессия по скиллам
+`review-standards` и `review-security` перед каждым коммитом.
 
-`claude/subagent-context.mjs` на `SubagentStart` кладёт в контекст субагента
-короткое правило: какие инструменты tokensave брать для чтения, поиска и правки,
-что Bash только для команд, что отказ гарда — указание, а не препятствие, и что
-своих субагентов он не запускает. Вне tokensave/ragsave-проекта хук молчит, как
-и гарды. Встроенный `tokensave hook-pre-tool-use` на `Agent` ничего в промпт не
-добавляет (проверено: отвечает `{"permission":"allow"}`), поэтому нужен свой.
+CLAUDE.md запрещает любой вызов `Agent`, включая встроенные `Explore`, `Plan`
+и `general-purpose`. Ask mode подстраховывает: `ask-guard.mjs` пропускает в
+режиме только встроенные читающие типы из `READONLY_AGENTS` в `ask-core.mjs`
+(`Explore`, `Plan`, `claude-code-guide`, `statusline-setup`), остальные —
+запрет. `opencode run` считается изменяющей командой (`MUTATING_SUBCMDS`).
 
-Ролевые агенты живут в `~/.claude/agents/` (`scout`, `backend-dev`,
-`frontend-dev`, `tester`, `reviewer`, `security-reviewer`, `devops`), их скиллы —
-в `~/.claude/skills/` (`nestjs-backend`, `react-frontend`, `testing-ts`,
-`team` — оркестрация без файла-плана). У ролей `Agent` отключён: оркестратор —
-основная сессия.
-
-Ask mode на субагентов распространяется через `ask-guard.mjs`: пишущие типы
-(`general-purpose`, `backend-dev`, `frontend-dev`, `tester`, `devops`) в режиме
-запрещены, читающие (`Explore`, `Plan`, `scout`, `reviewer`, `security-reviewer`)
-проходят — список `READONLY_AGENTS` в `ask-core.mjs`. Выполнение плана возможно
-только после `/ask-off`; обсуждение дизайна (`brainstorming`) и ревью в ask mode
-работают. `opencode run` считается изменяющей командой (`MUTATING_SUBCMDS`):
-через него скилл `/commit` запускает агента `commit` OpenCode, который коммитит
-и пушит.
-
-Worktree Superpowers не создаёт — CLAUDE.md объявляет предпочтение «ветка в том
-же checkout»: индексы `.tokensave/` и `.ragsave/` лежат в каталоге проекта, и
+Worktree не создаются — CLAUDE.md объявляет предпочтение «ветка в том же
+checkout»: индексы `.tokensave/` и `.ragsave/` лежат в каталоге проекта, и
 новый каталог означал бы полную переиндексацию.
 
 ## Гард безопасности
@@ -356,8 +336,6 @@ OpenCode: `read`, `tokensave_tokensave_context`) — они вынесены в 
 плюс `bin/tokensave-branch.sh` на `UserPromptSubmit` и `bin/tokensave-sync.sh` на `Stop`.
 Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 `node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
-Субагенты: `node ~/.ai-hooks/claude/subagent-context.mjs` на `SubagentStart`
-(без matcher — все типы агентов).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/handoff-load.mjs` на `SessionStart` (matcher
@@ -493,10 +471,8 @@ Claude Code через `cleanupPeriodDays`, на второй держится �
 node ~/.ai-hooks/test/test-guards.mjs
 node ~/.ai-hooks/test/test-ragsave-reminder.mjs
 node ~/.ai-hooks/test/test-ask-mode.mjs
-node ~/.ai-hooks/test/test-subagent-context.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
 node ~/.ai-hooks/test/test-security.mjs
-node ~/.ai-hooks/test/test-agents.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
@@ -504,12 +480,8 @@ node ~/.ai-hooks/test/test-handoff.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 ```
 
-`test-agents.mjs` не запускает агентов: живой прогон стоит токенов и проверяет
-поведение, а молча ломается конфигурация — опечатка в имени инструмента (Claude
-тихо отдаст агенту пустой список), несуществующий скилл в `skills:`,
-разъехавшиеся имя файла и поле `name`. Это ловится статически и бесплатно.
-
-Каждый сценарий проверяется в обоих агентах — вердикты должны совпадать.
+Каждый сценарий `test-guards.mjs` проверяется в обоих адаптерах (Claude Code и
+OpenCode) — вердикты должны совпадать.
 Тест ходит в реальный tokensave-проект (`/home/enkeym/main/web_groza`) и в
 не-проект (`/tmp`); если проект переехал, поправь константы в начале файла.
 Пути в сценариях — настоящие файлы этого проекта: вердикт зависит от того, что

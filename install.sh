@@ -29,7 +29,6 @@ bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; }
 LINKS=(
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md"
   "$HOME/.claude/skills|claude/skills"
-  "$HOME/.claude/agents|claude/agents"
   "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.claude/settings.local.json|claude/settings.local.json"

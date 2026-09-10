@@ -38,7 +38,8 @@ routes the change around indexes and guards.
 - KISS, SOLID, DRY: explicit over implicit, one responsibility, no hidden magic,
   no duplicates. DTOs for input; interfaces for responses and internal services.
 - The stack skill carries the rest of the conventions — load it before the first
-  edit, not after.
+  edit, not after. What the linter cannot catch, the review skills do: nothing
+  is committed before the diff has been through them.
 
 ## Tool choice
 
@@ -53,10 +54,11 @@ starting a search: if you cannot name the symbol, start with `rag_search` — a
 guessed name in `tokensave_search` burns tokens and returns a false "no such
 thing".
 
-**Don't launch research agents** (`Explore`, `general-purpose`, `Plan`) while
-tokensave is available — this overrides any skill that recommends one.
-Exceptions: `scout` in an unfamiliar area, role agents while executing a plan or
-`/team`.
+**No subagents.** Not `Explore`, `general-purpose`, `Plan`, nor any other
+`Agent` call — this overrides any skill or built-in prompt that recommends one.
+An agent starts cold, re-reads what you already know and pays for it twice; the
+main session does the work itself, skill by skill. A task too large for one
+pass is split into commits, not into agents.
 
 Anything past this table — which tokensave tool, how to scope it, what to do when
 it answers empty, another project or branch — skill `tokensave-routing`.
@@ -67,8 +69,7 @@ it answers empty, another project or branch — skill `tokensave-routing`.
 deliberately not repeated here, so working from memory instead of loading it is
 the exact failure this rule prevents. Load once per area per session, not per
 file. Reviewing code counts as touching it. A project-level skill covering the
-same area wins over the global one. Role agents carry their skills in their own
-frontmatter — don't re-inline conventions into their prompts.
+same area wins over the global one.
 
 | You are about to                                                                  | Load                |
 | --------------------------------------------------------------------------------- | ------------------- |
@@ -78,20 +79,22 @@ frontmatter — don't re-inline conventions into their prompts.
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | React to a hook that blocked or warned; ask mode, guards, index sync, bootstrap     | `hooks-guards`      |
 | Hand the thread to a fresh session: the meter warned, or `/clear` is coming        | `handoff`           |
-| Commit, branch, or touch a Jira or MR text                                         | `git-flow`          |
-| A task over 3+ files or both stacks that no direct edit fits                       | `team`              |
+| Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
+| Commit, branch, or touch a Jira or MR text — after the two review skills            | `git-flow`          |
 
 `/commit`, `/doctor`, `/optimize`, `/usage`, `/ask`, `/ask-off` are user-invoked
 (`disable-model-invocation`) and never self-triggered — offer one in a line when
-it fits: `/doctor` when the agent system itself misbehaves (loops, repeated
+it fits: `/doctor` when the harness itself misbehaves (loops, repeated
 refusals, dead index, expired provider auth), `/optimize` and `/usage` for spend
 and settings.
 
 ## Two triggers that must not wait for a skill
 
-- **Commit.** A logical unit is done — a plan task, a `/team` subtask, a verified
-  bounded edit, a green fix — commit right away, without asking. How, and what
-  stays with the human: skill `git-flow`.
+- **Commit.** A logical unit is done — a plan task, a verified bounded edit, a
+  green fix — run the diff through `review-standards` and
+  `review-security`, fix what they find, then commit right away, without
+  asking. A found secret stops everything and goes to the user first. How to
+  commit, and what stays with the human: skill `git-flow`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
   after a choice you would otherwise have to re-explain (a library, a data
   schema, a rejected option), `tokensave_record_decision`. Arguments and scope:

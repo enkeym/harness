@@ -1,6 +1,6 @@
 ---
 name: optimize
-description: Analyse token spend and agent-system settings and propose optimisations — which models and subagents eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize.
+description: Analyse token spend and harness settings and propose optimisations — which models and tools eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize.
 disable-model-invocation: true
 allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read, Grep, Glob
 argument-hint: [--days N | --project <name>]
@@ -20,22 +20,22 @@ node ~/.ai-hooks/bin/usage-report.mjs --days 30 --sessions
 ```
 
 Then as needed: `~/.ai-hooks/logs/usage.jsonl` (raw per-session records),
-`~/.claude/CLAUDE.md`, `~/.claude/skills/*/SKILL.md`, `~/.claude/agents/*.md`,
-`~/.claude/settings.json`.
+`~/.claude/CLAUDE.md`, `~/.claude/skills/*/SKILL.md`, `~/.claude/settings.json`.
 
 ## 2. What to look for
 
 Look for a cause, not an anomaly. Every observation is checked against the data,
 otherwise it is a guess.
 
-- **Wrong model for the job.** Roles on opus where sonnet suffices, or a cheap
-  model that takes three times the turns and ends up costing more. Look at
-  messages per session, not just the total.
+- **Wrong model for the job.** Opus where sonnet suffices, or a cheap model
+  that takes three times the turns and ends up costing more. Look at messages
+  per session, not just the total.
 - **Cache missing.** A hit rate in `tokensave cost` noticeably below 90% means
   something breaks the prefix: changing text at the start of the context, a
   CLAUDE.md edit mid-work, jumping between models.
-- **Subagents run for nothing.** A dispatch where one `tokensave_context` had
-  the answer; several roles for a single-file task.
+- **Subagents ran at all.** The harness has none; a `subagents > 0` in the
+  ledger means a built-in agent (`Explore`, `Plan`) slipped through the rule —
+  find the session and the prompt that caused it.
 - **Tools run for nothing.** The top calls in the report: a lot of `Grep` and
   `Read` with a live index means the tool-choice rule didn't fire; many repeats
   of one call means a guard or a loop — that is `/doctor`.

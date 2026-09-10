@@ -53,7 +53,7 @@ export function writeJSON(file, obj) {
 // ---------------------------------------------------------------------------
 // Git-корень и ветка. Одна реализация вместо rootFor / gitRoot / findRoot /
 // currentBranch / branch, разбросанных по ask-core, handoff-core,
-// subagent-context, project-bootstrap, statusline, guard-core.
+// project-bootstrap, statusline, guard-core.
 
 function hasGit(dir) {
   return fs.existsSync(path.join(dir, '.git'));
