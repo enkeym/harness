@@ -40,6 +40,11 @@ fs.writeFileSync(path.join(SERVERS_DIR, `${process.pid}.json`),
   JSON.stringify({ pid: process.pid, project_path: TS_PROJECT }));
 process.env.TS_SERVERS_DIR = SERVERS_DIR;
 
+// serveRunning() иначе сходит в /proc и увидит настоящий MCP-сервер web_groza,
+// если он поднят в этой машине во время прогона. Пустая строка = «серверов
+// нет»; кейсы, где нужен живой serve, ставят TS_SERVE_ROOTS точечно.
+process.env.TS_SERVE_ROOTS = '';
+
 // Диагностический журнал уводим в temp: выдуманные рассинхроны из тестов не
 // должны лежать в файле, по которому разбирают настоящие.
 const GUARD_LOG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guardlog-')), 'guard.log');
@@ -400,7 +405,15 @@ function clearLogDedup() {
   check('[claude] реестра нет (старый tokensave) → судим по БД, как раньше',
     claude(READ, cc, { TS_SERVERS_DIR: path.join(empty, 'missing') }), 'deny');
 
-  for (const d of [alien, wrongBranch, dead, empty]) fs.rmSync(d, { recursive: true, force: true });
+  // tokensave 7.11.x: каталог реестра есть, но пуст. Живой serve на этот корень
+  // (по /proc) — замена есть, судим по БД. Иначе был бы ложный рассинхрон.
+  const blank = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-blank-'));
+  check('[claude] реестр пуст, но serve на проект жив → судим по БД',
+    claude(READ, cc, { TS_SERVERS_DIR: blank, TS_SERVE_ROOTS: TS_PROJECT }), 'deny');
+  check('[claude] реестр пуст и serve нет → гард молчит',
+    claude(READ, cc, { TS_SERVERS_DIR: blank, TS_SERVE_ROOTS: '' }), 'allow');
+
+  for (const d of [alien, wrongBranch, dead, empty, blank]) fs.rmSync(d, { recursive: true, force: true });
 }
 
 check('[core] журнал гардов: запись ушла в тестовый файл, не в общий',

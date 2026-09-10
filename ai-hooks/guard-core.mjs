@@ -169,6 +169,42 @@ function serversDir() {
   return process.env.TS_SERVERS_DIR || path.join(HOME, TS_DIR, 'servers');
 }
 
+// Живой `tokensave serve` для этого проекта — по /proc, как syncRunning.
+// Нужно потому, что tokensave 7.11.x создаёт ~/.tokensave/servers/, но записи
+// в него не пишет: реестр всегда пуст, и «пусто» перестало означать «сервера
+// нет». Проверка процесса напрямую отвечает на вопрос, для которого реестр
+// заводился, — обслуживает ли кто-то этот корень.
+// TS_SERVE_ROOTS (список путей через разделитель PATH) подменяет результат в
+// тестах — как TS_SERVERS_DIR подменяет реестр; пустая строка = «серверов нет».
+function serveRunning(root) {
+  const override = process.env.TS_SERVE_ROOTS;
+  if (override !== undefined) {
+    return override.split(path.delimiter).filter(Boolean)
+      .some((p) => path.resolve(p) === path.resolve(root));
+  }
+  try {
+    const target = path.resolve(root);
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid)) continue;
+      let raw;
+      try { raw = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8'); } catch { continue; }
+      const argv = raw.split('\0').filter(Boolean);
+      if (!argv.some((a) => path.basename(a) === 'tokensave')) continue;
+      if (!argv.includes('serve')) continue;
+      const i = argv.findIndex((a) => a === '-p' || a === '--path');
+      if (i !== -1) {
+        if (argv[i + 1] && path.resolve(argv[i + 1]) === target) return true;
+        continue;
+      }
+      // serve без -p берёт cwd процесса
+      try {
+        if (path.resolve(fs.readlinkSync(`/proc/${pid}/cwd`)) === target) return true;
+      } catch { /* нет доступа к cwd — пропускаем */ }
+    }
+  } catch { /* нет /proc — на этой ОС проверить нечем */ }
+  return false;
+}
+
 // { ok } либо { ok:false, servers:[…] } — список нужен логу, чтобы рассинхрон
 // читался по записи целиком, без ручного обхода реестра.
 const serverCache = new Map();
@@ -191,6 +227,11 @@ function serverState(root, wantDb) {
       if (s.db_path && path.resolve(s.db_path) !== path.resolve(wantDb)) continue;
       ok = true;
     }
+    // Реестр не дал ни одной живой записи — либо серверов нет, либо это версия
+    // tokensave, которая себя не регистрирует. Сверяемся с /proc: нашёлся живой
+    // serve на этот корень — замена есть, гард работает как обычно. Не нашёлся —
+    // прежнее поведение (fail-open), но без записи выдуманного рассинхрона.
+    if (!ok && seen.length === 0 && serveRunning(root)) ok = true;
     result = ok ? { ok } : { ok, servers: seen };
   } catch {
     // Нет реестра (старая версия tokensave) — сверять нечем, ведём себя как
