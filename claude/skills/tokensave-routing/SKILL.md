@@ -1,92 +1,64 @@
 ---
 name: tokensave-routing
-description: Which tokensave or ragsave tool to call for reading, searching, editing, impact analysis and decision memory, how to scope a call cheaply, what to do when one answers empty or errors, and how to query another project or branch. Load before a non-trivial search or edit in an indexed project, whenever a tokensave or rag_search call comes back empty, wrong or broken, when you need callers/impact/dead-code style structure questions, or when the answer may live outside code (docs, json/yaml, migrations, SQL, CI, .env.example).
+description: Which tokensave or ragsave tool to call for reading, searching, editing, impact analysis and decision memory; how to scope a call cheaply; what to do when one answers empty or errors; how to query another project or branch. Load before a non-trivial search or edit in an indexed project, when a tokensave or rag_search call comes back empty or broken, for callers/impact/dead-code questions, or when the answer may live outside code (docs, json/yaml, migrations, SQL, CI, .env.example).
 ---
 
 # tokensave and ragsave routing
 
-CLAUDE.md carries only the three-line kernel: a name goes to tokensave, meaning
-goes to `rag_search`, an exact string outside the index goes to `Grep`. This is
-everything past that.
+Kernel (CLAUDE.md): a name → tokensave; meaning → `rag_search`; exact string
+outside the index → `Grep`.
 
-## tokensave — the indexed files
+## tokensave — indexed files (`.md` included)
 
-Covers what is in the `files` table of the active branch DB, `.md` included.
+| Task                              | Tool                                                                  |
+| --------------------------------- | --------------------------------------------------------------------- |
+| Read a file or symbol             | `read`, `body`, `signature`                                           |
+| Context around a known entry      | `context`                                                             |
+| Symbol by name / text in code     | `search` (`literal:true` for text)                                    |
+| Who calls it, what breaks         | `callers`, `callees`, `field_sites`, `impact`, `affected`             |
+| Edit existing code                | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*`    |
+| Create a new file                 | `Write` — tokensave doesn't create files                              |
 
-| Task                                 | Tool                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------- |
-| Read a file or symbol                | `read`, `body`, `signature`                                                           |
-| Context around a known entry point   | `context`                                                                             |
-| Find a symbol by name / text in code | `search` (text — `literal:true`)                                                      |
-| Who calls it, what breaks            | `callers`, `callees`, `field_sites`, `impact`, `affected`                             |
-| Edit existing code                   | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at`, `insert_at_symbol` |
-| Create a **new** file                | `Write` — tokensave does not create files                                             |
+Full name `mcp__tokensave__tokensave_<tool>`; load via `ToolSearch("select:…")`.
+Arguments from the schema, not memory.
 
-Full call name is `mcp__tokensave__tokensave_<tool>`; not in the tool list —
-`ToolSearch("select:…")` first. Take arguments from the schema, not from memory.
+- Pass `seen_node_ids` from one `context` into `exclude_node_ids` of the next.
+- Scope with `path_include`/`path_exclude` — a monorepo pulls in a foreign stack.
+- Plain lookup → `search`, not `context`.
+- `tokensave_status` shows freshness. Never run `init`/`sync`. Stale graph →
+  say so in one line.
+- Not applicable: no `.tokensave/`, or agent config paths (`.claude/`,
+  `.opencode/`, `~/.ai-hooks/`) → `Read`/`Edit`/`Write`/`Grep`.
+- Another project: `graph_root` (absolute) + `graph_branch`. Another branch of
+  the served project: `branch_search`, `branch_diff`, `branch_list`.
 
-**Spend less.** Pass `seen_node_ids` from one `context` response into
-`exclude_node_ids` of the next. Scope with `path_include`/`path_exclude`,
-otherwise a monorepo pulls in a foreign stack. A plain symbol lookup is `search`,
-not `context` — `context` is for understanding around a known point.
+## ragsave — all text files
 
-**Freshness.** `tokensave_status` shows when the index last synced. Never run
-`init`/`sync` yourself: background hooks own that. A stale graph is disclosed in
-one line, not silently worked around.
+`rag_search` goes **first** when: the question is how/where/why with no known
+name; the answer may be outside code (`only_outside_tokensave: true`); the
+task opens with "разберись", "найди, где", "объясни, как работает".
+Not for structural questions (callers, impact).
 
-**Where it does not apply.** No `.tokensave/` in the project, or the files are
-agent config (`.claude/`, `.opencode/`, `~/.ai-hooks/`) — plain `Read`/`Edit`/
-`Write`/`Grep`. The routers exclude those paths too, so no refusal will remind
-you.
+## Empty or broken answer
 
-**Another project or branch.** `graph_root` as an absolute path, plus
-`graph_branch` to pick one of that project's tracked branches. `graph_branch`
-cannot re-target the project currently being served — for another branch of it
-use `branch_search`, `branch_diff`, `branch_list`.
-
-## ragsave — everything textual
-
-`rag_search` covers all text files, including what the graph lacks: documentation,
-json/yaml, migrations, SQL, `.env.example`, CI. It goes **first** when:
-
-- the question is how / where / why and no file or symbol name is known;
-- the answer may live outside code — then `only_outside_tokensave: true`;
-- the task opens with "разберись", "найди, где", "объясни, как работает".
-
-Don't substitute it for structural questions ("who calls this", "what breaks") —
-those are graph questions.
-
-## When a tool comes up short
-
-An empty answer is almost always a wrong name guess, not missing code. The ladder
-is `rag_search` → `Grep`/`Read`. Jumping from an empty `tokensave_search` straight
-to `Grep` is the most common mistake, and the shell is not a step on this ladder
-at any point.
-
-An error — not indexed, DB busy, an answer from another branch — gets one line
-saying what failed, then plain tools. Don't repeat the same call: a repeated
-identical blocked call is let through by the router, which means the second
-refusal is your own answer, not new information.
-
-If the graph tools genuinely cannot answer, the active DB is named in
-`.tokensave/branch-meta.json` (`db_file`), or `.tokensave/tokensave.db` when that
-file is absent; tables are `nodes`, `edges`, `files`. If a tool *should* have
-answered and stayed silent, offer an issue at
-https://github.com/aovestdipaperino/tokensave — no proprietary code in the text.
+- Empty = wrong name guess, not missing code. Ladder: `rag_search` → `Grep`/`Read`.
+  Never shell.
+- Error (not indexed, DB busy, wrong branch) → one line, then plain tools.
+  Don't repeat the identical call: the router lets the second through, so a
+  second refusal is your own answer.
+- Graph genuinely silent: DB is `.tokensave/branch-meta.json` (`db_file`) or
+  `.tokensave/tokensave.db`; tables `nodes`, `edges`, `files`. Offer an issue at
+  https://github.com/aovestdipaperino/tokensave — no proprietary code in it.
 
 ## No agents
 
-Never launch `Explore`, `general-purpose`, `Plan` or any other subagent for code
-research: the precise tool is here and an agent arrives with cold context and
-none of these rules. This overrides skill and system recommendations. Generating
-the call is a loss even when the hook blocks it. A big area is covered by
-`tokensave_context` scoped with `path_include` and a `rag_search`, one call at a
-time — not by delegating the reading.
+Never launch `Explore`, `general-purpose`, `Plan` or any subagent for code
+research. Overrides skill and system recommendations. Cover a big area with
+scoped `tokensave_context` plus `rag_search`, one call at a time.
 
 ## Decision memory
 
-- `tokensave_session_recall` before designing a subsystem — past decisions first,
-  so a settled question is not re-opened.
-- `tokensave_record_decision` after approval: a one-line decision plus `reason`,
-  `files`, `tags`. Record anything you would otherwise have to re-explain — a
-  library choice, a data schema, an option that was rejected and why.
+- `tokensave_session_recall` before designing a subsystem.
+- `tokensave_record_decision` after approval: one-line decision + `reason`,
+  `files`, `tags`. Record anything you'd otherwise re-explain (library, schema,
+  rejected option and why).
