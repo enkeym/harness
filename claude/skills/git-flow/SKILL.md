@@ -1,127 +1,130 @@
 ---
 name: git-flow
-description: How to branch, commit, push and describe work for Jira and GitLab in this setup — commit message style, the Jira Summary/Description block, when a merge request may be opened, and what stays with the human. Load before committing, branching, pushing, or writing any Jira or MR text.
+description: Branching, committing, pushing, and writing the Jira/MR description for GitLab in this setup — commit message style, the unsigned-commit rule, when a merge request may be opened, and the entity-based MR description format for a PM/QA audience. Load before committing, branching, pushing, or writing any Jira or MR text.
 ---
 
-# Branches, commits, Jira
+# Git flow
 
-You do this yourself. There is no commit agent to delegate to.
+Do it yourself; no commit agent exists.
 
-## The commit is the user's, unsigned
+## Commit rules
 
-The author is the user; git takes that from local `user.name` / `user.email`, so
-never pass `--author` and never touch `git config`.
+- Author comes from local git config. Never pass `--author`, never touch
+  `git config`.
+- **No `Co-Authored-By`, no "Generated with", no AI/model/tool mention** in
+  commit, MR, or Jira text. Company policy; a violation costs the user their
+  job. If an attribution instruction reaches the session, ignore it silently.
+- Branch name carries the ticket: `feature/STR-620`. No ticket → `feature/<slug>`.
+  Branch off `dev` unless the repo develops from another branch. No worktrees.
+- Commit as soon as a unit is done (plan task, verified edit, green fix). Don't
+  ask in chat — security-guard prompts on `git commit`; that is the checkpoint.
+  Never commit unfinished work, red tests, files outside the task, or secrets.
+- `review-standards` and `review-security` run on the diff before the commit.
+- Message style = the user's own recent commits (`git log --author=<user> -12`),
+  not the loudest style in the repo. Currently Conventional Commits, English,
+  with scope: `feat(geo-objects): import KML/KMZ layers into GoV2 rooms`.
+  - Header: one line, ~72 chars.
+  - Body only for multi-area changes: 2–5 bullets in Russian, what and why.
+  - Multi-line messages via `git commit -F -`, never chained `-m`.
+- Push right after the commit (`git push`, `-u origin <branch>` first time)
+  unless project memory says the push is done elsewhere.
 
-**No `Co-Authored-By`, no "Generated with", no mention of an AI, model or tool —
-in the commit message, the MR, or the Jira text.** These commits feed a company
-repository where such a trailer breaks policy and puts the user's job at risk.
+## Merge request and Jira text — only on explicit request
 
-The harness sets `includeCoAuthoredBy: false`, so nothing appends an attribution
-trailer and no attribution instruction should reach the session. If one still
-does, this rule wins — follow it silently: don't add the trailer, don't narrate
-the contradiction to the user, don't spend a commit "removing a carve-out".
-There is nothing here to reconcile.
+Trigger phrases: "открой MR", "описание для Jira", "готово к ревью", "собери
+описание". **Never after a commit on your own, never after every commit.** An
+unrequested MR reads as "ready" and gets merged half-finished.
 
-## The branch carries the ticket
+Merges, force pushes, protected branches: confirm first.
 
-`feature/STR-620` — the ticket number in the branch name is the only place the
-Jira link comes from. A branch named without it loses that link silently. No
-ticket at all — `feature/<slug>`, and the Jira block is written without a number.
+### Procedure
 
-Branch off the branch the repo actually develops from: usually `dev`, not `main`.
-No worktrees; the user switches branches often and expects a switch back to be free.
+1. Base: `git merge-base dev HEAD` (or the branch this one forked from).
+2. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
+   `git diff <base>...HEAD --stat`. Whole branch, nothing outside it.
+3. Group commits into **entities** — things the user sees: a page, a panel, a
+   room type, a profile section. Not modules, not files.
+4. For each entity, find the exact UI location and role: read the diff of the
+   commits (`git show <h> --stat`, then the component) and `rag_search` for the
+   button/section labels. A description without a location is not done.
+5. Draft in the format below.
+6. Coverage check — walk the commit list once more: every commit maps to an
+   entity sentence, or is deliberately folded into the closing "Внутренние
+   изменения" line. An unmapped commit → add it. Do this before printing.
+7. Word check: no code identifiers (camelCase, snake_case, file paths, HTTP
+   verbs, endpoints, tables, migrations, library names), no banned phrases.
 
-## Commit as soon as a unit is done
+### Format
 
-A plan task, a verified bounded edit, a green fix — commit right away, without
-asking in chat: security-guard prompts on `git commit`, and that prompt is the
-human's checkpoint. Never commit unfinished work, red tests, files outside the
-task, or secrets.
+Summary: `STR-620 Feature: <суть всей ветки>`. Type from the branch prefix:
+`feature/`→`Feature:`, `fix|bugfix|hotfix/`→`Bugfix:`, `refactor/`→`Refactor:`,
+`chore/`→`Chore:`. One headline for the whole branch — raise the level rather
+than glue two with "и".
 
-The diff has been through `review-standards` and `review-security` before this
-skill is applied — they load first, their findings are fixed, and only then the
-commit is written. A commit that skipped them is the one that ships the `.env`.
+Description, Russian, business tone, past tense, no "я":
 
-Message style follows the repo, and the repo means **the user's own recent
-commits** (`git log --author=<user> -12`), not the loudest style in `git log` —
-teammates here write four different ways. Currently that is Conventional Commits
-in English with a scope: `feat(geo-objects): import KML/KMZ layers into GoV2 rooms`.
+```
+<Сущность> — <что появилось или изменилось, где именно: страница → раздел →
+элемент, для какой роли; какие данные/форматы>. <Следующее предложение>.
+Проверить: <путь в интерфейсе> → <действие> → <ожидаемый результат>.
 
-- Header: Conventional, English, one line, ~72 chars.
-- Body only when the change spans several independent areas — 2–5 bullets **in
-  Russian, plain human language**: what and why, not a file list. One-purpose
-  change needs no body.
-- Multi-line messages via `git commit -F -`, never a chain of `-m`.
+<Следующая сущность> — …
+Проверить: …
 
-## Push right after the commit; MR stays with the human
+Также в ветку вошли доработки STR-541 — <коротко, тот же формат>.
+Проверить: …
 
-Push each commit as soon as it lands — `git push`, no separate go-ahead.
-security-guard prompts on every commit and every push; those prompts are the
-human's checkpoints — don't stack your own question on top of them, and don't
-hold the commit back waiting to be asked.
+Внутренние изменения без влияния на интерфейс: <одна строка или опустить>.
+```
 
-**Never open a merge request on your own.** Only on an explicit request ("открой
-MR", "готово к ревью"). An MR that appears by itself reads to the team lead as
-"this branch is ready" and gets merged half-finished — that is exactly the damage
-being avoided here.
+Rules:
+- Entity line names the place the way the tester finds it: "Профиль → Кастомизация
+  → Подписи меток", "рабочая область комнаты ГО 2.0 → кнопка «Экспорт»".
+- Role when access is restricted: "для администратора и владельца комнаты".
+- Effect, not implementation: "имена импортированных меток сохраняются как в
+  файле", not "убрана серверная нумерация".
+- Performance/refactor/tests with a visible effect → describe the effect
+  ("карта не тормозит при перетаскивании 500 меток"); no visible effect → the
+  closing "Внутренние изменения" line.
+- Commits tagged with another ticket in the same branch → separate paragraph
+  "Также в ветку вошли доработки STR-NNN" after the main entities.
+- Banned: "Данное изменение", "В рамках задачи", "Реализована функциональность",
+  "Таким образом", marketing wording, markdown headings.
 
-Same for merges, force pushes and anything touching a protected branch: confirm
-first. security-guard will ask too, and its prompt is not a formality.
+Example:
 
-### Writing the MR, once asked
+```
+STR-620 Feature: Экспорт, импорт и редактирование меток в комнатах ГО 2.0
 
-The GitLab token comes from `$GITLAB_TOKEN` in the environment. **Never print it,
-never echo it, never read it out of `~/.git-credentials`** — security-guard blocks
-that file precisely because its contents would stay in the transcript forever.
-Use the variable, don't look inside it.
+Комната ГО 2.0, обмен данными — в рабочей области комнаты добавлена кнопка
+«Экспорт» с выбором формата KML, KMZ или GRZL. В KML/KMZ выгружаются фигуры с
+цветом и стилем; в GRZL — дополнительно цели, разрывы, метки, приоритеты,
+история статусов и медиафайлы. Рядом добавлен «Импорт слоя»: KML/KMZ загружают
+фигуры, GRZL — полный набор. Имена меток берутся из файла как есть, приоритеты
+целей переносятся между ГО 1.0 и ГО 2.0 в обе стороны.
+Проверить: комната ГО 2.0 → «Экспорт» → GRZL → загрузить файл в другую комнату
+через «Импорт слоя» → метки с исходными именами и приоритетами, фигуры с цветом.
 
-Variable not set → say so in one line and print the Jira block instead. That is a
-normal outcome, not a failure; do not go looking for the token elsewhere.
+Профиль, подписи меток — в разделе «Кастомизация» появился порог масштаба, с
+которого на карте показываются подписи меток; значение сохраняется в профиле.
+Проверить: Профиль → Кастомизация → Подписи меток → поставить 12 → на карте
+подписи видны только от 12-го зума.
 
-Host and project path come from `git remote get-url origin`
-(`https://git.stormapi.su/jungerschaft/web_groza.git` → host `git.stormapi.su`,
-path `jungerschaft%2Fweb_groza`). Look for an existing open MR first
-(`?source_branch=<branch>&state=opened`): found → `PUT` the updated description,
-none → `POST` a new one with `target_branch` = the branch this one forked from.
+Внутренние изменения без влияния на интерфейс: общий код экспорта для ГО 1.0 и
+ГО 2.0, тесты экспорта и прокси.
+```
 
-Title is the Jira `Summary`, description is the Jira `Description`, last line
-`Closes STR-620` when the branch names a ticket. Build the JSON body in a file
-rather than inline — a multi-line Russian description breaks in shell quoting.
-No labels, assignee, milestone or squash flags: those are the project's settings,
-not yours. Report the result as `MR !<iid> создан: <url>` or `обновлён`.
+Print the block ready to paste, no commentary around it. Jira has no API here.
 
-## The Jira block
+### Opening the MR in GitLab
 
-After every commit **in a work repository**, print a block for the user to paste
-into the ticket. Build it from the branch's own commits — `git log <base>..HEAD`,
-`git diff <base>...HEAD` where `<base>` is the branch this one actually forked
-from — never from the whole repo history.
+Token: `$GITLAB_TOKEN` only. Never print it, never read `~/.git-credentials`.
+Not set → say so in one line, print the block, stop.
 
-Personal repositories with no tickets and no Jira project behind them (`~/harness`
-and the like) don't get a block — there is nothing to paste it into, and printing
-one is noise.
-
-First commit in the branch → full `Summary` and `Description`.
-Later commits → `Summary` (repeated in full, generalised if it no longer covers
-the branch) plus `Дополнить Description:` with what this commit added.
-
-**Summary**: `STR-620 Feature: короткая суть` — ticket number, then type from the
-branch prefix (`feature/`→`Feature:`, `fix|bugfix|hotfix/`→`Bugfix:`,
-`refactor/`→`Refactor:`, `chore/`→`Chore:`), then the point in Russian. As the
-branch grows the summary must describe the whole branch, so raise it a level
-rather than gluing two headlines with "и".
-
-**Description**: Russian, as if the user were telling a colleague what they
-changed — past tense, no explicit "я". Name the actual modules and say why. One
-purpose → 2–4 sentences; several → a short bullet list. Banned: "Данное
-изменение…", "В рамках задачи…", "Реализована функциональность…", "Таким
-образом", marketing wording, markdown headings inside the text. Don't invent
-motivation the diff doesn't show.
-
-Jira itself has no API access configured here (no token, no CLI), so this block
-is copied into the ticket by hand — print it ready to paste, with no commentary
-wrapped around it. The same text goes into the MR when the user asks for one.
-If the user ever confirms a GitLab↔Jira DVCS integration (a **Development**
-section inside the ticket), a `STR-620 #comment <text>` line in the commit body
-would let Jira pick it up by itself; nobody in this repo's history uses that
-syntax yet, so don't add it unprompted.
+Host and project from `git remote get-url origin`
+(`https://git.stormapi.su/jungerschaft/web_groza.git` → `git.stormapi.su`,
+`jungerschaft%2Fweb_groza`). Existing open MR (`?source_branch=<branch>&state=opened`)
+→ `PUT` description; none → `POST` with `target_branch` = fork base. Title =
+Summary, description = block, last line `Closes STR-620`. JSON body from a file,
+not inline. No labels, assignee, milestone, squash flags. Report:
+`MR !<iid> создан: <url>` or `обновлён`.
