@@ -11,7 +11,10 @@
       "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
       "mcp__playwright__*",
       "Edit(~/.ai-hooks/**)",
-      "Edit(~/harness/**)"
+      "Edit(~/harness/**)",
+      "Edit(~/.bashrc)",
+      "Edit(~/.bash_env)",
+      "Write(~/.bash_env)"
     ],
     "defaultMode": "default"
   },
@@ -221,6 +224,5 @@
     }
   },
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false,
-  "model": "sonnet"
+  "remoteControlAtStartup": false
 }

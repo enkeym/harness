@@ -1,0 +1,14 @@
+[init]
+	defaultBranch = main
+[user]
+	name = Enkeym
+	email = nikita.korolev96@outlook.com
+[core]
+	excludesfile = /home/enkeym/.gitignore_global
+	hooksPath = /home/enkeym/.config/git/hooks
+[credential]
+	helper = store
+[pull]
+	rebase = true
+[push]
+	default = current

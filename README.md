@@ -22,6 +22,9 @@
 | `opencode/` | `~/.config/opencode/` | конфиг OpenCode, ask-режим, плагин tokensave-guard, тема |
 | `bin/` | `~/.local/bin/` | обёртка запуска `ragsave` |
 | `mcp/` | — | команды регистрации MCP-серверов |
+| `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` из `~/.git-credentials`, без копии секрета) |
+| `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: identity, `credential.helper store`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
+| `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
 
 История `claude-config` и `ai-hooks` втянута через `git subtree`, так что
 `git log` по этим каталогам показывает всю прежнюю историю.
@@ -57,7 +60,10 @@ cd ~/harness
 - `tokensave` — сторонний бинарь, ставится отдельно;
 - **перезапуск сессии.** `CLAUDE.md`, `settings.json` и хуки читаются при старте
   сессии. Агент, который только что всё разложил, работает ещё по пустому
-  конфигу — правила подхватит только следующая сессия.
+  конфигу — правила подхватит только следующая сессия;
+- **новый терминал.** `~/.bashrc` экспортирует `BASH_ENV`, и только шелл, в
+  котором эта строка уже отработала, передаст его в Bash-тул агента. Claude
+  Code, запущенный из старого терминала, `GITLAB_TOKEN` не увидит.
 
 **Домашний каталог обязан совпадать.** Пути к хукам в `settings.json` и правила
 `permissions.allow` абсолютные и буквальные, `$HOME` в них не раскрывается. При
@@ -93,7 +99,10 @@ cd ~/harness
 | `~/.claude.json` | регистрация MCP вперемешку с историей проектов | [`mcp/servers.md`](mcp/servers.md) |
 | рантайм `~/.claude` (`projects/`, `sessions/`, `history.jsonl`, `state/`) | локальное состояние машины | создаётся само |
 | `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно |
+| `~/.config/git/hooks` | глобальные git-хуки генерирует сам `tokensave` (chain-repo-hook, auto-init) | появляются при установке `tokensave` |
+| `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
+| `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
 
 ## Тесты
 

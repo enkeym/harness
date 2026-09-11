@@ -43,6 +43,11 @@ LINKS=(
   "$HOME/.config/opencode/opencode.json|opencode/opencode.json"
   "$HOME/.config/opencode/tui.json|opencode/tui.json"
   "$HOME/.config/opencode/tokensave.md|opencode/tokensave.md"
+  "$HOME/.bashrc|shell/bashrc"
+  "$HOME/.bash_env|shell/bash_env"
+  "$HOME/.gitconfig|git/gitconfig"
+  "$HOME/.gitignore_global|git/gitignore_global"
+  "$HOME/.tokensave/config.toml|tokensave/config.toml"
 )
 
 check_one() {
@@ -144,6 +149,12 @@ externals() {
   command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (нужен только для ask-режима OpenCode)"
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$HOME/.rag-mcp/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
+  # gitconfig ссылается на глобальные git-хуки, которые кладёт сам tokensave
+  # (chain-repo-hook + auto-init); без них git молча работает без хуков.
+  [ -x "$HOME/.config/git/hooks/post-checkout" ] && good "глобальные git-хуки tokensave на месте" || warn "глобальных git-хуков tokensave нет — tokensave ставит их сам при установке"
+  # Токен для MR берётся из ~/.git-credentials (credential.helper = store);
+  # без файла GITLAB_TOKEN выйдет пустым — агент отдаст описание MR в чат.
+  [ -f "$HOME/.git-credentials" ] && good "~/.git-credentials есть (источник GITLAB_TOKEN)" || warn "~/.git-credentials нет — GITLAB_TOKEN будет пустым, MR через API недоступен"
 }
 
 case "$MODE" in
