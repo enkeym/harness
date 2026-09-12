@@ -81,7 +81,7 @@ same area wins over the global one.
 | Hand the thread to a fresh session: the meter warned, or `/clear` is coming        | `handoff`           |
 | Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
 | Commit, branch, or touch a Jira or MR text — after the two review skills            | `git-flow`          |
-| Create, edit or review a skill — any SKILL.md, global or project                    | `skill-authoring`   |
+| Create, edit or review a skill, a command file, or CLAUDE.md itself                 | `skill-authoring`   |
 
 `/commit`, `/doctor`, `/optimize`, `/usage` are skills with
 `disable-model-invocation: true`; `/ask`, `/ask-off` are plain commands in

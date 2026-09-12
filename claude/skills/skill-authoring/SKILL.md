@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: Format and style rules for SKILL.md files in this harness — frontmatter fields, description wording, body structure, directive tone, English-only text, size limits, and the audit checklist. Load before creating, editing or reviewing any skill or SKILL.md, when the user says "создай скилл", "напиши скилл", "проверь скиллы", or when a skill's description fails to trigger it.
+description: Format and style rules for this harness's own instruction files — SKILL.md frontmatter and body, claude/commands/*.md command files, and CLAUDE.md's own wording and its Skills section. Load before creating, editing or reviewing any skill, command file or CLAUDE.md, when the user says "создай скилл", "проверь скиллы", "проверь CLAUDE.md", "проверь правила", or when a skill's description fails to trigger it.
 ---
 
 # Skill authoring
@@ -59,8 +59,43 @@ loaded — this skill decides how one is written.
   MCP tools by full name (`mcp__tokensave__tokensave_search`).
 - Emphasis: bold once per section at most; no caps-shouting ("ALWAYS",
   "NEVER") — the directive plus its reason does the work.
-- Length: 25–130 lines is the collection's range; hard ceiling 500. Longer →
-  split into `reference/`.
+- Length: 25–130 lines covers a single-area skill; a meta-skill spanning
+  several artifact types runs longer. Hard ceiling 500 — longer → split
+  into `reference/`.
+
+## Commands (`claude/commands/*.md`)
+
+A different mechanism from a skill, not a smaller version of one: no `name`
+field (the filename is the command), no `disable-model-invocation` (a command
+is never model-invoked to begin with), always user-invoked as `/<filename>`.
+
+- Frontmatter: `description` (third person, what running it does), tight
+  `allowed-tools`; `argument-hint` when it takes arguments.
+- Body: the steps it runs, in order; a leading `` !`command` `` line when it
+  needs live state before the rest makes sense. Same tone rules as a skill
+  body — imperative, no narration, no rationale paragraphs.
+- Never claim a skill-only field (`disable-model-invocation`, `user-invocable`)
+  for a command file — it doesn't have one.
+
+## CLAUDE.md
+
+Not a SKILL.md: no frontmatter, no `name`/`description` limits, always loaded.
+Its own rule (top of the file) is the scope test: a behaviour gate or routing
+rule stays; anything else belongs in a skill. Checklist for an edit or an
+audit:
+
+- [ ] every skill directory has a Skills-table row or sits in the user-invoked
+      line — and every table/line entry names a directory that exists
+- [ ] no field or mechanism attributed to a file that doesn't carry it (a
+      command wrongly called a skill, or vice versa)
+- [ ] a rule stated once; a skill restating it is either deleted from the skill
+      or is a deliberate "must not wait for a skill" gate, named as such
+- [ ] every bullet is a directive, not narration; nothing Claude already knows
+- [ ] paths, tool names, skill names current — no retired reference
+- [ ] English core; Russian only as a quoted user trigger phrase
+
+Report the same way as the skill checklist: `CLAUDE.md:<line> — <rule broken>
+— <fix>`, fixed in place unless ask mode is on.
 
 ## Procedure — new skill
 
@@ -88,7 +123,7 @@ Run on every new or edited SKILL.md; on the whole collection when asked to audit
 - [ ] nothing Claude already knows; nothing already in CLAUDE.md
 - [ ] paths and commands current; no retired location
 - [ ] one term per concept; no caps-shouting; bold sparingly
-- [ ] references one level deep; body ≤130 lines
+- [ ] references one level deep; body sized to its scope (≤130 for one area)
 - [ ] CLAUDE.md skills table or user-invoked line updated
 
 Report as `<skill>: <line> — <rule broken> — <fix>`, one line each; fix in
