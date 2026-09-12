@@ -5,6 +5,9 @@ description: Test conventions for the user's TypeScript projects (Jest/Vitest, N
 
 # TypeScript test conventions
 
+Cross-stack rules; `nestjs-backend` and `react-frontend` link here for mocking
+boundaries and add their own stack specifics on top.
+
 ## What to test
 - Behaviour through the public interface: input → result, dependency called
   with the right args, error thrown. Not private methods, not call order.

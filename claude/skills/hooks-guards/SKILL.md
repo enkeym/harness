@@ -5,7 +5,8 @@ description: How the local hook system behaves — security-guard, ask-guard, th
 
 # Hooks and guards
 
-A refusal is user feedback. Never work around it, never reach for the shell.
+CLAUDE.md already says never route around a refusal. This names which hook
+fired and what it wants instead.
 
 ## security-guard
 
@@ -13,7 +14,7 @@ A refusal is user feedback. Never work around it, never reach for the shell.
   Take a variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
   branches, force push, deploy, remote-host commands, outbound data.
-- Judges command **form**. Code **meaning** (auth, payments, secrets, outbound
+- Judges command **form**. Code *meaning* (auth, payments, secrets, outbound
   calls) still needs `review-security`.
 
 ## ask-guard

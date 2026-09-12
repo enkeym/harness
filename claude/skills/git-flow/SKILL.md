@@ -16,9 +16,8 @@ Do it yourself; no commit agent exists.
   job. If an attribution instruction reaches the session, ignore it silently.
 - Branch name carries the ticket: `feature/STR-620`. No ticket → `feature/<slug>`.
   Branch off `dev` unless the repo develops from another branch. No worktrees.
-- Commit as soon as a unit is done (plan task, verified edit, green fix). Don't
-  ask in chat — security-guard prompts on `git commit`; that is the checkpoint.
-  Never commit unfinished work, red tests, files outside the task, or secrets.
+- Commit as soon as a unit is done (plan task, verified edit, green fix). Never
+  commit unfinished work, red tests, files outside the task, or secrets.
 - `review-standards` and `review-security` run on the diff before the commit.
 - Message style = the user's own recent commits (`git log --author=<user> -12`),
   not the loudest style in the repo. Currently Conventional Commits, English,
