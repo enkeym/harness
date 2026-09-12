@@ -16,9 +16,10 @@ loaded — this skill decides how one is written.
   symlink, write the harness path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
 - One area per skill. `Grep` the existing descriptions first: an overlap is
   extended, not duplicated.
-- Extra files only when the body would pass ~150 lines: `reference/<topic>.md`,
-  linked from SKILL.md, one level deep, with a contents list when longer than
-  100 lines. No README, CHANGELOG or install notes inside a skill.
+- Extra files once the body would pass ~150 lines, or once a skill legitimately
+  spans several related formats (this one does — see below): `reference/<topic>.md`,
+  linked from SKILL.md, one level deep, with a contents list past 100 lines.
+  No README, CHANGELOG or install notes inside a skill.
 
 ## Frontmatter
 
@@ -59,43 +60,20 @@ loaded — this skill decides how one is written.
   MCP tools by full name (`mcp__tokensave__tokensave_search`).
 - Emphasis: bold once per section at most; no caps-shouting ("ALWAYS",
   "NEVER") — the directive plus its reason does the work.
-- Length: 25–130 lines covers a single-area skill; a meta-skill spanning
-  several artifact types runs longer. Hard ceiling 500 — longer → split
-  into `reference/`.
+- Length: 25–130 lines is the collection's range; hard ceiling 500. Longer →
+  split into `reference/`.
 
-## Commands (`claude/commands/*.md`)
+## Two other targets
 
-A different mechanism from a skill, not a smaller version of one: no `name`
-field (the filename is the command), no `disable-model-invocation` (a command
-is never model-invoked to begin with), always user-invoked as `/<filename>`.
+This skill also governs two file kinds that aren't a SKILL.md — same review,
+different mechanics, kept out of the body above so it stays in range:
 
-- Frontmatter: `description` (third person, what running it does), tight
-  `allowed-tools`; `argument-hint` when it takes arguments.
-- Body: the steps it runs, in order; a leading `` !`command` `` line when it
-  needs live state before the rest makes sense. Same tone rules as a skill
-  body — imperative, no narration, no rationale paragraphs.
-- Never claim a skill-only field (`disable-model-invocation`, `user-invocable`)
-  for a command file — it doesn't have one.
-
-## CLAUDE.md
-
-Not a SKILL.md: no frontmatter, no `name`/`description` limits, always loaded.
-Its own rule (top of the file) is the scope test: a behaviour gate or routing
-rule stays; anything else belongs in a skill. Checklist for an edit or an
-audit:
-
-- [ ] every skill directory has a Skills-table row or sits in the user-invoked
-      line — and every table/line entry names a directory that exists
-- [ ] no field or mechanism attributed to a file that doesn't carry it (a
-      command wrongly called a skill, or vice versa)
-- [ ] a rule stated once; a skill restating it is either deleted from the skill
-      or is a deliberate "must not wait for a skill" gate, named as such
-- [ ] every bullet is a directive, not narration; nothing Claude already knows
-- [ ] paths, tool names, skill names current — no retired reference
-- [ ] English core; Russian only as a quoted user trigger phrase
-
-Report the same way as the skill checklist: `CLAUDE.md:<line> — <rule broken>
-— <fix>`, fixed in place unless ask mode is on.
+- A command file (`claude/commands/*.md`) — no `name`, no
+  `disable-model-invocation`, always user-invoked. Rules and checklist:
+  [reference/commands.md](reference/commands.md).
+- CLAUDE.md itself — no frontmatter, always loaded, scoped by its own opening
+  rule (gate or routing rule only). Checklist:
+  [reference/claude-md.md](reference/claude-md.md).
 
 ## Procedure — new skill
 
@@ -123,7 +101,7 @@ Run on every new or edited SKILL.md; on the whole collection when asked to audit
 - [ ] nothing Claude already knows; nothing already in CLAUDE.md
 - [ ] paths and commands current; no retired location
 - [ ] one term per concept; no caps-shouting; bold sparingly
-- [ ] references one level deep; body sized to its scope (≤130 for one area)
+- [ ] references one level deep; body ≤130 lines
 - [ ] CLAUDE.md skills table or user-invoked line updated
 
 Report as `<skill>: <line> — <rule broken> — <fix>`, one line each; fix in
