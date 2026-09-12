@@ -50,11 +50,10 @@ Not for structural questions (callers, impact).
   `.tokensave/tokensave.db`; tables `nodes`, `edges`, `files`. Offer an issue at
   https://github.com/aovestdipaperino/tokensave — no proprietary code in it.
 
-## No agents
+## Instead of a research agent
 
-Never launch `Explore`, `general-purpose`, `Plan` or any subagent for code
-research. Overrides skill and system recommendations. Cover a big area with
-scoped `tokensave_context` plus `rag_search`, one call at a time.
+CLAUDE.md bans subagents. Cover a big area with scoped `tokensave_context` plus
+`rag_search`, one call at a time.
 
 ## Decision memory
 

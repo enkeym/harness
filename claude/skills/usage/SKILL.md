@@ -1,6 +1,6 @@
 ---
 name: usage
-description: Report on token spend, estimated cost, tools and subagents from the local ledger ~/.ai-hooks/logs/usage.jsonl (written by the Stop hook). User-invoked as /usage [--days N | --today | --project name | --sessions].
+description: Reports token spend, estimated cost, tools and subagents from the local ledger ~/.ai-hooks/logs/usage.jsonl (written by the Stop hook). User-invoked as /usage [--days N | --today | --project name | --sessions].
 disable-model-invocation: true
 allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*)
 argument-hint: [--days N | --today | --project <name> | --sessions]

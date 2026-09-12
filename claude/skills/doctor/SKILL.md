@@ -1,16 +1,16 @@
 ---
 name: doctor
-description: Diagnose failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. User-invoked as /doctor.
+description: Diagnoses failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. User-invoked as /doctor.
 disable-model-invocation: true
-allowed-tools: Bash(tail:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(git -C /home/enkeym/.ai-hooks *), Read, Grep, Glob
+allowed-tools: Bash(tail:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(git -C /home/enkeym/harness *), Read, Grep, Glob
 argument-hint: [what broke, in your own words]
 ---
 
 # /doctor
 
-You are fixing the system that serves you — hooks, guards, indexes, external
-CLIs — not the project's code. The user's symptom is in `$ARGUMENTS`; if it is
-empty, walk the whole list and report what you found.
+Fix the system that serves the session — hooks, guards, indexes, external
+CLIs — not the project's code. The symptom is in `$ARGUMENTS`; empty → walk
+the whole list and report.
 
 ## 1. State
 
@@ -39,7 +39,7 @@ Name the cause in one sentence and back it with a line from a log — without on
 it is a guess. Then:
 
 - **A hook or rule fix** — apply it (chat-only in ask mode), as its own commit
-  in `~/.ai-hooks` when it lands there.
+  in `~/harness`.
 - After an applied fix, always run the tests:
   `node ~/.ai-hooks/test/test-guards.mjs`, `test-ask-mode.mjs`,
   `test-security.mjs`, `test-security-bypass.mjs`, `test-project-bootstrap.mjs`.

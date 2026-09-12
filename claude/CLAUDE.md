@@ -81,6 +81,7 @@ same area wins over the global one.
 | Hand the thread to a fresh session: the meter warned, or `/clear` is coming        | `handoff`           |
 | Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
 | Commit, branch, or touch a Jira or MR text — after the two review skills            | `git-flow`          |
+| Create, edit or review a skill — any SKILL.md, global or project                    | `skill-authoring`   |
 
 `/commit`, `/doctor`, `/optimize`, `/usage`, `/ask`, `/ask-off` are user-invoked
 (`disable-model-invocation`) and never self-triggered — offer one in a line when

@@ -1,6 +1,6 @@
 ---
 name: optimize
-description: Analyse token spend and harness settings and propose optimisations — which models and tools eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize.
+description: Analyses token spend and harness settings and proposes optimisations — which models and tools eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize.
 disable-model-invocation: true
 allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read, Grep, Glob
 argument-hint: [--days N | --project <name>]
@@ -8,9 +8,9 @@ argument-hint: [--days N | --project <name>]
 
 # /optimize
 
-You work out where the tokens go and what in the current setup works against the
-user. Every edit is backed by a number from the facts below — an edit to hooks
-or rules breaks every session silently, and they notice a day later.
+Work out where the tokens go and what in the current setup works against the
+user. Back every edit with a number from the facts below — an edit to hooks or
+rules breaks every session silently, and the user notices a day later.
 
 ## 1. Collect the facts
 
@@ -53,7 +53,7 @@ in this shape:
 ```
 
 Apply the edits one at a time (chat-only in ask mode), each as its own commit in
-`~/.ai-hooks` if the edit lands there, and run the hook tests afterwards.
+`~/harness`, and run the hook tests afterwards.
 
 Nothing to optimise — say exactly that. A list of invented improvements is worse
 than an empty report: people start changing what works.
