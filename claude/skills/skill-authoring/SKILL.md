@@ -57,7 +57,8 @@ loaded — this skill decides how one is written.
 - Output with a fixed shape gets a fenced template with placeholders and the
   rule for empty parts ("Empty section = нет").
 - No time-bound facts, no version dates, no retired paths. Forward slashes.
-  MCP tools by full name (`mcp__tokensave__tokensave_search`).
+  MCP tools by the short name the collection uses (`tokensave_search`); the
+  full `mcp__…` form only where the short one is ambiguous.
 - Emphasis: bold once per section at most; no caps-shouting ("ALWAYS",
   "NEVER") — the directive plus its reason does the work.
 - Length: 25–130 lines is the collection's range; hard ceiling 500. Longer →
