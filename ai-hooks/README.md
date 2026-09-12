@@ -44,8 +44,8 @@ claude/ask-session.mjs          # сброс режима к значению п
 claude/statusline.mjs           # каталог, ветка, модель, индикатор ask mode
 claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты по сессии → logs/usage.jsonl (Stop)
-handoff-core.mjs                # передача между сессиями: путь по корню репозитория, срок годности
-claude/handoff-load.mjs         # подстановка передачи прошлой сессии (SessionStart)
+context-core.mjs                # замер занятости окна и порог передачи (75%)
+claude/context-meter.mjs        # один раз на пороге: собрать блок передачи в чат (UserPromptSubmit)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
 bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
@@ -68,7 +68,7 @@ test/test-project-bootstrap.mjs # пропуски проекта, недель�
 test/test-security.mjs          # что deny, что ask, что проходит молча
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
-test/test-handoff.mjs           # ключ по репозиторию, срок годности, обрезка длинной передачи
+test/test-context-meter.mjs     # цифра из последнего хода, порог, одно срабатывание на сессию
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
 ```
@@ -338,8 +338,7 @@ Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 `node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
-`node ~/.ai-hooks/claude/handoff-load.mjs` на `SessionStart` (matcher
-`startup|clear`).
+`node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`.
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs`. Плагины OpenCode грузятся автоматически из
@@ -378,16 +377,15 @@ Matcher переживает `tokensave reinstall`: install дописывает
 `bin/usage-report.mjs`.
 
 **Передача между сессиями.** `/clear` дешевеет ровно настолько, насколько не
-страшно его нажать, поэтому предупреждение называет файл
-`~/.claude/handoff/<проект>-<ключ>.md`: агент пишет туда состояние работы
-обычным `Write`, а `claude/handoff-load.mjs` на `SessionStart` подставляет файл
-обратно в новую сессию. Ключ — корень репозитория, как у ask mode, но взятый
-хешем: хвост base64 от пути определяется последними байтами, то есть тем же
-basename, что уже стоит в имени файла, и `~/main/vpn-new` с `~/work/vpn-new`
-делили бы одну передачу — состояние приватного проекта уехало бы в контекст
-рабочей сессии до первого слова пользователя. Передача старше двух недель не
-подставляется (описывает работу, которой уже нет), длиннее 6000 знаков —
-обрезается, чтобы сама не стала статьёй расхода.
+страшно его нажать. `claude/context-meter.mjs` на `UserPromptSubmit` меряет
+занятость окна по `usage` последнего хода основной нити и на пороге 75% (`ACT` в
+`context-core.mjs`) один раз просит агента собрать блок состояния по скиллу
+`handoff` и выдать его прямо в чат markdown-блоком. Дальше хук молчит до конца
+сессии, сколько бы окно ни росло. Файлов передача не создаёт и `/clear` не
+зовёт: пользователь либо переносит блок в новую сессию руками (история старой
+остаётся в `claude --resume <id>`), либо просто очищает контекст. Индикатор
+`ctx N%` в статусной строке желтеет с 60% (`WARN`) и краснеет с 75% — это только
+цвет, в контекст ничего не уходит.
 
 **Ограничитель вывода.** `claude/output-clip.mjs` на `PreToolUse(Bash)` заменяет
 команду на `bin/clip-output.sh <метка> -- '<команда>'`, если она из шумных
@@ -476,7 +474,7 @@ node ~/.ai-hooks/test/test-security.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
-node ~/.ai-hooks/test/test-handoff.mjs
+node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 ```
 

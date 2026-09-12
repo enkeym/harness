@@ -192,15 +192,6 @@
             "command": "node /home/enkeym/.ai-hooks/claude/project-bootstrap.mjs"
           }
         ]
-      },
-      {
-        "matcher": "startup|clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/handoff-load.mjs"
-          }
-        ]
       }
     ]
   },
@@ -221,6 +212,5 @@
     }
   },
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false,
-  "model": "opus"
+  "remoteControlAtStartup": false
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тест замера контекста и порога передачи. Смысл проверок: цифра должна браться
 // из фактического usage последнего хода основной нити (а не субагента), молчать
-// до порога, объявляться один раз и не пропустить переход к требованию.
+// до порога 75%, сработать один раз за сессию и больше не повторяться — даже
+// если окно растёт дальше. Файлов передача не создаёт, `/clear` не зовёт.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -116,59 +117,53 @@ check('без usage: null', contextUsed(transcript('nousage', ['{"type":"user"}'
   check('хвост даёт ту же цифру', contextUsed(file).pct, 80);
 }
 
-// --- пороги
-check('59% — молчим', level(59), null);
-check('60% — предупреждение', level(60), 'warn');
-check('74% — всё ещё предупреждение', level(74), 'warn');
-check('75% — требование', level(75), 'act');
+// --- уровни для цвета индикатора: жёлтый с 60%, красный с 75%
+check('59% — молчит', level(59), null);
+check('60% — warn (жёлтый)', level(60), 'warn');
+check('74% — всё ещё warn', level(74), 'warn');
+check('75% — act (красный)', level(75), 'act');
 
-// --- ниже порога хук молчит
+// --- ниже порога хук молчит, даже в жёлтой зоне: текст завязан только на 75%
 {
   const file = transcript('quiet', [assistant(pctTokens(40))]);
   check('40%: уведомления нет', contextNotice({ transcript_path: file, session_id: 's-quiet' }), null);
   check('40%: хук молчит', runHook({ transcript_path: file, session_id: 's-quiet' }), null);
 }
-
-// --- предупреждение: один раз, пока не вырос на пять пунктов
 {
-  const file = transcript('warn', [assistant(pctTokens(62))]);
-  const first = contextNotice({ transcript_path: file, session_id: 's-warn' });
-  check('62%: уровень warn', first.level, 'warn');
-  check('62%: назван порог передачи', /75%/.test(first.text), true);
-  check('62%: процент в тексте', /62%/.test(first.text), true);
-  check('повтор на том же проценте молчит', contextNotice({ transcript_path: file, session_id: 's-warn' }), null);
-
-  const nudge = transcript('warn2', [assistant(pctTokens(64))]);
-  check('+2 п.п. — всё ещё молчим', contextNotice({ transcript_path: nudge, session_id: 's-warn' }), null);
-
-  const grown = transcript('warn3', [assistant(pctTokens(68))]);
-  check('+6 п.п. — говорим снова', contextNotice({ transcript_path: grown, session_id: 's-warn' }).pct, 68);
+  const file = transcript('amber', [assistant(pctTokens(68))]);
+  check('68%: уведомления нет', contextNotice({ transcript_path: file, session_id: 's-amber' }), null);
 }
 
-// --- переход warn → act объявляется сразу: это смена требования, а не ещё
-// несколько процентов
+// --- порог: одно срабатывание на сессию, текст про блок в чат, без /clear
 {
-  const warn = transcript('cross1', [assistant(pctTokens(73))]);
-  const act = transcript('cross2', [assistant(pctTokens(75))]);
-  check('73%: warn', contextNotice({ transcript_path: warn, session_id: 's-cross' }).level, 'warn');
-  const crossed = contextNotice({ transcript_path: act, session_id: 's-cross' });
-  check('75% сразу после 73%: объявлено', crossed?.level, 'act');
-  check('act: назван скилл handoff', /handoff/.test(crossed.text), true);
-  check('act: назван /clear', /\/clear/.test(crossed.text), true);
-  check('act: сказано сначала закоммитить', /[Зз]акоммит/.test(crossed.text), true);
+  const file = transcript('act', [assistant(pctTokens(76))]);
+  const first = contextNotice({ transcript_path: file, session_id: 's-act' });
+  check('76%: сработало', first.pct, 76);
+  check('76%: процент в тексте', /76%/.test(first.text), true);
+  check('76%: назван скилл handoff', /handoff/.test(first.text), true);
+  check('76%: сказано выдать в чат', /чат/.test(first.text), true);
+  check('76%: про /clear не просит', /\/clear/.test(first.text), false);
+  check('76%: назван resume с id сессии', /--resume s-act/.test(first.text), true);
+  check('76%: сначала коммит', /коммит/.test(first.text), true);
+
+  check('повтор на том же проценте молчит', contextNotice({ transcript_path: file, session_id: 's-act' }), null);
+
+  const grown = transcript('act2', [assistant(pctTokens(90))]);
+  check('окно выросло до 90% — всё равно молчим', contextNotice({ transcript_path: grown, session_id: 's-act' }), null);
 }
 
-// --- сессии не делят состояние объявлений
+// --- сессии не делят состояние объявлений: каждая слышит свой единственный раз
 {
   const file = transcript('two', [assistant(pctTokens(80))]);
-  check('первая сессия слышит', contextNotice({ transcript_path: file, session_id: 's-a' }).level, 'act');
-  check('вторая сессия тоже слышит', contextNotice({ transcript_path: file, session_id: 's-b' }).level, 'act');
+  check('первая сессия слышит', contextNotice({ transcript_path: file, session_id: 's-a' }).pct, 80);
+  check('вторая сессия тоже слышит', contextNotice({ transcript_path: file, session_id: 's-b' }).pct, 80);
+  check('первая второй раз — молчит', contextNotice({ transcript_path: file, session_id: 's-a' }), null);
 }
 
 // --- хук: доносит текст и не падает на мусоре
 {
-  const file = transcript('hook', [assistant(pctTokens(90))]);
-  check('хук отдаёт текст', /90%/.test(runHook({ transcript_path: file, session_id: 's-hook' })), true);
+  const file = transcript('hook', [assistant(pctTokens(88))]);
+  check('хук отдаёт текст', /88%/.test(runHook({ transcript_path: file, session_id: 's-hook' })), true);
   const broken = execFileSync('node', [HOOK], {
     input: 'не json',
     encoding: 'utf8',
