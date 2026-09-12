@@ -73,6 +73,7 @@ same area wins over the global one.
 
 | You are about to                                                                  | Load                |
 | --------------------------------------------------------------------------------- | ------------------- |
+| Start a large or loosely worded task: multi-module, new subsystem, no place or acceptance criterion named | `task-brief` |
 | Touch server code: module, controller, service, DTO, entity, guard, migration      | `nestjs-backend`    |
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
 | Write, fix or review tests in any stack                                            | `testing-ts`        |
