@@ -83,11 +83,12 @@ same area wins over the global one.
 | Commit, branch, or touch a Jira or MR text — after the two review skills            | `git-flow`          |
 | Create, edit or review a skill — any SKILL.md, global or project                    | `skill-authoring`   |
 
-`/commit`, `/doctor`, `/optimize`, `/usage`, `/ask`, `/ask-off` are user-invoked
-(`disable-model-invocation`) and never self-triggered — offer one in a line when
-it fits: `/doctor` when the harness itself misbehaves (loops, repeated
-refusals, dead index, expired provider auth), `/optimize` and `/usage` for spend
-and settings.
+`/commit`, `/doctor`, `/optimize`, `/usage` are skills with
+`disable-model-invocation: true`; `/ask`, `/ask-off` are plain commands in
+`claude/commands/`. Both kinds are user-invoked only, never self-triggered —
+offer one in a line when it fits: `/doctor` when the harness itself misbehaves
+(loops, repeated refusals, dead index, expired provider auth), `/optimize` and
+`/usage` for spend and settings.
 
 ## Two triggers that must not wait for a skill
 
