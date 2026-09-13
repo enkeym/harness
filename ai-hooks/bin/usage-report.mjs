@@ -45,6 +45,8 @@ const rpad = (s, w) => String(s).padStart(w);
 const byProject = {};
 const byModel = {};
 const tools = {};
+const sourceTools = {}; // инструмент → { calls, chars } из tool_result
+const sourceFiles = {}; // файл → символы, отданные Read
 let total = 0;
 let subagents = 0;
 
@@ -62,7 +64,19 @@ for (const r of records) {
     if (m.priced === false) acc.priced = false;
   }
   for (const [name, n] of Object.entries(r.tools || {})) tools[name] = (tools[name] || 0) + n;
+  for (const [name, s] of Object.entries(r.context_sources?.tools || {})) {
+    const acc = sourceTools[name] || (sourceTools[name] = { calls: 0, chars: 0 });
+    acc.calls += s.calls || 0;
+    acc.chars += s.chars || 0;
+  }
+  for (const [file, chars] of Object.entries(r.context_sources?.files || {})) {
+    sourceFiles[file] = (sourceFiles[file] || 0) + chars;
+  }
 }
+
+// Грубая оценка: ~4 символа на токен; для кириллицы занижает, но порядок верен.
+const CHARS_PER_TOKEN = 4;
+const tok = (chars) => k(Math.round(chars / CHARS_PER_TOKEN));
 
 const period = flag('--today') ? 'сегодня' : `${days} дн.`;
 let out = `Период: ${period} · сессий: ${records.length} · субагентов: ${subagents} · оценка стоимости: ${usd(total)}\n\n`;
@@ -80,6 +94,21 @@ for (const [p, v] of Object.entries(byProject).sort((a, b) => b[1].cost - a[1].c
 out += '\nИнструменты (топ-12):\n';
 for (const [name, n] of Object.entries(tools).sort((a, b) => b[1] - a[1]).slice(0, 12)) {
   out += `  ${pad(name, 44)} ${rpad(n, 5)}\n`;
+}
+
+const topSources = Object.entries(sourceTools).sort((a, b) => b[1].chars - a[1].chars).slice(0, 10);
+if (topSources.length > 0) {
+  out += '\nИсточники контекста — результаты инструментов (топ-10, вызовы / ~токены):\n';
+  for (const [name, s] of topSources) {
+    out += `  ${pad(name, 44)} ${rpad(s.calls, 5)} ${rpad(tok(s.chars), 8)}\n`;
+  }
+  const topFiles = Object.entries(sourceFiles).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (topFiles.length > 0) {
+    out += '\nСамые тяжёлые файлы через Read (топ-10, ~токены):\n';
+    for (const [file, chars] of topFiles) {
+      out += `  ${pad(proj(file), 60)} ${rpad(tok(chars), 8)}\n`;
+    }
+  }
 }
 
 if (flag('--sessions')) {

@@ -7,6 +7,10 @@
 // раз на message.id. Запись в logs/usage.jsonl — одна на сессию, при каждом
 // Stop перезаписывается (upsert по session_id), так что файл — снимок, а не
 // журнал событий. Любая ошибка → тихий выход: учёт не должен ломать ответ.
+//
+// Источники контекста: размер каждого tool_result (символы) привязывается к
+// tool_use по id и суммируется по инструменту, для Read — ещё и по файлу.
+// Это то, что реально попадает в окно; токены оценивает отчёт.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,16 +49,41 @@ function readLines(file) {
   }
 }
 
+// Размер результата инструмента в символах: строка или массив блоков text.
+function resultChars(content) {
+  if (typeof content === 'string') return content.length;
+  if (!Array.isArray(content)) return 0;
+  return content.reduce((n, b) => n + (typeof b?.text === 'string' ? b.text.length : 0), 0);
+}
+
+// Запись user с tool_result → размер по инструменту и по файлу (Read).
+function collectResults(rec, uses, sources) {
+  if (!Array.isArray(rec.message?.content)) return;
+  for (const block of rec.message.content) {
+    if (block?.type !== 'tool_result') continue;
+    const use = uses.get(block.tool_use_id) || { name: 'unknown' };
+    const chars = resultChars(block.content);
+    const t = sources.tools[use.name] || (sources.tools[use.name] = { calls: 0, chars: 0 });
+    t.calls += 1;
+    t.chars += chars;
+    if (use.name === 'Read' && use.file) sources.files[use.file] = (sources.files[use.file] || 0) + chars;
+  }
+}
+
 // Агрегирует один транскрипт в acc; вернёт число учтённых сообщений.
 function collect(file, acc) {
   const seen = new Map(); // message.id → последняя строка с usage
+  const uses = new Map(); // tool_use.id → { name, file }
   for (const line of readLines(file)) {
     let rec;
     try { rec = JSON.parse(line); } catch { continue; }
+    if (rec.type === 'user') { collectResults(rec, uses, acc.context_sources); continue; }
     if (rec.type !== 'assistant' || !rec.message?.usage) continue;
     seen.set(rec.message.id || rec.uuid, rec);
     for (const block of rec.message.content || []) {
-      if (block?.type === 'tool_use' && block.name) acc.tools[block.name] = (acc.tools[block.name] || 0) + 1;
+      if (block?.type !== 'tool_use' || !block.name) continue;
+      acc.tools[block.name] = (acc.tools[block.name] || 0) + 1;
+      if (block.id) uses.set(block.id, { name: block.name, file: block.input?.file_path });
     }
     if (rec.timestamp) {
       if (!acc.started || rec.timestamp < acc.started) acc.started = rec.timestamp;
@@ -92,7 +121,10 @@ function price(acc) {
 
 export function summarize({ session_id, transcript_path, cwd }) {
   if (!session_id || !transcript_path) return null;
-  const acc = { session_id, project: cwd || '', started: null, ended: null, models: {}, tools: {}, subagents: 0, cost: 0 };
+  const acc = {
+    session_id, project: cwd || '', started: null, ended: null, models: {}, tools: {},
+    context_sources: { tools: {}, files: {} }, subagents: 0, cost: 0,
+  };
   const main = collect(transcript_path, acc);
   const subDir = path.join(path.dirname(transcript_path), session_id, 'subagents');
   try {

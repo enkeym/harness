@@ -142,6 +142,32 @@ const usage = (o = {}) => ({
   check('upsert: соседняя не задета', recs.find((r) => r.session_id === 's2').cost, 2);
 }
 
+// --- 9. Источники контекста: размер tool_result привязан к инструменту по id,
+// для Read — к файлу; строка и массив блоков считаются одинаково; результат
+// без парного tool_use не теряется, а идёт в unknown.
+{
+  const use = (id, name, input = {}) => ({ type: 'tool_use', id, name, input });
+  const result = (tool_use_id, content) => JSON.stringify({
+    type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id, content }] },
+  });
+  const file = transcript('sources', [
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'обычный промпт' } }),
+    line('claude-sonnet-5', 'm1', usage(), [use('t1', 'Read', { file_path: '/p/a.ts' })]),
+    result('t1', 'x'.repeat(400)),
+    line('claude-sonnet-5', 'm2', usage(), [use('t2', 'Read', { file_path: '/p/a.ts' })]),
+    result('t2', [{ type: 'text', text: 'y'.repeat(100) }, { type: 'image' }]),
+    line('claude-sonnet-5', 'm3', usage(), [use('t3', 'Bash', { command: 'ls' })]),
+    result('t3', [{ type: 'text', text: 'z'.repeat(50) }]),
+    result('нет-такого', 'q'.repeat(10)),
+  ]);
+  const r = summarize({ session_id: 'sources', transcript_path: file, cwd: '/p' });
+  check('источники: по инструменту', r.context_sources.tools, {
+    Read: { calls: 2, chars: 500 }, Bash: { calls: 1, chars: 50 }, unknown: { calls: 1, chars: 10 },
+  });
+  check('источники: Read по файлу суммируется', r.context_sources.files, { '/p/a.ts': 500 });
+  check('источники: вызовы инструментов не задеты', r.tools, { Read: 2, Bash: 1 });
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 process.stdout.write(failed ? `\n=== ${failed} FAIL ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);
