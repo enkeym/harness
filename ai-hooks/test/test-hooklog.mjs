@@ -70,6 +70,17 @@ function records(sb) {
   check('security: время — число', typeof r.ms === 'number' && r.ms >= 0, true);
 }
 
+// --- запрет внутри ребёнка-доктора помечен ---
+{
+  const sb = sandbox();
+  const input = { session_id: 'sid-doc', tool_name: 'Bash', cwd: '/tmp', tool_input: { command: 'cat .env' } };
+  run(SECURITY, input, { ...sb.env, AI_HOOKS_DOCTOR: '1' });
+  run(SECURITY, input, sb.env);
+  const recs = records(sb);
+  check('doctor: строка ребёнка помечена doctor:1', recs[0]?.doctor, 1);
+  check('doctor: строка сессии без метки', 'doctor' in (recs[1] || {}), false);
+}
+
 // --- секрет в запрещённой команде не попадает в журнал ---
 {
   const sb = sandbox();

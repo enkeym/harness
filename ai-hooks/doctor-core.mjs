@@ -10,9 +10,10 @@
 // Автоправка харнеса из фонового процесса, которого никто не видит, хуже
 // открытого вопроса — применяет человек или основная сессия через /doctor.
 //
-// Стоимость держат три ограничителя: один запуск на (проект, симптом) в
-// DEBOUNCE_MS, бюджет --max-budget-usd на запуск, и метка AI_HOOKS_DOCTOR=1 в
-// окружении ребёнка — хуки внутри доктора доктора не порождают.
+// Стоимость держат четыре ограничителя: один запуск на (проект, симптом) в
+// DEBOUNCE_MS, один запуск на отпечаток события (см. fingerprintOf), бюджет
+// --max-budget-usd на запуск, и метка AI_HOOKS_DOCTOR=1 в окружении ребёнка —
+// хуки внутри доктора доктора не порождают.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +21,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { statePath, readJSON, writeJSON, projectKey, currentBranch } from './state-core.mjs';
-import { HOOKS_LOG } from './hooklog-core.mjs';
+import { HOOKS_LOG, DOCTOR_MARK, insideDoctor } from './hooklog-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -28,10 +29,14 @@ const HARNESS_REPO = path.join(HOME, 'harness');
 const LOGS_DIR = path.join(HOME, '.ai-hooks', 'logs');
 
 export const DOCTOR_DIR = statePath('doctor');
-export const CHILD_MARK = 'AI_HOOKS_DOCTOR';
+export const CHILD_MARK = DOCTOR_MARK;
 export const RUNNER = path.join(HERE, 'bin', 'doctor-run.mjs');
 export const SKILL_FILE = path.join(HOME, '.claude', 'skills', 'doctor', 'SKILL.md');
 
+// Нижний порог между запусками по одному симптому. Сам по себе он от холостых
+// запусков не спасал: server-mismatch при смене ветки держится всю сессию
+// (сервер не перечитывает БД), и каждые полчаса доктор за доллар ставил бы
+// тот же диагноз. Поэтому основной ограничитель — отпечаток события.
 export const DEBOUNCE_MS = 30 * 60 * 1000;
 // Запуск, который не отчитался за это время, считается мёртвым: следующий
 // симптом запускает нового доктора, не дожидаясь.
@@ -68,7 +73,7 @@ export const SYMPTOMS = {
 // Выключатели: метка ребёнка (защита от рекурсии), переменная окружения и
 // файл off в каталоге состояния — для «отключить, не трогая конфиг».
 export function doctorEnabled() {
-  if (process.env[CHILD_MARK] === '1') return false;
+  if (insideDoctor()) return false;
   if (process.env.AI_HOOKS_DOCTOR_OFF === '1') return false;
   return !fs.existsSync(path.join(DOCTOR_DIR, 'off'));
 }
@@ -84,6 +89,39 @@ export function readState(root) {
 function isRunning(st, now) {
   if (st.status !== 'running' && st.status !== 'queued') return false;
   return typeof st.started === 'number' && now - st.started < STALE_RUN_MS;
+}
+
+// Что считать «той же проблемой». Пока отпечаток не сменился и отчёт по нему
+// не применён, второго доктора не будет — сколько бы часов ни прошло.
+//   server-mismatch: проект + ветка + БД, по которой судит гард. Сменилась
+//     ветка или БД — это новое состояние, его стоит разобрать заново.
+//   breaker-open: сессия + класс инструментов. Один цикл в одной сессии — одна
+//     проблема; новая сессия (в т.ч. после /clear) получает своего доктора.
+export function fingerprintOf(symptom, detail = {}, sid = null) {
+  if (symptom === 'server-mismatch') {
+    return [detail.root || '', detail.branch || '', detail.guard_db || ''].join('|');
+  }
+  if (symptom === 'breaker-open') {
+    return [sid || '', detail.family || detail.tool || ''].join('|');
+  }
+  return sid || '';
+}
+
+// Отчёт применён (/doctor apply): тот же отпечаток снова может позвать
+// доктора — после правки хуков стоит проверить, ушёл ли симптом. Зовёт
+// bin/doctor-applied.mjs из основной сессии; возвращает симптом или null,
+// если применять было нечего.
+export function markApplied(root) {
+  const file = stateFile(root);
+  const st = readJSON(file, {});
+  // Идущий запуск отмечать нечем: отчёта ещё нет, а метка скрыла бы его итог.
+  if (!st.symptom || !st.report || (st.status !== 'done' && st.status !== 'failed')) return null;
+  writeJSON(file, { ...st, applied: { ...(st.applied || {}), [st.symptom]: true } });
+  return st.symptom;
+}
+
+function isApplied(st, symptom) {
+  return Boolean(st.applied?.[symptom]);
 }
 
 // Текст задания ребёнку. Скилл он читает сам (Read разрешён) — дублировать
@@ -122,8 +160,10 @@ function childEnv() {
   return env;
 }
 
-// Возвращает true, если доктор запущен; false — выключен, уже идёт, или
-// этот симптом на этом проекте уже разбирали в окне дебаунса.
+// Возвращает true, если доктор запущен; false — выключен, уже идёт, этот
+// симптом на этом проекте разбирали в окне дебаунса, или это та же проблема
+// (отпечаток не сменился, отчёт не применён). Упавший запуск отпечаток не
+// «занимает»: после дебаунса та же проблема разбирается заново.
 export function maybeSpawnDoctor({ root, symptom, detail = {}, sid = null }) {
   if (!root || !doctorEnabled()) return false;
   const now = Date.now();
@@ -132,6 +172,9 @@ export function maybeSpawnDoctor({ root, symptom, detail = {}, sid = null }) {
   if (isRunning(st, now)) return false;
   const last = st.last?.[symptom];
   if (typeof last === 'number' && now - last < DEBOUNCE_MS) return false;
+  const fp = fingerprintOf(symptom, detail, sid);
+  const lastFailed = st.symptom === symptom && st.status === 'failed';
+  if (st.fp?.[symptom] === fp && !isApplied(st, symptom) && !lastFailed) return false;
 
   try {
     fs.mkdirSync(DOCTOR_DIR, { recursive: true });
@@ -155,6 +198,8 @@ export function maybeSpawnDoctor({ root, symptom, detail = {}, sid = null }) {
       headline: null,
       exit: null,
       last: { ...(st.last || {}), [symptom]: now },
+      fp: { ...(st.fp || {}), [symptom]: fp },
+      applied: { ...(st.applied || {}), [symptom]: false },
     });
 
     const child = spawn(process.execPath, [RUNNER, file, report, promptFile, root], {

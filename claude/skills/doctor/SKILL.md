@@ -2,7 +2,7 @@
 name: doctor
 description: Diagnoses failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, a crashing or slow hook, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. Also runs headless in the background when a hook records breaker-open or server-mismatch; `/doctor apply` acts on that report. User-invoked as /doctor.
 disable-model-invocation: true
-allowed-tools: Bash(tail:*), Bash(ps:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(git -C /home/enkeym/harness *), Read, Grep, Glob
+allowed-tools: Bash(tail:*), Bash(ps:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(node /home/enkeym/.ai-hooks/bin/doctor-applied.mjs:*), Bash(git -C /home/enkeym/harness *), Read, Grep, Glob
 argument-hint: [what broke, in your own words | apply | server-mismatch]
 ---
 
@@ -47,9 +47,12 @@ twice), `~/.ai-hooks/logs/guard.log`, the project's `.tokensave/sync.log` and
 
 `breaker-open` (first open per class) and a fresh `server-mismatch` spawn this
 skill headless: `claude -p`, read-only tools, budget-capped, one run per
-project and symptom per 30 min. It writes `~/.claude/state/doctor/<key>-<ts>.md`
-and the next prompt gets a two-line summary; running inside it, do not offer
-edits — the report is the deliverable. Kill switch:
+project and symptom per 30 min and one per event fingerprint (session + tool
+class; root + branch + guard DB) until the report is applied. It writes
+`~/.claude/state/doctor/<key>-<ts>.md` and the next prompt gets a two-line
+summary; running inside it, do not offer edits — the report is the
+deliverable. Lines the child's own hooks write to `hooks.jsonl` carry
+`doctor: 1` — skip them when reading a session trace. Kill switch:
 `touch ~/.claude/state/doctor/off` (cleanup removes it after 14 days).
 
 On `/doctor apply`:
@@ -58,6 +61,10 @@ On `/doctor apply`:
 2. Re-check its **Факт** line against the current log — a stale finding is not
    applied.
 3. Continue with §4 as if the cause were your own.
+4. Last, from the project directory:
+   `node ~/.ai-hooks/bin/doctor-applied.mjs` — marks the report applied, so
+   the reminder stops announcing it and the same fingerprint may spawn a
+   re-check.
 
 ## 4. What to do with a finding
 

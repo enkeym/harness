@@ -10,8 +10,12 @@
 
 import { repoRootOr, currentBranch, writeJSON } from '../state-core.mjs';
 import { readState, stateFile } from '../doctor-core.mjs';
-import { readRecent } from '../hooklog-core.mjs';
+import { readRecent, insideDoctor } from '../hooklog-core.mjs';
 import { readInput } from './hook-io.mjs';
+
+// Внутри самого доктора напоминать некому: он и есть тот разбор, о котором
+// шла бы речь, а метка «сказали» уходила бы на его одноразовую сессию.
+if (insideDoctor()) process.exit(0);
 
 const REPORT_FRESH_MS = 24 * 60 * 60 * 1000;
 const MISMATCH_WINDOW_MS = 10 * 60 * 1000;
@@ -39,7 +43,9 @@ readInput((input) => {
   let doctorSymptom = null;
 
   const fresh = typeof st.finished === 'number' && now - st.finished < REPORT_FRESH_MS;
-  if ((st.status === 'done' || st.status === 'failed') && fresh && !said(st, 'announced', sid)) {
+  // Применённый отчёт (/doctor apply → bin/doctor-applied.mjs) — уже история.
+  const applied = Boolean(st.applied?.[st.symptom]);
+  if ((st.status === 'done' || st.status === 'failed') && fresh && !applied && !said(st, 'announced', sid)) {
     doctorSymptom = st.symptom;
     if (st.status === 'done') {
       lines.push(

@@ -25,6 +25,17 @@ const LOG_DIR = process.env.AI_HOOKS_LOG_DIR || path.join(HOME, '.ai-hooks', 'lo
 export const HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG || path.join(LOG_DIR, 'hooks.jsonl');
 const ERRORS_LOG = path.join(LOG_DIR, 'errors.log');
 
+// Метка окружения ребёнка-доктора (ставит doctor-core при запуске). Живёт
+// здесь, а не в doctor-core: тот импортирует этот модуль, обратная зависимость
+// была бы циклом. Хуки внутри доктора пишут в тот же журнал — их строки
+// помечаются `doctor: 1`, иначе /doctor принимал бы запреты своего же
+// фонового запуска за запреты сессии пользователя.
+export const DOCTOR_MARK = 'AI_HOOKS_DOCTOR';
+
+export function insideDoctor() {
+  return process.env[DOCTOR_MARK] === '1';
+}
+
 // Медленный хук ощущается как «спотыкание» не хуже запрещающего, но до этого
 // журнала его не видел никто. Порог с запасом над штатным стартом node +
 // sqlite-запросом гарда.
@@ -93,6 +104,7 @@ export function logDecision(decision, data = {}) {
       tool: ctx.tool,
       decision,
       ms: elapsedMs(),
+      ...(insideDoctor() ? { doctor: 1 } : {}),
       ...data,
     };
     if (rec.reason !== undefined) rec.reason = trimText(rec.reason, REASON_MAX);

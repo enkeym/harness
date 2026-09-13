@@ -7,12 +7,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-claude.mjs');
 const REMINDER = path.join(ROOT, 'claude', 'doctor-reminder.mjs');
+const APPLIED = path.join(ROOT, 'bin', 'doctor-applied.mjs');
 
 // Состояние — во временный каталог ДО импорта: state-core читает переменную
 // при загрузке. Проект — временный git-репозиторий, чтобы ключ и ветка были
@@ -132,6 +133,45 @@ const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   const st = await waitDone(project);
   check('второй запуск завершён', st.status, 'done');
   check('дебаунс хранится по каждому симптому', Object.keys(st.last).sort(), ['breaker-open', 'server-mismatch']);
+}
+
+// --- отпечаток события: та же проблема не разбирается дважды ---
+{
+  const file = stateFile(project);
+  // Снимаем только временной дебаунс — проверяем отпечаток, а не время.
+  const resetDebounce = () => fs.writeFileSync(file, JSON.stringify({ ...readJSON(file, {}), last: {} }));
+  const breaker = (family, sid) =>
+    maybeSpawnDoctor({ root: project, symptom: 'breaker-open', detail: { tool: 'Edit', target: 'b.ts', family }, sid });
+
+  resetDebounce();
+  check('дебаунс снят, отпечаток прежний, отчёт не применён → не запускается', call(), false);
+  check('та же сессия, другой класс → новый отпечаток → запуск', breaker('edit', 'sid-main'), true);
+  await waitDone(project);
+  resetDebounce();
+  check('другая сессия, тот же класс → запуск', breaker('edit', 'sid-new'), true);
+  await waitDone(project);
+  resetDebounce();
+  check('повтор отпечатка после done → не запускается', breaker('edit', 'sid-new'), false);
+  check('состояние: отпечаток и applied=false', [readState(project).fp['breaker-open'], readState(project).applied['breaker-open']], ['sid-new|edit', false]);
+
+  const out = execFileSync('node', [APPLIED, project], { encoding: 'utf8', env: process.env });
+  check('doctor-applied: называет симптом', out.includes('breaker-open'), true);
+  check('состояние: applied=true', readState(project).applied['breaker-open'], true);
+  check('применённый отчёт reminder не объявляет', reminder('sid-applied'), '');
+  check('после применения тот же отпечаток → запуск', breaker('edit', 'sid-new'), true);
+  await waitDone(project);
+
+  const mismatch = (branch) => maybeSpawnDoctor({
+    root: project, symptom: 'server-mismatch',
+    detail: { root: project, branch, guard_db: '.tokensave/x.db', servers: [] }, sid: 'sid-mm',
+  });
+  resetDebounce();
+  check('mismatch: корень+ветка+БД → запуск', mismatch('feature/x'), true);
+  await waitDone(project);
+  resetDebounce();
+  check('mismatch: то же состояние — хоть через час → не запускается', mismatch('feature/x'), false);
+  check('mismatch: другая ветка → новый отпечаток → запуск', mismatch('gov2-room'), true);
+  await waitDone(project);
 }
 
 // --- сбой headless-сессии ---
