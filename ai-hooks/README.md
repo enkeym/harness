@@ -278,6 +278,34 @@ exit=101` в `errors.log`). Пустой каталог `.tokensave`, созда
 минут: гард в этом случае молчит осознанно (fail-open), но раньше молчал и о
 том, что молчит, и роутеры бывали выключены по несколько дней незаметно.
 
+## Гейт скиллов
+
+CLAUDE.md велит грузить скилл до первого действия в его области, и это
+правило модель забывает чаще прочих: правит SKILL.md по памяти, коммитит без
+ревью. `claude/skill-gate.mjs` (PreToolUse `Edit|Write|MultiEdit|NotebookEdit|Bash`)
+делает из правила запрет для двух областей, где цена забывания видна сразу:
+
+| Действие | Требует |
+| --- | --- |
+| правка `claude/skills/*/SKILL.md`, `skills/*/reference/*.md`, `claude/commands/*.md`, любого `CLAUDE.md` (под `.claude/` или `harness/claude/`) | `skill-authoring` |
+| `git … commit` в любом сегменте команды (пайп, `&&`, `-C`) | `review-standards`, `review-security`, `git-flow` |
+
+`git-flow` в списке не ради стиля: без него в сообщение попадает
+`Co-Authored-By`, а это политика компании. Список гейтов — `GATES` в
+`skill-core.mjs`; разбор shell общий с bash-гардом (`segments`/`tokenize`).
+
+Метку «загружен» ставит `claude/skill-track.mjs` — на PreToolUse инструмента
+`Skill` и на `UserPromptSubmit` с промптом `/name` (пользовательский вызов
+через `Skill` не проходит). Состояние — `~/.claude/state/skills-loaded.json`,
+по `session_id`: после `/clear` сессия новая, и скилл в ней снова не загружен,
+как и в контексте модели. Запрет пишется в hooks.jsonl (`hook: skill-gate`),
+текст называет недостающий скилл и `Skill(<name>)`; выключатель в тексте не
+упоминается намеренно. Отключить: `touch ~/.claude/state/skill-gate.off`
+(cleanup уберёт через 7 дней) или `AI_HOOKS_SKILL_GATE_OFF=1`. Внутри
+ребёнка-доктора гейт молчит — правки и коммиты там запрещены и так.
+
+Тесты: `test/test-skill-gate.mjs`.
+
 ## Ask mode
 
 Режим «только ответ в чате»: правки файлов, write-инструменты tokensave,
@@ -429,6 +457,10 @@ Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`.
+Гейт скиллов: `node ~/.ai-hooks/claude/skill-track.mjs` на `PreToolUse`
+(matcher `Skill`) и на `UserPromptSubmit`, `node ~/.ai-hooks/claude/skill-gate.mjs`
+на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash`, после гардов
+и до роутеров).
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs`. Плагины OpenCode грузятся автоматически из

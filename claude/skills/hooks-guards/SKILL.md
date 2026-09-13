@@ -1,6 +1,6 @@
 ---
 name: hooks-guards
-description: How the local hook system behaves — security-guard, ask-guard, the edit/read/bash routers, background index sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure.
+description: How the local hook system behaves — security-guard, ask-guard, skill-gate, the edit/read/bash routers, background index sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure.
 ---
 
 # Hooks and guards
@@ -26,6 +26,17 @@ fired and what it wants instead.
   mention ask mode has another source — name it; don't prescribe `/ask-off`.
 - State is bound to the session root (`CLAUDE_PROJECT_DIR`), not the cwd.
   `ask-mode.mjs status` prints the anchor it used.
+
+## skill-gate
+
+- Denies an edit of a SKILL.md, `skills/*/reference/*.md`, `commands/*.md` or
+  any `CLAUDE.md` until `skill-authoring` is loaded in this session, and a
+  `git commit` until `review-standards`, `review-security` and `git-flow` are.
+- The refusal names the missing skill: load it with `Skill(<name>)`, do what
+  it says (the review skills mean running the checklist on the diff, not just
+  loading), then repeat the call. Loaded-state is per session — after `/clear`
+  the skills are gone from your context and from the gate alike.
+- A prompt the user started with `/<skill>` counts as loaded.
 
 ## Routers
 

@@ -541,7 +541,10 @@ const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
 // рвался по альтернации на куски, первый из которых выглядел как рекурсивный
 // grep без пути, — и гард запрещал поиск даже вне проекта. Ложный запрет там,
 // где альтернативы нет, — худший из отказов: из него уходят в обход.
-function segments(command) {
+//
+// segments/tokenize/commandName экспортируются: skill-core распознаёт ими
+// `git commit` — второй разбор shell рядом с этим разошёлся бы с ним.
+export function segments(command) {
   const text = String(command || '');
   const out = [];
   let buf = '';
@@ -577,7 +580,7 @@ function segments(command) {
 
 // Токенизация с учётом кавычек. Кавычки снимаем: они разделяют слова, но не
 // являются частью пути.
-function tokenize(seg) {
+export function tokenize(seg) {
   const out = [];
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
   let m;
@@ -587,7 +590,7 @@ function tokenize(seg) {
 
 // Имя команды: первый токен, пропуская префиксные присваивания (FOO=bar cmd)
 // и обёртки вида `sudo`/`env`/`command`.
-function commandName(toks) {
+export function commandName(toks) {
   let i = 0;
   while (i < toks.length && (/^[A-Za-z_]\w*=/.test(toks[i]) || ['sudo', 'env', 'command', 'nohup', 'time'].includes(toks[i]))) i++;
   return path.basename(toks[i] || '');
