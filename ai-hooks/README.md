@@ -34,7 +34,11 @@ guard-core.mjs              # вся логика: что в индексе, ч�
 state-core.mjs             # единый корень рантайм-состояния (~/.claude/state) +
                             # repoRoot / currentBranch / projectKey для всех хуков
 ask-core.mjs                # ask mode: состояние режима и что считается изменением
-claude/hook-io.mjs              # общий ввод/вывод PreToolUse + предохранитель повторов
+hooklog-core.mjs                # журнал решений хуков → logs/hooks.jsonl, захват падений
+doctor-core.mjs                 # фоновый /doctor: триггер, дебаунс, промпт headless-сессии
+bin/doctor-run.mjs              # отвязанный раннер `claude -p`, итог → ~/.claude/state/doctor/
+claude/doctor-reminder.mjs      # итог доктора и затянувшийся server-mismatch — в промпт (UserPromptSubmit)
+claude/hook-io.mjs              # общий ввод/вывод PreToolUse + предохранитель повторов + журнал
 claude/read-search-router.mjs   # адаптер Claude: PreToolUse(Read|Grep)
 claude/edit-router.mjs          # адаптер Claude: PreToolUse(Edit|Write)
 claude/bash-router.mjs          # адаптер Claude: PreToolUse(Bash|mcp__ide__executeCode)
@@ -62,7 +66,11 @@ claude/ragsave-reminder.mjs     # подсказка про rag_search на см
 bin/log-error.sh                # общая запись отказов фоновых задач
 logs/errors.log                 # журнал отказов обоих инструментов (ротация 5 МБ)
 logs/guard.log                  # рассинхрон гарда с MCP и снятые запреты (в норме пуст)
+logs/hooks.jsonl                # решения хуков по сессиям: deny/ask, предохранитель, падения, медленные
 test/test-guards.mjs            # прогоняет одни сценарии через оба адаптера
+test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
+test/test-doctor.mjs            # фоновый доктор: выключатели, дебаунс, раннер, чистое окружение, напоминание
+test/env-isolate.mjs            # первым импортом в тестах хуков: журнал в temp, доктор выключен
 test/test-ragsave-reminder.mjs  # когда напоминание про rag_search молчит, когда говорит
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-security.mjs          # что deny, что ask, что проходит молча
@@ -187,6 +195,77 @@ exit=101` в `errors.log`). Пустой каталог `.tokensave`, созда
 Дедуп — 60 секунд на одинаковое событие (метки в
 `~/.claude/state/guard-log.json`): один вызов проверяет несколько путей, и без
 дедупа давал бы десяток одинаковых строк. Ротация — в `bin/cleanup.mjs`.
+
+## Журнал решений
+
+`logs/hooks.jsonl` — то, чего не было ни в одном из журналов выше: след
+конкретной сессии. guard.log знает, где гард отступил, errors.log — где упала
+фоновая задача, а сами запреты (ask-guard, security-guard, роутеры), их
+причины и время работы хука не писались никуда, и `/doctor` не мог
+восстановить последовательность «запрет → что модель попробовала дальше →
+снова запрет».
+
+Строка на **решение**, не на вызов: `sid`, `hook`, `tool`, `target`,
+`decision`, `reason` (обрезана до 160), `ms` — время от старта процесса хука.
+Решения: `deny`, `ask`, `breaker-open`, `server-mismatch` (дублируют guard.log
+с тем же дедупом, но с сессией), `slow` (разрешённый вызов, хук работал дольше
+800 мс — медленный хук ощущается как «спотыкание» не хуже запрещающего) и
+`crash`. Разрешённые вызовы не пишутся — в тихой сессии файл не растёт.
+
+`crash` — падение самого хука. Раньше исключение внутри обработчика роняло
+процесс с ненулевым кодом: Claude показывал «hook error», шёл дальше, а причина
+не оставалась нигде. Теперь `hook-io` ловит его на уровне процесса, пишет
+строку в hooks.jsonl и стек в errors.log (`exit=crash`, тот же формат, что у
+`log-error.sh`) и выходит с кодом 0 — вызов пропускается, как при любом другом
+отказе инфраструктуры (fail-open). Контекст (сессия, хук, инструмент) ставит
+`readInput`; guard-core пишет из глубины через него же.
+
+Тесты, запускающие настоящие хук-скрипты, импортируют `test/env-isolate.mjs`
+первым: иначе каждый прогон test-security дописывал бы сотню выдуманных
+запретов в общий журнал. Ротация — `bin/cleanup.mjs`, хвост 2000 строк.
+
+## Фоновый доктор
+
+`/doctor` ловил только то, о чём его спросили: пока пользователь не заметит
+цикл и не скопирует симптом в новую сессию, зациклившийся хук или молчащий
+гард живут незамеченными. Теперь тот же скилл запускается автоматически, в
+отдельной headless-сессии (`claude -p`), в момент, когда хук фиксирует
+«модель спотыкается»:
+
+- `breaker-open` с объяснением (первое открытие предохранителя в классе за
+  окно) — из `hook-io.respond`;
+- новое (не дедуп-повтор) `server-mismatch` — из `guard-core.query`.
+
+`doctor-core.maybeSpawnDoctor` пишет промпт и метку `queued` в
+`~/.claude/state/doctor/<projectKey>.json` и отвязанно (`detached`, stdio
+закрыт) запускает `bin/doctor-run.mjs`; тот держит `claude` синхронно, stdout
+уходит в `<projectKey>-<ts>.md`, stderr — в `.log`, по завершении метка
+становится `done` (с первой строкой «Причина: …») или `failed` (с кодом).
+
+Ограничители, без которых это была бы вторая статья расходов:
+
+- один запуск на (проект, симптом) в 30 минут, идущий запуск не дублируется
+  (зависший считается мёртвым через 15 минут);
+- `--max-budget-usd 1.00`, `--effort medium`, модель sonnet,
+  `--no-session-persistence`;
+- только чтение: `--permission-mode dontAsk`, `allowedTools` из Read/Grep/Glob и
+  нескольких просмотровых команд, `disallowedTools` Edit/Write/Agent/Skill;
+- окружение ребёнка очищено от `CLAUDE*` родительской сессии (иначе это
+  вложенная сессия, а не самостоятельная) и помечено `AI_HOOKS_DOCTOR=1` —
+  хуки внутри доктора доктора не порождают;
+- выключатели: `AI_HOOKS_DOCTOR_OFF=1` или файл `~/.claude/state/doctor/off`.
+
+`--bare` не используется намеренно: он читает только `ANTHROPIC_API_KEY`, а
+аутентификация здесь OAuth. Поэтому ребёнок платит за CLAUDE.md и хуки как
+обычная сессия — отсюда бюджет в доллар, а не в центы.
+
+Доктор ничего не правит. Итог возвращает `claude/doctor-reminder.mjs` на
+следующем `UserPromptSubmit`: две строки один раз на сессию — заголовок
+отчёта, путь к файлу, `/doctor apply`. Применяет основная сессия, где правку
+видит пользователь и где security-guard спросит перед коммитом. Тот же хук
+говорит один раз за сессию про `server-mismatch`, длящийся дольше десяти
+минут: гард в этом случае молчит осознанно (fail-open), но раньше молчал и о
+том, что молчит, и роутеры бывали выключены по несколько дней незаметно.
 
 ## Ask mode
 
@@ -476,6 +555,8 @@ node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
+node ~/.ai-hooks/test/test-hooklog.mjs
+node ~/.ai-hooks/test/test-doctor.mjs
 ```
 
 Каждый сценарий `test-guards.mjs` проверяется в обоих адаптерах (Claude Code и

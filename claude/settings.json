@@ -169,6 +169,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/doctor-reminder.mjs"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "node /home/enkeym/.ai-hooks/claude/context-meter.mjs"
           }
         ]

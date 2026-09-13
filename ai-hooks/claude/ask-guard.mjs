@@ -3,25 +3,13 @@
 // меняет файлы или состояние снаружи. Режим выключен → хук молчит.
 
 import { isOn, askGuard, ASK_DENY_HINT } from '../ask-core.mjs';
+import { readInput, decide } from './hook-io.mjs';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (c) => { raw += c; });
-process.stdin.on('end', () => {
-  let input;
-  try { input = JSON.parse(raw); } catch { process.exit(0); }
-
-  if (!isOn(input.cwd)) process.exit(0);
+readInput((input) => {
+  if (!isOn(input.cwd)) decide(input, null);
 
   const what = askGuard(input.tool_name, input.tool_input);
-  if (!what) process.exit(0);
+  if (!what) decide(input, null);
 
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'deny',
-      permissionDecisionReason: `Запрещено в ask mode: ${what}. ${ASK_DENY_HINT}`,
-    },
-  }));
-  process.exit(0);
+  decide(input, 'deny', `Запрещено в ask mode: ${what}. ${ASK_DENY_HINT}`);
 });

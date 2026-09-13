@@ -13,6 +13,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { currentBranch, statePath, readJSON, writeJSON } from './state-core.mjs';
+import { logDecision, hookContext } from './hooklog-core.mjs';
+import { maybeSpawnDoctor } from './doctor-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const TS_DIR = '.tokensave';
@@ -274,6 +276,12 @@ export function logGuard(event, data = {}) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file,
       JSON.stringify({ ts: new Date(now).toISOString(), event, ...data }) + '\n');
+    // То же событие — в журнал решений сессии (hooks.jsonl): guard.log остаётся
+    // «в норме пустым» сигналом, а hooks.jsonl даёт последовательность внутри
+    // сессии. Строку с предохранителем hook-io пишет сам — там есть target.
+    if (event === 'server-mismatch') {
+      logDecision(event, { root: data.root, branch: data.branch, servers: (data.servers || []).length });
+    }
     return true;
   } catch {
     return false; // лог не обязан работать, чтобы работал гард
@@ -289,12 +297,18 @@ function query(root, fn) {
 
   const srv = serverState(root, file);
   if (!srv.ok) {
-    logGuard('server-mismatch', {
+    const detail = {
       root,
       branch: currentBranch(root),
       guard_db: path.relative(root, file),
       servers: srv.servers,
-    });
+    };
+    // Молчание гарда — тоже симптом: проект инициализирован, а роутеры
+    // отключились. Доктор запускается на новое событие (не на дедуп-повтор);
+    // частоту дальше держит его собственный дебаунс по проекту.
+    if (logGuard('server-mismatch', detail)) {
+      maybeSpawnDoctor({ root, symptom: 'server-mismatch', detail, sid: hookContext().sid });
+    }
     return null;
   }
 

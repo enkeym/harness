@@ -52,13 +52,22 @@ fired and what it wants instead.
 
 ## When something is broken
 
-1. `~/.ai-hooks/logs/errors.log` — first read on any tokensave/ragsave report.
-2. `~/.ai-hooks/logs/guard.log` (JSONL) — only real events: `server-mismatch`
+1. `~/.ai-hooks/logs/hooks.jsonl` — one line per hook decision (`deny`, `ask`,
+   `breaker-open`, `server-mismatch`, `slow`, `crash`) with `sid`, `target`,
+   `ms`; allowed calls are not written. The per-session trace of "what
+   blocked, what came next".
+2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes
+   (`exit=crash`); first read on any tokensave/ragsave report.
+3. `~/.ai-hooks/logs/guard.log` (JSONL) — only real events: `server-mismatch`
    (MCP serves another project/branch; registry `~/.tokensave/servers/`),
    `breaker-open`. Marks live in `~/.claude/state/`.
-3. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
+4. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red
    → roll back, don't patch further.
-4. Everything under `~/.claude/` is a symlink into `~/harness/claude/`;
+5. Everything under `~/.claude/` is a symlink into `~/harness/claude/`;
    Edit/Write refuse symlinks — address the target path.
-5. Deeper diagnosis is `/doctor` — offer it in one line, don't improvise.
+6. Deeper diagnosis is `/doctor` — offer it in one line, don't improvise. A
+   prompt line starting `doctor (…)` is the background doctor's finding: its
+   report is a file to `Read`, applying it is `/doctor apply`; a line starting
+   `tokensave-гард молчит` means the routers are off for this session, not
+   that the project is un-indexed.

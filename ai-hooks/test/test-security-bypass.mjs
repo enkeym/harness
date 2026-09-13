@@ -8,6 +8,7 @@
 // не для обхода, а просто потому что они естественны: обёртки интерпретатора,
 // чтение из git, `find -exec`, команда на удалённом хосте.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

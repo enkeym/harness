@@ -7,7 +7,7 @@
 // повторный вызов значило бы отменять запрет вторым нажатием.
 
 import { securityGuard, DENY } from '../security-core.mjs';
-import { readInput } from './hook-io.mjs';
+import { readInput, decide } from './hook-io.mjs';
 
 readInput((input) => {
   let verdict = null;
@@ -17,15 +17,11 @@ readInput((input) => {
     verdict = null; // fail-open: гард не должен ломать работу
   }
 
-  if (!verdict) process.exit(0);
+  if (!verdict) decide(input, null);
 
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: verdict.level,
-      permissionDecisionReason:
-        (verdict.level === DENY ? 'security-guard, запрет: ' : 'security-guard: ') + verdict.reason,
-    },
-  }));
-  process.exit(0);
+  decide(
+    input,
+    verdict.level,
+    (verdict.level === DENY ? 'security-guard, запрет: ' : 'security-guard: ') + verdict.reason,
+  );
 });

@@ -3,6 +3,7 @@
 // сессии) и классификация «меняет / не меняет». Состояние пишется во временные
 // каталоги, глобальное умолчание тест не трогает — только читает.
 
+import './env-isolate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

@@ -3,6 +3,7 @@
 // что проходит молча. Прогоняется через реальный хук-скрипт, как это делает
 // Claude Code, чтобы проверялся и адаптер, и ядро.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

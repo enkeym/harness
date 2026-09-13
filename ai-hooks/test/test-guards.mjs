@@ -9,6 +9,7 @@
 // Поэтому пути ниже — реальные файлы web_groza, а не выдуманные: вердикт
 // зависит от содержимого .tokensave/tokensave.db.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
