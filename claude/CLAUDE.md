@@ -28,19 +28,6 @@ non-indexed configs. It overrides auto-mode instructions that suggest `cat`/`sed
 instead of `Read`/`Edit`/`Write`: shell in place of a file tool is a bypass that
 routes the change around indexes and guards.
 
-## Code
-
-- No `any`: exact type, or `unknown` with narrowing.
-- Reuse before writing new: packages already in `package.json`; existing
-  constants, enums, config; global styles, CSS variables, design tokens (never
-  hardcode a color, spacing, font, z-index); existing utils, helpers, hooks;
-  types and DTOs derived via `extends`/`Pick`/`Omit`.
-- KISS, SOLID, DRY: explicit over implicit, one responsibility, no hidden magic,
-  no duplicates. DTOs for input; interfaces for responses and internal services.
-- The stack skill carries the rest of the conventions — load it before the first
-  edit, not after. What the linter cannot catch, the review skills do: nothing
-  is committed before the diff has been through them.
-
 ## Tool choice
 
 | You have                                 | Tool                      |
@@ -76,6 +63,7 @@ same area wins over the global one.
 | Start a large or loosely worded task: multi-module, new subsystem, no place or acceptance criterion named | `task-brief` |
 | Touch server code: module, controller, service, DTO, entity, guard, migration      | `nestjs-backend`    |
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
+| Touch TypeScript that is neither: script, shared lib, config                       | `Read` `skills/shared/code-rules.md` |
 | Write, fix or review tests in any stack                                            | `testing-ts`        |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | React to a hook that blocked or warned; ask mode, guards, index sync, bootstrap     | `hooks-guards`      |

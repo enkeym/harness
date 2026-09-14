@@ -6,8 +6,9 @@ description: NestJS/TypeScript server conventions — module layout, DI, DTOs an
 # NestJS backend conventions
 
 The project outranks this list: copy a neighbouring module first
-(`tokensave_context` scoped to the server). Global rules (no `any`, reuse
-first, KISS/SOLID/DRY) are in CLAUDE.md.
+(`tokensave_context` scoped to the server). Read
+[../shared/code-rules.md](../shared/code-rules.md) (types, reuse,
+KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
 
 ## Structure
 - One module per domain: `x.module.ts`, `x.controller.ts`, `x.service.ts`,
@@ -24,7 +25,6 @@ first, KISS/SOLID/DRY) are in CLAUDE.md.
   Numeric params via `ParseIntPipe` or `@Type(() => Number)`.
 - Output = interface/class with explicit fields; an entity never leaves whole;
   sensitive fields excluded in the mapping.
-- Derived DTOs via `PartialType`/`PickType`/`OmitType`, never copied lists.
 
 ## Errors
 - Expected failures → `HttpException` subclasses; client text carries no
@@ -49,6 +49,3 @@ first, KISS/SOLID/DRY) are in CLAUDE.md.
   result, repository args, thrown exception — not internal steps.
 - e2e: `supertest` against `INestApplication` with the same global pipes and
   filters as `main.ts`. Rest is in `testing-ts`.
-
-## Domain types
-- Domain enumerations live once as `enum` or `as const`; no scattered literals.

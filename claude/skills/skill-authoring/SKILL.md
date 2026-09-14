@@ -20,6 +20,9 @@ loaded — this skill decides how one is written.
   spans several related formats (this one does — see below): `reference/<topic>.md`,
   linked from SKILL.md, one level deep, with a contents list past 100 lines.
   No README, CHANGELOG or install notes inside a skill.
+- A rule set two or more skills share: `skills/shared/<topic>.md` (no
+  SKILL.md there, so it costs no description), linked as
+  `../shared/<topic>.md` from each skill's opening lines. Same body rules.
 
 ## Frontmatter
 

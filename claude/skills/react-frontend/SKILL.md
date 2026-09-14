@@ -6,8 +6,9 @@ description: React/TypeScript client conventions — components, hooks, state, d
 # React frontend conventions
 
 The project outranks this list: copy neighbouring components first
-(`tokensave_context` with `path_include` on the client). Global rules (no
-`any`, reuse first, no hardcoded design values) are in CLAUDE.md.
+(`tokensave_context` with `path_include` on the client). Read
+[../shared/code-rules.md](../shared/code-rules.md) (types, reuse, tokens,
+KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 
 ## Components
 - Function components, named exports, one per file, file named after it.
