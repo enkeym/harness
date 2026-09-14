@@ -52,8 +52,8 @@ in this shape:
 <what to change> — <what it is based on, with a number> — <expected effect> — <what we risk>
 ```
 
-Apply the edits one at a time (chat-only in ask mode), each as its own commit in
-`~/harness`, and run the hook tests afterwards.
+Apply the edits one at a time, each as its own commit in `~/harness`, and run
+the hook tests afterwards.
 
 Nothing to optimise — say exactly that. A list of invented improvements is worse
 than an empty report: people start changing what works.

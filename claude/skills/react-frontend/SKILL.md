@@ -22,16 +22,10 @@ KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 - Call the API the way the project already does (its client, data hook or
   store). Never a second way beside the first.
 - State as close to its use as possible; global only when several trees need it.
-- Loading, error and empty states handled, not only the happy path.
 
 ## Forms
 - The project's form library and validation schema; errors beside the field;
   submit disabled while the request is in flight.
-
-## Styles
-- Only project tokens: colors, spacing, fonts, radii, z-index. A raw px/hex is
-  the signal a token is needed; none exists → report, don't hardcode.
-- One styling method — the project's (CSS modules, styled, utility classes).
 
 ## Accessibility and UX
 - Real `button`/`a`/`input`, not `div onClick`; `aria-label` on icon buttons;
@@ -39,9 +33,7 @@ KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 - User-facing strings where the project keeps them (i18n or constants).
 
 ## Tests
-- Testing Library: query by role and text; `userEvent` over `fireEvent`.
-- Mock the boundary (API client, timers), not the component's own hooks.
-  Rest is in `testing-ts`.
+- `testing-ts`, including its React lines.
 
 ## Types
 - API responses typed by interfaces shared with the server when the project

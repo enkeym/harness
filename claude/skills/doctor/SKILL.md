@@ -71,8 +71,7 @@ On `/doctor apply`:
 Name the cause in one sentence and back it with a line from a log — without one
 it is a guess. Then:
 
-- **A hook or rule fix** — apply it (chat-only in ask mode), as its own commit
-  in `~/harness`.
+- **A hook or rule fix** — apply it as its own commit in `~/harness`.
 - After an applied fix, always run the tests:
   `node ~/.ai-hooks/test/test-guards.mjs`, `test-ask-mode.mjs`,
   `test-security.mjs`, `test-security-bypass.mjs`, `test-project-bootstrap.mjs`,

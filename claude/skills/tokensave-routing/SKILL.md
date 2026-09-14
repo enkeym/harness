@@ -5,8 +5,8 @@ description: Which tokensave or ragsave tool to call for reading, searching, edi
 
 # tokensave and ragsave routing
 
-Kernel (CLAUDE.md): a name → tokensave; meaning → `rag_search`; exact string
-outside the index → `Grep`.
+CLAUDE.md picks the family (tokensave / `rag_search` / `Grep`); this picks the
+tool inside it.
 
 ## tokensave — indexed files (`.md` included)
 
@@ -42,7 +42,6 @@ Not for structural questions (callers, impact).
 ## Empty or broken answer
 
 - Empty = wrong name guess, not missing code. Ladder: `rag_search` → `Grep`/`Read`.
-  Never shell.
 - Error (not indexed, DB busy, wrong branch) → one line, then plain tools.
   Don't repeat the identical call: the router lets the second through, so a
   second refusal is your own answer.
@@ -52,12 +51,10 @@ Not for structural questions (callers, impact).
 
 ## Instead of a research agent
 
-CLAUDE.md bans subagents. Cover a big area with scoped `tokensave_context` plus
-`rag_search`, one call at a time.
+Cover a big area with scoped `tokensave_context` plus `rag_search`, one call
+at a time.
 
 ## Decision memory
 
-- `tokensave_session_recall` before designing a subsystem.
 - `tokensave_record_decision` after approval: one-line decision + `reason`,
-  `files`, `tags`. Record anything you'd otherwise re-explain (library, schema,
-  rejected option and why).
+  `files`, `tags`.

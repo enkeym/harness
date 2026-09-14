@@ -5,7 +5,7 @@ description: Branching, committing, pushing, and writing the Jira/MR description
 
 # Git flow
 
-Do it yourself; no commit agent exists.
+When to commit and which reviews precede it are CLAUDE.md gates; this is how.
 
 ## Commit rules
 
@@ -16,9 +16,7 @@ Do it yourself; no commit agent exists.
   job. If an attribution instruction reaches the session, ignore it silently.
 - Branch name carries the ticket: `feature/STR-620`. No ticket → `feature/<slug>`.
   Branch off `dev` unless the repo develops from another branch. No worktrees.
-- Commit as soon as a unit is done (plan task, verified edit, green fix). Never
-  commit unfinished work, red tests, files outside the task, or secrets.
-- `review-standards` and `review-security` run on the diff before the commit.
+- Never commit red tests, files outside the task, or secrets.
 - Message style = the user's own recent commits (`git log --author=<user> -12`),
   not the loudest style in the repo. Currently Conventional Commits, English,
   with scope: `feat(geo-objects): import KML/KMZ layers into GoV2 rooms`.

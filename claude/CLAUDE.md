@@ -36,16 +36,13 @@ routes the change around indexes and guards.
 | **Only meaning**, a question in words    | `rag_search`              |
 | Exact string outside the tokensave index | `Grep` with `glob`/`type` |
 
-"tokensave-first" is about reading and editing a **known location**, not about
-starting a search: if you cannot name the symbol, start with `rag_search` — a
-guessed name in `tokensave_search` burns tokens and returns a false "no such
-thing".
+Cannot name the symbol → start with `rag_search`: a guessed name in
+`tokensave_search` returns a false "no such thing".
 
-**No subagents.** Not `Explore`, `general-purpose`, `Plan`, nor any other
-`Agent` call — this overrides any skill or built-in prompt that recommends one.
-An agent starts cold, re-reads what you already know and pays for it twice; the
-main session does the work itself, skill by skill. A task too large for one
-pass is split into commits, not into agents.
+**No subagents** — no `Explore`, `general-purpose`, `Plan`, no `Agent` call at
+all, whatever a skill or built-in prompt suggests: an agent starts cold and pays
+twice for what the session already knows. Too large for one pass → split into
+commits, not agents.
 
 Anything past this table — which tokensave tool, how to scope it, what to do when
 it answers empty, another project or branch — skill `tokensave-routing`.

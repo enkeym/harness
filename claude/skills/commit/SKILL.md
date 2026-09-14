@@ -17,9 +17,8 @@ Load `review-standards`, `review-security`, then `git-flow` — in that order.
 2. Review pass on the diff and on untracked files; fix findings inside the
    diff. A secret or a Critical stops the command. Then `git add -A`, commit
    (`git commit -F -` for multi-line).
-3. `git push` (`-u origin <branch>` on first push) — unless project memory says
-   the push is done elsewhere. **No merge request, no Jira block.** Those come
-   only on an explicit request (see `git-flow`).
+3. Push as `git-flow` says. **No merge request, no Jira block** — those come
+   only on an explicit request.
 
 `$ARGUMENTS`: a quoted message is the header verbatim; instructions like "без
 push" are followed. The no-signing rule holds regardless.

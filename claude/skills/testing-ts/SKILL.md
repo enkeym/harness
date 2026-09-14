@@ -5,8 +5,8 @@ description: Test conventions for the user's TypeScript projects (Jest/Vitest, N
 
 # TypeScript test conventions
 
-Cross-stack rules; `nestjs-backend` and `react-frontend` link here for mocking
-boundaries and add their own stack specifics on top.
+Cross-stack rules with the stack specifics inline; `nestjs-backend` and
+`react-frontend` point here and add nothing of their own.
 
 ## What to test
 - Behaviour through the public interface: input → result, dependency called
@@ -28,7 +28,8 @@ boundaries and add their own stack specifics on top.
   injected clock), external SDKs. Never internal project modules.
 - NestJS: `Test.createTestingModule({ providers: [Service, { provide: Repo, useValue: mock }] })`;
   e2e = real `INestApplication` with `main.ts` pipes/filters + `supertest`.
-- React: mock the API client, not the hook; query by role and text.
+- React: mock the API client and timers, not the component's own hooks; query
+  by role and text; `userEvent` over `fireEvent`.
 
 ## Playwright e2e
 - Config and specs on the client: `client/playwright.config.ts`,

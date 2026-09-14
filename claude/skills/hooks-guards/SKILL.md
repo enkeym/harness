@@ -46,14 +46,13 @@ fired and what it wants instead.
 - A router or breaker block ≠ missing index. Call `tokensave_status` first.
   Index alive → `tokensave_read` / `tokensave_context` / `tokensave_str_replace`
   (load via `ToolSearch('select:mcp__tokensave__…')`). Real `tokensave_*` error
-  or empty result → retry once, quote the error, then `Read`/`Edit`/`Write` for
-  that file. Bash never gets the pass.
+  or empty result → quote it, then `Read`/`Edit`/`Write` for that file; the
+  router lets that second call through. Bash never gets the pass.
 
 ## Background hooks
 
-- They sync an **existing** tokensave/ragsave index. Never run `sync`. Never
-  run `init` or create `.tokensave`/`.ragsave` — that is the user's call; say
-  `tokensave init <path>` is needed instead of offering to do it.
+- They sync an **existing** tokensave/ragsave index; creating one is the
+  user's call — say `tokensave init <path>` is needed, don't offer to run it.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the
   session directory. Outside a project the server doesn't come up — tools are
   absent, not wrong.

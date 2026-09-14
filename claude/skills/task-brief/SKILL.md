@@ -6,8 +6,8 @@ description: Turns a large, loosely worded task into a technical brief before an
 # Task brief
 
 No implementation until the brief is approved; a change describable in one
-sentence skips this skill entirely. CLAUDE.md gates (ask mode, no subagents, no
-planning files) still hold; once work starts, the stack skill carries the rules.
+sentence skips this skill entirely. CLAUDE.md gates still hold; once work
+starts, the stack skill carries the rules.
 
 ## Trigger
 

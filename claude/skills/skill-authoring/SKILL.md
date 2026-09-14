@@ -46,7 +46,7 @@ loaded — this skill decides how one is written.
   (a template) or as a quoted user phrase that triggers the skill.
 - `# <Subject>`, or `# /name` for a command. Then one or two lines: the rule
   that governs everything below, and the boundary with CLAUDE.md or a
-  neighbouring skill ("Global rules are in CLAUDE.md", "Rest is in `testing-ts`").
+  neighbouring skill — a pointer ("Rest is in `testing-ts`"), never a restatement.
 - `##` per task or category, bullets inside. Fixed order → numbered list.
   Any order → bullets. Lookup → table.
 - Directives in the imperative: "Mock the boundary, not the hook". Not "you
@@ -54,35 +54,28 @@ loaded — this skill decides how one is written.
 - One "why" clause, only where the rule is counter-intuitive or high-stakes:
   "No `Co-Authored-By` — company policy". No paragraphs of rationale.
 - Concrete over abstract: a command, a path, an identifier, an input → output
-  pair. What Claude already knows (what a DTO is, how a library works) and
-  what CLAUDE.md already states is not repeated.
+  pair. Not repeated: what Claude already knows, what CLAUDE.md states, what
+  another skill or `shared/` file already carries — point to it instead.
 - One term per concept, the project's own name for it.
 - Output with a fixed shape gets a fenced template with placeholders and the
   rule for empty parts ("Empty section = нет").
 - No time-bound facts, no version dates, no retired paths. Forward slashes.
-  MCP tools by the short name the collection uses (`tokensave_search`); the
-  full `mcp__…` form only where the short one is ambiguous.
+  MCP tools by the short name (`tokensave_search`); `mcp__…` only when ambiguous.
 - Emphasis: bold once per section at most; no caps-shouting ("ALWAYS",
   "NEVER") — the directive plus its reason does the work.
-- Length: 25–130 lines is the collection's range; hard ceiling 500. Longer →
-  split into `reference/`.
+- Length: 25–130 lines; hard ceiling 500. Longer → split into `reference/`.
 
 ## Two other targets
 
-This skill also governs two file kinds that aren't a SKILL.md — same review,
-different mechanics, kept out of the body above so it stays in range:
-
 - A command file (`claude/commands/*.md`) — no `name`, no
-  `disable-model-invocation`, always user-invoked. Rules and checklist:
+  `disable-model-invocation`, always user-invoked:
   [reference/commands.md](reference/commands.md).
-- CLAUDE.md itself — no frontmatter, always loaded, scoped by its own opening
-  rule (gate or routing rule only). Checklist:
+- CLAUDE.md — no frontmatter, always loaded, gate or routing rule only:
   [reference/claude-md.md](reference/claude-md.md).
 
 ## Procedure — new skill
 
-1. Name the failure the skill prevents. No observed failure → no skill; check
-   whether CLAUDE.md or memory already covers it.
+1. Name the failure the skill prevents. No observed failure → no skill.
 2. `Grep` the existing descriptions for the area. Overlap → edit that skill.
 3. Write the description first; test it against the trigger: would this
    sentence be picked out of thirty others?
@@ -102,14 +95,13 @@ Run on every new or edited SKILL.md; on the whole collection when asked to audit
 - [ ] opening line states the governing rule; boundary with CLAUDE.md or a
       neighbour named
 - [ ] every bullet is a directive; no narration, no "you are", no preamble
-- [ ] nothing Claude already knows; nothing already in CLAUDE.md
-- [ ] paths and commands current; no retired location
-- [ ] one term per concept; no caps-shouting; bold sparingly
+- [ ] nothing Claude already knows, nothing CLAUDE.md or another skill states
+- [ ] paths and commands current; one term per concept; no caps-shouting
 - [ ] references one level deep; body ≤130 lines
 - [ ] CLAUDE.md skills table or user-invoked line updated
 
 Report as `<skill>: <line> — <rule broken> — <fix>`, one line each; fix in
-place unless ask mode is on. Clean skill → `<skill>: ok`.
+place. Clean skill → `<skill>: ok`.
 
 ## Template
 
@@ -131,7 +123,6 @@ description: <What it covers — key terms>. Load before <task> or when <trigger
 ## <Procedure>
 
 1. <Step with the exact command or tool.>
-2. <Step.>
 
 ## Output
 

@@ -29,15 +29,12 @@ KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
 ## Errors
 - Expected failures → `HttpException` subclasses; client text carries no
   internal detail.
-- Unexpected ones not caught; the global filter handles them. `try/catch` only
-  with a meaningful reaction.
+- Unexpected ones not caught; the global filter handles them.
 - `Logger` from `@nestjs/common` with class context. No tokens, passwords,
   payment bodies in logs.
 
 ## Config
-- Environment only via `ConfigService`, schema validated at startup. Never
-  `process.env` in module code.
-- New variable → `.env.example` in the same change (name + comment, no value).
+- Environment via `ConfigService` with a schema validated at startup.
 
 ## Database
 - Transaction wherever more than one entity changes together.
@@ -45,7 +42,4 @@ KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
 - Migrations are separate reversible files; no `synchronize` on production.
 
 ## Tests
-- Unit: `Test.createTestingModule` with deps mocked via `useValue`; assert
-  result, repository args, thrown exception — not internal steps.
-- e2e: `supertest` against `INestApplication` with the same global pipes and
-  filters as `main.ts`. Rest is in `testing-ts`.
+- `testing-ts`, including its NestJS lines.
