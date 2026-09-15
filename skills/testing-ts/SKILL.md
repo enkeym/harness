@@ -6,7 +6,8 @@ description: Test conventions for the user's TypeScript projects (Jest/Vitest, N
 # TypeScript test conventions
 
 Cross-stack rules with the stack specifics inline; `nestjs-backend` and
-`react-frontend` point here and add nothing of their own.
+`react-frontend` point here and add nothing of their own. Which tests a diff
+or branch still needs: `review-tests`.
 
 ## What to test
 - Behaviour through the public interface: input → result, dependency called
@@ -46,8 +47,8 @@ Cross-stack rules with the stack specifics inline; `nestjs-backend` and
 - Locators by role, text, `getByTestId` — no CSS chains tied to layout.
 - Visual regression: snapshots committed; `--update-snapshots` only for an
   intended visual change, reviewed as part of the diff.
-- Playwright MCP tools (`browser_*`) are for exploring a live page by hand,
-  not for running the suite.
+- Playwright MCP tools (`browser_*`) are for exploring a live page by hand
+  (`browser-qa`), not for running the suite.
 
 ## Running
 - While writing: only the touched file (`npx jest path -t 'name'`, `vitest run

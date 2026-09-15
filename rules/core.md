@@ -59,6 +59,7 @@ same area wins over the global one.
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
 | Write, fix or review tests in any stack                                            | `testing-ts`        |
+| Cover a branch or diff with tests, or open a merge request                         | `review-tests`      |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | Hand the thread to a fresh session: the context is filling up, or a reset is coming | `handoff`          |
 | Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
@@ -69,8 +70,8 @@ same area wins over the global one.
 
 - **Commit.** A logical unit is done — a plan task, a verified bounded edit, a
   green fix — run the diff through `review-standards` and
-  `review-security`, fix what they find, then commit right away, without
-  asking. A found secret stops everything and goes to the user first. How to
+  `review-security`, fix what they find, run the one-line gap check of
+  `review-tests`, then commit right away, without asking. A found secret stops everything and goes to the user first. How to
   commit, and what stays with the human: skill `git-flow`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
   after a choice you would otherwise have to re-explain (a library, a data
