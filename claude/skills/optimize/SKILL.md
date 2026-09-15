@@ -39,6 +39,11 @@ otherwise it is a guess.
 - **Tools run for nothing.** The top calls in the report: a lot of `Grep` and
   `Read` with a live index means the tool-choice rule didn't fire; many repeats
   of one call means a guard or a loop — that is `/doctor`.
+- **A tool that costs more per call.** Divide ~tokens by calls in the report's
+  context-sources block for `Read`, `tokensave_read`, `tokensave_body`, `Bash`
+  and compare. Under 50 calls for a tool → report "рано судить", not a verdict.
+  Whole-file `tokensave_read` next to a `Read` of the same file before an edit
+  means the file is paid for twice.
 - **Rules working against themselves.** CLAUDE.md sections contradicting each
   other or the skills; skills never loaded because nothing triggers them; bans
   with no working alternative — the agent looks for a way around those.
