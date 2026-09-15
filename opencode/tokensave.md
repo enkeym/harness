@@ -2,6 +2,8 @@
 
 Before reading source files or scanning a codebase, use the tokensave MCP tools: `tokensave_context` for exploration, `tokensave_search` for a known symbol, plus `tokensave_callers`, `tokensave_callees`, `tokensave_impact`, `tokensave_node`, `tokensave_files`, and `tokensave_affected`.
 
+To read a file's contents, use `tokensave_read`: it reads any path, indexed or not, and slices with `mode: "lines"` or maps a file's symbols with `mode: "map"` instead of pulling in the whole body. Use the harness's own file-read tool for a file you are about to edit.
+
 ### Check freshness before relying on the graph
 
 Run `tokensave_status` to see when the index was last synced. Run `tokensave sync` or `tokensave branch add` only when the user has asked for an index update or the task already involves modifying this repository; otherwise disclose the staleness and fall back to read-only source inspection.

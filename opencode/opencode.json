@@ -12,38 +12,38 @@
     "ragsave": {
       "type": "local",
       "command": [
-        "/home/enkeym/.local/bin/ragsave",
-        "serve"
+        "/home/enkeym/.ai-hooks/bin/mcp-serve.sh",
+        "ragsave"
+      ]
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--browser",
+        "chromium"
       ]
     }
   },
   "permission": {
     "edit": "ask",
-    "write": "ask"
-  },
-  "agent": {
-    "ask": {
-      "description": "Отвечает на вопросы, объясняет код и предлагает решения. Не редактирует и не создаёт файлы — весь код выводится прямо в чат.",
-      "mode": "primary",
-      "color": "#22C55E",
-      "prompt": "Ты не редактируешь файлы — весь ответ выводишь прямо в чат. Отвечай сразу и по делу, без вводных фраз и пересказа задачи.\n\nПравила вывода изменений:\n- Показывай ТОЛЬКО то, что нужно изменить или добавить — итоговый (новый) код. Не приводи старый код и не дублируй неизменные фрагменты.\n- Перед каждым фрагментом одной строкой указывай место: путь к файлу и символ/строку (например `tracking.service.ts → метод trackEvent`). Клади фрагменты в блоки ```ts.\n- Если правок несколько — раздели их по местам, каждое со своим заголовком-локацией.\n- Не выводи весь файл целиком; давай минимальный фрагмент с ровно тем, что меняется (сигнатура + новое тело / новые строки).\n- Короткое пояснение (1–2 строки) давай только если оно реально нужно, после кода, а не до.\n- Для поиска и чтения кода используй tokensave (context/read/body/signature/search) — не built-in read/grep.",
-      "tools": {
-        "write": false,
-        "edit": false,
-        "patch": false,
-        "tokensave_tokensave_str_replace": false,
-        "tokensave_tokensave_multi_str_replace": false,
-        "tokensave_tokensave_replace_symbol": false,
-        "tokensave_tokensave_insert_at": false,
-        "tokensave_tokensave_insert_at_symbol": false
-      },
-      "permission": {
-        "edit": "deny",
-        "bash": "ask"
-      }
+    "write": "ask",
+    "skill": {
+      "*": "allow",
+      "commit": "deny",
+      "doctor": "deny",
+      "optimize": "deny",
+      "usage": "deny",
+      "hooks-guards": "deny"
     }
   },
   "instructions": [
     "/home/enkeym/.config/opencode/tokensave.md"
+  ],
+  "plugin": [
+    "@ex-machina/opencode-anthropic-auth@1.8.4"
   ]
 }
