@@ -52,7 +52,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | Субагенты | `permissions.deny: Agent` | `general`/`explore` отключены, `permission.task` — только `commit` |
 | MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
 | Гарды tokensave | хуки `ai-hooks/claude/*` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
-| Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask` (Tab): правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
+| Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask`, включён при старте (`default_agent`), Tab — в `build`: правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
 | Коммит | `/commit` | субагент `@commit` на `zai-coding-plan/glm-5.3`: коммит в стиле истории, своё сообщение аргументом; push и MR — только по «сделай МР» |
 
 Оба механизма загрузки правил вставляют текст целиком в контекст при старте
