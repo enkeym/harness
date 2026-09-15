@@ -2,6 +2,10 @@
 
 Each line is a check; a failed one is a finding with the URL.
 
+Contents: Status and redirects · robots.txt · AI crawlers · sitemap.xml ·
+Discovery and verification · Canonical and duplicates · Meta · Multilingual
+and regional · Rendering · Images · Core Web Vitals · Internal linking
+
 ## Status and redirects
 
 - Canonical host and protocol decided once (`https://`, with or without `www`);
@@ -12,6 +16,7 @@ Each line is a check; a failed one is a finding with the URL.
 - Staging and preview hosts: `X-Robots-Tag: noindex` header or basic auth;
   never `Disallow: /` shipped to production by a shared config.
 - 5xx under the crawler's normal load → finding, whatever the page.
+- HTTPS on every URL, HSTS header, no mixed content — HTTP variants 301 to HTTPS.
 
 ## robots.txt
 
@@ -29,6 +34,15 @@ Each line is a check; a failed one is a finding with the URL.
   crawl rate in "Скорость обхода".
 - Google ignores `Clean-param`; parameter duplicates are solved by canonical.
 
+## AI crawlers
+
+- Policy is the owner's decision — ask; never block by default.
+- `Googlebot` and `YandexBot` feed search and its AI answers (AI Overviews,
+  Yandex Neuro); blocking them removes the site from both.
+- `User-agent: Google-Extended` only opts out of Gemini training; Search and
+  AI Overviews are unaffected. Training and assistant bots (`GPTBot`,
+  `ClaudeBot`, `PerplexityBot`, `CCBot`) are separate `User-agent` groups.
+
 ## sitemap.xml
 
 - Only canonical, indexable, `200` URLs — no redirects, no `noindex`, no
@@ -39,6 +53,19 @@ Each line is a check; a failed one is a finding with the URL.
   every URL; `changefreq` and `priority` are ignored by Google — omit.
 - Generated from data (routes, CMS, DB), not a hand-kept list.
 - Submitted in Search Console and Yandex Webmaster.
+
+## Discovery and verification
+
+- Site ownership confirmed in Google Search Console and Yandex Webmaster (DNS
+  record or `<meta name="google-site-verification">` /
+  `<meta name="yandex-verification">`; Next: `metadata.verification`). Codes
+  come from the owner — never invent them.
+- IndexNow for Yandex and Bing: key file `https://<host>/<key>.txt`, a POST to
+  `https://yandex.com/indexnow` on page create, update and delete, sent from
+  the code path that changes the content. Google does not use it — the sitemap
+  stays.
+- Snippet control where needed: `data-nosnippet` on a block,
+  `max-snippet`/`max-video-preview` in robots meta.
 
 ## Canonical and duplicates
 
@@ -78,6 +105,15 @@ Each line is a check; a failed one is a finding with the URL.
 - Internal links are `<a href>`; `onClick` navigation is not followed.
 - Lazy-loaded content that matters loads without scroll or interaction.
 - Infinite scroll has paginated URLs behind it.
+
+## Images
+
+- Meaningful images as `<img>` with `alt`, not CSS backgrounds.
+- Descriptive file names (`sinij-divan-oslo.avif`, not `IMG_0042.jpg`),
+  AVIF/WebP with `width`/`height`, `srcset` for sizes.
+- Image URLs stable and crawlable (not blocked, not signed short-lived links)
+  on image-driven sites; `image:image` entries in the sitemap when images carry
+  traffic.
 
 ## Core Web Vitals (mobile, 75th percentile)
 

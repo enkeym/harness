@@ -19,8 +19,9 @@ more. Validate with Google Rich Results Test, the Schema.org validator
 | Video page | `VideoObject` | `name`, `thumbnailUrl`, `uploadDate`, `duration`, `contentUrl` or `embedUrl` |
 | Recipe | `Recipe` | `recipeIngredient`, `recipeInstructions`, `image`, `totalTime` |
 | Job | `JobPosting` | `title`, `datePosted`, `validThrough`, `hiringOrganization`, `jobLocation`, `baseSalary` |
-| Questions and answers on the page | `FAQPage` | only for real Q&A visible on the page |
-| Forum, user Q&A | `DiscussionForumPosting`, `QAPage` | user-generated content only |
+| Questions and answers on the page | `FAQPage` | only for real Q&A visible on the page; no rich result in Google |
+| One question with answers (Yandex mobile snippet, Google Q&A) | `QAPage` | one question per page, `acceptedAnswer` / `suggestedAnswer` visible on the page |
+| Forum thread | `DiscussionForumPosting` | user-generated content only |
 | Software / app | `SoftwareApplication` | `name`, `operatingSystem`, `applicationCategory`, `offers` |
 
 ## Google vs Yandex
@@ -28,10 +29,14 @@ more. Validate with Google Rich Results Test, the Schema.org validator
 - Google: no FAQ or HowTo rich results in any surface; `FAQPage` and `HowTo`
   stay valid Schema.org and cause no harm, but bring no snippet — don't add
   them for Google alone. Current feature list: Search Central "search gallery".
-- Yandex: `FAQPage` Q&A can still appear in snippets (mostly mobile) per
-  current practice — confirm in Yandex Webmaster's validator on the real page
-  before promising it. Yandex reads JSON-LD for products and breadcrumbs;
-  Open Graph feeds its link previews.
+- Yandex documents `QAPage` for the Q&A snippet on mobile results: one
+  question per page, the algorithm picks one answer. `FAQPage` is absent from
+  its docs — third-party reports of FAQ snippets are not a promise; check the
+  real page in the Yandex Webmaster validator.
+- Yandex reads Schema.org (JSON-LD or microdata) for organisation, products,
+  recipes, breadcrumbs, and Open Graph for previews; unsupported or broken
+  markup is skipped, not penalised. The "Товары и цены" feed outranks product
+  markup when both exist. Snippets form within about two weeks of indexing.
 - `Organization`/`LocalBusiness` details must match the Yandex Business and
   Google Business profiles exactly — mismatched address or phone is a trust
   finding.
