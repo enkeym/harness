@@ -62,6 +62,7 @@ same area wins over the global one.
 | Write, fix or review tests in any stack                                            | `testing-ts`        |
 | Cover a branch or diff with tests, or open a merge request                         | `review-tests`      |
 | Click through a running app by hand: "прокликай", "проверь в браузере"             | `browser-qa`        |
+| Set up or audit SEO — only when the user asks for it                               | `seo`               |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | Hand the thread to a fresh session: the context is filling up, or a reset is coming | `handoff`          |
 | Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
