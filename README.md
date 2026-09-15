@@ -16,12 +16,12 @@
 
 | Каталог | Куда раскатывается | Что это |
 | --- | --- | --- |
-| `claude/` | `~/.claude/{CLAUDE.md,skills,commands,settings*.json}` | глобальные правила, скиллы, слэш-команды, настройки и хуки Claude Code (ролевых агентов нет — только скиллы) |
+| `claude/` | `~/.claude/{CLAUDE.md,skills,commands,rules/tokensave.md,settings*.json}` | глобальные правила, скиллы, слэш-команды, настройки и хуки Claude Code (ролевых агентов нет — только скиллы) |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, роутеры, фоновая синхронизация индексов, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
-| `opencode/` | `~/.config/opencode/` | конфиг OpenCode, ask-режим, плагин tokensave-guard, тема |
-| `bin/` | `~/.local/bin/` | обёртка запуска `ragsave` |
-| `mcp/` | — | команды регистрации MCP-серверов |
+| `opencode/` | `~/.config/opencode/{AGENTS.md,agent,plugin,themes,opencode.json,tui.json,tokensave.md}` | конфиг OpenCode: правила-двойник `CLAUDE.md`, агенты `ask` и `@commit`, плагин tokensave-guard, тема |
+| `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
+| `mcp/` | `~/.claude.json` и `opencode/opencode.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов обоих агентов |
 | `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` из `~/.git-credentials`, без копии секрета) |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: identity, `credential.helper store`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
@@ -34,11 +34,26 @@
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness
 cd ~/harness
-./install.sh            # симлинки
+./install.sh            # симлинки + MCP-серверы в Claude и OpenCode
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
 
-Затем зарегистрировать MCP-серверы — команды в [`mcp/servers.md`](mcp/servers.md).
+MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), подробности — в
+[`mcp/servers.md`](mcp/servers.md).
+
+## Claude Code и OpenCode — что общее
+
+| Что | Claude Code | OpenCode |
+| --- | --- | --- |
+| Скиллы | `~/.claude/skills` | те же — OpenCode сам сканирует `~/.claude/skills`; `commit`, `doctor`, `optimize`, `usage`, `hooks-guards` закрыты в `opencode.json` (`permission.skill`) как Claude-only |
+| Правила | `claude/CLAUDE.md` | `opencode/AGENTS.md` — двойник с именами инструментов OpenCode, та же таблица скиллов; правило меняется в обоих |
+| MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
+| Гарды tokensave | хуки `ai-hooks/claude/*` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
+| Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask` (Tab): правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
+| Коммит | `/commit` | субагент `@commit` на `zai-coding-plan/glm-5.3`: коммит в стиле истории, своё сообщение аргументом; push и MR — только по «сделай МР» |
+
+После правки агента, скилла или `opencode.json` OpenCode нужно перезапустить —
+конфиг читается один раз при старте.
 
 ## Раскатка агентом
 
@@ -46,10 +61,11 @@ cd ~/harness
 не на месте, читать ему нечего кроме этого файла. Поэтому порядок ниже —
 самодостаточный, выполнять сверху вниз.
 
-1. `./install.sh` — симлинки. Отчёт покажет, что встало, что уехало в бэкап.
+1. `./install.sh` — симлинки и MCP-серверы. Отчёт покажет, что встало, что
+   уехало в бэкап.
 2. `./install.sh --venv` — venv для ragsave. Долго, качает пакеты.
-3. `claude mcp add …` — три команды из [`mcp/servers.md`](mcp/servers.md),
-   затем `claude mcp list`, все три должны быть `✔ Connected`.
+3. `claude mcp list` — все три сервера из `mcp/servers.json` должны быть
+   `✔ Connected`.
 4. `node ai-hooks/test/test-guards.mjs` и соседние тесты — зелёные.
 5. `./install.sh --check` — итоговая проверка, включая внешние зависимости.
 
@@ -96,7 +112,7 @@ cd ~/harness
 | `~/.rag-mcp/models` (3.4 ГБ) | модель fastembed, качается сама | первый запуск `ragsave` |
 | `~/.rag-mcp/venv` (250 МБ) | воспроизводится из `ragsave/requirements.txt` | `./install.sh --venv` |
 | `~/.config/opencode/node_modules` | воспроизводится из `package.json` | `bun install` в каталоге |
-| `~/.claude.json` | регистрация MCP вперемешку с историей проектов | [`mcp/servers.md`](mcp/servers.md) |
+| `~/.claude.json` | регистрация MCP вперемешку с историей проектов | `./install.sh` (из `mcp/servers.json`) |
 | рантайм `~/.claude` (`projects/`, `sessions/`, `history.jsonl`, `state/`) | локальное состояние машины | создаётся само |
 | `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно |
 | `~/.config/git/hooks` | глобальные git-хуки генерирует сам `tokensave` (chain-repo-hook, auto-init) | появляются при установке `tokensave` |

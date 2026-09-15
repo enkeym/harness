@@ -32,12 +32,14 @@ LINKS=(
   "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.claude/settings.local.json|claude/settings.local.json"
+  "$HOME/.claude/rules/tokensave.md|claude/rules/tokensave.md"
   "$HOME/.ai-hooks|ai-hooks"
   "$HOME/.rag-mcp/ragsave|ragsave/ragsave"
   "$HOME/.rag-mcp/tests|ragsave/tests"
   "$HOME/.rag-mcp/README.md|ragsave/README.md"
   "$HOME/.local/bin/ragsave|bin/ragsave"
   "$HOME/.config/opencode/AGENTS.md|opencode/AGENTS.md"
+  "$HOME/.config/opencode/agent|opencode/agent"
   "$HOME/.config/opencode/plugin|opencode/plugin"
   "$HOME/.config/opencode/themes|opencode/themes"
   "$HOME/.config/opencode/opencode.json|opencode/opencode.json"
@@ -139,6 +141,21 @@ home_check() {
   drift=$((drift + 1))
 }
 
+# MCP-серверы — один список mcp/servers.json на оба агента. Claude держит их в
+# ~/.claude.json (не симлинкуется), OpenCode — в opencode.json; bin/mcp-sync.mjs
+# сверяет или приводит оба к списку.
+mcp_sync() {
+  say
+  if ! command -v node >/dev/null; then
+    bad "node не найден — MCP не сверить"; drift=$((drift + 1)); return
+  fi
+  if [ "${1:-}" = "--check" ]; then
+    node "$HARNESS/bin/mcp-sync.mjs" --check || drift=$((drift + 1))
+  else
+    node "$HARNESS/bin/mcp-sync.mjs" || missing=$((missing + 1))
+  fi
+}
+
 externals() {
   say
   home_check
@@ -146,7 +163,13 @@ externals() {
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
-  command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (нужен только для ask-режима OpenCode)"
+  command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (агенты ask и @commit не будут доступны)"
+  # @commit жёстко привязан к zai-coding-plan/glm-5.3 (opencode/agent/commit.md).
+  if command -v opencode >/dev/null; then
+    opencode models zai-coding-plan 2>/dev/null | grep -qx 'zai-coding-plan/glm-5.3' \
+      && good "модель @commit zai-coding-plan/glm-5.3 доступна" \
+      || warn "zai-coding-plan/glm-5.3 недоступна — opencode auth login (Z.AI Coding Plan) или сменить model в opencode/agent/commit.md"
+  fi
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$HOME/.rag-mcp/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
   # gitconfig ссылается на глобальные git-хуки, которые кладёт сам tokensave
@@ -161,6 +184,7 @@ case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS):"
     for pair in "${LINKS[@]}"; do check_one "${pair%%|*}" "${pair##*|}"; done
+    mcp_sync --check
     externals
     say
     say "на месте: $ok, требуют внимания: $drift, нет источника: $missing"
@@ -172,11 +196,12 @@ case "$MODE" in
   install)
     say "Раскатка харнеса из $HARNESS:"
     for pair in "${LINKS[@]}"; do link_one "${pair%%|*}" "${pair##*|}"; done
+    mcp_sync
     externals
     say
     say "на месте: $ok, создано/починено: $fixed, нет источника: $missing"
     say
-    say "Дальше: ./install.sh --venv  и  mcp/servers.md для регистрации MCP."
+    say "Дальше: ./install.sh --venv. MCP-серверы правятся в mcp/servers.json."
     ;;
   *)
     say "Использование: ./install.sh [--check|--venv]"

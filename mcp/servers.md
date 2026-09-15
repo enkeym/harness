@@ -1,27 +1,38 @@
 # MCP-серверы
 
-Регистрация MCP живёт в `~/.claude.json` вперемешку с историей проектов, поэтому
-файл целиком в репозиторий не кладётся. Здесь — команды, которыми состав
-серверов воспроизводится на новой машине.
+Единый список — [`servers.json`](servers.json). Оба агента получают серверы из
+него, руками ни в `~/.claude.json`, ни в `opencode.json` блок `mcp` не правится.
 
-## Что должно быть подключено
+| Агент | Где хранит | Как попадает |
+| --- | --- | --- |
+| Claude Code | `~/.claude.json` (scope user) — вперемешку с историей проектов, в репозиторий не кладётся | `claude mcp add-json -s user` |
+| OpenCode | `opencode/opencode.json` → `mcp` | блок переписывается, остальные поля файла не трогаются |
 
-```
-tokensave    /usr/local/bin/tokensave serve
-ragsave      ~/.local/bin/ragsave serve
-playwright   npx -y @playwright/mcp@latest --headless --browser chromium
-```
-
-## Как зарегистрировать
+## Команды
 
 ```bash
-claude mcp add tokensave   -- /usr/local/bin/tokensave serve
-claude mcp add ragsave     -- "$HOME/.local/bin/ragsave" serve
-claude mcp add playwright  -- npx -y @playwright/mcp@latest --headless --browser chromium
+node bin/mcp-sync.mjs --check   # отчёт; код 1 при расхождении
+node bin/mcp-sync.mjs           # привести оба агента к servers.json
 ```
 
-Проверка: `claude mcp list` — все три должны отвечать `✔ Connected`.
+`./install.sh` вызывает первое в `--check` и второе при раскатке.
 
-`ragsave` подключится только после того, как собран venv:
-`./install.sh --venv`. `tokensave` — сторонний бинарь, ставится отдельно (см.
-`../README.md`).
+## Формат
+
+```json
+{
+  "<имя>": { "command": "<путь или бинарь>", "args": ["..."], "env": { "K": "V" } }
+}
+```
+
+`~/` в `command` раскрывается в домашний каталог. Серверы, которых нет в
+списке, не удаляются — скрипт только предупреждает.
+
+## Заметки
+
+- `ragsave` и при желании `tokensave` запускаются через
+  `~/.ai-hooks/bin/mcp-serve.sh`: он выбирает проект по каталогу сессии и не
+  поднимает сервер без индекса.
+- `ragsave` подключится только после `./install.sh --venv`. `tokensave` —
+  сторонний бинарь, ставится отдельно (см. `../README.md`).
+- Проверка: `claude mcp list` и `opencode mcp list`.
