@@ -1,13 +1,15 @@
 ---
 name: task-brief
-description: Turns a large, loosely worded task into a technical brief before any work starts — reads the code it touches, resolves the obvious gaps itself, argues with the prompt where the code disagrees, asks only about real forks, and prints an imperative brief (task, context, constraints, out of scope, verification, steps) that waits for approval. Load when the prompt describes an architectural or multi-module change, a new subsystem, data model or integration, or a feature with no location, acceptance criterion or boundary named; when the user says "подумай", "продумай", "мозговой штурм", "поспорь", "предложи как", "уточни если что", "спроси если непонятно", or runs /task-brief. Not for a change describable in one sentence.
+description: "Turns a large, loosely worded task into a technical brief before any work starts — reads the code it touches, resolves the obvious gaps itself, argues with the prompt where the code disagrees, asks only about real forks, and prints an imperative brief (task, context, constraints, out of scope, verification, steps) that waits for approval; for a single decision or idea runs a short challenge instead — objections and alternatives checked against code and docs, one recommendation. Load when the prompt describes an architectural or multi-module change, a new subsystem, data model or integration, or a feature with no location, acceptance criterion or boundary named; when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"что может пойти не так\", \"предложи как\", \"уточни если что\", \"спроси если непонятно\", or runs /task-brief."
 ---
 
 # Task brief
 
-No implementation until the brief is approved; a change describable in one
-sentence skips this skill entirely. `rules/core.md` gates still hold; once work
-starts, the stack skill carries the rules.
+No implementation until the brief is approved; a single decision to argue gets
+the *Challenge* section instead, a plain one-line change gets neither.
+`rules/core.md` gates still hold; once work starts, the stack skill carries
+the rules. Argument without a check is opinion — every objection here is
+verified by code, docs or a run before it reaches the user.
 
 ## Trigger
 
@@ -19,6 +21,35 @@ starts, the stack skill carries the rules.
   describe in one line; a prompt that already has the sections below.
 - First line of the reply names why it fired, in Russian: `Задача крупная:
   <причина> — собираю бриф.` The user can wave it off.
+- "поспорь", "мозговой штурм", "найди дыры", "что может пойти не так" about one
+  decision, library, schema or idea → *Challenge*, not the brief.
+
+## Challenge
+
+1. State the claim under test in one sentence: the user's idea, or the answer
+   you would give by default.
+2. Objections: the 2–4 strongest that would change the decision — a failure
+   mode with its mechanism, a cost (runtime, money, migration, lock-in), a
+   cheaper path, a conflict with what the code or a recorded decision already
+   does. Not style, not "could be an issue" without a mechanism.
+3. Check each: `tokensave_context`/`rag_search` for the code, the installed
+   version's docs, `tokensave_session_recall`, a quick run when one settles
+   it. Refuted → dropped silently; unverifiable → kept, marked.
+4. Brainstorm asked → 3+ approaches that differ in mechanism, each with the
+   one cost that decides between them. No padding options.
+5. Recommend one, and name the condition that would flip it.
+
+```markdown
+Тезис: <что проверяем>
+
+Возражения:
+- <возражение> — <механизм/цена> — проверено: <файл, дока, прогон> | не проверено
+Варианты: <подход — решающая цена | нет>
+
+Рекомендация: <один выбор>. Передумаю, если: <условие>.
+```
+
+A choice made here that the user accepts → `tokensave_record_decision`.
 
 ## Reason before asking
 

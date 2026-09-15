@@ -54,7 +54,7 @@ same area wins over the global one.
 
 | You are about to                                                                  | Load                |
 | --------------------------------------------------------------------------------- | ------------------- |
-| Start a large or loosely worded task: multi-module, new subsystem, no place or acceptance criterion named | `task-brief` |
+| Start a large or loosely worded task: multi-module, new subsystem, no place or acceptance criterion named; or argue one decision: "поспорь", "мозговой штурм" | `task-brief` |
 | Touch server code: module, controller, service, DTO, entity, guard, migration      | `nestjs-backend`    |
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
 | Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
