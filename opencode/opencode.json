@@ -38,9 +38,27 @@
       "optimize": "deny",
       "usage": "deny",
       "hooks-guards": "deny"
+    },
+    "task": {
+      "*": "deny",
+      "commit": "allow"
+    },
+    "bash": {
+      "*": "allow",
+      "git commit*": "ask",
+      "git push*": "ask"
+    }
+  },
+  "agent": {
+    "general": {
+      "disable": true
+    },
+    "explore": {
+      "disable": true
     }
   },
   "instructions": [
+    "/home/enkeym/.config/opencode/rules/core.md",
     "/home/enkeym/.config/opencode/tokensave.md"
   ],
   "plugin": [

@@ -16,10 +16,12 @@
 
 | Каталог | Куда раскатывается | Что это |
 | --- | --- | --- |
-| `claude/` | `~/.claude/{CLAUDE.md,skills,commands,rules/tokensave.md,settings*.json}` | глобальные правила, скиллы, слэш-команды, настройки и хуки Claude Code (ролевых агентов нет — только скиллы) |
+| `rules/` | `~/.claude/rules/core.md`, `~/.config/opencode/rules/core.md` | `core.md` — общие правила обоих агентов: гейты, выбор инструментов, таблица скиллов |
+| `skills/` | `~/.claude/skills`, `~/.config/opencode/skills` | скиллы — одна папка на оба агента |
+| `claude/` | `~/.claude/{CLAUDE.md,commands,rules/tokensave.md,settings*.json}` | только Claude Code: `CLAUDE.md`, слэш-команды, настройки и хуки; инструмент `Agent` запрещён |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, роутеры, фоновая синхронизация индексов, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
-| `opencode/` | `~/.config/opencode/{AGENTS.md,agent,plugin,themes,opencode.json,tui.json,tokensave.md}` | конфиг OpenCode: правила-двойник `CLAUDE.md`, агенты `ask` и `@commit`, плагин tokensave-guard, тема |
+| `opencode/` | `~/.config/opencode/{AGENTS.md,agent,plugin,themes,opencode.json,tui.json,tokensave.md}` | только OpenCode: `AGENTS.md`, агенты `ask` и `@commit`, плагин tokensave-guard, тема; встроенные `general`/`explore` отключены |
 | `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
 | `mcp/` | `~/.claude.json` и `opencode/opencode.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов обоих агентов |
 | `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` из `~/.git-credentials`, без копии секрета) |
@@ -45,12 +47,17 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 
 | Что | Claude Code | OpenCode |
 | --- | --- | --- |
-| Скиллы | `~/.claude/skills` | те же — OpenCode сам сканирует `~/.claude/skills`; `commit`, `doctor`, `optimize`, `usage`, `hooks-guards` закрыты в `opencode.json` (`permission.skill`) как Claude-only |
-| Правила | `claude/CLAUDE.md` | `opencode/AGENTS.md` — двойник с именами инструментов OpenCode, та же таблица скиллов; правило меняется в обоих |
+| Скиллы | `skills/` через `~/.claude/skills` | `skills/` через `~/.config/opencode/skills` (OpenCode видит и `~/.claude/skills`, дубли склеиваются по имени); `commit`, `doctor`, `optimize`, `usage`, `hooks-guards` закрыты в `permission.skill` |
+| Правила | `rules/core.md` (автозагрузка `~/.claude/rules/`) + `claude/CLAUDE.md` | `rules/core.md` (`instructions`) + `opencode/AGENTS.md` |
+| Субагенты | `permissions.deny: Agent` | `general`/`explore` отключены, `permission.task` — только `commit` |
 | MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
 | Гарды tokensave | хуки `ai-hooks/claude/*` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
 | Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask` (Tab): правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
 | Коммит | `/commit` | субагент `@commit` на `zai-coding-plan/glm-5.3`: коммит в стиле истории, своё сообщение аргументом; push и MR — только по «сделай МР» |
+
+Оба механизма загрузки правил вставляют текст целиком в контекст при старте
+сессии — это не ссылка, которую модели нужно открыть. Правило для обоих агентов
+пишется в `core.md`, в `CLAUDE.md`/`AGENTS.md` — только то, чего у другого нет.
 
 После правки агента, скилла или `opencode.json` OpenCode нужно перезапустить —
 конфиг читается один раз при старте.

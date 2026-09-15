@@ -287,7 +287,7 @@ CLAUDE.md велит грузить скилл до первого действ�
 
 | Действие | Требует |
 | --- | --- |
-| правка `claude/skills/*/SKILL.md`, `skills/*/reference/*.md`, `claude/commands/*.md`, любого `CLAUDE.md` (под `.claude/` или `harness/claude/`) | `skill-authoring` |
+| правка `skills/*/SKILL.md`, `skills/*/reference/*.md`, `commands/*.md`, `agent/*.md`, `rules/*.md` (под `.claude/`, `.opencode/`, `opencode/` или `harness/`), любого `CLAUDE.md` или `AGENTS.md` | `skill-authoring` |
 | `git … commit` в любом сегменте команды (пайп, `&&`, `-C`) | `review-standards`, `review-security`, `git-flow` |
 
 `git-flow` в списке не ради стиля: без него в сообщение попадает

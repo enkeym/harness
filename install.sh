@@ -28,7 +28,8 @@ bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; }
 # target|source — цель в системе и путь относительно корня репозитория.
 LINKS=(
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md"
-  "$HOME/.claude/skills|claude/skills"
+  "$HOME/.claude/skills|skills"
+  "$HOME/.claude/rules/core.md|rules/core.md"
   "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.claude/settings.local.json|claude/settings.local.json"
@@ -40,6 +41,8 @@ LINKS=(
   "$HOME/.local/bin/ragsave|bin/ragsave"
   "$HOME/.config/opencode/AGENTS.md|opencode/AGENTS.md"
   "$HOME/.config/opencode/agent|opencode/agent"
+  "$HOME/.config/opencode/skills|skills"
+  "$HOME/.config/opencode/rules/core.md|rules/core.md"
   "$HOME/.config/opencode/plugin|opencode/plugin"
   "$HOME/.config/opencode/themes|opencode/themes"
   "$HOME/.config/opencode/opencode.json|opencode/opencode.json"

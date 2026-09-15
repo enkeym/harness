@@ -52,7 +52,7 @@ const loadViaTool = (sid, skill) =>
 const loadViaPrompt = (sid, prompt) =>
   run(TRACK, { session_id: sid, prompt, cwd: tmp });
 
-const SKILL_MD = '/home/enkeym/harness/claude/skills/doctor/SKILL.md';
+const SKILL_MD = '/home/enkeym/harness/skills/doctor/SKILL.md';
 const edit = (p) => ({ file_path: p, old_string: 'a', new_string: 'b' });
 const bash = (command) => ({ command });
 
@@ -62,6 +62,11 @@ const bash = (command) => ({ command });
   check('файл: reference скилла', isInstructionFile('/home/x/.claude/skills/git-flow/reference/mr.md'), true);
   check('файл: команда', isInstructionFile('/home/x/harness/claude/commands/ask.md'), true);
   check('файл: CLAUDE.md проекта', isInstructionFile('/home/x/main/web_groza/CLAUDE.md'), true);
+  check('файл: общие правила', isInstructionFile('/home/x/harness/rules/core.md'), true);
+  check('файл: AGENTS.md', isInstructionFile('/home/x/harness/opencode/AGENTS.md'), true);
+  check('файл: агент OpenCode', isInstructionFile('/home/x/harness/opencode/agent/commit.md'), true);
+  check('файл: скилл через ~/.config/opencode', isInstructionFile('/home/x/.config/opencode/skills/git-flow/SKILL.md'), true);
+  check('файл: docs/rules проекта', isInstructionFile('/home/x/app/docs/rules/style.md'), false);
   check('файл: обычный md', isInstructionFile('/home/x/main/web_groza/README.md'), false);
   check('файл: commands вне .claude', isInstructionFile('/home/x/app/src/commands/deploy.md'), false);
   check('файл: память не файл инструкций', isInstructionFile('/home/x/.claude/projects/-home-x/memory/a.md'), false);

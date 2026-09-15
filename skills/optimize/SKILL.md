@@ -20,7 +20,8 @@ node ~/.ai-hooks/bin/usage-report.mjs --days 30 --sessions
 ```
 
 Then as needed: `~/.ai-hooks/logs/usage.jsonl` (raw per-session records),
-`~/.claude/CLAUDE.md`, `~/.claude/skills/*/SKILL.md`, `~/.claude/settings.json`.
+`~/.claude/rules/core.md`, `~/.claude/CLAUDE.md`, `~/.claude/skills/*/SKILL.md`,
+`~/.claude/settings.json`.
 
 ## 2. What to look for
 

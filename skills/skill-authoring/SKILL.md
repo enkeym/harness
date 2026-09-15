@@ -1,19 +1,22 @@
 ---
 name: skill-authoring
-description: Format and style rules for this harness's own instruction files — SKILL.md frontmatter and body, claude/commands/*.md command files, and CLAUDE.md's own wording and its Skills section. Load before creating, editing or reviewing any skill, command file or CLAUDE.md, when the user says "создай скилл", "проверь скиллы", "проверь CLAUDE.md", "проверь правила", or when a skill's description fails to trigger it.
+description: "Format and style rules for this harness's own instruction files — SKILL.md frontmatter and body, claude/commands/*.md command files, OpenCode agent files, the shared rules/core.md with its Skills table, CLAUDE.md and AGENTS.md. Load before creating, editing or reviewing any skill, command, agent or rules file, when the user says \"создай скилл\", \"создай агента\", \"проверь скиллы\", \"проверь CLAUDE.md\", \"проверь правила\", or when a skill's description fails to trigger it."
 ---
 
 # Skill authoring
 
 A skill is a reference card, not an article: the reader is Claude, who already
 knows the domain. Every line is a rule it would otherwise get wrong or a fact it
-cannot derive; anything else is deleted. CLAUDE.md decides when a skill is
+cannot derive; anything else is deleted. `rules/core.md` decides when a skill is
 loaded — this skill decides how one is written.
 
 ## Placement
 
-- Global: `~/harness/claude/skills/<name>/SKILL.md` — `~/.claude/skills` is a
-  symlink, write the harness path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
+- Global: `~/harness/skills/<name>/SKILL.md` — one directory for both agents;
+  `~/.claude/skills` and `~/.config/opencode/skills` are symlinks, write the
+  harness path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
+- Description in double quotes whenever it contains `: ` — OpenCode parses
+  frontmatter as strict YAML and cuts an unquoted value there.
 - One area per skill. `Grep` the existing descriptions first: an overlap is
   extended, not duplicated.
 - Extra files once the body would pass ~150 lines, or once a skill legitimately
@@ -65,13 +68,15 @@ loaded — this skill decides how one is written.
   "NEVER") — the directive plus its reason does the work.
 - Length: 25–130 lines; hard ceiling 500. Longer → split into `reference/`.
 
-## Two other targets
+## Other targets
 
 - A command file (`claude/commands/*.md`) — no `name`, no
   `disable-model-invocation`, always user-invoked:
   [reference/commands.md](reference/commands.md).
-- CLAUDE.md — no frontmatter, always loaded, gate or routing rule only:
-  [reference/claude-md.md](reference/claude-md.md).
+- An OpenCode agent (`opencode/agent/*.md`) — same body rules as a skill,
+  OpenCode frontmatter: [reference/agents.md](reference/agents.md).
+- Always-loaded rules — `rules/core.md` (both agents), `claude/CLAUDE.md`,
+  `opencode/AGENTS.md`: [reference/claude-md.md](reference/claude-md.md).
 
 ## Procedure — new skill
 
@@ -81,7 +86,9 @@ loaded — this skill decides how one is written.
    sentence be picked out of thirty others?
 4. Body from the template below; run the checklist.
 5. Auto-loaded skill → add its row to the **Skills** table in
-   `~/harness/claude/CLAUDE.md`. Command → add it to the user-invoked line there.
+   `~/harness/rules/core.md`; a skill only one agent can run → its row in
+   `CLAUDE.md` or `AGENTS.md` and a deny in the other. Command → the
+   user-invoked line in `CLAUDE.md`.
 6. Commit in `~/harness`: `feat(skills): <what the skill adds>`.
 
 ## Checklist
@@ -92,13 +99,13 @@ Run on every new or edited SKILL.md; on the whole collection when asked to audit
 - [ ] description: third person, what + when, trigger terms, ≤1024 chars
 - [ ] command skill: `disable-model-invocation`, `allowed-tools`, `argument-hint`
 - [ ] body English; Russian only in output templates and quoted user phrases
-- [ ] opening line states the governing rule; boundary with CLAUDE.md or a
-      neighbour named
+- [ ] opening line states the governing rule; boundary with the rules files
+      or a neighbour named
 - [ ] every bullet is a directive; no narration, no "you are", no preamble
-- [ ] nothing Claude already knows, nothing CLAUDE.md or another skill states
+- [ ] nothing Claude already knows, nothing the rules files or another skill state
 - [ ] paths and commands current; one term per concept; no caps-shouting
 - [ ] references one level deep; body ≤130 lines
-- [ ] CLAUDE.md skills table or user-invoked line updated
+- [ ] `rules/core.md` skills table or the user-invoked line updated
 
 Report as `<skill>: <line> — <rule broken> — <fix>`, one line each; fix in
 place. Clean skill → `<skill>: ok`.

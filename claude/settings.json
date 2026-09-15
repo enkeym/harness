@@ -13,6 +13,9 @@
       "Edit(~/.ai-hooks/**)",
       "Edit(~/harness/**)"
     ],
+    "deny": [
+      "Agent"
+    ],
     "defaultMode": "default"
   },
   "hooks": {
