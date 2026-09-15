@@ -57,6 +57,7 @@ same area wins over the global one.
 | Start a large or loosely worded task: multi-module, new subsystem, no place or acceptance criterion named | `task-brief` |
 | Touch server code: module, controller, service, DTO, entity, guard, migration      | `nestjs-backend`    |
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
+| Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
 | Write, fix or review tests in any stack                                            | `testing-ts`        |
 | Cover a branch or diff with tests, or open a merge request                         | `review-tests`      |

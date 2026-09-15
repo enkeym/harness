@@ -9,6 +9,7 @@ The project outranks this list: copy neighbouring components first
 (`tokensave_context` with `path_include` on the client). Read
 [../shared/code-rules.md](../shared/code-rules.md) (types, reuse, tokens,
 KISS/SOLID/DRY) before the first edit; this file adds only React structure.
+`next` in `package.json` → load `nextjs-app` too.
 
 ## Components
 - Function components, named exports, one per file, file named after it.
