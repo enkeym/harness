@@ -6,7 +6,7 @@ description: Turns a large, loosely worded task into a technical brief before an
 # Task brief
 
 No implementation until the brief is approved; a change describable in one
-sentence skips this skill entirely. CLAUDE.md gates still hold; once work
+sentence skips this skill entirely. `rules/core.md` gates still hold; once work
 starts, the stack skill carries the rules.
 
 ## Trigger
@@ -29,7 +29,7 @@ starts, the stack skill carries the rules.
    `tokensave_session_recall` for earlier decisions. A gap the repository
    answers is not a question.
 3. List every gap and close each one of three ways: answered by code,
-   CLAUDE.md or memory; defaulted to the neighbouring module's pattern (goes
+   the rules files or memory; defaulted to the neighbouring module's pattern (goes
    to `Допущения`); or a real fork (goes to the questions).
 4. Chain the consequences: for each step ask what breaks if it is wrong —
    data, callers, auth, migration order, rollback. What breaks goes into
@@ -44,8 +44,8 @@ starts, the stack skill carries the rules.
 
 - A real fork = two viable options whose consequences the code cannot settle.
   Not naming, not style, not what the neighbour already decides, not anything
-  CLAUDE.md answers.
-- One `AskUserQuestion`, at most three questions, options with the recommended
+  the rules files answer.
+- One question tool call (`AskUserQuestion` / `question`), at most three questions, options with the recommended
   one first and marked. A second round only if an answer opened a new fork.
 - Zero forks → zero questions; the assumptions carry the decisions.
 
@@ -89,7 +89,7 @@ Then stop.
 
 - "да", "ок", "поехали" → step 1. A correction → rewrite the touched sections
   only, reprint just them, wait again.
-- The brief is the spec: one step, one commit (CLAUDE.md commit trigger). A
+- The brief is the spec: one step, one commit (`rules/core.md` commit trigger). A
   step that turns out different from the brief → one line saying so before
   continuing, not after.
 - The brief lives in chat only; `handoff` carries it across sessions. An

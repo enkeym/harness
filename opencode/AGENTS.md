@@ -30,4 +30,5 @@ alone; a rule both agents need goes into `core.md`, never here.
 
 Denied here through `permission.skill`: `commit`, `doctor`, `optimize`,
 `usage`, `hooks-guards`. Slash commands `/ask`, `/ask-off`, `/commit` do not
-exist — use the `ask` agent and `@commit`.
+exist — use the `ask` agent and `@commit`. `/handoff` is a thin command in
+`opencode/command/` that loads the shared skill.

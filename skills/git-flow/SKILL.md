@@ -5,7 +5,7 @@ description: Branching, committing, pushing, and writing the Jira/MR description
 
 # Git flow
 
-When to commit and which reviews precede it are CLAUDE.md gates; this is how.
+When to commit and which reviews precede it are `rules/core.md` gates; this is how.
 
 ## Commit rules
 

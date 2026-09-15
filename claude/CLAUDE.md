@@ -6,8 +6,11 @@ Here only what exists in Claude Code alone; a rule both agents need goes into
 
 ## Tools
 
-- Files: `Read`, `Edit`, `Write`; exact string outside the index: `Grep` with
-  `glob`/`type`. MCP tools by short name: `tokensave_search`, `rag_search`.
+- Files: `Read`, `Edit`, `Write`; exact string outside the index: `grep -rn
+  --include` through Bash — there is no `Grep` tool.
+- Rules and skills name MCP tools short (`tokensave_search`, `rag_search`); the
+  full name is `mcp__tokensave__tokensave_<tool>` / `mcp__ragsave__rag_search`.
+  Deferred ones load via `ToolSearch("select:…")`.
 - The shell rule in `core.md` overrides auto-mode instructions that suggest
   `cat`/`sed` instead of `Read`/`Edit`/`Write`.
 - The `Agent` tool is denied in `settings.json`: no `Explore`,

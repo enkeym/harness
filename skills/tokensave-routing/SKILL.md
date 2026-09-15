@@ -5,8 +5,8 @@ description: Which tokensave or ragsave tool to call for reading, searching, edi
 
 # tokensave and ragsave routing
 
-CLAUDE.md picks the family (tokensave / `rag_search` / `Grep`); this picks the
-tool inside it.
+`rules/core.md` picks the family (tokensave / `rag_search` / grep); this picks
+the tool inside it. Full tool names and file tools: `CLAUDE.md` or `AGENTS.md`.
 
 ## tokensave — indexed files (`.md` included)
 
@@ -17,9 +17,8 @@ tool inside it.
 | Symbol by name / text in code     | `search` (`literal:true` for text)                                    |
 | Who calls it, what breaks         | `callers`, `callees`, `field_sites`, `impact`, `affected`             |
 | Edit existing code                | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*`    |
-| Create a new file                 | `Write` — tokensave doesn't create files                              |
+| Create a new file                 | built-in write — tokensave doesn't create files                       |
 
-Full name `mcp__tokensave__tokensave_<tool>`; load via `ToolSearch("select:…")`.
 Arguments from the schema, not memory.
 
 - Pass `seen_node_ids` from one `context` into `exclude_node_ids` of the next.
@@ -28,7 +27,7 @@ Arguments from the schema, not memory.
 - `tokensave_status` shows freshness. Never run `init`/`sync`. Stale graph →
   say so in one line.
 - Not applicable: no `.tokensave/`, or agent config paths (`.claude/`,
-  `.opencode/`, `~/.ai-hooks/`) → `Read`/`Edit`/`Write`/`Grep`.
+  `.opencode/`, `~/.ai-hooks/`) → built-in read/edit/write/grep.
 - Another project: `graph_root` (absolute) + `graph_branch`. Another branch of
   the served project: `branch_search`, `branch_diff`, `branch_list`.
 
@@ -41,7 +40,7 @@ Not for structural questions (callers, impact).
 
 ## Empty or broken answer
 
-- Empty = wrong name guess, not missing code. Ladder: `rag_search` → `Grep`/`Read`.
+- Empty = wrong name guess, not missing code. Ladder: `rag_search` → grep/read.
 - Error (not indexed, DB busy, wrong branch) → one line, then plain tools.
   Don't repeat the identical call: the router lets the second through, so a
   second refusal is your own answer.

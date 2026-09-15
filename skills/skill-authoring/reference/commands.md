@@ -17,3 +17,9 @@ is never model-invoked to begin with), always user-invoked as `/<filename>`.
   no rationale paragraphs.
 - Never claim a skill-only field (`disable-model-invocation`, `user-invocable`)
   for a command file — it doesn't have one.
+
+## OpenCode (`opencode/command/*.md`)
+
+- Skills are not slash commands in OpenCode; a skill the user runs by name
+  needs a thin command here: frontmatter `description` only, body "Load the
+  `<skill>` skill and follow it" plus `$ARGUMENTS`. No logic copied from the skill.

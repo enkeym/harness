@@ -1,20 +1,22 @@
 ---
 name: handoff
-description: Assembles a handoff block in chat when the context window fills up — what belongs in it, what never does. No files are written; the user copies the block into a fresh session. Load when the context meter fires at 75% or when the user runs /handoff.
+description: Assembles a handoff block in chat when the context window fills up — what belongs in it, what never does. No files are written; the user copies the block into a fresh session. Load when the context meter fires at 75%, when the user runs /handoff, or says "передай в новую сессию", "контекст кончается".
 ---
 
 # Handoff
 
-`context-meter.mjs` warns **once** at 75% (threshold `ACT` in
-`~/.ai-hooks/context-core.mjs`). Don't raise context size again yourself.
-Never write a file, never call `/clear` for the user.
+Trigger: in Claude Code `context-meter.mjs` warns **once** at 75% (threshold
+`ACT` in `~/.ai-hooks/context-core.mjs`); OpenCode has no meter — only
+`/handoff` or the user's words. Don't raise context size again yourself.
+Never write a file, never start a new session for the user.
 
 ## Steps
 
 1. Finish the unit of work: commit, tests green. If finishing costs another
    ~20% of the window, hand off now with the unfinished state stated honestly.
 2. Print the block as one fenced ```markdown block. After it, one line: ready
-   to copy into a new session, `/clear` is safe once copied. Stale after the
+   to copy into a new session (`/clear` in Claude Code, `/new` in OpenCode) once
+   copied. Stale after the
    next commit — rerun `/handoff`, don't trust the old one.
 
 ## Block (Russian, only sections that apply)

@@ -41,6 +41,7 @@ LINKS=(
   "$HOME/.local/bin/ragsave|bin/ragsave"
   "$HOME/.config/opencode/AGENTS.md|opencode/AGENTS.md"
   "$HOME/.config/opencode/agent|opencode/agent"
+  "$HOME/.config/opencode/command|opencode/command"
   "$HOME/.config/opencode/skills|skills"
   "$HOME/.config/opencode/rules/core.md|rules/core.md"
   "$HOME/.config/opencode/plugin|opencode/plugin"
