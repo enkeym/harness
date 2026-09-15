@@ -5,8 +5,8 @@
     "tokensave": {
       "type": "local",
       "command": [
-        "/usr/local/bin/tokensave",
-        "serve"
+        "/home/enkeym/.ai-hooks/bin/mcp-serve.sh",
+        "tokensave"
       ]
     },
     "ragsave": {

@@ -1,7 +1,7 @@
 {
   "tokensave": {
-    "command": "/usr/local/bin/tokensave",
-    "args": ["serve"]
+    "command": "~/.ai-hooks/bin/mcp-serve.sh",
+    "args": ["tokensave"]
   },
   "ragsave": {
     "command": "~/.ai-hooks/bin/mcp-serve.sh",
