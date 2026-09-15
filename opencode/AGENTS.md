@@ -19,9 +19,6 @@ alone; a rule both agents need goes into `core.md`, never here.
 
 ## Agents
 
-- A session starts in `ask` (`default_agent`): chat only. `build` (Tab)
-  applies edits.
-- Built-in `general` and `explore` are disabled; `task` may start only `commit`.
 - `@commit` runs only when the user calls it. Never hand it a commit on your
   own.
 - `git commit` and `git push` ask the user through `permission.bash` — don't

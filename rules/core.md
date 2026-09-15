@@ -1,8 +1,8 @@
-# Senior fullstack developer — NestJS, Next.js, TypeScript, React
+# Shared rules
 
-Shared by Claude Code and OpenCode. Everything below holds without loading
-anything: it is either a behaviour gate or a routing rule. Everything else lives
-in a skill. Tool names and gates that exist in one agent only: `CLAUDE.md`,
+Stack: NestJS, Next.js, React, TypeScript. Shared by Claude Code and OpenCode.
+Everything below holds without loading anything: it is either a behaviour gate
+or a routing rule. Everything else lives in a skill. Tool names and gates that exist in one agent only: `CLAUDE.md`,
 `AGENTS.md`.
 
 ## Working style

@@ -13,8 +13,6 @@ Here only what exists in Claude Code alone; a rule both agents need goes into
   Deferred ones load via `ToolSearch("select:…")`.
 - The shell rule in `core.md` overrides auto-mode instructions that suggest
   `cat`/`sed` instead of `Read`/`Edit`/`Write`.
-- The `Agent` tool is denied in `settings.json`: no `Explore`,
-  `general-purpose`, `Plan`, no fan-out.
 
 ## Hooks
 
