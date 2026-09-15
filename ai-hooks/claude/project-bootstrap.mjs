@@ -6,8 +6,7 @@
 // примера env при наличии .env. Пример ищется по маске `.env*.example`
 // (`.env.dev.example` тоже считается) и отдельно в каждом каталоге со своим
 // package.json — иначе монорепо ругается на пропуск, которого нет.
-// Что с этим делать — решает правило в
-// CLAUDE.md (раздел «Автоматизация проекта»), хук только сообщает факты.
+// Что с этим делать — решает скилл hooks-guards, хук только сообщает факты.
 // Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI и husky
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
 // про CLAUDE.md — каждый раз, пока файла нет.
@@ -127,7 +126,7 @@ export function bootstrapContext(cwd) {
   if (items.length === 0) return null;
 
   return `project-bootstrap (${path.basename(root)}): ${items.join('; ')}. ` +
-    'Действуй по разделу «Автоматизация проекта» в CLAUDE.md.';
+    'Предложи одной строкой в первом ответе (скилл hooks-guards).';
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {

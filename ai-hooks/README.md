@@ -392,8 +392,8 @@ diff`, показывающий строку с ключом, или чужой 
 `claude/project-bootstrap.mjs` на `SessionStart` (`startup|clear`) смотрит
 корень репозитория и сообщает в контекст, чего нет: CLAUDE.md проекта,
 `.env.example` при наличии `.env`, husky, CI и dependabot для GitHub-remote,
-`.gitlab-ci.yml` для GitLab. Что делать — правило «Автоматизация проекта» в
-CLAUDE.md: `/init` запускается сам, остальное предлагается одной строкой.
+`.gitlab-ci.yml` для GitLab. Что делать — скилл `hooks-guards`: каждый пропуск
+предлагается одной строкой в первом ответе, сам агент ничего не создаёт.
 Про husky/CI хук напоминает раз в неделю на проект (метки в
 `~/.claude/state/bootstrap/`), про CLAUDE.md — пока файла нет.
 
