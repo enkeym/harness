@@ -49,8 +49,8 @@ or branch still needs: `test-coverage`.
 - Locators by role, text, `getByTestId` — no CSS chains tied to layout.
 - Visual regression: snapshots committed; `--update-snapshots` only for an
   intended visual change, reviewed as part of the diff.
-- Playwright MCP tools (`browser_*`) are for exploring a live page by hand
-  (`test-browser`), not for running the suite.
+- Playwright MCP tools (`browser_*`) are not a test runner — never use them
+  to run or check specs.
 
 ## Running
 - While writing: only the touched file with the package's runner (Jest:

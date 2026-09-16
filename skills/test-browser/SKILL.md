@@ -1,26 +1,48 @@
 ---
 name: test-browser
-description: "Manual exploratory QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — scenarios derived from a diff or branch, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps, and stable scenarios turned into Playwright specs. Load when the task is checking a running UI by hand rather than writing a spec (\"прокликай\", \"проверь в браузере\", \"протестируй UI\"), or when test-coverage offers it for a UI change."
+description: "Manual QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — every change of the current branch mapped to a browser scenario, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps. User-invoked as /test-browser."
+disable-model-invocation: true
+argument-hint: "[URL, page or flow to narrow the pass]"
 ---
 
-# Browser QA
+# /test-browser
 
 Click what a user would click and report only what was seen in the browser.
-Spec conventions are `test-conventions`; which unit tests a diff needs is
-`test-coverage`.
+Runs only on this command — never offered or started by another skill. Project
+memory that forbids browser QA wins: say so in one line and stop. Spec
+conventions are `test-conventions`.
 
 ## Setup
 
-1. App running? Check the dev port from `package.json` scripts or the
-   Playwright config (`webServer.url`). Not running → start it the project's
-   way in the background (`npm run dev`); none found → ask for the URL.
-2. Test data and login: use the seed or test account the project documents
-   (`.env.example`, `e2e/fixtures`, README). Never a real user's credentials,
+1. Resolve the base branch by [../shared/project-facts.md](../shared/project-facts.md).
+2. App running? Dev port from `package.json` scripts or `playwright.config.*`
+   (`webServer.url`). Not running → start it the project's way in the
+   background; none found → ask for the URL.
+3. Login and data: the seed or test account the project documents
+   (`.env.example`, e2e fixtures, README). Never a real user's credentials,
    never production.
-3. Scenarios from the change: `git diff <base>...HEAD --stat`, then the touched
-   pages, routes and components. The user named a page or flow → only that.
 
-## Scenarios per touched screen
+## Branch inventory
+
+`$ARGUMENTS` names a page or flow → only that; skip to *Scenarios*.
+Otherwise every change of the branch gets a scenario:
+
+1. `git log --no-merges --format='%h %s' <base>..HEAD`,
+   `git diff <base>...HEAD --stat`, plus `git status --short` for
+   uncommitted work.
+2. Group commits into entities the user sees (page, panel, dialog, form) the
+   way `git-flow` does; find each entity's route and UI labels from the diff.
+3. Add the cases already written for the branch: e2e specs and `it(...)`
+   titles in the diff, `Проверить:` lines of an MR text in this session.
+4. Print the plan before the first click:
+   ```
+   План: <n сценариев> по <base>..HEAD
+   | Коммит | Сущность → экран | Сценарий |
+   ```
+5. Coverage check: every commit has a row or `без UI: <причина>`. An unmapped
+   commit → add a row. Nothing starts until the table is complete.
+
+## Scenarios per screen
 
 Only the rows the screen has:
 
@@ -28,9 +50,9 @@ Only the rows the screen has:
 - Forms: empty submit, each field invalid, max length, paste with spaces,
   double submit, submit disabled in flight, error beside the field, values kept
   after a server error.
-- States: loading, empty list, request failed (block the request with
-  `browser_run_code_unsafe` + `page.route` only when the user allows it),
-  not found, no permission.
+- States: loading, empty list, request failed (block with
+  `browser_run_code_unsafe` + `page.route` only when the user allows it), not
+  found, no permission.
 - Navigation: back/forward, reload on a deep link, direct URL without login.
 - Keyboard: Tab order, visible focus, Enter submits, Esc closes a modal, focus
   returns after closing.
@@ -40,35 +62,29 @@ Only the rows the screen has:
 
 ## Procedure
 
-1. `browser_navigate` → `browser_snapshot`. Act by the `ref` from the latest
-   snapshot; take a new one after every navigation or DOM change.
-2. After each scenario: `browser_console_messages` (errors and warnings) and
-   `browser_network_requests` (4xx/5xx, duplicate calls, requests fired twice).
-3. Screenshot (`browser_take_screenshot`) only as evidence of a visual bug.
-4. Wait by `browser_wait_for` on text or disappearance, never a fixed delay.
-5. A bug: reproduce it once more from a clean load before reporting.
-6. Stay read-only toward data you did not create; delete what you created when
-   the UI allows it.
+1. `browser_navigate` → `browser_snapshot`; act by the `ref` of the latest
+   snapshot, a new snapshot after every navigation or DOM change.
+2. After each scenario: `browser_console_messages` (errors, warnings) and
+   `browser_network_requests` (4xx/5xx, duplicate calls).
+3. `browser_take_screenshot` only as evidence of a visual bug.
+4. Wait with `browser_wait_for` on text or disappearance, never a fixed delay.
+5. A bug: reproduce once more from a clean load before reporting.
+6. Read-only toward data you did not create; delete what you created.
 7. Finish with `browser_close`.
-
-## Scenario → spec
-
-- A scenario that passed and guards the changed behaviour → propose a
-  Playwright spec; write it only when the user agrees or the task asked for e2e.
-- Selectors from the snapshot's roles and names (`getByRole`, `getByLabel`),
-  not refs — refs die with the page.
 
 ## Never
 
 - Guess a bug from code while the browser shows otherwise — the browser wins.
-- Fix the bug inside this pass unless asked; report it.
-- Submit payments, send real messages or emails, change settings of shared
-  accounts.
+- Fix the bug inside this pass unless asked.
+- Submit payments, send real messages or emails, change shared accounts.
+- Write a spec without the user's yes; selectors then by role and label, not refs.
 
 ## Output
 
 ```
-QA: <URL> — <сценарии: n пройдено, n с багами>
+QA: <URL> — <base>..HEAD — <сценарии: n пройдено, n с багами>
+
+Покрытие ветки: <n коммитов → n сценариев; без UI: <коммиты> | нет>
 
 Баги:
 1. <Экран → элемент> — <что не так>
@@ -77,7 +93,7 @@ QA: <URL> — <сценарии: n пройдено, n с багами>
    Консоль/сеть: <ошибка или запрос со статусом | нет>
 
 Проверено без замечаний: <сценарии одной строкой>
-Не проверено: <что и почему — нет доступа, нет данных, нужен реальный платёж>
+Не проверено: <что и почему>
 Предлагаю в e2e: <сценарии | нет>
 ```
 

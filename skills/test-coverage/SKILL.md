@@ -64,7 +64,6 @@ write. Base branch and test runner: resolve by
    back to step 2 or a reason in the report. Coverage percent is not the goal.
 8. **Run** the touched spec files, then the full suite once. Red on existing
    tests → report, never bend the expectation (`test-conventions`).
-9. UI in the diff → offer `test-browser` in one line.
 
 ## Not tested
 

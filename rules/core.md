@@ -77,7 +77,6 @@ user asks, never the only condition.
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
 | Write, fix or review tests in any stack, one test on a named symbol included       | `test-conventions`  |
 | Cover a whole branch or diff with tests, or test a change with no object named     | `test-coverage`     |
-| Check a running app by hand in the browser, not by writing a spec                  | `test-browser`      |
 | Set up or audit SEO — only when the user asks for it                               | `seo`               |
 | Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |

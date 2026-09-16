@@ -23,9 +23,10 @@ Here only what exists in Claude Code alone; a rule both agents need goes into
 
 ## User-invoked
 
-`/commit`, `/doctor`, `/optimize`, `/usage` are skills with
+`/commit`, `/doctor`, `/optimize`, `/usage`, `/test-browser` are skills with
 `disable-model-invocation: true`; `/ask`, `/ask-off` are plain commands in
 `claude/commands/`. Both kinds are user-invoked only, never self-triggered —
 offer one in a line when it fits: `/doctor` when the harness itself misbehaves
 (loops, repeated refusals, dead index, expired provider auth), `/optimize` and
-`/usage` for spend and settings.
+`/usage` for spend and settings. `/test-browser` is never offered — the user
+asks for it.

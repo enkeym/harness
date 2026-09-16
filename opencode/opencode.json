@@ -38,7 +38,8 @@
       "doctor": "deny",
       "optimize": "deny",
       "usage": "deny",
-      "hooks-guards": "deny"
+      "hooks-guards": "deny",
+      "test-browser": "ask"
     },
     "task": {
       "*": "deny",
