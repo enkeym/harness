@@ -17,3 +17,11 @@ node_modules/
 
 # Модели fastembed (3.4 ГБ) — качаются сами при первом запуске ragsave
 models/
+
+# Скиллы claude.ai, которые клиент синхронизирует в ~/.claude/skills (симлинк сюда)
+skills/synced/
+
+# Правила, которые пишет `tokensave install`: их содержание уже в rules/core.md
+# и скилле tokensave-routing, в постоянный контекст они не возвращаются
+claude/rules/tokensave.md
+opencode/tokensave.md

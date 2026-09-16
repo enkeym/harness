@@ -60,8 +60,7 @@
     }
   },
   "instructions": [
-    "/home/enkeym/.config/opencode/rules/core.md",
-    "/home/enkeym/.config/opencode/tokensave.md"
+    "/home/enkeym/.config/opencode/rules/core.md"
   ],
   "plugin": [
     "@ex-machina/opencode-anthropic-auth@1.8.4"
