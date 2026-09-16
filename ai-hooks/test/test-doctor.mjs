@@ -126,7 +126,7 @@ const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   const said = reminder('sid-main');
   check('итог приходит в сессию одной строкой doctor(...)', said.startsWith('doctor (') && said.includes('Причина: тестовая причина') && said.includes('/doctor apply'), true);
   check('повторно той же сессии — молчит', reminder('sid-main'), '');
-  check('другой сессии — говорит', reminder('sid-other').includes('Причина:'), true);
+  check('breaker-open другой сессии — молчит (отпечаток сессионный)', reminder('sid-other'), '');
   check('вне проекта — молчит', reminder('sid-main', os.tmpdir()), '');
 
   check('другой симптом → новый запуск', call('server-mismatch', 'sid-2'), true);
@@ -183,7 +183,9 @@ const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   check('после сброса дебаунса → запуск', call(), true);
   const st = await waitDone(project);
   check('claude упал → failed с кодом', [st.status, st.exit, st.headline], ['failed', 3, null]);
-  check('напоминание о сбое ведёт в .log', reminder('sid-fail').includes('не завершился (exit 3)') && reminder('sid-fail2').includes('.log'), true);
+  // sid-main уже слышал прошлый отчёт — новый запуск сбрасывает «сказали».
+  const said = reminder('sid-main');
+  check('напоминание о сбое ведёт в .log — и сессии, слышавшей прошлый отчёт', said.includes('не завершился (exit 3)') && said.includes('.log'), true);
   delete process.env.FAKE_CLAUDE_EXIT;
 }
 
@@ -197,6 +199,24 @@ const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   const old = { ...rec, ts: new Date(Date.now() - 3600 * 1000).toISOString() };
   fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, JSON.stringify(old) + '\n');
   check('mismatch: событие старше окна не упоминается', reminder('sid-mm-old').includes('tokensave-гард молчит'), false);
+}
+
+// --- отчёт по server-mismatch объявляется, только пока рассинхрон жив ---
+{
+  const file = stateFile(project);
+  const report = path.join(tmp, 'mm-report.md');
+  fs.writeFileSync(report, 'Причина: сервер на другой ветке\n');
+  fs.writeFileSync(file, JSON.stringify({
+    ...readJSON(file, {}), status: 'done', symptom: 'server-mismatch', sid: 'sid-mm',
+    finished: Date.now(), report, headline: 'Причина: сервер на другой ветке',
+    applied: {}, announced: [],
+  }));
+  fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, '');
+  check('mismatch-отчёт: рассинхрона в журнале нет → молчит', reminder('sid-fixed'), '');
+  const rec = { ts: new Date().toISOString(), sid: 'sid-live', decision: 'server-mismatch', root: project, branch: 'feature/x' };
+  fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, JSON.stringify(rec) + '\n');
+  const said = reminder('sid-live');
+  check('mismatch-отчёт: свежий рассинхрон → объявляет без дубля строки гарда', said.startsWith('doctor (') && !said.includes('tokensave-гард молчит'), true);
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');

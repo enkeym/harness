@@ -42,10 +42,26 @@ readInput((input) => {
   const lines = [];
   let doctorSymptom = null;
 
+  let mismatches = null;
+  const recentMismatches = () => (mismatches ??= readRecent(RECENT_LINES).filter((r) =>
+    r.decision === 'server-mismatch' && r.root === root &&
+    now - Date.parse(r.ts) < MISMATCH_WINDOW_MS));
+
+  // Закрывает отчёт только /doctor apply, а чинят проблему чаще иначе — /mcp,
+  // новой сессией, — и отчёт сутки всплывал в каждой сессии проекта. Поэтому
+  // объявляем его лишь там, где симптом ещё касается сессии:
+  //   breaker-open — отпечаток сессионный, чужой сессии он ни о чём;
+  //   server-mismatch — пока журнал видит свежий рассинхрон по проекту.
+  const relevant = () => {
+    if (st.symptom === 'breaker-open') return st.sid === sid;
+    if (st.symptom === 'server-mismatch') return recentMismatches().length > 0;
+    return true;
+  };
+
   const fresh = typeof st.finished === 'number' && now - st.finished < REPORT_FRESH_MS;
   // Применённый отчёт (/doctor apply → bin/doctor-applied.mjs) — уже история.
   const applied = Boolean(st.applied?.[st.symptom]);
-  if ((st.status === 'done' || st.status === 'failed') && fresh && !applied && !said(st, 'announced', sid)) {
+  if ((st.status === 'done' || st.status === 'failed') && fresh && !applied && !said(st, 'announced', sid) && relevant()) {
     doctorSymptom = st.symptom;
     if (st.status === 'done') {
       lines.push(
@@ -59,7 +75,7 @@ readInput((input) => {
       );
     }
     mark(st, 'announced', sid);
-  } else if ((st.status === 'queued' || st.status === 'running') && !said(st, 'runningSaid', sid)) {
+  } else if ((st.status === 'queued' || st.status === 'running') && !said(st, 'runningSaid', sid) && relevant()) {
     doctorSymptom = st.symptom;
     lines.push(
       `doctor: по симптому ${st.symptom} с ${hhmm(st.started)} идёт фоновый разбор; ` +
@@ -69,9 +85,7 @@ readInput((input) => {
   }
 
   if (doctorSymptom !== 'server-mismatch' && !said(st, 'mismatchSaid', sid)) {
-    const recent = readRecent(RECENT_LINES).filter((r) =>
-      r.decision === 'server-mismatch' && r.root === root &&
-      now - Date.parse(r.ts) < MISMATCH_WINDOW_MS);
+    const recent = recentMismatches();
     if (recent.length) {
       lines.push(
         `tokensave-гард молчит: живой MCP-сервер не обслуживает ${root}@${currentBranch(root) || '?'} ` +

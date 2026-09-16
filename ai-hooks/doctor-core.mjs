@@ -200,6 +200,10 @@ export function maybeSpawnDoctor({ root, symptom, detail = {}, sid = null }) {
       last: { ...(st.last || {}), [symptom]: now },
       fp: { ...(st.fp || {}), [symptom]: fp },
       applied: { ...(st.applied || {}), [symptom]: false },
+      // Новый отчёт — новая новость: сессия, которой сказали о прошлом, иначе
+      // не узнала бы о следующем.
+      announced: [],
+      runningSaid: [],
     });
 
     const child = spawn(process.execPath, [RUNNER, file, report, promptFile, root], {
