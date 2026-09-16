@@ -33,7 +33,7 @@ process.env.CLAUDECODE = '1'; // как внутри настоящей сесс
 fs.chmodSync(FAKE, 0o755);
 
 const { maybeSpawnDoctor, readState, stateFile, CHILD_MARK, buildPrompt } = await import('../doctor-core.mjs');
-const { readJSON } = await import('../state-core.mjs');
+const { readJSON, writeJSON } = await import('../state-core.mjs');
 
 let failed = 0;
 function check(name, got, want) {
@@ -65,6 +65,17 @@ function reminder(sid, cwd = project) {
 
 const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   maybeSpawnDoctor({ root: project, symptom, detail: { tool: 'Read', target: 'a.ts' }, sid });
+
+// --- запись состояния атомарна ---
+{
+  const dir = path.join(tmp, 'atomic');
+  const file = path.join(dir, 's.json');
+  check('writeJSON: записал', [writeJSON(file, { a: 1 }), readJSON(file, null)], [true, { a: 1 }]);
+  writeJSON(file, { a: 2 });
+  check('writeJSON: перезапись без временных файлов рядом', [readJSON(file, null), fs.readdirSync(dir)], [{ a: 2 }, ['s.json']]);
+  const blocked = path.join(file, 'nested.json'); // родитель — файл, запись невозможна
+  check('writeJSON: сбой → false, мусора нет, прежнее цело', [writeJSON(blocked, {}), fs.readdirSync(dir), readJSON(file, null)], [false, ['s.json'], { a: 2 }]);
+}
 
 // --- выключатели ---
 {
