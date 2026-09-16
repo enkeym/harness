@@ -1,19 +1,21 @@
 ---
-name: review-tests
-description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load before opening a merge request, when asked \"покрой тестами\", \"напиши тесты на ветку\", \"допиши тесты\", \"что не покрыто\", and for the one-line gap check before every commit."
+name: test-coverage
+description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load before opening a merge request, when asked \"протестируй\", \"покрой тестами\", \"напиши тесты на ветку\", \"допиши тесты\", \"что не покрыто\", and for the one-line gap check before every commit."
 ---
 
-# Test review
+# Test coverage
 
 Every changed behaviour ends with a test that fails without it, or with a
 stated reason it has none. How a test is written (structure, mocks, Playwright
-config, runs) is `testing-ts` — load it first; this skill decides what to write.
+config, runs) is `test-conventions` — load it first; this skill decides what to
+write.
 
 ## Scope
 
 - Before a commit: the gap check only — step 1 and 3 on `git diff HEAD`, then
   one line: `Без теста: <поведение> — <path>` or nothing. No tests written.
-- Before a merge request or on request: the full procedure on
+- Before a merge request, or on an explicit request ("протестируй", "покрой
+  тестами"): the full procedure on
   `git diff <base>...HEAD`, base = `git merge-base dev HEAD` or the fork branch.
 - A path or symbol named by the user narrows the scope to it.
 
@@ -42,7 +44,7 @@ config, runs) is `testing-ts` — load it first; this skill decides what to writ
 4. **Pick the level** — the lowest that proves the row: pure logic → unit;
    DI, guards, pipes, DB query → Nest e2e with `supertest`; component state →
    Testing Library; a flow across pages → Playwright spec. One row, one level.
-5. **Write** the missing rows by `testing-ts`, beside the neighbours' specs.
+5. **Write** the missing rows by `test-conventions`, beside the neighbours' specs.
 6. **Red-check** each new test: break the line it guards (flip the condition,
    return early, drop the guard), run that file, confirm red, restore, confirm
    green. A test that stays green is rewritten or deleted.
@@ -51,8 +53,8 @@ config, runs) is `testing-ts` — load it first; this skill decides what to writ
    `npx vitest run --coverage --changed <base>`. An uncovered changed branch →
    back to step 2 or a reason in the report. Coverage percent is not the goal.
 8. **Run** the touched spec files, then the full suite once. Red on existing
-   tests → report, never bend the expectation (`testing-ts`).
-9. UI in the diff → offer `browser-qa` in one line.
+   tests → report, never bend the expectation (`test-conventions`).
+9. UI in the diff → offer `test-browser` in one line.
 
 ## Not tested
 

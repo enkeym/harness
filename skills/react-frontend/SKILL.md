@@ -34,7 +34,7 @@ KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 - User-facing strings where the project keeps them (i18n or constants).
 
 ## Tests
-- `testing-ts`, including its React lines.
+- `test-conventions`, including its React lines.
 
 ## Types
 - API responses typed by interfaces shared with the server when the project

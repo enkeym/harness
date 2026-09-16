@@ -1,13 +1,13 @@
 ---
-name: browser-qa
-description: "Manual exploratory QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — scenarios derived from a diff or branch, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps, and stable scenarios turned into Playwright specs. Load when asked \"прокликай\", \"проверь в браузере\", \"пройдись руками\", \"протестируй UI\", or when review-tests offers it for a UI change."
+name: test-browser
+description: "Manual exploratory QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — scenarios derived from a diff or branch, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps, and stable scenarios turned into Playwright specs. Load when asked \"прокликай\", \"проверь в браузере\", \"пройдись руками\", \"протестируй UI\", or when test-coverage offers it for a UI change."
 ---
 
 # Browser QA
 
 Click what a user would click and report only what was seen in the browser.
-Spec conventions are `testing-ts`; which unit tests a diff needs is
-`review-tests`.
+Spec conventions are `test-conventions`; which unit tests a diff needs is
+`test-coverage`.
 
 ## Setup
 

@@ -33,7 +33,8 @@ apply it. A refusal without code is a failure.
 
 - Read through tokensave and `rag_search`; built-in `read`/`grep` only for files
   outside the index.
-- Load the area skill first — `nestjs-backend`, `react-frontend`, `testing-ts` —
+- Load the area skill first — `nestjs-backend`, `react-frontend`,
+  `test-conventions` —
   and reuse the project's types, constants, helpers and style tokens.
 - Answer at once: no preamble, no restating the task.
 

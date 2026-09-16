@@ -42,4 +42,4 @@ KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
 - Migrations are separate reversible files; no `synchronize` on production.
 
 ## Tests
-- `testing-ts`, including its NestJS lines.
+- `test-conventions`, including its NestJS lines.

@@ -49,7 +49,8 @@ loaded — this skill decides how one is written.
   (a template) or as a quoted user phrase that triggers the skill.
 - `# <Subject>`, or `# /name` for a command. Then one or two lines: the rule
   that governs everything below, and the boundary with CLAUDE.md or a
-  neighbouring skill — a pointer ("Rest is in `testing-ts`"), never a restatement.
+  neighbouring skill — a pointer ("Rest is in `test-conventions`"), never a
+  restatement.
 - `##` per task or category, bullets inside. Fixed order → numbered list.
   Any order → bullets. Lookup → table.
 - Directives in the imperative: "Mock the boundary, not the hook". Not "you

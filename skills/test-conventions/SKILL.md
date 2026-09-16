@@ -1,5 +1,5 @@
 ---
-name: testing-ts
+name: test-conventions
 description: Test conventions for the user's TypeScript projects (Jest/Vitest, NestJS TestingModule, supertest, Testing Library, Playwright e2e and visual regression) — what to assert, file structure and naming, mocking boundaries, clean output, focused runs. Load before writing, fixing or reviewing tests in any stack, unit or e2e.
 ---
 
@@ -7,7 +7,7 @@ description: Test conventions for the user's TypeScript projects (Jest/Vitest, N
 
 Cross-stack rules with the stack specifics inline; `nestjs-backend` and
 `react-frontend` point here and add nothing of their own. Which tests a diff
-or branch still needs: `review-tests`.
+or branch still needs: `test-coverage`.
 
 ## What to test
 - Behaviour through the public interface: input → result, dependency called
@@ -48,7 +48,7 @@ or branch still needs: `review-tests`.
 - Visual regression: snapshots committed; `--update-snapshots` only for an
   intended visual change, reviewed as part of the diff.
 - Playwright MCP tools (`browser_*`) are for exploring a live page by hand
-  (`browser-qa`), not for running the suite.
+  (`test-browser`), not for running the suite.
 
 ## Running
 - While writing: only the touched file (`npx jest path -t 'name'`, `vitest run
