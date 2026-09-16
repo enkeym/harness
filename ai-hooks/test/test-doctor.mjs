@@ -32,7 +32,7 @@ delete process.env.AI_HOOKS_DOCTOR;
 process.env.CLAUDECODE = '1'; // как внутри настоящей сессии
 fs.chmodSync(FAKE, 0o755);
 
-const { maybeSpawnDoctor, readState, stateFile, CHILD_MARK, buildPrompt } = await import('../doctor-core.mjs');
+const { maybeSpawnDoctor, readState, stateFile, CHILD_MARK, buildPrompt, recordSaid } = await import('../doctor-core.mjs');
 const { readJSON, writeJSON } = await import('../state-core.mjs');
 
 let failed = 0;
@@ -220,14 +220,46 @@ const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   fs.writeFileSync(file, JSON.stringify({
     ...readJSON(file, {}), status: 'done', symptom: 'server-mismatch', sid: 'sid-mm',
     finished: Date.now(), report, headline: 'Причина: сервер на другой ветке',
+    fp: { 'server-mismatch': `${project}|feature/x|.tokensave/x.db` },
     applied: {}, announced: [],
   }));
   fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, '');
   check('mismatch-отчёт: рассинхрона в журнале нет → молчит', reminder('sid-fixed'), '');
   const rec = { ts: new Date().toISOString(), sid: 'sid-live', decision: 'server-mismatch', root: project, branch: 'feature/x' };
+  fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, JSON.stringify({ ...rec, branch: 'other' }) + '\n');
+  check('mismatch-отчёт: рассинхрон на другой ветке → отчёт молчит', reminder('sid-other-branch').startsWith('doctor ('), false);
   fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, JSON.stringify(rec) + '\n');
   const said = reminder('sid-live');
   check('mismatch-отчёт: свежий рассинхрон → объявляет без дубля строки гарда', said.startsWith('doctor (') && !said.includes('tokensave-гард молчит'), true);
+}
+
+// --- зависший запуск не объявляется «идёт разбор» ---
+{
+  const file = stateFile(project);
+  fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, '');
+  fs.writeFileSync(file, JSON.stringify({
+    ...readJSON(file, {}), status: 'running', symptom: 'breaker-open', sid: 'sid-stale',
+    started: Date.now() - 16 * 60 * 1000, finished: null, runningSaid: [],
+  }));
+  check('running старше 15 минут → молчит', reminder('sid-stale'), '');
+  fs.writeFileSync(file, JSON.stringify({ ...readJSON(file, {}), started: Date.now() }));
+  check('свежий running → говорит', reminder('sid-stale').includes('идёт фоновый разбор'), true);
+}
+
+// --- отметки «сказали» ложатся на свежее состояние ---
+{
+  const file = stateFile(project);
+  const base = { status: 'running', symptom: 'breaker-open', sid: 's', started: 100, announced: [], runningSaid: [] };
+  // Напоминание прочитало running (started 100), а раннер успел записать done.
+  fs.writeFileSync(file, JSON.stringify({ ...base, status: 'done', finished: 200, headline: 'Причина: x' }));
+  recordSaid(project, ['runningSaid'], 's', 100);
+  const st = readState(project);
+  check('recordSaid: done раннера не затёрт, отметка легла', [st.status, st.headline, st.runningSaid], ['done', 'Причина: x', ['s']]);
+  // Между чтением и записью стартовал новый запуск.
+  fs.writeFileSync(file, JSON.stringify({ ...base, started: 300 }));
+  recordSaid(project, ['announced', 'mismatchSaid'], 's', 100);
+  const next = readState(project);
+  check('recordSaid: новый запуск не помечен сказанным, mismatchSaid — да', [next.announced, next.mismatchSaid, next.root], [[], ['s'], project]);
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');

@@ -86,7 +86,29 @@ export function readState(root) {
   return readJSON(stateFile(root), {});
 }
 
-function isRunning(st, now) {
+// Сколько сессий помнить как «уже сказали» — файл состояния не должен расти вечно.
+const SAID_KEEP = 20;
+
+export function said(st, key, sid) {
+  return Array.isArray(st[key]) && st[key].includes(sid);
+}
+
+// Отметить, что сессии сказали, — поверх свежего состояния, а не копии,
+// прочитанной напоминанием: между чтением и записью раннер мог записать done,
+// и запись копии целиком возвращала status: running навсегда. Отметки о
+// запуске (announced, runningSaid) не переносятся на запуск, начатый после
+// чтения: о нём этой сессии ещё не говорили. mismatchSaid к запуску не привязан.
+export function recordSaid(root, keys, sid, seenStarted) {
+  const file = stateFile(root);
+  const cur = readJSON(file, {});
+  for (const key of keys) {
+    if (key !== 'mismatchSaid' && cur.started !== seenStarted) continue;
+    cur[key] = [...(Array.isArray(cur[key]) ? cur[key] : []), sid].slice(-SAID_KEEP);
+  }
+  return writeJSON(file, { ...cur, root: cur.root || root });
+}
+
+export function isRunning(st, now) {
   if (st.status !== 'running' && st.status !== 'queued') return false;
   return typeof st.started === 'number' && now - st.started < STALE_RUN_MS;
 }
