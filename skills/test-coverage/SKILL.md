@@ -1,6 +1,6 @@
 ---
 name: test-coverage
-description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load before opening a merge request, when asked \"протестируй\", \"покрой тестами\", \"напиши тесты на ветку\", \"допиши тесты\", \"что не покрыто\", and for the one-line gap check before every commit."
+description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load when asked to test the change as a whole — \"протестируй\" (no object, or a branch/diff), \"покрой тестами\", \"напиши тесты на ветку\", \"что не покрыто\" — and for the one-line gap check before every commit. Not for one test on a named symbol or file (test-conventions) and not for sample or scratch code (\"тестовый код\", \"пробный пример\")."
 ---
 
 # Test coverage
@@ -12,12 +12,17 @@ write.
 
 ## Scope
 
-- Before a commit: the gap check only — step 1 and 3 on `git diff HEAD`, then
-  one line: `Без теста: <поведение> — <path>` or nothing. No tests written.
-- Before a merge request, or on an explicit request ("протестируй", "покрой
-  тестами"): the full procedure on
+- Before a commit: the gap check only — step 1 on `git diff HEAD`, then step 3
+  per behaviour, not per matrix row; one line: `Без теста: <поведение> —
+  <path>` or nothing. No tests written.
+- On an explicit request ("протестируй", "покрой тестами"): the full procedure on
   `git diff <base>...HEAD`, base = `git merge-base dev HEAD` or the fork branch.
 - A path or symbol named by the user narrows the scope to it.
+- Not this procedure: "напиши тест на X" → write that test by
+  `test-conventions` and run its file, no inventory, coverage or full suite;
+  "тестовый код" without a target, a sample, a scratch script → not a test, write
+  what was asked; "прогони тесты" → run the suite and report. Unclear which →
+  ask in one line before starting.
 
 ## Procedure
 
@@ -69,7 +74,8 @@ write.
 - Untestable without a change (hidden `new`, global time, module-level state)
   → describe the change and ask; never refactor silently.
 - A row that exposes a real bug → leave the test red, report it under
-  `Найдено`, don't fix inside the test task unless asked.
+  `Найдено`, don't fix inside the test task unless asked. A red suite is not
+  committed (`git-flow`): stop before the commit and hand the choice to the user.
 
 ## Output
 

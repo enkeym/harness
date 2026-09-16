@@ -1,6 +1,6 @@
 ---
 name: test-conventions
-description: Test conventions for the user's TypeScript projects (Jest/Vitest, NestJS TestingModule, supertest, Testing Library, Playwright e2e and visual regression) — what to assert, file structure and naming, mocking boundaries, clean output, focused runs. Load before writing, fixing or reviewing tests in any stack, unit or e2e.
+description: "Test conventions for the user's TypeScript projects (Jest/Vitest, NestJS TestingModule, supertest, Testing Library, Playwright e2e and visual regression) — what to assert, file structure and naming, mocking boundaries, clean output, focused runs. Load before writing, fixing or reviewing tests in any stack, unit or e2e — including one test on a named symbol or file (\"напиши тест на X\"), which needs no test-coverage run."
 ---
 
 # TypeScript test conventions
@@ -57,7 +57,8 @@ or branch still needs: `test-coverage`.
 - Flakiness fixed with determinism (fake timers, explicit `await`), never retries.
 
 ## Never
-- Bend an expectation to current wrong behaviour — leave it red, report.
+- Bend an expectation to current wrong behaviour — leave it red, report, and
+  don't commit the red suite (`git-flow`).
 - Change production code for testability silently — describe what must change
   and hand it over.
 - Test the library (`class-validator` validates an email) — only your logic on top.

@@ -37,7 +37,6 @@ Merges, force pushes, protected branches: confirm first.
 ### Procedure
 
 1. Base: `git merge-base dev HEAD` (or the branch this one forked from).
-   Opening the MR, not only its text → `test-coverage` on the branch first.
 2. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
    `git diff <base>...HEAD --stat`. Whole branch, nothing outside it.
 3. Group commits into **entities** — things the user sees: a page, a panel, a

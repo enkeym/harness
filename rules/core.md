@@ -59,8 +59,8 @@ same area wins over the global one.
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
 | Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
-| Write, fix or review tests in any stack                                            | `test-conventions`  |
-| Cover a branch or diff with tests, open a merge request, or asked "протестируй"    | `test-coverage`     |
+| Write, fix or review tests in any stack, one test on a named symbol included       | `test-conventions`  |
+| Cover a whole branch or diff with tests, or asked "протестируй" without an object  | `test-coverage`     |
 | Click through a running app by hand: "прокликай", "проверь в браузере"             | `test-browser`      |
 | Set up or audit SEO — only when the user asks for it                               | `seo`               |
 | Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
