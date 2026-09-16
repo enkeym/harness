@@ -76,23 +76,22 @@ user asks, never the only condition.
 | Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
 | Write, fix or review tests in any stack, one test on a named symbol included       | `test-conventions`  |
-| Cover a whole branch or diff with tests, or test a change with no object named     | `test-coverage`     |
+| Cover a whole branch or diff with tests, test a change with no object named, or prepare an MR | `test-coverage` |
 | Set up or audit SEO — only when the user asks for it                               | `seo`               |
 | Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | Hand the thread to a fresh session: the context is filling up, or a reset is coming | `handoff`          |
 | Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
-| Commit, branch, or touch a Jira or MR text — after the two review skills            | `git-flow`          |
+| Commit, branch, or touch a Jira or MR text — after the two review skills; an MR after `test-coverage` too | `git-flow` |
 | Create, edit or review a skill, an agent file, a rules file, CLAUDE.md or AGENTS.md | `skill-authoring`   |
 
 ## Two triggers that must not wait for a skill
 
 - **Commit.** A logical unit is done — a plan task, a verified bounded edit, a
   green fix — run the diff through `review-standards` and
-  `review-security`, fix what they find, run the one-line gap check of
-  `test-coverage`, then commit right away, without asking — unless project
-  memory or the project's rules file restricts commits; then stop after the
-  review and report. A found secret stops everything and goes to the user
+  `review-security`, fix what they find, then commit right away, without
+  asking — unless project memory or the project's rules file restricts
+  commits; then stop after the review and report. A found secret stops everything and goes to the user
   first. How to commit, and what stays with the human: skill `git-flow`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
   after a choice you would otherwise have to re-explain (a library, a data

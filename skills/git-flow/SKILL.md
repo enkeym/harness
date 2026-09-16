@@ -1,6 +1,6 @@
 ---
 name: git-flow
-description: Branching, committing, pushing, and writing the Jira/MR description for GitLab in this setup — commit message style, the unsigned-commit rule, when a merge request may be opened, and the entity-based MR description format for a PM/QA audience. Load before committing, branching, pushing, or writing any Jira or MR text.
+description: "Branching, committing, pushing, and preparing a merge request for GitLab — commit message style, the unsigned-commit rule, the test-coverage pass before an MR, when an MR may be opened, and the entity-based Jira/MR description format for a PM/QA audience. Load before committing, branching, pushing, or when asked for an MR or its Jira text (\"открой MR\", \"описание для Jira\")."
 ---
 
 # Git flow
@@ -20,8 +20,6 @@ resolve them first; nothing below is a project default.
 - Branch name = the user's existing prefix + ticket (`<prefix>/<TICKET>`); no
   ticket → `<prefix>/<slug>`. Branch off the resolved base. No worktrees.
 - Never commit red tests, files outside the task, or secrets.
-- Commit restricted by memory or the project's rules file → stop after the
-  review, report what is ready, commit only on an explicit request.
 - Message style = the user's own recent commits, not the loudest style in the
   repo: same form, same language, same scope names.
   - Header: one line, ~72 chars.
@@ -43,20 +41,25 @@ Merges, force pushes, protected branches: confirm first.
 
 ### Procedure
 
-1. Base: the resolved base branch.
-2. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
+1. Base: the resolved base branch. Push and MR delivery from memory
+   ([../shared/project-facts.md](../shared/project-facts.md)): restricted →
+   no `git push`, no GitLab API — the block below printed in chat is the
+   whole result.
+2. Tests: `test-coverage` on `<base>...HEAD`, report first. Red suite → stop,
+   no MR text until the user decides.
+3. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
    `git diff <base>...HEAD --stat`. Whole branch, nothing outside it.
-3. Group commits into **entities** — things the user sees: a page, a panel, a
+4. Group commits into **entities** — things the user sees: a page, a panel, a
    dialog, a profile section. Not modules, not files.
-4. For each entity, find the exact UI location and role: read the diff of the
+5. For each entity, find the exact UI location and role: read the diff of the
    commits (`git show <h> --stat`, then the component) and `rag_search` for the
    button/section labels. A description without a location is not done.
-5. Draft in the format below. The project's rules file has a sample →
+6. Draft in the format below. Project memory or rules file has a sample →
    match its vocabulary for entities and places.
-6. Coverage check — walk the commit list once more: every commit maps to an
+7. Coverage check — walk the commit list once more: every commit maps to an
    entity sentence, or is deliberately folded into the closing "Внутренние
    изменения" line. An unmapped commit → add it. Do this before printing.
-7. Word check: no code identifiers (camelCase, snake_case, file paths, HTTP
+8. Word check: no code identifiers (camelCase, snake_case, file paths, HTTP
    verbs, endpoints, tables, migrations, library names), no banned phrases.
 
 ### Format
@@ -114,8 +117,9 @@ Print the block ready to paste, no commentary around it. Jira has no API here.
 
 ### Opening the MR in GitLab
 
-Token: `$GITLAB_TOKEN` only. Never print it, never read `~/.git-credentials`.
-Not set → say so in one line, print the block, stop.
+Only when step 1 allows delivery. Token: `$GITLAB_TOKEN` only. Never print
+it, never read `~/.git-credentials`. Not set → say so in one line, print the
+block, stop.
 
 Host and project from `git remote get-url origin`: `https://<host>/<group>/<repo>.git`
 → API host `<host>`, project id `<group>%2F<repo>` (SSH form `git@<host>:<group>/<repo>.git`

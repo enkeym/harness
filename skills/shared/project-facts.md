@@ -1,6 +1,6 @@
 # Project facts — resolved, never assumed
 
-Read by `git-flow`, `test-coverage` and `test-conventions` before the first
+Read by `git-flow`, `test-coverage`, `test-conventions` and `test-browser` before the first
 step that needs a fact below. Order of authority is in `rules/core.md`
 (*Project facts outrank skills*): memory and the project's rules file first,
 then the repository, then a skill default. Resolve once per session; state
@@ -18,6 +18,8 @@ is caught before it is acted on.
 | Remote host and path | `git remote get-url origin` |
 | Commit allowed | Memory/rules file; silent → `rules/core.md` commit trigger |
 | Push allowed | Memory/rules file; silent → push |
+| MR delivery | Memory/rules file; silent → push + GitLab API; restricted → Jira block in chat only |
+| Browser QA allowed | Memory/rules file; silent → only on `/test-browser` |
 | Test runner, scripts | `package.json` of the touched package (`scripts`, `devDependencies`): `jest` / `vitest` / `@playwright/test` |
 | Playwright setup | The package's `playwright.config.*`: `testDir`, `webServer`, `workers`, projects |
 | Language of MR/Jira text | Memory/rules file; silent → the language of recent MR titles, else Russian |

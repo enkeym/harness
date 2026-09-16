@@ -1,6 +1,6 @@
 ---
 name: test-coverage
-description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load when the object to test is a diff, a branch or the current change as a whole (\"протестируй\" with no object, \"покрой тестами\", \"что не покрыто\"), and for the one-line gap check before every commit. Not when the object is one named symbol or file (test-conventions) or code with no production behaviour to guard (a sample, a scratch script)."
+description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load when the object to test is a diff, a branch or the current change as a whole (\"протестируй\" with no object, \"покрой тестами\", \"что не покрыто\"), and before preparing a merge request or its Jira text. Not when the object is one named symbol or file (test-conventions) or code with no production behaviour to guard (a sample, a scratch script)."
 ---
 
 # Test coverage
@@ -13,11 +13,11 @@ write. Base branch and test runner: resolve by
 
 ## Scope
 
-- Before a commit: the gap check only — step 1 on `git diff HEAD`, then step 3
-  per behaviour, not per matrix row; one line: `Без теста: <поведение> —
-  <path>` or nothing. No tests written.
-- Asked to test the change as a whole: the full procedure on
-  `git diff <base>...HEAD`, base resolved.
+- Not run on a commit: tests come only on request or before an MR.
+- Before an MR, or asked to test the change as a whole: the full procedure on
+  `git diff <base>...HEAD`, base resolved. Commit the new tests when commits
+  are allowed; restricted by memory → leave them in the working tree and list
+  them under `Не закоммичено`.
 - A path or symbol named by the user narrows the scope to it.
 - Decide by the object of the request, not its wording:
   | Object | Action |
@@ -94,6 +94,7 @@ Red-check: <n из n падают без реализации>
 Покрытие изменённых строк: <непокрытые места с причиной | нет>
 Найдено: <баги, которые вскрыли тесты | нет>
 Прогон: <команда> → <passed/failed>
+Не закоммичено: <новые тесты в рабочем дереве | нет>
 ```
 
 Empty section = `нет`.
