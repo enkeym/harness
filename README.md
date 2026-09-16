@@ -133,7 +133,9 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 node ai-hooks/test/test-guards.mjs
 node ai-hooks/test/test-ask-mode.mjs
 node ai-hooks/test/test-security.mjs
+node ai-hooks/test/test-skills.mjs
 ```
 
-Прогонять после любой правки в `ai-hooks/`. Красный тест — откат, а не
-дальнейшая правка.
+Прогонять после любой правки в `ai-hooks/`; `test-skills.mjs` — после любой
+правки в `skills/`, `rules/core.md`, `CLAUDE.md`, `AGENTS.md` или
+`opencode.json`. Красный тест — откат, а не дальнейшая правка.
