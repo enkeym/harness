@@ -19,8 +19,8 @@ alone; a rule both agents need goes into `core.md`, never here.
 
 ## Agents
 
-- `@commit` runs only when the user calls it. Never hand it a commit on your
-  own.
+- No `@commit` agent — commit through the main session, `git-flow` loaded per
+  `core.md`'s commit trigger.
 - `git commit` and `git push` ask the user through `permission.bash` — don't
   add a chat question on top.
 
@@ -28,5 +28,5 @@ alone; a rule both agents need goes into `core.md`, never here.
 
 Denied here through `permission.skill`: `commit`, `doctor`, `optimize`,
 `usage`, `hooks-guards`. Slash commands `/ask`, `/ask-off`, `/commit` do not
-exist — use the `ask` agent and `@commit`. `/handoff` is a thin command in
+exist — use the `ask` agent. `/handoff` is a thin command in
 `opencode/command/` that loads the shared skill.

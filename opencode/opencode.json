@@ -40,10 +40,7 @@
       "usage": "deny",
       "hooks-guards": "deny"
     },
-    "task": {
-      "*": "deny",
-      "commit": "allow"
-    },
+    "task": "deny",
     "bash": {
       "*": "allow",
       "git commit*": "ask",
