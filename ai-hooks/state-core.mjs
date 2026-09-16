@@ -14,8 +14,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const HOME = process.env.HOME || os.homedir();
+
+// Модуль запущен как скрипт, а не импортирован тестом. Сравнение по realpath:
+// хуки вызываются через симлинк ~/.ai-hooks → ~/harness/ai-hooks, argv[1]
+// остаётся путём симлинка, а import.meta.url Node отдаёт уже разрешённым.
+// Сравнение по path.resolve с 2026-09-09 давало false, и хук молча не делал
+// ничего.
+export function isEntryPoint(metaUrl) {
+  if (!process.argv[1]) return false;
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(metaUrl));
+  } catch {
+    return false;
+  }
+}
 
 // Единственный корень рантайм-состояния хуков. ~/.claude/state, потому что там
 // уже живёт большая часть (ask-mode, ragsave-reminder, bootstrap, clip-output)

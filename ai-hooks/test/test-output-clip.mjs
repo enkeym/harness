@@ -124,6 +124,18 @@ for (const cmd of [
     encoding: 'utf8',
   });
   check('тихая команда: хук молчит', quiet.trim(), '');
+
+  // settings.json зовёт хуки через симлинк ~/.ai-hooks. Проверка «запущен как
+  // скрипт» по path.resolve его не разрешала, и хук неделю молча ничего не делал.
+  const linkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clip-link-'));
+  const link = path.join(linkDir, 'ai-hooks');
+  fs.symlinkSync(ROOT, link);
+  const viaLink = execFileSync('node', [path.join(link, 'claude', 'output-clip.mjs')], {
+    input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test' } }),
+    encoding: 'utf8',
+  });
+  check('через симлинк: хук срабатывает', /clip-output\.sh/.test(viaLink), true);
+  fs.rmSync(linkDir, { recursive: true, force: true });
 }
 
 // --- поведение самого ограничителя

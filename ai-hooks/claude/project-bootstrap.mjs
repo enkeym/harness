@@ -22,7 +22,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { isHarnessConfigPath } from '../guard-core.mjs';
-import { statePath, projectKey } from '../state-core.mjs';
+import { statePath, projectKey, isEntryPoint } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const STATE_DIR = statePath('bootstrap');
@@ -129,7 +129,7 @@ export function bootstrapContext(cwd) {
     'Предложи одной строкой в первом ответе (скилл hooks-guards).';
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+if (isEntryPoint(import.meta.url)) {
   let raw = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (c) => { raw += c; });

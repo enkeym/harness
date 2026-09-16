@@ -15,6 +15,7 @@
 
 import path from 'node:path';
 import os from 'node:os';
+import { isEntryPoint } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const CLIP = path.join(HOME, '.ai-hooks', 'bin', 'clip-output.sh');
@@ -122,7 +123,7 @@ export function clipCommand(command, opts = {}) {
   return `${CLIP} ${label} -- ${shellQuote(cmd)}`;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+if (isEntryPoint(import.meta.url)) {
   let raw = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (c) => { raw += c; });
