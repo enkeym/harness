@@ -1,9 +1,9 @@
 ---
 name: optimize
-description: Analyses token spend and harness settings and proposes optimisations — which models and tools eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize.
+description: "Analyses token spend and harness settings and proposes optimisations — which models and tools eat the budget, where the cache misses, which rules and hooks get in the way. Facts first, then the edits, each backed by a number. User-invoked as /optimize."
 disable-model-invocation: true
 allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read, Grep, Glob
-argument-hint: [--days N | --project <name>]
+argument-hint: "[--days N | --project <name>]"
 ---
 
 # /optimize

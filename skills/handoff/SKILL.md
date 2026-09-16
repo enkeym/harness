@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Assembles a handoff block in chat when the context window fills up — what belongs in it, what never does. No files are written; the user copies the block into a fresh session. Load when the context meter fires at 75%, when the user runs /handoff, or says "передай в новую сессию", "контекст кончается".
+description: "Assembles a handoff block in chat when the context window fills up — what belongs in it, what never does. No files are written; the user copies the block into a fresh session. Load when the context meter fires at 75%, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
 ---
 
 # Handoff

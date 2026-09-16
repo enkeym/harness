@@ -1,6 +1,6 @@
 ---
 name: hooks-guards
-description: How the local hook system behaves — security-guard, ask-guard, skill-gate, the edit/read/bash routers, background index sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure.
+description: "How the local hook system behaves — security-guard, ask-guard, skill-gate, the edit/read/bash routers, background index sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure."
 ---
 
 # Hooks and guards

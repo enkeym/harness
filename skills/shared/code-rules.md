@@ -3,7 +3,7 @@
 Read by `nestjs-backend` and `react-frontend` before the first edit and by
 `review-standards` as its checklist: the stack skill adds structure, the
 review adds only what a diff can show. The project's own code outranks any
-line here.
+line here; facts about one project live in its memory, never in this file.
 
 ## Types
 
@@ -20,15 +20,32 @@ line here.
 
 ## Reuse before writing new
 
-- A package already in `package.json` before a new dependency.
+Before a new function, hook, component, type or constant, in this order — stop
+at the first hit:
+
+1. **The project.** `tokensave_search` by the likely name and the verb
+   (`format`, `parse`, `debounce`, `useFetch`), `rag_search` by meaning ("where
+   dates are formatted"). Found something close → call it, or parameterise it;
+   never a sibling copy.
+2. **Installed packages.** `dependencies` of the touched package and the
+   workspace root: a dependency that already does it (`date-fns`, `lodash-es`,
+   `zod`, `clsx`, the UI kit, the query client) is used, not re-implemented.
+   Check its API in `node_modules/<pkg>` for the installed version.
+3. **A library.** Nothing in 1–2, and the need is generic and well-trodden
+   (dates and time zones, deep merge/clone, debounce/throttle, validation,
+   number/currency formatting, retries, file-type detection, sanitising) →
+   propose one in one line before writing: name, latest version
+   (`npm view <pkg> version`), why it beats hand-rolling. Prefer maintained,
+   typed, tree-shakable. Never install without the user's yes.
+4. **Write it.** Domain logic, a few lines, or the library would be the only
+   use of a large dependency → write it beside the neighbours, in their form.
+
 - A meaningful bare number/string (timeout, limit, page size, retries, status
   code, route, storage key, header, message, regex) has a name with its unit
   (`TIMEOUT_MS`); search first — the value usually exists as a constant, enum,
   config or token. `0`, `1`, `-1`, `''` in index/empty roles are not magic.
 - Used twice → one constant; a related family → `enum`/`as const` in the
   project's form.
-- Existing utils, helpers, hooks before a new one — search the name and the
-  verb first.
 - Config only through the project's config layer: never `process.env` in
   module code, never a default that is a secret; a new variable → `.env.example`
   in the same change (name + comment, no value).

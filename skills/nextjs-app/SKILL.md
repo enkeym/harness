@@ -82,5 +82,5 @@ what crosses the boundary. Components, hooks, forms, a11y stay in
 
 - `npx tsc --noEmit`, the project's lint script, `next build` for the touched
   routes — build errors catch boundary and cache mistakes `tsc` misses.
-- Tests: `test-conventions`; Server Actions tested as functions with mocked session
-  and DAL.
+- Tests, when asked or before an MR: `test-conventions`; Server Actions tested
+  as functions with mocked session and DAL.

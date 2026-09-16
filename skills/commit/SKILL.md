@@ -1,9 +1,9 @@
 ---
 name: commit
-description: Commits the current changes and pushes the branch — message written from the diff in the user's own style. User-invoked as /commit; never self-triggered.
+description: "Commits the current changes and pushes the branch — message written from the diff in the user's own style. User-invoked as /commit."
 disable-model-invocation: true
 allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git merge-base:*), Bash(git show:*)
-argument-hint: [commit message, or instructions]
+argument-hint: "[commit message, or instructions]"
 ---
 
 # /commit

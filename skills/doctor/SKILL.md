@@ -1,9 +1,9 @@
 ---
 name: doctor
-description: Diagnoses failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, a crashing or slow hook, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. Also runs headless in the background when a hook records breaker-open or server-mismatch; `/doctor apply` acts on that report. User-invoked as /doctor.
+description: "Diagnoses failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, a crashing or slow hook, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. Also runs headless in the background when a hook records breaker-open or server-mismatch; `/doctor apply` acts on that report. User-invoked as /doctor."
 disable-model-invocation: true
 allowed-tools: Bash(tail:*), Bash(ps:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node /home/enkeym/.ai-hooks/test/*), Bash(node /home/enkeym/.ai-hooks/bin/doctor-applied.mjs:*), Bash(git -C /home/enkeym/harness *), Read, Grep, Glob
-argument-hint: [what broke, in your own words | apply | server-mismatch]
+argument-hint: "[what broke, in your own words | apply | server-mismatch]"
 ---
 
 # /doctor

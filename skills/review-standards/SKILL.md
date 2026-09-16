@@ -1,6 +1,6 @@
 ---
 name: review-standards
-description: Cross-stack TypeScript review checklist and the procedure to run it on a diff — types (no any, one representation per value set, derived not copied), constants (no magic values, existing enum/config reused), naming that matches neighbours, styles only through project tokens, duplication, error handling, leftovers. Load on the diff before every commit and whenever asked to review code, a branch, an MR or someone else's change. Finds what the linter cannot.
+description: "Cross-stack TypeScript review checklist and the procedure to run it on a diff — types (no any, one representation per value set, derived not copied), constants (no magic values, existing enum/config reused), reuse of existing code and installed libraries, naming that matches neighbours, styles only through project tokens, duplication, error handling, leftovers. Load on the diff before every commit and whenever asked to review code, a branch, an MR or someone else's change. Finds what the linter cannot."
 ---
 
 # Standards review
@@ -13,7 +13,9 @@ re-done by hand; a finding is what they cannot see.
 1. Read the whole diff before judging a line. Uncommitted: `git diff HEAD` +
    `git status --short`. Branch: `git diff <base>...HEAD`.
 2. Verify by search, never by eye: a literal → search the value in the project;
-   a new type → search its fields; a new helper → search its name and verb.
+   a new type → search its fields; a new helper, hook or component → the reuse
+   order of `code-rules.md` (project, installed packages, then a library
+   proposal); a new dependency → was an installed one enough.
    Changed signature or contract → `tokensave_callers` / `tokensave_impact`.
    Tests in the diff: do they assert behaviour or the mock? Run when in doubt.
 3. Fix inside the diff silently (one line in chat per fix). Pre-existing

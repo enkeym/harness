@@ -1,6 +1,6 @@
 ---
 name: tokensave-routing
-description: Which tokensave or ragsave tool to call for reading, searching, editing, impact analysis and decision memory; how to scope a call cheaply; what to do when one answers empty or errors; how to query another project or branch. Load before a non-trivial search or edit in an indexed project, when a tokensave or rag_search call comes back empty or broken, for callers/impact/dead-code questions, or when the answer may live outside code (docs, json/yaml, migrations, SQL, CI, .env.example).
+description: "Which tokensave or ragsave tool to call for reading, searching, editing, impact analysis and decision memory; how to scope a call cheaply; what to do when one answers empty or errors; how to query another project or branch. Load before a non-trivial search or edit in an indexed project, when a tokensave or rag_search call comes back empty or broken, for callers/impact/dead-code questions, or when the answer may live outside code (docs, json/yaml, migrations, SQL, CI, .env.example)."
 ---
 
 # tokensave and ragsave routing

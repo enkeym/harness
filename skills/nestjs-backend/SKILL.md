@@ -1,14 +1,16 @@
 ---
 name: nestjs-backend
-description: "NestJS/TypeScript server conventions — module layout, DI, DTOs and validation, exceptions, config, database, tests. Load before writing or reviewing any server-side code: module, controller, service, provider, DTO, entity or schema, guard, interceptor, migration, or a Nest test."
+description: "NestJS/TypeScript server conventions — module layout, DI, DTOs and validation, exceptions, config, database. Load before writing or reviewing any server-side code: module, controller, service, provider, DTO, entity or schema, guard, interceptor, migration."
 ---
 
 # NestJS backend conventions
 
 The project outranks this list: copy a neighbouring module first
 (`tokensave_context` scoped to the server). Read
-[../shared/code-rules.md](../shared/code-rules.md) (types, reuse,
+[../shared/code-rules.md](../shared/code-rules.md) (types, reuse order,
 KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
+Tests are written only when asked or before an MR (`test-coverage`), never as
+a side effect of a server edit.
 
 ## Structure
 - One module per domain: `x.module.ts`, `x.controller.ts`, `x.service.ts`,
@@ -17,6 +19,9 @@ KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
   nothing about HTTP.
 - Dependencies only via constructor DI. No `new Service()`, no import around
   another module's `exports`.
+- A Nest module for the concern exists (`@nestjs/config`, `@nestjs/schedule`,
+  `@nestjs/throttler`, `@nestjs/cache-manager`, `@nestjs/axios`) → use or
+  propose it before a custom provider.
 - Shared guards, interceptors, pipes, filters, decorators in `common/`.
 
 ## Input and output
@@ -42,4 +47,4 @@ KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
 - Migrations are separate reversible files; no `synchronize` on production.
 
 ## Tests
-- `test-conventions`, including its NestJS lines.
+- How: `test-conventions`, including its NestJS lines.

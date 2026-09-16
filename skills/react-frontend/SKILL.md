@@ -1,15 +1,16 @@
 ---
 name: react-frontend
-description: "React/TypeScript client conventions — components, hooks, state, data fetching, forms, styling through project tokens, accessibility, tests. Load before writing or reviewing any client-side code: component, page, hook, store, form, or stylesheet."
+description: "React/TypeScript client conventions — components, hooks, state, data fetching, forms, styling through project tokens, accessibility. Load before writing or reviewing any client-side code: component, page, hook, store, form, or stylesheet."
 ---
 
 # React frontend conventions
 
 The project outranks this list: copy neighbouring components first
 (`tokensave_context` with `path_include` on the client). Read
-[../shared/code-rules.md](../shared/code-rules.md) (types, reuse, tokens,
+[../shared/code-rules.md](../shared/code-rules.md) (types, reuse order, tokens,
 KISS/SOLID/DRY) before the first edit; this file adds only React structure.
-`next` in `package.json` → load `nextjs-app` too.
+`next` in `package.json` → load `nextjs-app` too. Tests are written only when
+asked or before an MR (`test-coverage`), never as a side effect of a UI edit.
 
 ## Components
 - Function components, named exports, one per file, file named after it.
@@ -27,6 +28,8 @@ KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 ## Forms
 - The project's form library and validation schema; errors beside the field;
   submit disabled while the request is in flight.
+- No form library yet and the form has validation → propose one from the
+  reuse order, don't hand-roll field state.
 
 ## Accessibility and UX
 - Real `button`/`a`/`input`, not `div onClick`; `aria-label` on icon buttons;
@@ -34,7 +37,7 @@ KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 - User-facing strings where the project keeps them (i18n or constants).
 
 ## Tests
-- `test-conventions`, including its React lines.
+- How: `test-conventions`, including its React lines.
 
 ## Types
 - API responses typed by interfaces shared with the server when the project

@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: Security checklist for a diff or module and the procedure to run it — leaked secrets (code, tests, fixtures, untracked files about to be staged), env and config, input validation and mass assignment, auth and ownership, injection (SQL/ORM, shell, path, HTML, regex), SSRF and outbound calls, webhooks and payments (Telegram, YooKassa), sensitive data in logs and responses, client bundle exposure, dependencies, docker and CI. Load on the diff before every commit and whenever asked to check security or audit a module. Complements the security-guard hook, which sees commands, not code.
+description: "Security checklist for a diff or module and the procedure to run it — leaked secrets (code, tests, fixtures, untracked files about to be staged), env and config, input validation and mass assignment, auth and ownership, injection (SQL/ORM, shell, path, HTML, regex), SSRF and outbound calls, bot webhooks and payment provider callbacks, sensitive data in logs and responses, client bundle exposure, dependencies, docker and CI. Load on the diff before every commit and whenever asked to check security or audit a module. Complements the security-guard hook, which sees commands, not code."
 ---
 
 # Security review
@@ -52,7 +52,7 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 - Every non-public route guarded; `@Public()` is deliberate and named.
 - Ownership, not just login: fetch by `id` **and** owner, or explicit check.
   Admin/role from config or DB, never a string compared in code.
-- Telegram bots: webhook secret verified; admin commands compare `from.id`
+- Chat bots: webhook secret verified; admin commands compare the sender id
   against config; side-effect commands refused from groups/inline; callback
   data validated.
 - Sessions/tokens: expiry, refresh rotated, logout invalidates.
@@ -68,7 +68,7 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 **Outbound and integrations**
 - URL from input = SSRF until an allowlist says otherwise. Timeouts, bounded
   retries, TLS verification on.
-- Webhooks/payment callbacks (YooKassa etc.): signature or source verified;
+- Webhooks/payment provider callbacks: signature or source verified;
   amount/currency from the server-side order; idempotency by key; status
   changes only from a confirmed event, never from the redirect.
 - Outgoing data is the minimum needed.
