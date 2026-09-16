@@ -19,10 +19,12 @@ alone; a rule both agents need goes into `core.md`, never here.
 
 ## Agents
 
-- No `@commit` agent — commit through the main session, `git-flow` loaded per
-  `core.md`'s commit trigger.
-- `git commit` and `git push` ask the user through `permission.bash` — don't
-  add a chat question on top.
+- `@commit` runs the `git-flow` procedure in its own session on
+  `zai-coding-plan/glm-5.3`: commit, push and the GitLab API are allowed
+  outright, file edits and history rewriting are denied. User-invoked only —
+  never delegate to it on your own.
+- In the main session `git commit` and `git push` ask through
+  `permission.bash` — don't add a chat question on top.
 
 ## Claude Code only
 

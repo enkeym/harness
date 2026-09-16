@@ -4,7 +4,9 @@ mode: primary
 color: "#22C55E"
 permission:
   edit: deny
-  task: deny
+  task:
+    "*": deny
+    commit: allow
   todowrite: deny
   tokensave_tokensave_str_replace: deny
   tokensave_tokensave_multi_str_replace: deny
