@@ -1,6 +1,6 @@
 ---
 name: test-coverage
-description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load when asked to test the change as a whole — \"протестируй\" (no object, or a branch/diff), \"покрой тестами\", \"напиши тесты на ветку\", \"что не покрыто\" — and for the one-line gap check before every commit. Not for one test on a named symbol or file (test-conventions) and not for sample or scratch code (\"тестовый код\", \"пробный пример\")."
+description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load when the object to test is a diff, a branch or the current change as a whole (\"протестируй\" with no object, \"покрой тестами\", \"что не покрыто\"), and for the one-line gap check before every commit. Not when the object is one named symbol or file (test-conventions) or code with no production behaviour to guard (a sample, a scratch script)."
 ---
 
 # Test coverage
@@ -8,21 +8,25 @@ description: "Test-gap procedure for a diff or a whole branch — inventory of c
 Every changed behaviour ends with a test that fails without it, or with a
 stated reason it has none. How a test is written (structure, mocks, Playwright
 config, runs) is `test-conventions` — load it first; this skill decides what to
-write.
+write. Base branch and test runner: resolve by
+[../shared/project-facts.md](../shared/project-facts.md).
 
 ## Scope
 
 - Before a commit: the gap check only — step 1 on `git diff HEAD`, then step 3
   per behaviour, not per matrix row; one line: `Без теста: <поведение> —
   <path>` or nothing. No tests written.
-- On an explicit request ("протестируй", "покрой тестами"): the full procedure on
-  `git diff <base>...HEAD`, base = `git merge-base dev HEAD` or the fork branch.
+- Asked to test the change as a whole: the full procedure on
+  `git diff <base>...HEAD`, base resolved.
 - A path or symbol named by the user narrows the scope to it.
-- Not this procedure: "напиши тест на X" → write that test by
-  `test-conventions` and run its file, no inventory, coverage or full suite;
-  "тестовый код" without a target, a sample, a scratch script → not a test, write
-  what was asked; "прогони тесты" → run the suite and report. Unclear which →
-  ask in one line before starting.
+- Decide by the object of the request, not its wording:
+  | Object | Action |
+  | --- | --- |
+  | A diff, a branch, or nothing named | This procedure |
+  | One named symbol or file | That test by `test-conventions`, run its file; no inventory, coverage or full suite |
+  | No production code to guard (a sample, a scratch script, demo code) | Not a test — write what was asked |
+  | Existing tests, nothing to write | Run the suite and report |
+  Object unclear → ask in one line before starting.
 
 ## Procedure
 
@@ -53,9 +57,10 @@ write.
 6. **Red-check** each new test: break the line it guards (flip the condition,
    return early, drop the guard), run that file, confirm red, restore, confirm
    green. A test that stays green is rewritten or deleted.
-7. **Coverage of changed lines** with the project's runner:
-   `npx jest --coverage --changedSince=<base>` or
-   `npx vitest run --coverage --changed <base>`. An uncovered changed branch →
+7. **Coverage of changed lines** with the resolved runner — Jest:
+   `--coverage --changedSince=<base>`; Vitest: `run --coverage --changed <base>`;
+   through the package's test script when it sets config or env. No runner in
+   the package → say so, skip the step. An uncovered changed branch →
    back to step 2 or a reason in the report. Coverage percent is not the goal.
 8. **Run** the touched spec files, then the full suite once. Red on existing
    tests → report, never bend the expectation (`test-conventions`).

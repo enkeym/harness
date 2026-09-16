@@ -1,6 +1,6 @@
 ---
 name: test-browser
-description: "Manual exploratory QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — scenarios derived from a diff or branch, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps, and stable scenarios turned into Playwright specs. Load when asked \"прокликай\", \"проверь в браузере\", \"пройдись руками\", \"протестируй UI\", or when test-coverage offers it for a UI change."
+description: "Manual exploratory QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — scenarios derived from a diff or branch, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps, and stable scenarios turned into Playwright specs. Load when the task is checking a running UI by hand rather than writing a spec (\"прокликай\", \"проверь в браузере\", \"протестируй UI\"), or when test-coverage offers it for a UI change."
 ---
 
 # Browser QA

@@ -1,6 +1,6 @@
 ---
 name: copywriting
-description: "Writing and rewriting user-facing Russian web copy — landing sections, product and service cards, category intros, articles, title and meta description, CTA, microcopy (buttons, empty states, errors) — for a named audience, search intent and query list, with natural keyword use and no filler. Load when asked \"напиши текст\", \"перепиши текст\", \"сделай описание\", \"тексты для лендинга\", \"мета-описания\", \"SEO-текст\", or when seo reports a content finding the user wants fixed."
+description: "Writing and rewriting user-facing Russian web copy — landing sections, product and service cards, category intros, articles, title and meta description, CTA, microcopy (buttons, empty states, errors) — for a named audience, search intent and query list, with natural keyword use and no filler. Load before producing or rewriting text an end user of a site reads — page copy, cards, articles, meta tags, button and error microcopy (\"напиши текст\", \"сделай описание\", \"мета-описания\") — or when seo reports a content finding the user wants fixed. Not for code comments, docs, commit or MR text."
 ---
 
 # Copywriting

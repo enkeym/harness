@@ -33,13 +33,15 @@ or branch still needs: `test-coverage`.
   by role and text; `userEvent` over `fireEvent`.
 
 ## Playwright e2e
-- Config and specs on the client: `client/playwright.config.ts`,
-  `testDir: './e2e'`, `*.spec.ts`, shared setup in `e2e/fixtures`. A specialised
-  suite (visual regression) gets its own config file.
-- Run via the project script (`npm run test:e2e`), never bare `npx playwright
-  test` — the config brings up its own dev server and env flags.
-- Serial on purpose (`fullyParallel: false`, `workers: 1`): one server, one
-  canvas. Don't enable parallelism.
+- Read the package's `playwright.config.*` first
+  ([../shared/project-facts.md](../shared/project-facts.md)): specs go into its
+  `testDir`, shared setup beside the existing fixtures. A specialised suite
+  (visual regression) gets its own config file.
+- Run via the package script that wraps Playwright when one exists — the config
+  or script may bring up its own dev server and env flags; bare `npx playwright
+  test` only when no script does.
+- Keep the config's `workers` / `fullyParallel` as they are; serial is usually
+  deliberate (one shared server or canvas).
 - Retries only on CI. A spec needing a local retry is broken, not slow.
 - Read the trace before editing a failed test.
 - Wait with web-first assertions and `page.waitForResponse`; never
@@ -51,8 +53,8 @@ or branch still needs: `test-coverage`.
   (`test-browser`), not for running the suite.
 
 ## Running
-- While writing: only the touched file (`npx jest path -t 'name'`, `vitest run
-  path`). Full suite once before the commit.
+- While writing: only the touched file with the package's runner (Jest:
+  `path -t 'name'`, Vitest: `run path`). Full suite once before the commit.
 - Clean output: no `console.error`, no `act` warnings, no open handles.
 - Flakiness fixed with determinism (fake timers, explicit `await`), never retries.
 

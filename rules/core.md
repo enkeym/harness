@@ -18,6 +18,20 @@ or a routing rule. Everything else lives in a skill. Tool names and gates that e
 - A guard refusal is user feedback, not an obstacle: never look for a way around
   it.
 
+## Project facts outrank skills
+
+Skills carry procedure; facts about a project — base branch, ticket format,
+commit style, remote, scripts, whether to commit or push — come from the
+project. On conflict, first wins:
+
+1. Project memory and the project's `CLAUDE.md` / `AGENTS.md`.
+2. The repository itself: git, `package.json`, configs, neighbouring code —
+   resolved by `skills/shared/project-facts.md`.
+3. A skill's default.
+
+A skill line that names another project's value is a defect: fix the skill,
+don't follow it.
+
 ## Bash runs commands, nothing else
 
 `git`, `npm`, `tsc`, `docker`, tests, linters. **Never read or write files
@@ -50,7 +64,9 @@ it answers empty, another project or branch — skill `tokensave-routing`.
 deliberately not repeated here, so working from memory instead of loading it is
 the exact failure this rule prevents. Load once per area per session, not per
 file. Reviewing code counts as touching it. A project-level skill covering the
-same area wins over the global one.
+same area wins over the global one. The trigger is the action and its object,
+not a word: a quoted phrase in a row or a description is an example of how the
+user asks, never the only condition.
 
 | You are about to                                                                  | Load                |
 | --------------------------------------------------------------------------------- | ------------------- |
@@ -60,8 +76,8 @@ same area wins over the global one.
 | Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
 | Write, fix or review tests in any stack, one test on a named symbol included       | `test-conventions`  |
-| Cover a whole branch or diff with tests, or asked "протестируй" without an object  | `test-coverage`     |
-| Click through a running app by hand: "прокликай", "проверь в браузере"             | `test-browser`      |
+| Cover a whole branch or diff with tests, or test a change with no object named     | `test-coverage`     |
+| Check a running app by hand in the browser, not by writing a spec                  | `test-browser`      |
 | Set up or audit SEO — only when the user asks for it                               | `seo`               |
 | Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
@@ -75,8 +91,10 @@ same area wins over the global one.
 - **Commit.** A logical unit is done — a plan task, a verified bounded edit, a
   green fix — run the diff through `review-standards` and
   `review-security`, fix what they find, run the one-line gap check of
-  `test-coverage`, then commit right away, without asking. A found secret stops everything and goes to the user first. How to
-  commit, and what stays with the human: skill `git-flow`.
+  `test-coverage`, then commit right away, without asking — unless project
+  memory or the project's rules file restricts commits; then stop after the
+  review and report. A found secret stops everything and goes to the user
+  first. How to commit, and what stays with the human: skill `git-flow`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
   after a choice you would otherwise have to re-explain (a library, a data
   schema, a rejected option), `tokensave_record_decision`. Arguments and scope:
