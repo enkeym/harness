@@ -31,6 +31,7 @@
   "permission": {
     "edit": "ask",
     "write": "ask",
+    "external_directory": "allow",
     "skill": {
       "*": "allow",
       "commit": "deny",

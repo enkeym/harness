@@ -13,9 +13,7 @@
       "Edit(~/.ai-hooks/**)",
       "Edit(~/harness/**)"
     ],
-    "deny": [
-      "Agent"
-    ],
+    "deny": ["Agent"],
     "defaultMode": "default"
   },
   "hooks": {
@@ -98,9 +96,7 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": [
-              "hook-pre-tool-use"
-            ]
+            "args": ["hook-pre-tool-use"]
           }
         ]
       }
@@ -111,9 +107,7 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": [
-              "hook-stop"
-            ]
+            "args": ["hook-stop"]
           }
         ]
       },
@@ -156,9 +150,7 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": [
-              "hook-prompt-submit"
-            ]
+            "args": ["hook-prompt-submit"]
           }
         ]
       },
@@ -239,15 +231,7 @@
     "refreshInterval": 5
   },
   "language": "Russian",
-  "effortLevel": "medium",
-  "modelSettings": {
-    "claude-sonnet-5": {
-      "effortLevel": "high"
-    },
-    "claude-opus-5": {
-      "effortLevel": "high"
-    }
-  },
+  "effortLevel": "high",
   "theme": "dark-ansi",
   "remoteControlAtStartup": false
 }
