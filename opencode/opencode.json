@@ -1,7 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "vscode-dark-plus",
-  "default_agent": "ask",
+  "theme": "dracula",
   "mcp": {
     "tokensave": {
       "type": "local",
