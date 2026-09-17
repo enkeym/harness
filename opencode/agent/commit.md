@@ -1,7 +1,7 @@
 ---
 description: "Runs the commit, push and merge request procedure of the git-flow skill in its own session — its own model and a resolved permission set, so no step asks the main session for confirmation. Invoked by the user as @commit; never self-triggered."
 mode: subagent
-model: zai-coding-plan/glm-5.3
+model: zai-coding-plan/glm-5-turbo
 temperature: 0.2
 color: "#F59E0B"
 permission:
