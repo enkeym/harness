@@ -166,11 +166,13 @@ externals() {
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
   command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (агенты ask и @commit не будут доступны)"
-  # @commit жёстко привязан к zai-coding-plan/glm-5.3 (opencode/agent/commit.md).
+  # Модель @commit — из frontmatter opencode/agent/commit.md, единственное место, где она задана.
   if command -v opencode >/dev/null; then
-    opencode models zai-coding-plan 2>/dev/null | grep -qx 'zai-coding-plan/glm-5.3' \
-      && good "модель @commit zai-coding-plan/glm-5.3 доступна" \
-      || warn "zai-coding-plan/glm-5.3 недоступна — opencode auth login (Z.AI Coding Plan) или сменить model в opencode/agent/commit.md"
+    commit_model=$(awk -F': *' '/^model:/{print $2; exit}' "$HARNESS/opencode/agent/commit.md")
+    commit_provider=${commit_model%%/*}
+    opencode models "$commit_provider" 2>/dev/null | grep -qx "$commit_model" \
+      && good "модель @commit $commit_model доступна" \
+      || warn "$commit_model недоступна — opencode auth login ($commit_provider) или сменить model в opencode/agent/commit.md"
   fi
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$HOME/.rag-mcp/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"

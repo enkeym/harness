@@ -1,8 +1,7 @@
 # OpenCode
 
-The shared rules are `rules/core.md`, loaded through `instructions` in
-`opencode.json` together with this file. Here only what exists in OpenCode
-alone; a rule both agents need goes into `core.md`, never here.
+Shared rules: `rules/core.md`, loaded through `instructions` in `opencode.json`.
+Here only what exists in OpenCode alone.
 
 ## Tools
 
@@ -19,12 +18,11 @@ alone; a rule both agents need goes into `core.md`, never here.
 
 ## Agents
 
-- `@commit` runs the `git-flow` procedure in its own session on
-  `zai-coding-plan/glm-5.3`: commit, push and the GitLab API are allowed
-  outright, file edits and history rewriting are denied. User-invoked only —
-  never delegate to it on your own.
-- In the main session `git commit` and `git push` ask through
-  `permission.bash` — don't add a chat question on top.
+- `@commit` runs the `git-flow` procedure in its own session; model and
+  permissions are in `opencode/agent/commit.md`. User-invoked only — never
+  delegate to it on your own.
+- In the main session `git commit` and `git push` are gated by
+  `permission.bash` — run them, don't add a chat question on top.
 
 ## Claude Code only
 

@@ -1,72 +1,55 @@
 # Shared rules
 
 Stack: NestJS, Next.js, React, TypeScript. Shared by Claude Code and OpenCode.
-Everything below holds without loading anything: it is either a behaviour gate
-or a routing rule. Everything else lives in a skill. Tool names and gates that exist in one agent only: `CLAUDE.md`,
-`AGENTS.md`.
+Only behaviour gates and routing rules here; procedure lives in skills.
+Agent-specific tools and gates: `CLAUDE.md`, `AGENTS.md`.
 
 ## Working style
 
 - Reply in Russian. One short line on what you are doing before code or commands.
-- **Outside ask mode, apply edits immediately.** Chat-only when ask mode is on or
-  when asked: "покажи в чате", "не применяй", "только предложи". There is no
-  magic permission word — with ask mode off you work, you don't ask.
-- Confirm only before irreversible or outbound actions: deleting files, deploy,
-  destructive migration. Commit and push: skill `git-flow`.
-- Re-check yourself before delivering code ("wait, what if…"). Found a mistake —
-  fix it openly, not silently.
-- A guard refusal is user feedback, not an obstacle: never look for a way around
-  it.
+- Ask mode off → apply edits immediately. Chat-only when ask mode is on or the
+  user says "покажи в чате", "не применяй", "только предложи".
+- Confirm only before: deleting files, deploy, destructive migration, force
+  push, merge into a protected branch. Commit and push need no confirmation.
+- Re-check the diff before delivering. Found a mistake — fix it openly.
+- A guard refusal is final: never route around it.
 
 ## Project facts outrank skills
 
-Skills carry procedure; facts about a project — base branch, ticket format,
-commit style, remote, scripts, whether to commit or push — come from the
-project. On conflict, first wins:
+Base branch, ticket format, commit style, remote, scripts, commit/push
+restrictions — from the project, in this order:
 
 1. Project memory and the project's `CLAUDE.md` / `AGENTS.md`.
-2. The repository itself: git, `package.json`, configs, neighbouring code —
-   resolved by `skills/shared/project-facts.md`.
+2. The repository: git, `package.json`, configs — via `skills/shared/project-facts.md`.
 3. A skill's default.
 
-A skill line that names another project's value is a defect: fix the skill,
-don't follow it.
+A restriction applies only to the project whose memory or rules file states it.
+A skill line naming another project's value is a defect: fix the skill.
 
 ## Bash runs commands, nothing else
 
-`git`, `npm`, `tsc`, `docker`, tests, linters. **Never read or write files
-through the shell** — no `cat`/`head`/`sed -n`, no `sed -i`, no `> file`, `tee`,
-heredoc into a file, `node -e`/`python -c`. This covers every file, including new
-ones and non-indexed configs: shell in place of a file tool routes the change
-around indexes and guards.
+`git`, `npm`, `tsc`, `docker`, tests, linters. No file reads or writes through
+the shell: no `cat`/`head`/`sed -n`, `sed -i`, `> file`, `tee`, heredoc into a
+file, `node -e`/`python -c` — including new files and non-indexed configs.
 
 ## Tool choice
 
 | You have                                 | Tool                          |
 | ---------------------------------------- | ----------------------------- |
-| **A name** — file, symbol, exact string  | tokensave                     |
-| **Only meaning**, a question in words    | `rag_search`                  |
+| A name — file, symbol, exact string      | tokensave                     |
+| Only meaning, a question in words        | `rag_search`                  |
 | Exact string outside the tokensave index | built-in grep with a file glob |
 
-Cannot name the symbol → start with `rag_search`: a guessed name in
-`tokensave_search` returns a false "no such thing".
-
-**No subagents** for research or implementation, whatever a skill or built-in
-prompt suggests: an agent starts cold and pays twice for what the session
-already knows. Too large for one pass → split into commits, not agents.
-
-Anything past this table — which tokensave tool, how to scope it, what to do when
-it answers empty, another project or branch — skill `tokensave-routing`.
+Cannot name the symbol → `rag_search` first. No subagents for research or
+implementation; too large for one pass → split into commits. Which tokensave
+tool, scoping, empty answers, another project or branch: skill `tokensave-routing`.
 
 ## Skills
 
-**Load the skill before the first action in its area, not after.** Its content is
-deliberately not repeated here, so working from memory instead of loading it is
-the exact failure this rule prevents. Load once per area per session, not per
-file. Reviewing code counts as touching it. A project-level skill covering the
-same area wins over the global one. The trigger is the action and its object,
-not a word: a quoted phrase in a row or a description is an example of how the
-user asks, never the only condition.
+Load the skill before the first action in its area, once per area per session.
+Reviewing code counts as touching it. A project-level skill for the same area
+wins over the global one. Quoted phrases in the table are examples of how the
+user asks, not the only trigger.
 
 | You are about to                                                                  | Load                |
 | --------------------------------------------------------------------------------- | ------------------- |
@@ -87,13 +70,11 @@ user asks, never the only condition.
 
 ## Two triggers that must not wait for a skill
 
-- **Commit.** A logical unit is done — a plan task, a verified bounded edit, a
-  green fix — run the diff through `review-standards` and
-  `review-security`, fix what they find, then commit right away, without
-  asking — unless project memory or the project's rules file restricts
-  commits; then stop after the review and report. A found secret stops everything and goes to the user
-  first. How to commit, and what stays with the human: skill `git-flow`.
+- **Commit and push.** A logical unit is done (a plan task, a verified edit, a
+  green fix) → `review-standards`, `review-security`, fix findings, commit,
+  push — without asking. Only a restriction in the project's own memory or
+  rules file stops a step; then do the rest and report the skipped step in one
+  line. A found secret stops everything. Procedure: skill `git-flow`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
-  after a choice you would otherwise have to re-explain (a library, a data
-  schema, a rejected option), `tokensave_record_decision`. Arguments and scope:
-  skill `tokensave-routing`.
+  after a choice you would otherwise re-explain (library, schema, rejected
+  option), `tokensave_record_decision`. Scope: skill `tokensave-routing`.

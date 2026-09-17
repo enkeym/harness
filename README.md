@@ -53,7 +53,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
 | Гарды tokensave | хуки `ai-hooks/claude/*` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
 | Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask`, включён при старте (`default_agent`), Tab — в `build`: правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
-| Коммит | `/commit` | `@commit` — субагент на `zai-coding-plan/glm-5.3` со своими правами: коммит, пуш и GitLab API без подтверждений, правка файлов и переписывание истории запрещены; вся процедура из `git-flow`, MR — только по «сделай МР». Из основной сессии `git commit`/`git push` спрашивают через `permission.bash` |
+| Коммит | `/commit` | `@commit` — субагент со своей моделью и правами (`opencode/agent/commit.md`): коммит, пуш и GitLab API без подтверждений, правка файлов и переписывание истории запрещены; вся процедура из `git-flow`, MR — только по «сделай МР». Из основной сессии `git commit`/`git push` идут через `permission.bash` |
 
 Оба механизма загрузки правил вставляют текст целиком в контекст при старте
 сессии — это не ссылка, которую модели нужно открыть. Правило для обоих агентов

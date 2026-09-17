@@ -1,8 +1,6 @@
 # Claude Code
 
-The shared rules are `~/.claude/rules/core.md`, loaded together with this file.
-Here only what exists in Claude Code alone; a rule both agents need goes into
-`core.md`, never here.
+Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code alone.
 
 ## Tools
 
@@ -16,17 +14,17 @@ Here only what exists in Claude Code alone; a rule both agents need goes into
 
 ## Hooks
 
-- `git commit` and `git push` have their own gate: security-guard prompts the
-  user on both, so don't add a chat question on top.
+- `git commit` and `git push` are gated by security-guard (commit always asks;
+  push asks only for a protected branch, force or no refspec) — run them, don't
+  add a chat question on top.
 - A hook blocked or warned; ask mode, guards, index sync, bootstrap → load
-  `hooks-guards` before reacting. It names the hook and what it wants instead.
+  `hooks-guards` before reacting.
 
 ## User-invoked
 
-`/commit`, `/doctor`, `/optimize`, `/usage`, `/test-browser` are skills with
-`disable-model-invocation: true`; `/ask`, `/ask-off` are plain commands in
-`claude/commands/`. Both kinds are user-invoked only, never self-triggered —
-offer one in a line when it fits: `/doctor` when the harness itself misbehaves
-(loops, repeated refusals, dead index, expired provider auth), `/optimize` and
-`/usage` for spend and settings. `/test-browser` is never offered — the user
-asks for it.
+`/commit`, `/doctor`, `/optimize`, `/usage`, `/test-browser` (skills with
+`disable-model-invocation: true`) and `/ask`, `/ask-off` (commands in
+`claude/commands/`) are user-invoked only. Offer in one line when it fits:
+`/doctor` when the harness misbehaves (loops, repeated refusals, dead index,
+expired provider auth), `/optimize` and `/usage` for spend and settings.
+`/test-browser` is never offered.

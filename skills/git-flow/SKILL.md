@@ -5,10 +5,9 @@ description: "Branching, committing, pushing, and preparing a merge request for 
 
 # Git flow
 
-When to commit and which reviews precede it are `rules/core.md` gates; this is how.
-Base branch, ticket, commit style, remote, and whether commit and push are
-allowed come from [../shared/project-facts.md](../shared/project-facts.md) —
-resolve them first; nothing below is a project default.
+When to commit and push is a `rules/core.md` gate; this is how. Base branch,
+ticket, commit style, remote and project restrictions come from
+[../shared/project-facts.md](../shared/project-facts.md) — resolve them first.
 
 ## Commit rules
 
@@ -26,8 +25,8 @@ resolve them first; nothing below is a project default.
   - Body only for multi-area changes: 2–5 bullets, what and why, in the
     language the user's bodies use.
   - Multi-line messages via `git commit -F -`, never chained `-m`.
-- Push right after the commit (`git push`, `-u origin <branch>` first time)
-  unless memory or the rules file says the push happens elsewhere — then say
+- Push right after the commit: `git push origin <branch>` (`-u` the first
+  time). Only the project's own memory or rules file can restrict it; then say
   in one line that the push is left to the user.
 
 ## Merge request and Jira text — only on explicit request
@@ -41,9 +40,8 @@ Merges, force pushes, protected branches: confirm first.
 
 ### Procedure
 
-1. Base: the resolved base branch. Push and MR delivery from memory
-   ([../shared/project-facts.md](../shared/project-facts.md)): restricted →
-   no `git push`, no GitLab API — the block below printed in chat is the
+1. Base: the resolved base branch. MR delivery restricted by the project's
+   memory or rules file → no GitLab API, the block below in chat is the
    whole result.
 2. Tests: `test-coverage` on `<base>...HEAD`, report first. Red suite → stop,
    no MR text until the user decides.
