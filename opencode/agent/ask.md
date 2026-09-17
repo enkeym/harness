@@ -13,6 +13,7 @@ permission:
   tokensave_tokensave_replace_symbol: deny
   tokensave_tokensave_insert_at: deny
   tokensave_tokensave_insert_at_symbol: deny
+  playwright_*: deny
   bash:
     "*": deny
     "git status*": allow

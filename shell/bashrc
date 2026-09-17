@@ -129,6 +129,11 @@ case ":$PATH:" in
 esac
 # pnpm end
 
+# OpenCode сканирует ~/.claude/skills поверх ~/.config/opencode/skills — обе
+# ссылки на ~/harness/skills, каждый скилл читался дважды (warn "duplicate
+# skill name" на старте). Свои скиллы он берёт через ~/.config/opencode/skills.
+export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1
+
 # BASH_ENV: bash сам подхватывает этот файл для неинтерактивных шеллов (в т.ч.
 # Bash-тул харнесса Claude Code), минуя ранний return выше. Секреты (GITLAB_TOKEN
 # и т.п.) вынесены туда, а не сюда — см. ~/.bash_env.

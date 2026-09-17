@@ -22,7 +22,7 @@
       "command": [
         "npx",
         "-y",
-        "@playwright/mcp@latest",
+        "@playwright/mcp@0.0.81",
         "--headless",
         "--browser",
         "chromium"
@@ -49,7 +49,30 @@
       "*": "allow",
       "git commit*": "ask",
       "git push*": "ask"
-    }
+    },
+    "tokensave_tokensave_*": "deny",
+    "tokensave_tokensave_read": "allow",
+    "tokensave_tokensave_body": "allow",
+    "tokensave_tokensave_signature": "allow",
+    "tokensave_tokensave_context": "allow",
+    "tokensave_tokensave_search": "allow",
+    "tokensave_tokensave_callers": "allow",
+    "tokensave_tokensave_callees": "allow",
+    "tokensave_tokensave_field_sites": "allow",
+    "tokensave_tokensave_impact": "allow",
+    "tokensave_tokensave_affected": "allow",
+    "tokensave_tokensave_unsafe_patterns": "allow",
+    "tokensave_tokensave_str_replace": "allow",
+    "tokensave_tokensave_multi_str_replace": "allow",
+    "tokensave_tokensave_replace_symbol": "allow",
+    "tokensave_tokensave_insert_at": "allow",
+    "tokensave_tokensave_insert_at_symbol": "allow",
+    "tokensave_tokensave_status": "allow",
+    "tokensave_tokensave_branch_search": "allow",
+    "tokensave_tokensave_branch_diff": "allow",
+    "tokensave_tokensave_branch_list": "allow",
+    "tokensave_tokensave_session_recall": "allow",
+    "tokensave_tokensave_record_decision": "allow"
   },
   "agent": {
     "general": {
