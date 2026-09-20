@@ -109,7 +109,9 @@ for (const file of allMd) {
 
 // --- core.md: таблица грузит только существующие авто-скиллы ---
 const core = read(path.join(HARNESS, 'rules', 'core.md'));
-const table = core.slice(core.indexOf('## Skills'), core.indexOf('## Two triggers'));
+// До следующего заголовка, а не до его названия: раздел за таблицей переименовывали.
+const tableStart = core.indexOf('## Skills');
+const table = core.slice(tableStart, core.indexOf('\n## ', tableStart + 1));
 const routed = new Set();
 for (const row of table.split('\n').filter((l) => l.startsWith('|'))) {
   const cells = row.split('|');

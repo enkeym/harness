@@ -78,9 +78,16 @@ user asks, not the only trigger.
   `git-flow`.
 - **Impact before the review skills.** Every symbol whose behaviour the diff
   changes goes through `tokensave_impact`/`callers` and the project's map of
-  implicit links (`docs/implicit-links.md`, or whatever file the project
-  already keeps); each hit ends as unaffected, fixed, or covered by a test. Green tests on the changed symbol prove nothing about its consumers.
-  Format and what belongs in the file: `skills/shared/impact-map.md`.
-- **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
-  after a choice you would otherwise re-explain (library, schema, rejected
-  option), `tokensave_record_decision`. Scope: skill `tokensave-routing`.
+  implicit links (`docs/links/`, `.claude/links/` in a shared repository, or
+  whatever map the project already keeps); each hit ends as unaffected, fixed,
+  or covered by a test. Green tests on the changed symbol prove nothing about
+  its consumers. No `.tokensave/` in the project → `grep -rn --include` over
+  the changed names, no map, and one line saying so. Where the map lives, how
+  it is split and how it is checked: `skills/shared/impact-map.md`.
+- **Memory answers with a method, never with a result.** Before designing a
+  subsystem, `tokensave_session_recall`; after a choice you would otherwise
+  re-explain (library, schema, rejected option), `tokensave_record_decision`.
+  A recalled number, status or "it works" is a hypothesis to re-run, not an
+  answer to quote, and a bug the user reports outranks any memory line that
+  says otherwise. What may be written and how memory is kept fresh:
+  `skills/shared/memory-hygiene.md`. Scope: skill `tokensave-routing`.
