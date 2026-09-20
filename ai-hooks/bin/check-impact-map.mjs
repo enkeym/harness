@@ -78,8 +78,9 @@ if (!mapDir) {
     const index = checkRefs(indexFile);
     const indexLines = lineCount(index);
     if (indexLines > INDEX_MAX) report(indexFile, `${indexLines} строк > ${INDEX_MAX}`);
-    // Ссылки индекса на файлы сущностей и обратное покрытие.
-    const listed = new Set([...index.matchAll(/`([\w./-]+\.md)`/g)].map((m) => path.basename(m[1])));
+    // Имя сущности — файл рядом с индексом, без пути: со слэшем это ссылка на
+    // документ проекта, её проверяет checkRefs.
+    const listed = new Set([...index.matchAll(/`([\w.-]+\.md)`/g)].map((m) => m[1]));
     for (const name of entities) {
       if (!listed.has(name)) report(indexFile, `сущность ${name} не указана в индексе`);
     }

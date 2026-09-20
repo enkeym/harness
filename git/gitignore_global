@@ -24,6 +24,7 @@ desktop.ini
 .tokensave
 .tokensaveignore
 .ragsave
+GEMINI.md
 
 # Node
 node_modules/
@@ -48,14 +49,6 @@ __pycache__/
 dist/
 build/
 
-# Custom
-web_groza/docker-compose.yaml
-web_groza/Makefile
-web_groza/.cursorignore
-**/openapi.json
-data/
-GEMINI.md
-geogroza.pdf
-geogroza.json
-initSocketServer.js
-STORM_SCOKET.md
+# Правил одного проекта здесь не бывает: файл применяется ко всем
+# репозиториям сразу, включая будущие и чужие, и однажды молча выкинет из
+# коммита чужие фикстуры. Такие строки — в `<репозиторий>/.git/info/exclude`.

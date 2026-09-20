@@ -22,6 +22,7 @@ function check(name, ok, detail = '') {
 function project(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impact-map-test-'));
   fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
+  files = { 'docs/STRATEGY.md': '# Механика\n', ...files };
   for (const [rel, body] of Object.entries(files)) {
     const file = path.join(dir, rel);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -39,7 +40,8 @@ function run(dir) {
 }
 
 const SERVICE = 'export function markPaid() {}\n';
-const INDEX = '# Индекс\n\n- заказы — `orders.md` — триггеры: оплата, статус\n';
+// Ссылка на документ проекта в индексе — не имя сущности: проверяется как путь.
+const INDEX = '# Индекс\n\n- заказы — `orders.md` — триггеры: оплата, статус. Механика — `docs/STRATEGY.md`.\n';
 const ORDERS = '## События\n\n- `order.paid` — эмит `src/orders.service.ts:markPaid` → слушает `src/mail.ts:onPaid`.\n';
 
 // Живая карта: обе стороны связи на месте.
