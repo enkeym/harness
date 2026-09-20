@@ -77,9 +77,9 @@ user asks, not the only trigger.
   skipped step in one line. A found secret stops everything. Procedure: skill
   `git-flow`.
 - **Impact before the review skills.** Every symbol whose behaviour the diff
-  changes goes through `tokensave_impact`/`callers` and the project's
-  `docs/implicit-links.md`; each hit ends as unaffected, fixed, or covered by a
-  test. Green tests on the changed symbol prove nothing about its consumers.
+  changes goes through `tokensave_impact`/`callers` and the project's map of
+  implicit links (`docs/implicit-links.md`, or whatever file the project
+  already keeps); each hit ends as unaffected, fixed, or covered by a test. Green tests on the changed symbol prove nothing about its consumers.
   Format and what belongs in the file: `skills/shared/impact-map.md`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
   after a choice you would otherwise re-explain (library, schema, rejected

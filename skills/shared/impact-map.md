@@ -8,6 +8,25 @@ not in any call edge, and that a change silently breaks.
 
 Lives in `<project>/docs/implicit-links.md`, or `<project>/.claude/implicit-links.md`
 where the project has no `docs/`. One file per project, never a directory.
+Unlike the tokensave graph and its decisions (`.tokensave/`, git-ignored, local
+to this machine), this file is committed and read by the whole team.
+
+## A project that already keeps one
+
+The project's own convention wins — `rules/core.md`, *Project facts outrank
+skills*. Look before creating anything:
+
+- An existing map under another name is the map: sections of `CLAUDE.md` or
+  `AGENTS.md`, `docs/architecture.md`, an ADR folder, a spec directory, or
+  another agent's rules (`.cursor/rules`, `.github/copilot-instructions.md`).
+  Add the line there, in the format that file already uses.
+- Never create a second place for the same link. Two maps disagree within a
+  month, and the stale one is the one that gets read.
+- A shared repository: a new file in it is the team's decision, not yours.
+  Nothing to extend → name the candidate places in one line and let the user
+  choose.
+- A found link contradicting what the map says → report it in one line; fix
+  the team's line only with the change that proves it wrong.
 
 ## What goes in
 
