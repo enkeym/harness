@@ -118,11 +118,9 @@ Then stop.
 
 ## Sizing the steps
 
-- One step = one commit = one session, roughly 20–40 turns: every later turn
-  re-pays for whatever the step dragged into the window.
-- A third subsystem, a second data model, or a migration plus its callers →
-  two steps. Split in the brief, not halfway through.
-- Each step names the check that proves it.
+- One step = one commit = one session, ~20–40 turns: every later turn re-pays
+  for whatever the step dragged into the window. A third subsystem, a second
+  data model or a migration plus its callers → two steps, each with its check.
 
 ## After the answer
 
