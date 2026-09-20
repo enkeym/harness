@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOOK = path.join(ROOT, 'claude', 'context-meter.mjs');
+const STEP_HOOK = path.join(ROOT, 'claude', 'context-step.mjs');
 
 let failed = 0;
 function check(name, got, want) {
@@ -32,9 +33,13 @@ const ENV = {
   AI_HOOKS_CTX_SOFT: '90000',
   AI_HOOKS_CTX_HAND: '150000',
   AI_HOOKS_CTX_HARD: '220000',
+  AI_HOOKS_CTX_STEP_REPEAT: '20000',
 };
 Object.assign(process.env, ENV);
-const { contextUsed, contextNotice, level, WINDOW, SOFT, HAND, HARD } = await import('../context-core.mjs');
+const { contextUsed, contextNotice, noteWork, level, WINDOW, SOFT, HAND, HARD, STEP_REPEAT } = await import('../context-core.mjs');
+
+// В сессии появилась работа: без неё текст порога другой — передавать нечего.
+const work = (sessionId) => noteWork({ session_id: sessionId, tool_name: 'Edit', tool_input: {} });
 
 let seq = 0;
 function assistant(tokens, extra = {}) {
@@ -68,6 +73,15 @@ function runHook(input) {
     env: { ...process.env, ...ENV },
   });
   return out.trim() ? JSON.parse(out).hookSpecificOutput.additionalContext : null;
+}
+
+function runStepHook(input) {
+  const out = execFileSync('node', [STEP_HOOK], {
+    input: JSON.stringify(input),
+    encoding: 'utf8',
+    env: { ...process.env, ...ENV },
+  });
+  return out.trim() ? JSON.parse(out).hookSpecificOutput : null;
 }
 
 // --- нечего мерить: молчим, а не гадаем
@@ -141,6 +155,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 // --- первый порог: закрыть шаг, но блок ещё не собирать; звучит один раз
 {
   const file = transcript('soft', [assistant(95_000)]);
+  work('s-soft');
   const first = contextNotice({ transcript_path: file, session_id: 's-soft' });
   check('95k: сработало как soft', first.stage, 'soft');
   check('95k: токены в тексте', /95k/.test(first.text), true);
@@ -154,6 +169,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const soft = transcript('esc-soft', [assistant(95_000)]);
   const hand = transcript('esc-hand', [assistant(160_000)]);
   const hard = transcript('esc-hard', [assistant(240_000)]);
+  work('s-esc');
 
   check('сначала soft', contextNotice({ transcript_path: soft, session_id: 's-esc' }).stage, 'soft');
 
@@ -206,6 +222,123 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     env: { ...process.env, ...ENV },
   });
   check('нет транскрипта: пустой ответ', noPath.trim(), '');
+}
+
+// --- посреди хода: первый порог закрывает шаг, но блока ещё не просит
+{
+  const file = transcript('step-soft', [assistant(95_000)]);
+  work('s-step-soft');
+  const n = contextNotice({ transcript_path: file, session_id: 's-step-soft' }, { phase: 'step' });
+  check('95k посреди хода: soft', n.stage, 'soft');
+  check('95k посреди хода: ответ не обрывать', /не обрывай/.test(n.text), true);
+  check('95k посреди хода: про handoff пока не просит', /handoff/.test(n.text), false);
+}
+
+// --- посреди хода на втором пороге: довести шаг до коммита с пушем, и только
+// потом блок передачи — а не обрыв ответа на половине
+{
+  const file = transcript('step-hand', [assistant(160_000)]);
+  work('s-step');
+  const input = { transcript_path: file, session_id: 's-step' };
+  const n = contextNotice(input, { phase: 'step' });
+  check('160k посреди хода: hand', n.stage, 'hand');
+  check('160k посреди хода: ответ не обрывать', /не обрывай/.test(n.text), true);
+  check('160k посреди хода: коммит и пуш', /коммитом и пушем/.test(n.text), true);
+  check('160k посреди хода: назван скилл handoff', /handoff/.test(n.text), true);
+  check('160k посреди хода: следующий шаг — новой сессии',
+    /Следующий шаг здесь не начинай/.test(n.text), true);
+  check('тот же порог посреди хода второй раз молчит',
+    contextNotice(input, { phase: 'step' }), null);
+  check('и на следующем промпте не повторяется', contextNotice(input), null);
+}
+
+// --- верхний порог посреди хода повторяется по росту контекста, а не на каждом
+// вызове: вызовов в автономном ходе сотни
+{
+  const sid = 's-step-hard';
+  const first = transcript('step-hard-1', [assistant(240_000)]);
+  const small = transcript('step-hard-2', [assistant(240_000 + STEP_REPEAT - 5_000)]);
+  const grown = transcript('step-hard-3', [assistant(240_000 + STEP_REPEAT + 2_000)]);
+
+  check('240k посреди хода: hard',
+    contextNotice({ transcript_path: first, session_id: sid }, { phase: 'step' }).stage, 'hard');
+  check('рост меньше STEP_REPEAT: повтора нет',
+    contextNotice({ transcript_path: small, session_id: sid }, { phase: 'step' }), null);
+  check('рост больше STEP_REPEAT: повтор звучит',
+    contextNotice({ transcript_path: grown, session_id: sid }, { phase: 'step' }).stage, 'hard');
+  check('на ходу пользователя hard повторяется без условия роста',
+    contextNotice({ transcript_path: grown, session_id: sid }).stage, 'hard');
+}
+
+// --- step-хук: доносит текст со своим событием и не падает на мусоре
+{
+  const file = transcript('step-hook', [assistant(240_000)]);
+  const out = runStepHook({ transcript_path: file, session_id: 's-step-hook' });
+  check('step-хук отдаёт текст', /240k/.test(out.additionalContext), true);
+  check('step-хук называет своё событие', out.hookEventName, 'PostToolUse');
+  const quiet = transcript('step-quiet', [assistant(40_000)]);
+  check('ниже порога: step-хук молчит',
+    runStepHook({ transcript_path: quiet, session_id: 's-step-quiet' }), null);
+  const broken = execFileSync('node', [STEP_HOOK], {
+    input: 'не json',
+    encoding: 'utf8',
+    env: { ...process.env, ...ENV },
+  });
+  check('step-хук, битый ввод: пустой ответ', broken.trim(), '');
+}
+
+// --- сессия, где порог съеден одним сбором данных, не обязана вставать до начала
+// работы: передавать ей нечего, и новая сессия упёрлась бы в тот же порог — петля
+{
+  const soft = transcript('idle-soft', [assistant(95_000)]);
+  const hand = transcript('idle-hand', [assistant(160_000)]);
+  const hard = transcript('idle-hard', [assistant(240_000)]);
+  const sid = 's-idle';
+
+  const first = contextNotice({ transcript_path: soft, session_id: sid }, { phase: 'step' });
+  check('без правок: шаг бросать не велят', /шаг не бросай/.test(first.text), true);
+  check('без правок: про handoff не просят', /handoff/.test(first.text), false);
+  check('без правок: сказано сузить чтение', /Сузь чтение/.test(first.text), true);
+
+  const second = contextNotice({ transcript_path: hand, session_id: sid }, { phase: 'step' });
+  check('без правок на 160k: блок не собирать',
+    /Блок передачи не собирай/.test(second.text), true);
+  check('без правок на 160k: скилл handoff не назван', /handoff/.test(second.text), false);
+
+  const third = contextNotice({ transcript_path: hard, session_id: sid }, { phase: 'step' });
+  check('без правок на 240k: разрешено сказать пользователю',
+    /скажи об этом пользователю/.test(third.text), true);
+
+  // появилась правка — и требование меняется на передачу
+  work(sid);
+  const grown = transcript('idle-grown', [assistant(240_000 + STEP_REPEAT + 2_000)]);
+  const after = contextNotice({ transcript_path: grown, session_id: sid }, { phase: 'step' });
+  check('после первой правки: просят блок передачи', /handoff/.test(after.text), true);
+}
+
+// --- отметка работы: чтение ею не считается, правка и коммит — считаются
+{
+  check('Read работой не считается',
+    noteWork({ session_id: 's-work', tool_name: 'Read', tool_input: { file_path: '/a' } }), false);
+  check('git status работой не считается',
+    noteWork({ session_id: 's-work', tool_name: 'Bash', tool_input: { command: 'git status' } }), false);
+  check('git commit считается',
+    noteWork({ session_id: 's-work', tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }), true);
+  check('повторная отметка файл не трогает',
+    noteWork({ session_id: 's-work', tool_name: 'Edit', tool_input: {} }), false);
+  check('правка через mcp считается',
+    noteWork({ session_id: 's-mcp', tool_name: 'mcp__tokensave__tokensave_str_replace', tool_input: {} }), true);
+  check('без id сессии отметки нет',
+    noteWork({ tool_name: 'Edit', tool_input: {} }), false);
+}
+
+// --- посреди хода без id сессии дедупликации нет — молчим
+{
+  const file = transcript('no-sid', [assistant(240_000)]);
+  check('step без session_id: молчит',
+    contextNotice({ transcript_path: file }, { phase: 'step' }), null);
+  check('на ходу пользователя без session_id — всё ещё звучит',
+    contextNotice({ transcript_path: file }).stage, 'hard');
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

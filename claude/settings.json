@@ -13,7 +13,9 @@
       "Edit(~/.ai-hooks/**)",
       "Edit(~/harness/**)"
     ],
-    "deny": ["Agent"],
+    "deny": [
+      "Agent"
+    ],
     "defaultMode": "default"
   },
   "hooks": {
@@ -96,7 +98,20 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": ["hook-pre-tool-use"]
+            "args": [
+              "hook-pre-tool-use"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/context-step.mjs"
           }
         ]
       }
@@ -107,7 +122,9 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": ["hook-stop"]
+            "args": [
+              "hook-stop"
+            ]
           }
         ]
       },
@@ -150,7 +167,9 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": ["hook-prompt-submit"]
+            "args": [
+              "hook-prompt-submit"
+            ]
           }
         ]
       },
@@ -233,5 +252,6 @@
   "language": "Russian",
   "effortLevel": "high",
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false
+  "remoteControlAtStartup": false,
+  "model": "opus"
 }

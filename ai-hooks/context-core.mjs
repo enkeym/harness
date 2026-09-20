@@ -19,7 +19,13 @@
 // Файлов передача не создаёт и `/clear` не зовёт. На пороге агент выдаёт
 // markdown-блок состояния прямо в чат; пользователь переносит его руками.
 //
-// Модуль чистый — без stdin и вывода: его импортируют и хук, и statusline.
+// Замер живёт в двух фазах. 'prompt' — на ходу пользователя, где ничего ещё не
+// начато. 'step' — между вызовами инструментов внутри одного хода: автономный ход
+// на сотню вызовов проходит все три порога, ни разу не вернувшись к пользователю, и
+// без этой фазы пороги для него не существуют. Требования разные: посреди хода
+// нельзя бросить ответ на половине — сначала коммит и пуш, потом блок передачи.
+//
+// Модуль чистый — без stdin и вывода: его импортируют оба хука и statusline.
 
 import fs from 'node:fs';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
@@ -36,6 +42,12 @@ const num = (env, fallback) => Number(process.env[env]) || fallback;
 export const SOFT = num('AI_HOOKS_CTX_SOFT', 90_000);
 export const HAND = num('AI_HOOKS_CTX_HAND', 150_000);
 export const HARD = num('AI_HOOKS_CTX_HARD', 220_000);
+
+// На сколько должен вырасти контекст, чтобы верхний порог прозвучал посреди хода
+// ещё раз. На ходу пользователя мерой повтора служит сам ход; внутри хода ходов
+// нет, а вызовов инструментов сотни — привязка к их числу превратила бы
+// напоминание в шум на каждом вызове.
+export const STEP_REPEAT = num('AI_HOOKS_CTX_STEP_REPEAT', 20_000);
 
 const TAIL_BYTES = 256 * 1024;
 const STATE_FILE = statePath('context-meter.json');
@@ -98,27 +110,124 @@ export function level(tokens) {
   return 'soft';
 }
 
-// Что объявляли этой сессии. Записи чужих сессий старше суток выбрасываем:
-// файл не журнал, а память одного дня.
-function announced(sessionId) {
-  const rec = readJSON(STATE_FILE)[sessionId];
-  return rec?.stage || null;
+// Память о сессии: какой порог объявлен, на какой занятости это было и появилась
+// ли в сессии работа. Записи старше суток выбрасываем: файл не журнал, а память
+// одного дня.
+function record(sessionId) {
+  return readJSON(STATE_FILE)[sessionId] || null;
 }
 
-function remember(sessionId, stage) {
+function update(sessionId, patch) {
   const now = Date.now();
   const all = readJSON(STATE_FILE);
   for (const [key, rec] of Object.entries(all)) {
     if (!rec || typeof rec.at !== 'number' || now - rec.at > KEEP_MS) delete all[key];
   }
-  all[sessionId] = { stage, at: now };
+  all[sessionId] = { ...all[sessionId], ...patch, at: now };
   writeJSON(STATE_FILE, all);
+}
+
+// Инструменты, после которых в сессии есть что передавать: правка файла или
+// коммит. Чтение и поиск сюда не входят намеренно — ими порог как раз и берётся.
+const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
+const EDIT_MCP = /(str_replace|insert_at|replace_symbol)/;
+
+function isWork(toolName, toolInput) {
+  if (!toolName) return false;
+  if (EDIT_TOOL.test(toolName) || EDIT_MCP.test(toolName)) return true;
+  if (toolName === 'Bash') return /\bgit\s+commit\b/.test(String(toolInput?.command || ''));
+  return false;
+}
+
+// Отметка «в сессии появилась работа». Пишется один раз за сессию: дальше запись
+// уже стоит, и файл на каждом вызове инструмента не трогаем.
+export function noteWork(input) {
+  const sessionId = input?.session_id;
+  if (!sessionId || !isWork(input?.tool_name, input?.tool_input)) return false;
+  if (record(sessionId)?.worked) return false;
+  update(sessionId, { worked: true });
+  return true;
+}
+
+// Объявленный порог звучит снова только наверху: на ходу пользователя — каждый
+// ход, потому что именно там прежняя версия замолкала навсегда; посреди хода —
+// когда контекст с прошлого раза вырос ещё на STEP_REPEAT.
+function mayRepeat(phase, stage, tokens, seen) {
+  if (stage !== 'hard' || seen.stage !== 'hard') return false;
+  if (phase !== 'step') return true;
+  return tokens - (seen.tokens || 0) >= STEP_REPEAT;
 }
 
 const k = (tokens) => `${Math.round(tokens / 1000)}k`;
 
-export function noticeText(stage, tokens, sessionId) {
+// Текст посреди хода. Здесь агент уже что-то начал, и «остановись» оставило бы
+// грязное рабочее дерево, а следующей сессии — не шаг, а половину шага, которую
+// нечем описать в блоке передачи. Поэтому требование другое: довести текущий шаг
+// до коммита с пушем и не начинать следующий — его сделает новая сессия.
+function stepText(stage, size, resume) {
+  const finish = 'Ответ на середине не обрывай: доведи текущий шаг до конца и закрой его '
+    + 'коммитом и пушем по скиллу `git-flow`.';
+
+  if (stage === 'soft') {
+    return `${size} Порог пройден посреди хода. ${finish} Новый шаг в этой сессии не `
+      + 'начинай, файлы целиком не перечитывай — бери символ или диапазон. Блок передачи '
+      + 'пока не собирай, про порог пользователю не сообщай: это указание тебе.';
+  }
+
+  const handoff = 'Следующий шаг здесь не начинай: вместо него собери блок передачи по скиллу '
+    + '`handoff` — одним markdown-блоком прямо в чат, и первым пунктом «Дальше» назови '
+    + 'именно его. Файлов не создавай, очистку контекста не предлагай и сам не запускай: '
+    + 'пользователь перенесёт блок в новую сессию сам.';
+
+  if (stage === 'hand') {
+    return `${size} Порог пройден посреди хода. ${finish} ${handoff}${resume} Про сам порог `
+      + 'пользователю не сообщай, это указание тебе.';
+  }
+
+  return `${size} Это уже дорогая зона, и порог пройден посреди хода. ${finish} До конца `
+    + 'шага ещё далеко — зафиксируй сделанное и честно назови незавершённое в блоке. '
+    + `${handoff}${resume} Про сам порог пользователю не сообщай.`;
+}
+
+// Сессия, где ещё ничего не изменено — одно чтение. Передавать нечего: блок
+// свёлся бы к списку прочитанного, новая сессия прочла бы то же самое и упёрлась
+// в тот же порог — это петля, а не передача. Требование здесь обратное: не
+// останавливаться, а сузить чтение и дойти до результата. Без этой ветки сессия,
+// где порог съедается одним сбором данных, вставала бы до начала работы.
+function idleText(stage, size) {
+  const narrow = 'Сузь чтение: символ или диапазон вместо файла целиком, поиск вместо '
+    + 'обзора, прочитанное повторно не открывай.';
+
+  if (stage === 'soft') {
+    return `${size} Правок в этой сессии пока нет — значит платим за одно чтение. `
+      + `${narrow} Работу при этом не откладывай и шаг не бросай: блок передачи сейчас `
+      + 'бесполезен — в нём нечего передавать. Про порог пользователю не сообщай.';
+  }
+
+  const instead = 'Блок передачи не собирай: новая сессия прочла бы ровно то же самое и '
+    + 'упёрлась в тот же порог. Доведи до результата самый узкий полезный кусок и '
+    + 'закрой его коммитом; если результат сессии — не правки, а выводы, изложи их '
+    + 'пользователю сейчас и новых чтений не начинай.';
+
+  if (stage === 'hand') return `${size} Правок в этой сессии всё ещё нет. ${narrow} ${instead}`;
+
+  return `${size} Это дорогая зона, а сделанного в сессии нет. ${narrow} ${instead} Если `
+    + 'задача не помещается даже в сбор данных, скажи об этом пользователю одной '
+    + 'строкой: её нужно сузить, а не передавать.';
+}
+
+// phase: 'prompt' — на ходу пользователя, где ничего не начато; 'step' — посреди
+// хода, между вызовами инструментов. worked — была ли в сессии работа,
+// которую есть смысл передавать.
+export function noticeText(stage, tokens, { sessionId, phase = 'prompt', worked = false } = {}) {
   const size = `В контексте ${k(tokens)} токенов.`;
+  if (!worked) return idleText(stage, size);
+
+  const resume = sessionId
+    ? ` История этой сессии остаётся доступной через \`claude --resume ${sessionId}\`.`
+    : '';
+
+  if (phase === 'step') return stepText(stage, size, resume);
 
   if (stage === 'soft') {
     return `${size} Каждый следующий ход заново оплачивает всё накопленное, поэтому крупное `
@@ -127,10 +236,6 @@ export function noticeText(stage, tokens, sessionId) {
       + 'собирай, про порог пользователю не сообщай: это указание тебе, и на этом пороге оно '
       + 'единственное.';
   }
-
-  const resume = sessionId
-    ? ` История этой сессии остаётся доступной через \`claude --resume ${sessionId}\`.`
-    : '';
 
   if (stage === 'hand') {
     return `${size} Доведи текущую единицу работы до состояния, которое не стыдно бросить `
@@ -151,7 +256,10 @@ export function noticeText(stage, tokens, sessionId) {
 // Один раз на порог: soft не повторяется, hand звучит поверх soft, а hard —
 // каждый ход, потому что именно там прежняя версия замолкала навсегда и сессия
 // спокойно уезжала за 300k.
-export function contextNotice(input) {
+//
+// Леджер объявлений у фаз общий: порог, пройденный посреди хода, не повторяется
+// следующим же промптом — указание уже доехало, и вторая копия была бы шумом.
+export function contextNotice(input, { phase = 'prompt' } = {}) {
   const used = contextUsed(input?.transcript_path);
   if (!used) return null;
 
@@ -159,16 +267,21 @@ export function contextNotice(input) {
   if (!stage) return null;
 
   const sessionId = input?.session_id;
-  if (sessionId && stage !== 'hard') {
-    const seen = announced(sessionId);
-    if (seen && RANK[seen] >= RANK[stage]) return null;
+  // Посреди хода без id сессии дедупликации нет, а вызовов сотни: молчим, иначе
+  // текст повторился бы после каждого из них.
+  if (phase === 'step' && !sessionId) return null;
+
+  const seen = sessionId ? record(sessionId) : null;
+  if (seen?.stage && RANK[seen.stage] >= RANK[stage]
+    && !mayRepeat(phase, stage, used.tokens, seen)) {
+    return null;
   }
-  if (sessionId) remember(sessionId, stage);
+  if (sessionId) update(sessionId, { stage, tokens: used.tokens });
 
   return {
     stage,
     pct: used.pct,
     tokens: used.tokens,
-    text: noticeText(stage, used.tokens, sessionId),
+    text: noticeText(stage, used.tokens, { sessionId, phase, worked: seen?.worked === true }),
   };
 }

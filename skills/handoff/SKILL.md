@@ -5,11 +5,18 @@ description: "Assembles a handoff block in chat when the context grows expensive
 
 # Handoff
 
-Trigger: in Claude Code `context-meter.mjs` fires at the token thresholds in
-`~/.ai-hooks/context-core.mjs` — `SOFT` (close the step, no block yet), `HAND`
-(assemble the block), `HARD` (assemble it now, repeated every turn); OpenCode
-has no meter — only `/handoff` or the user's words. Don't raise context size
-again yourself. Never write a file, never start a new session for the user.
+Trigger: in Claude Code two hooks fire at the token thresholds in
+`~/.ai-hooks/context-core.mjs` — `context-meter.mjs` between turns,
+`context-step.mjs` mid-turn, between tool calls. `SOFT` closes the step with no
+block yet; `HAND` and `HARD` ask for the block. OpenCode has no meter — only
+`/handoff` or the user's words. Don't raise context size again yourself. Never
+write a file, never start a new session for the user.
+
+Mid-turn the answer is never cut in half: finish the step in hand, commit and
+push it, and only then print the block — the step not started goes first under
+`Дальше`. A session that has changed nothing yet gets no block at all: it would
+list what was read, the next session would read the same and hit the same
+threshold. The hook says which case it is; follow its wording.
 
 ## Steps
 
