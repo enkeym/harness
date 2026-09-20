@@ -116,6 +116,20 @@ symbols and commands, not areas. Empty section = `нет`, never omitted.
 After the block, one line: `Правки — по разделам; «да» — начинаю с шага 1.`
 Then stop.
 
+## Sizing the steps
+
+A step is one commit and fits one session. Cost per turn grows with everything
+already in the window, so a step that outgrows its session is paid for at every
+later turn of it.
+
+- Size a step at roughly 20–40 turns of work. Below that the restarts cost
+  more than they save; above it the window does.
+- A step that needs a third subsystem, a second data model or a migration plus
+  its callers is two steps. Split it in the brief, not halfway through.
+- Name in the step what it must leave behind: the commit and the check that
+  proves it. A step nobody can verify cannot be handed over.
+- Don't plan the handoff in the brief — `context-meter` decides when, by tokens.
+
 ## After the answer
 
 - "да", "ок", "поехали" → step 1. A correction → rewrite the touched sections
@@ -123,5 +137,8 @@ Then stop.
 - The brief is the spec: one step, one commit (`rules/core.md` commit trigger). A
   step that turns out different from the brief → one line saying so before
   continuing, not after.
+- At a step boundary with the meter already asking for a handoff: finish the
+  commit, then `handoff`, and carry the remaining steps of the brief verbatim
+  into its `Дальше` — the next session re-derives them otherwise.
 - The brief lives in chat only; `handoff` carries it across sessions. An
   architectural choice made here → `tokensave_record_decision`.
