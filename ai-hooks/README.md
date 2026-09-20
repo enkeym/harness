@@ -51,11 +51,13 @@ claude/usage-log.mjs            # токены, стоимость, инстру
 context-core.mjs                # замер занятости окна, пороги в токенах и их тексты
 claude/context-meter.mjs        # порог на ходу пользователя (UserPromptSubmit)
 claude/context-step.mjs         # порог посреди хода, между вызовами (PostToolUse)
+claude/paste-guard.mjs          # промпт длиннее предела — не в контекст (UserPromptSubmit, block)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
 bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
 bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
+bin/start-cost.mjs              # стартовая цена сессий по слоям — из транскриптов
 bin/cleanup.mjs                 # уборка меток, кешей и журналов (Stop, раз в сутки)
 bin/ask-mode.mjs                # переключатель: on | off | toggle | reset | default
 opencode/tokensave-guard.mjs    # адаптер OpenCode: плагин (tool.execute.before и др.)
@@ -471,7 +473,9 @@ Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 `node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
-`node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`.
+`node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,
+`node ~/.ai-hooks/claude/paste-guard.mjs` на `UserPromptSubmit` первым в
+цепочке — заблокированный промпт остальным хукам не достаётся.
 Гейт скиллов: `node ~/.ai-hooks/claude/skill-track.mjs` на `PreToolUse`
 (matcher `Skill`) и на `UserPromptSubmit`, `node ~/.ai-hooks/claude/skill-gate.mjs`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash`, после гардов
@@ -549,6 +553,24 @@ Matcher переживает `tokensave reinstall`: install дописывает
 в новую сессию руками (история старой остаётся в `claude --resume <id>`), либо
 просто очищает контекст. Индикатор в статусной строке показывает те же пороги
 цветом — в контекст оттуда ничего не уходит.
+
+Пороги ловят рост, но не старт. Стартовая цена сессии — `cache_creation` первой
+записи ассистента, по слоям её считает `bin/start-cost.mjs` — раскладывается так (trader, opus, короткий промпт, 44k):
+≈28k системный промпт Claude Code со схемами встроенных инструментов, ≈4k
+схемы поднятых tokensave-инструментов, 5k список скиллов (свои 2k, скиллы
+claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`, `CLAUDE.md`,
+память), 1.2k имена отложенных инструментов, 0.8k инструкции MCP. Из этого
+пользователю подвластны ≈8k: в `claude/settings.json` выключены синхронизация
+скиллов и плагинов claude.ai, коннекторы claude.ai и инструмент Artifact —
+документы делаются из приложения, не из CLI. Проектный `CLAUDE.md` — указатель,
+не справочник: его ужатие с 24k до 2k символов сняло 14k со старта.
+
+Единственное, что пороги не поймали бы и что стоит дороже всей базы, — дамп в
+промпте: три сессии из 35 открылись сразу на 200k, потому что под блок передачи
+вставили выгрузку БД на 250k символов. `claude/paste-guard.mjs` на
+`UserPromptSubmit` отвечает `decision: block` на промпт длиннее
+`AI_HOOKS_PASTE_LIMIT` (40k символов; нормальная передача — до 6k): вставка не
+попадает в окно, пользователь видит причину — данные в файл, путь в промпт.
 
 **Ограничитель вывода.** `claude/output-clip.mjs` на `PreToolUse(Bash)` заменяет
 команду на `bin/clip-output.sh <метка> -- '<команда>'`, если она из шумных

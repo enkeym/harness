@@ -36,7 +36,7 @@ const ENV = {
   AI_HOOKS_CTX_STEP_REPEAT: '20000',
 };
 Object.assign(process.env, ENV);
-const { contextUsed, contextNotice, noteWork, level, WINDOW, SOFT, HAND, HARD, STEP_REPEAT } = await import('../context-core.mjs');
+const { contextUsed, contextNotice, noteWork, level, oversizedPrompt, WINDOW, SOFT, HAND, HARD, STEP_REPEAT } = await import('../context-core.mjs');
 
 // В сессии появилась работа: без неё текст порога другой — передавать нечего.
 const work = (sessionId) => noteWork({ session_id: sessionId, tool_name: 'Edit', tool_input: {} });
@@ -346,6 +346,31 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     contextNotice({ transcript_path: file }, { phase: 'step' }), null);
   check('на ходу пользователя без session_id — всё ещё звучит',
     contextNotice({ transcript_path: file }).stage, 'hard');
+}
+
+// --- предохранитель на вставку: дамп в промпте не доходит до контекста
+{
+  const PASTE_HOOK = path.join(ROOT, 'claude', 'paste-guard.mjs');
+  const runPaste = (input) => {
+    const out = execFileSync('node', [PASTE_HOOK], {
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: { ...process.env, ...ENV, AI_HOOKS_PASTE_LIMIT: '1000' },
+    });
+    return out.trim() ? JSON.parse(out) : null;
+  };
+  check('короткий промпт проходит', runPaste({ prompt: 'а'.repeat(1000) }), null);
+  const blocked = runPaste({ prompt: '{"_type":"auditLog"}\n'.repeat(60) });
+  check('дамп длиннее предела — block', blocked?.decision, 'block');
+  check('отказ объясняет, куда девать данные',
+    /файл/.test(blocked?.reason) && /handoff/.test(blocked?.reason), true);
+  check('без промпта: молчит', runPaste({}), null);
+  check('битый stdin: молчит', (() => {
+    const out = execFileSync('node', [PASTE_HOOK], { input: '{', encoding: 'utf8', env: { ...process.env, ...ENV } });
+    return out.trim() || null;
+  })(), null);
+  check('предел по умолчанию не режет нормальную передачу',
+    oversizedPrompt('передача\n'.repeat(700)), null);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

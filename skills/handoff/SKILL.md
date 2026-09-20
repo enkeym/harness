@@ -68,7 +68,12 @@ The hook says which case it is; follow its wording.
 
 Dialogue retelling; file contents, diffs, command output, stack traces;
 anything one command restores (`git status`, `git log`, a signature); secrets.
-Architectural decisions go to `tokensave_record_decision`, not here.
+Data of any kind — DB dumps, JSONL records, logs, result tables past a few
+rows: write them to a file and name the path; the next session processes the
+file with a script and reads only the totals. `paste-guard.mjs` blocks a
+prompt above its size limit, and one pasted dump costs more than the whole
+session's base context. Architectural decisions go to
+`tokensave_record_decision`, not here.
 
 ## Receiving a block
 

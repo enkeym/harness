@@ -1,6 +1,10 @@
 {
   "cleanupPeriodDays": 45,
   "includeCoAuthoredBy": false,
+  "syncClaudeAiSkills": false,
+  "syncClaudeAiPlugins": false,
+  "disableClaudeAiConnectors": true,
+  "enableArtifact": false,
   "permissions": {
     "allow": [
       "mcp__ragsave__rag_index",
@@ -162,6 +166,14 @@
       }
     ],
     "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/paste-guard.mjs"
+          }
+        ]
+      },
       {
         "hooks": [
           {
