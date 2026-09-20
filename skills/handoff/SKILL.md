@@ -14,9 +14,12 @@ write a file, never start a new session for the user.
 
 Mid-turn the answer is never cut in half: finish the step in hand, commit and
 push it, and only then print the block — the step not started goes first under
-`Дальше`. A session that has changed nothing yet gets no block at all: it would
+`Дальше`. A session that has changed nothing gets no block at `SOFT`: it would
 list what was read, the next session would read the same and hit the same
-threshold. The hook says which case it is; follow its wording.
+threshold. From `HAND` such a session is usually an analysis, not a prelude to
+an edit — its block is built from conclusions (`Решения`, `Открытые вопросы`,
+`Дальше`), with nothing under `Карта` beyond the files the next step needs.
+The hook says which case it is; follow its wording.
 
 ## Steps
 
