@@ -49,12 +49,16 @@ function branch(dir) {
 // Занятость контекстного окна. Пока её не видно, «сессия стала дорогой» заметно
 // только по счёту в конце месяца; цвета — те же пороги, на которых срабатывает
 // context-meter, чтобы предупреждение агенту и индикатор не расходились.
+//
+// Показываем токены, а не долю окна: с 1M-окном процент выглядит безобидно
+// (220k — «22%»), тогда как платим мы ровно за эти токены на каждом ходе.
 function contextBadge(transcriptPath) {
   const used = contextUsed(transcriptPath);
   if (!used) return '';
-  const lvl = level(used.pct);
-  const color = lvl === 'act' ? RED : lvl === 'warn' ? AMBER : DIM;
-  return `${color}ctx ${used.pct}%${RESET}`;
+  const lvl = level(used.tokens);
+  const color = lvl === 'hard' || lvl === 'hand' ? RED : lvl === 'soft' ? AMBER : DIM;
+  const mark = lvl === 'hard' ? '!' : '';
+  return `${color}ctx ${Math.round(used.tokens / 1000)}k${mark}${RESET}`;
 }
 
 let raw = '';

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Тест замера контекста и порога передачи. Смысл проверок: цифра должна браться
-// из фактического usage последнего хода основной нити (а не субагента), молчать
-// до порога 75%, сработать один раз за сессию и больше не повторяться — даже
-// если окно растёт дальше. Файлов передача не создаёт, `/clear` не зовёт.
+// Тест замера контекста и порогов передачи. Смысл проверок: цифра должна браться
+// из фактического usage последнего хода основной нити (а не субагента), пороги
+// считаться в токенах (а не в доле окна), каждый порог звучать один раз, а
+// верхний — повторяться каждый ход, пока сессия не сменится. Файлов передача не
+// создаёт, `/clear` не зовёт.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -23,11 +24,17 @@ function check(name, got, want) {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-meter-'));
 const stateDir = path.join(tmp, 'state');
 
-// Состояние — в песочницу, окно — фиксированное: иначе проверки зависят от того,
-// что осталось от предыдущего прогона и от env машины.
-process.env.AI_HOOKS_STATE_DIR = stateDir;
-process.env.AI_HOOKS_CONTEXT_WINDOW = '200000';
-const { contextUsed, contextNotice, level, WINDOW } = await import('../context-core.mjs');
+// Состояние — в песочницу, окно и пороги — фиксированные: иначе проверки зависят
+// от того, что осталось от предыдущего прогона, и от env машины.
+const ENV = {
+  AI_HOOKS_STATE_DIR: stateDir,
+  AI_HOOKS_CONTEXT_WINDOW: '1000000',
+  AI_HOOKS_CTX_SOFT: '90000',
+  AI_HOOKS_CTX_HAND: '150000',
+  AI_HOOKS_CTX_HARD: '220000',
+};
+Object.assign(process.env, ENV);
+const { contextUsed, contextNotice, level, WINDOW, SOFT, HAND, HARD } = await import('../context-core.mjs');
 
 let seq = 0;
 function assistant(tokens, extra = {}) {
@@ -58,12 +65,10 @@ function runHook(input) {
   const out = execFileSync('node', [HOOK], {
     input: JSON.stringify(input),
     encoding: 'utf8',
-    env: { ...process.env, AI_HOOKS_STATE_DIR: stateDir, AI_HOOKS_CONTEXT_WINDOW: '200000' },
+    env: { ...process.env, ...ENV },
   });
   return out.trim() ? JSON.parse(out).hookSpecificOutput.additionalContext : null;
 }
-
-const pctTokens = (pct) => Math.round(WINDOW * pct / 100);
 
 // --- нечего мерить: молчим, а не гадаем
 check('нет пути: null', contextUsed(undefined), null);
@@ -73,10 +78,10 @@ check('без usage: null', contextUsed(transcript('nousage', ['{"type":"user"}'
 
 // --- цифра из последнего хода, а не из первого
 {
-  const file = transcript('grow', [assistant(pctTokens(20)), assistant(pctTokens(50))]);
+  const file = transcript('grow', [assistant(50_000), assistant(120_000)]);
   const used = contextUsed(file);
-  check('берётся последний ход', used.pct, 50);
-  check('токены сходятся', used.tokens, pctTokens(50));
+  check('берётся последний ход', used.tokens, 120_000);
+  check('процент считается от окна', used.pct, Math.round(120_000 / WINDOW * 100));
   check('модель названа', used.model, 'claude-opus-5');
 }
 
@@ -103,77 +108,102 @@ check('без usage: null', contextUsed(transcript('nousage', ['{"type":"user"}'
 // контекст основной нити вырос сильнее всего
 {
   const file = transcript('side', [
-    assistant(pctTokens(70)),
-    assistant(pctTokens(5), { isSidechain: true }),
+    assistant(180_000),
+    assistant(9_000, { isSidechain: true }),
   ]);
-  check('sidechain пропущен', contextUsed(file).pct, 70);
+  check('sidechain пропущен', contextUsed(file).tokens, 180_000);
 }
 
 // --- хвост: длинный транскрипт не читается целиком, но цифра та же
 {
   const filler = Array.from({ length: 400 }, () => JSON.stringify({ type: 'user', text: 'x'.repeat(1000) }));
-  const file = transcript('long', [...filler, assistant(pctTokens(80))]);
+  const file = transcript('long', [...filler, assistant(160_000)]);
   check('файл больше хвоста', fs.statSync(file).size > 256 * 1024, true);
-  check('хвост даёт ту же цифру', contextUsed(file).pct, 80);
+  check('хвост даёт ту же цифру', contextUsed(file).tokens, 160_000);
 }
 
-// --- уровни для цвета индикатора: жёлтый с 60%, красный с 75%
-check('59% — молчит', level(59), null);
-check('60% — warn (жёлтый)', level(60), 'warn');
-check('74% — всё ещё warn', level(74), 'warn');
-check('75% — act (красный)', level(75), 'act');
+// --- пороги считаются в токенах: доля окна на них не влияет
+check('ниже SOFT — молчит', level(SOFT - 1), null);
+check('SOFT — soft', level(SOFT), 'soft');
+check('ниже HAND — всё ещё soft', level(HAND - 1), 'soft');
+check('HAND — hand', level(HAND), 'hand');
+check('ниже HARD — всё ещё hand', level(HARD - 1), 'hand');
+check('HARD — hard', level(HARD), 'hard');
+check('220k при 1M-окне — это 22%, и всё равно hard', level(220_000), 'hard');
 
-// --- ниже порога хук молчит, даже в жёлтой зоне: текст завязан только на 75%
+// --- ниже первого порога хук молчит
 {
-  const file = transcript('quiet', [assistant(pctTokens(40))]);
-  check('40%: уведомления нет', contextNotice({ transcript_path: file, session_id: 's-quiet' }), null);
-  check('40%: хук молчит', runHook({ transcript_path: file, session_id: 's-quiet' }), null);
-}
-{
-  const file = transcript('amber', [assistant(pctTokens(68))]);
-  check('68%: уведомления нет', contextNotice({ transcript_path: file, session_id: 's-amber' }), null);
-}
-
-// --- порог: одно срабатывание на сессию, текст про блок в чат, без /clear
-{
-  const file = transcript('act', [assistant(pctTokens(76))]);
-  const first = contextNotice({ transcript_path: file, session_id: 's-act' });
-  check('76%: сработало', first.pct, 76);
-  check('76%: процент в тексте', /76%/.test(first.text), true);
-  check('76%: назван скилл handoff', /handoff/.test(first.text), true);
-  check('76%: сказано выдать в чат', /чат/.test(first.text), true);
-  check('76%: про /clear не просит', /\/clear/.test(first.text), false);
-  check('76%: назван resume с id сессии', /--resume s-act/.test(first.text), true);
-  check('76%: сначала коммит', /коммит/.test(first.text), true);
-
-  check('повтор на том же проценте молчит', contextNotice({ transcript_path: file, session_id: 's-act' }), null);
-
-  const grown = transcript('act2', [assistant(pctTokens(90))]);
-  check('окно выросло до 90% — всё равно молчим', contextNotice({ transcript_path: grown, session_id: 's-act' }), null);
+  const file = transcript('quiet', [assistant(40_000)]);
+  check('40k: уведомления нет', contextNotice({ transcript_path: file, session_id: 's-quiet' }), null);
+  check('40k: хук молчит', runHook({ transcript_path: file, session_id: 's-quiet' }), null);
 }
 
-// --- сессии не делят состояние объявлений: каждая слышит свой единственный раз
+// --- первый порог: закрыть шаг, но блок ещё не собирать; звучит один раз
 {
-  const file = transcript('two', [assistant(pctTokens(80))]);
-  check('первая сессия слышит', contextNotice({ transcript_path: file, session_id: 's-a' }).pct, 80);
-  check('вторая сессия тоже слышит', contextNotice({ transcript_path: file, session_id: 's-b' }).pct, 80);
+  const file = transcript('soft', [assistant(95_000)]);
+  const first = contextNotice({ transcript_path: file, session_id: 's-soft' });
+  check('95k: сработало как soft', first.stage, 'soft');
+  check('95k: токены в тексте', /95k/.test(first.text), true);
+  check('95k: про handoff пока не просит', /handoff/.test(first.text), false);
+  check('95k: сказано закрыть шаг коммитом', /коммит/.test(first.text), true);
+  check('повтор того же порога молчит', contextNotice({ transcript_path: file, session_id: 's-soft' }), null);
+}
+
+// --- второй порог звучит поверх первого, третий — поверх второго
+{
+  const soft = transcript('esc-soft', [assistant(95_000)]);
+  const hand = transcript('esc-hand', [assistant(160_000)]);
+  const hard = transcript('esc-hard', [assistant(240_000)]);
+
+  check('сначала soft', contextNotice({ transcript_path: soft, session_id: 's-esc' }).stage, 'soft');
+
+  const second = contextNotice({ transcript_path: hand, session_id: 's-esc' });
+  check('рост до 160k: звучит hand', second.stage, 'hand');
+  check('160k: назван скилл handoff', /handoff/.test(second.text), true);
+  check('160k: сказано выдать в чат', /чат/.test(second.text), true);
+  check('160k: про /clear не просит', /\/clear/.test(second.text), false);
+  check('160k: назван resume с id сессии', /--resume s-esc/.test(second.text), true);
+  check('hand второй раз молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
+
+  const third = contextNotice({ transcript_path: hard, session_id: 's-esc' });
+  check('рост до 240k: звучит hard', third.stage, 'hard');
+  check('240k: повторяется каждый ход', contextNotice({ transcript_path: hard, session_id: 's-esc' }).stage, 'hard');
+  check('240k: и на третий ход тоже', contextNotice({ transcript_path: hard, session_id: 's-esc' }).stage, 'hard');
+  check('240k: не начинать новую работу', /[Нн]овую работу не начинай/.test(third.text), true);
+
+  // откат ниже порога (новый ход дешевле предыдущего) младший порог не будит
+  check('спуск к 160k после hard: молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
+  check('спуск к 95k после hard: молчит', contextNotice({ transcript_path: soft, session_id: 's-esc' }), null);
+}
+
+// --- сессия, начатая сразу в дорогой зоне, слышит верхний порог без младших
+{
+  const file = transcript('cold', [assistant(300_000)]);
+  check('старт с 300k: сразу hard', contextNotice({ transcript_path: file, session_id: 's-cold' }).stage, 'hard');
+}
+
+// --- сессии не делят состояние объявлений
+{
+  const file = transcript('two', [assistant(160_000)]);
+  check('первая сессия слышит', contextNotice({ transcript_path: file, session_id: 's-a' }).stage, 'hand');
+  check('вторая сессия тоже слышит', contextNotice({ transcript_path: file, session_id: 's-b' }).stage, 'hand');
   check('первая второй раз — молчит', contextNotice({ transcript_path: file, session_id: 's-a' }), null);
 }
 
 // --- хук: доносит текст и не падает на мусоре
 {
-  const file = transcript('hook', [assistant(pctTokens(88))]);
-  check('хук отдаёт текст', /88%/.test(runHook({ transcript_path: file, session_id: 's-hook' })), true);
+  const file = transcript('hook', [assistant(175_000)]);
+  check('хук отдаёт текст', /175k/.test(runHook({ transcript_path: file, session_id: 's-hook' })), true);
   const broken = execFileSync('node', [HOOK], {
     input: 'не json',
     encoding: 'utf8',
-    env: { ...process.env, AI_HOOKS_STATE_DIR: stateDir },
+    env: { ...process.env, ...ENV },
   });
   check('битый ввод: пустой ответ', broken.trim(), '');
   const noPath = execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: 's-nopath' }),
     encoding: 'utf8',
-    env: { ...process.env, AI_HOOKS_STATE_DIR: stateDir },
+    env: { ...process.env, ...ENV },
   });
   check('нет транскрипта: пустой ответ', noPath.trim(), '');
 }

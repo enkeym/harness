@@ -1,5 +1,5 @@
-// Замер занятости контекстного окна и единственный порог: сказать агенту
-// один раз собрать блок передачи прямо в чат.
+// Замер занятости контекстного окна и пороги, на которых агенту пора закрывать
+// шаг и уходить в новую сессию.
 //
 // Считать нечего: в каждой записи ассистента Claude Code хранит usage запроса, и
 // input + cache_read + cache_write + output — это ровно то, что модель прочитала
@@ -9,30 +9,40 @@
 // Читаем хвост файла, а не файл: транскрипт длинной сессии — мегабайты, а замер
 // зовётся на каждый промпт и на каждую отрисовку статусной строки.
 //
-// Файлов передача больше не создаёт и `/clear` не зовёт. На пороге агент один
-// раз выдаёт markdown-блок состояния прямо в чат; пользователь переносит его
-// руками в новую сессию, если хочет продолжить, — иначе просто очищает контекст.
-// После единственного срабатывания хук молчит до конца сессии.
+// Пороги заданы В ТОКЕНАХ, а не в долях окна. С включённым 1M-окном процент
+// перестал что-либо значить для расхода: платим не за долю окна, а за токены, и
+// 96% месячного счёта — это cache read, то есть перечитывание накопленного на
+// каждом ходе. Цена одного хода по локальному ledger'у растёт с $0.046 в коротких
+// сессиях до $0.136 в сессиях за сотню ходов — втрое, задолго до любого предела
+// окна. Отсюда SOFT/HAND/HARD ниже: это бюджет, а не вместимость.
+//
+// Файлов передача не создаёт и `/clear` не зовёт. На пороге агент выдаёт
+// markdown-блок состояния прямо в чат; пользователь переносит его руками.
 //
 // Модуль чистый — без stdin и вывода: его импортируют и хук, и statusline.
 
 import fs from 'node:fs';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
 
-// Окно всех текущих моделей Claude Code. Переопределяется через env, если
-// включён длинный контекст: цифра нужна только как знаменатель процента.
-export const WINDOW = Number(process.env.AI_HOOKS_CONTEXT_WINDOW) || 200_000;
+// Знаменатель процента в статусной строке. 1M — окно моделей с длинным
+// контекстом; переопределяется через env для окна поменьше. На пороги не влияет.
+export const WINDOW = Number(process.env.AI_HOOKS_CONTEXT_WINDOW) || 1_000_000;
 
-// 75% — уходить пора: дальше каждый ход оплачивает чтение всего накопленного,
-// а запас до автокомпакта (~95%) нужен, чтобы блок успел собрать я, а не он.
-export const ACT = 0.75;
-// Индикатор в статусной строке желтеет раньше — чтобы рост окна был виден
-// глазами до того, как хук что-то скажет. Это только цвет, не текст в контексте.
-export const WARN = 0.6;
+const num = (env, fallback) => Number(process.env[env]) || fallback;
+
+// SOFT — шаг пора закрывать: дальше каждый новый ход оплачивает всё накопленное.
+// HAND — собрать блок передачи после ближайшего коммита.
+// HARD — работать здесь уже дорого; напоминание повторяется каждый ход.
+export const SOFT = num('AI_HOOKS_CTX_SOFT', 90_000);
+export const HAND = num('AI_HOOKS_CTX_HAND', 150_000);
+export const HARD = num('AI_HOOKS_CTX_HARD', 220_000);
 
 const TAIL_BYTES = 256 * 1024;
 const STATE_FILE = statePath('context-meter.json');
 const KEEP_MS = 24 * 3600 * 1000;
+
+// Порядок порогов: объявленный порог гасит только равные и младшие.
+const RANK = { soft: 1, hand: 2, hard: 3 };
 
 // Последние TAIL_BYTES файла. При обрезке первая строка почти наверняка
 // неполная — её и отбрасываем, разбор всё равно упал бы на ней.
@@ -79,54 +89,86 @@ export function contextUsed(transcriptPath) {
   return null;
 }
 
-// Для цвета индикатора статусной строки: null | 'warn' | 'act'. Текстовое
-// предупреждение агенту завязано только на 'act'.
-export function level(pct) {
-  if (pct >= ACT * 100) return 'act';
-  if (pct >= WARN * 100) return 'warn';
-  return null;
+// Порог, на котором стоит сессия: null | 'soft' | 'hand' | 'hard'. Принимает
+// токены — не проценты: у индикатора и у текста агенту одна шкала.
+export function level(tokens) {
+  if (!Number.isFinite(tokens) || tokens < SOFT) return null;
+  if (tokens >= HARD) return 'hard';
+  if (tokens >= HAND) return 'hand';
+  return 'soft';
 }
 
-// Одно срабатывание на сессию. Состояние — только чтобы не повторяться; записи
-// чужих сессий старше суток выбрасываем: файл не журнал, а память одного дня.
+// Что объявляли этой сессии. Записи чужих сессий старше суток выбрасываем:
+// файл не журнал, а память одного дня.
 function announced(sessionId) {
-  const all = readJSON(STATE_FILE);
-  return Boolean(all[sessionId]?.done);
+  const rec = readJSON(STATE_FILE)[sessionId];
+  return rec?.stage || null;
 }
 
-function remember(sessionId) {
+function remember(sessionId, stage) {
   const now = Date.now();
   const all = readJSON(STATE_FILE);
   for (const [key, rec] of Object.entries(all)) {
     if (!rec || typeof rec.at !== 'number' || now - rec.at > KEEP_MS) delete all[key];
   }
-  all[sessionId] = { done: true, at: now };
+  all[sessionId] = { stage, at: now };
   writeJSON(STATE_FILE, all);
 }
 
-export function noticeText(pct, sessionId) {
+const k = (tokens) => `${Math.round(tokens / 1000)}k`;
+
+export function noticeText(stage, tokens, sessionId) {
+  const size = `В контексте ${k(tokens)} токенов.`;
+
+  if (stage === 'soft') {
+    return `${size} Каждый следующий ход заново оплачивает всё накопленное, поэтому крупное `
+      + 'сюда уже не влезает дёшево: доведи текущий шаг до коммита и не начинай в этой сессии '
+      + 'новый. Файлы целиком не перечитывай — бери символ или диапазон. Блок передачи пока не '
+      + 'собирай, про порог пользователю не сообщай: это указание тебе, и на этом пороге оно '
+      + 'единственное.';
+  }
+
   const resume = sessionId
     ? ` История этой сессии остаётся доступной через \`claude --resume ${sessionId}\`.`
     : '';
-  return `Контекст занят на ${pct}%. Собери блок передачи по скиллу \`handoff\` и выдай его `
-    + 'прямо в чат одним markdown-блоком для ручного копирования. Файлов не создавай, очистку '
-    + 'контекста не предлагай и сам не запускай: пользователь либо перенесёт блок в новую сессию '
-    + `руками, либо просто сбросит контекст сам.${resume} Это единственное напоминание — дальше `
-    + 'про занятость контекста молчи до конца сессии, даже если она вырастет. Пользователю про '
-    + 'сам порог сообщать не нужно, это указание тебе. Сначала доведи текущую единицу работы до '
-    + 'состояния, которое не стыдно бросить (коммит), потом собирай блок.';
-}
 
-// null — молчим. Иначе процент, токены и текст для additionalContext.
-export function contextNotice(input) {
-  const used = contextUsed(input?.transcript_path);
-  if (!used || used.pct < ACT * 100) return null;
-
-  const sessionId = input?.session_id;
-  if (sessionId) {
-    if (announced(sessionId)) return null;
-    remember(sessionId);
+  if (stage === 'hand') {
+    return `${size} Доведи текущую единицу работы до состояния, которое не стыдно бросить `
+      + '(коммит), и собери блок передачи по скиллу `handoff` — одним markdown-блоком прямо в '
+      + 'чат, для ручного копирования. Файлов не создавай, очистку контекста не предлагай и сам '
+      + `не запускай: пользователь перенесёт блок в новую сессию сам.${resume} Про сам порог `
+      + 'пользователю не сообщай, это указание тебе.';
   }
 
-  return { pct: used.pct, tokens: used.tokens, text: noticeText(used.pct, sessionId) };
+  return `${size} Это уже дорогая зона: ход здесь стоит втрое против начала сессии. Новую работу `
+    + 'не начинай, глубокие чтения и обзоры не запускай — закрой начатое коммитом и выдай блок '
+    + `передачи по скиллу \`handoff\` прямо в чат.${resume} Напоминание будет повторяться каждый `
+    + 'ход, пока сессия не сменится; пользователю про порог не сообщай.';
+}
+
+// null — молчим. Иначе порог, занятость и текст для additionalContext.
+//
+// Один раз на порог: soft не повторяется, hand звучит поверх soft, а hard —
+// каждый ход, потому что именно там прежняя версия замолкала навсегда и сессия
+// спокойно уезжала за 300k.
+export function contextNotice(input) {
+  const used = contextUsed(input?.transcript_path);
+  if (!used) return null;
+
+  const stage = level(used.tokens);
+  if (!stage) return null;
+
+  const sessionId = input?.session_id;
+  if (sessionId && stage !== 'hard') {
+    const seen = announced(sessionId);
+    if (seen && RANK[seen] >= RANK[stage]) return null;
+  }
+  if (sessionId) remember(sessionId, stage);
+
+  return {
+    stage,
+    pct: used.pct,
+    tokens: used.tokens,
+    text: noticeText(stage, used.tokens, sessionId),
+  };
 }
