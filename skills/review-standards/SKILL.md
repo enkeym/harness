@@ -16,11 +16,18 @@ re-done by hand; a finding is what they cannot see.
    a new type → search its fields; a new helper, hook or component → the reuse
    order of `code-rules.md` (project, installed packages, then a library
    proposal); a new dependency → was an installed one enough.
-   Changed signature or contract → `tokensave_callers` / `tokensave_impact`.
    Tests in the diff: do they assert behaviour or the mock? Run when in doubt.
-3. Fix inside the diff silently (one line in chat per fix). Pre-existing
+3. Impact pass on **every** symbol whose behaviour the diff changes, not only
+   on changed signatures — a caller compiles fine against a function that now
+   returns filtered data. `tokensave_impact` / `callers` / `field_sites`, plus
+   the project's [../shared/impact-map.md](../shared/impact-map.md) for links
+   no call edge carries. Close each hit one of three ways: unaffected (one line
+   saying why), fixed in this diff, or covered by a test that fails on the old
+   behaviour. A link the map lacks → add its line in this commit. No graph
+   (`.tokensave/` missing or stale) → grep the symbol name, say so in one line.
+4. Fix inside the diff silently (one line in chat per fix). Pre-existing
    problems the diff touches → one line under *Minor*, never a widening refactor.
-4. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
+5. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
    output. Red = no commit.
 
 ## Checklist

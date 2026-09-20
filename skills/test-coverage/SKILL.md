@@ -33,8 +33,9 @@ write. Base branch and test runner: resolve by
 1. **Inventory.** From the diff, list behaviours, not files: an exported
    function or method, an endpoint (method + route + guard), a component state,
    a hook result, a DTO rule, a migration, a query with new filters. Changed
-   signature or contract → `tokensave_callers`: a caller whose behaviour
-   changed is in the inventory too.
+   behaviour, not just a changed signature → `tokensave_callers` plus the
+   project's [../shared/impact-map.md](../shared/impact-map.md): a caller or an
+   implicit consumer whose behaviour changed is in the inventory too.
 2. **Case matrix** per behaviour — only the rows that apply:
    | Row | Covers |
    | --- | --- |

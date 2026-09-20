@@ -68,13 +68,19 @@ user asks, not the only trigger.
 | Commit, branch, or touch a Jira or MR text — after the two review skills; an MR after `test-coverage` too | `git-flow` |
 | Create, edit or review a skill, an agent file, a rules file, CLAUDE.md or AGENTS.md | `skill-authoring`   |
 
-## Two triggers that must not wait for a skill
+## Three triggers that must not wait for a skill
 
 - **Commit and push.** A logical unit is done (a plan task, a verified edit, a
-  green fix) → `review-standards`, `review-security`, fix findings, commit,
-  push — without asking. Only a restriction in the project's own memory or
-  rules file stops a step; then do the rest and report the skipped step in one
-  line. A found secret stops everything. Procedure: skill `git-flow`.
+  green fix) → impact pass, `review-standards`, `review-security`, fix
+  findings, commit, push — without asking. Only a restriction in the project's
+  own memory or rules file stops a step; then do the rest and report the
+  skipped step in one line. A found secret stops everything. Procedure: skill
+  `git-flow`.
+- **Impact before the review skills.** Every symbol whose behaviour the diff
+  changes goes through `tokensave_impact`/`callers` and the project's
+  `docs/implicit-links.md`; each hit ends as unaffected, fixed, or covered by a
+  test. Green tests on the changed symbol prove nothing about its consumers.
+  Format and what belongs in the file: `skills/shared/impact-map.md`.
 - **Decision memory.** Before designing a subsystem, `tokensave_session_recall`;
   after a choice you would otherwise re-explain (library, schema, rejected
   option), `tokensave_record_decision`. Scope: skill `tokensave-routing`.
