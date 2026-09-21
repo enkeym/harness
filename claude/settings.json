@@ -117,6 +117,15 @@
             "command": "node /home/enkeym/.ai-hooks/claude/context-step.mjs"
           }
         ]
+      },
+      {
+        "matcher": "Read|Edit|Write|mcp__tokensave__tokensave_read|mcp__tokensave__tokensave_body|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/links-context.mjs"
+          }
+        ]
       }
     ],
     "Stop": [

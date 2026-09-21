@@ -5,5 +5,7 @@ description: Create the first implicit-links map in a project indexed by tokensa
 Load the `impact-map` skill and follow it: check for an existing map, run the
 init script, pair the candidates the seed script prints into links the graph
 cannot see, validate with the checker. `--reseed` only prints what the map lacks.
+OpenCode has no `links-context` hook: a domain file reaches you only through
+`INDEX.md`, open it yourself in the impact pass.
 
 $ARGUMENTS

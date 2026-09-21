@@ -67,6 +67,11 @@ bin/tokensave-branch.sh         # ветки существующего инде
 bin/tokensave-sync.sh           # инкрементальный sync — по завершении ответа
 bin/ragsave-sync.sh             # смысловой (RAG) индекс: sync существующего
 claude/ragsave-reminder.mjs     # подсказка про rag_search на смысловых промптах (не гард)
+claude/links-context.mjs        # файл домена карты связей в контекст, когда правка попала в его paths: (не гард)
+links-core.mjs                  # карта связей на диске: каталог, файлы доменов, paths: — общее хука и чекера
+bin/init-impact-map.mjs         # первая карта: где лежит по авторству репозитория, скелет INDEX.md
+bin/seed-impact-map.mjs         # кандидаты в карту из литералов графа: события, ключи, флаги, cron, миграции
+bin/check-impact-map.mjs        # карта против дерева: ссылки путь:символ, глобы paths:, индекс, размеры
 bin/log-error.sh                # общая запись отказов фоновых задач
 logs/errors.log                 # журнал отказов обоих инструментов (ротация 5 МБ)
 logs/guard.log                  # рассинхрон гарда с MCP и снятые запреты (в норме пуст)
@@ -76,6 +81,8 @@ test/test-hooklog.mjs           # журнал решений: запрет пи
 test/test-doctor.mjs            # фоновый доктор: выключатели, дебаунс, раннер, чистое окружение, напоминание
 test/env-isolate.mjs            # первым импортом в тестах хуков: журнал в temp, доктор выключен
 test/test-ragsave-reminder.mjs  # когда напоминание про rag_search молчит, когда говорит
+test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любым инструментом
+test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-security.mjs          # что deny, что ask, что проходит молча
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
@@ -122,6 +129,21 @@ camelCase или бэктиков. Молчит: если нет `.ragsave/rag.d
 проекту — дроссель 15 минут, чтобы подсказка осталась сигналом, а не фоном.
 Метки дросселя: `~/.claude/state/ragsave-reminder/`. Любая ошибка → выход без
 вывода: пропущенная подсказка дешевле сломанного промпта.
+
+Той же природы `claude/links-context.mjs` — карта неявных связей проекта
+(`docs/links/` или `.claude/links/`, формат — `skills/shared/impact-map.md`) разбита
+на файлы доменов, и каждый открывается frontmatter `paths:` в формате `.claude/rules`.
+Родное path-scoped правило тут не работает: зонд показал, что оно срабатывает на
+встроенном `Read` и молчит на `tokensave_read`, к которому read-router принуждает на
+всех проиндексированных файлах. Хук висит на `PostToolUse` инструментов чтения и правки
+(`Read|Edit|Write` и `tokensave_read|body|str_replace|multi_str_replace`), берёт путь
+из `tool_input` (`file_path` / `file` / `path`; для `tokensave_body` — поле `file` из
+ответа), сверяет с глобами через `path.matchesGlob` и добавляет тело совпавшего
+файла домена как `additionalContext`. Один домен — один раз на сессию (метки
+`~/.claude/state/links-context/`, ключ — сессия + проект + домен): второй показ —
+тот же текст в контексте дважды. `INDEX.md` хук не подключает — его читает impact-проход
+и OpenCode, у которого такого хука нет. Глоб без файлов (переехавший каталог) ловит
+`bin/check-impact-map.mjs`, иначе домен молча перестал бы подключаться.
 
 Адаптеры не содержат логики — только перевод формата конкретного агента в вызов
 `guard-core`. Меняешь правило — меняешь `guard-core.mjs`, оба агента получают его сразу.
@@ -472,6 +494,8 @@ OpenCode: `read`, `tokensave_tokensave_context`) — они вынесены в 
 плюс `bin/tokensave-branch.sh` на `UserPromptSubmit` и `bin/tokensave-sync.sh` на `Stop`.
 Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 `node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
+Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
+(matcher `Read|Edit|Write|mcp__tokensave__tokensave_read|…_body|…_str_replace|…_multi_str_replace`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,

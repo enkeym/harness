@@ -11,11 +11,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRootOr } from '../state-core.mjs';
+import { INDEX_NAME, domainFiles, mapDirOf, pathsOf } from '../links-core.mjs';
 
 const INDEX_MAX = 30;
 const ENTITY_MAX = 80;
-// Каталоги карты: свой репозиторий и общий (там карта не коммитится).
-const MAP_DIRS = ['docs/links', '.claude/links'];
 const LEGACY = ['docs/implicit-links.md', '.claude/implicit-links.md'];
 // Что не обходить, сверяя глобы с деревом: глоб на артефакт сборки — не связь.
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage']);
@@ -59,23 +58,6 @@ function checkRefs(file, mapFiles = new Set()) {
   return text;
 }
 
-// Frontmatter файла домена в формате .claude/rules: `paths:` и список глобов.
-// Нет frontmatter или нет `paths:` → null: файл достижим только через индекс.
-function pathsOf(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---\n/);
-  if (!m) return null;
-  const lines = m[1].split('\n');
-  const start = lines.findIndex((l) => /^paths:\s*$/.test(l));
-  if (start < 0) return null;
-  const globs = [];
-  for (const line of lines.slice(start + 1)) {
-    const item = line.match(/^\s+-\s+["']?([^"'#]+?)["']?\s*$/);
-    if (!item) break;
-    globs.push(item[1]);
-  }
-  return globs;
-}
-
 // Файлы рабочего дерева относительно корня, со слэшами вперёд — как в глобах.
 let treeFiles;
 function tree() {
@@ -106,7 +88,7 @@ function checkPaths(file, text) {
   }
 }
 
-const mapDir = MAP_DIRS.map((d) => path.join(root, d)).find((d) => fs.existsSync(d));
+const mapDir = mapDirOf(root);
 if (!mapDir) {
   const legacy = LEGACY.map((f) => path.join(root, f)).find((f) => fs.existsSync(f));
   if (!legacy) {
@@ -117,17 +99,12 @@ if (!mapDir) {
   const lines = lineCount(read(legacy));
   report(legacy, `плоская карта на ${lines} строк — разбить на INDEX.md и файлы сущностей`);
 } else {
-  const indexFile = path.join(mapDir, 'INDEX.md');
+  const indexFile = path.join(mapDir, INDEX_NAME);
   if (!fs.existsSync(indexFile)) {
-    report(mapDir, 'нет INDEX.md');
+    report(mapDir, `нет ${INDEX_NAME}`);
   }
 
-  // Файлы доменов: `tracking.md` или `tracking/rls.md`, когда домен разбит.
-  const domains = fs
-    .readdirSync(mapDir, { recursive: true })
-    .map((n) => n.split(path.sep).join('/'))
-    .filter((n) => n.endsWith('.md') && n !== 'INDEX.md')
-    .sort();
+  const domains = domainFiles(mapDir);
   const domainSet = new Set(domains);
   // Разбитый домен — каталог вместо файла, а не рядом с ним.
   for (const name of domains) {
