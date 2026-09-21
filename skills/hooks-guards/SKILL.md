@@ -48,6 +48,9 @@ fired and what it wants instead.
   (load via `ToolSearch('select:mcp__tokensave__…')`). Real `tokensave_*` error
   or empty result → quote it, then `Read`/`Edit`/`Write` for that file; the
   router lets that second call through. Bash never gets the pass.
+- `node <file>` (`python`, `bun`, `deno` alike) with no `-e`/`-p`/`-c` and no
+  heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` and the
+  README's commands pass; the inline-code forms stay blocked.
 
 ## Background hooks
 
