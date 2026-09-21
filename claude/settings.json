@@ -1,10 +1,8 @@
 {
   "cleanupPeriodDays": 45,
-  "includeCoAuthoredBy": false,
   "syncClaudeAiSkills": false,
   "syncClaudeAiPlugins": false,
-  "disableClaudeAiConnectors": true,
-  "enableArtifact": false,
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "mcp__ragsave__rag_index",
@@ -22,6 +20,7 @@
     ],
     "defaultMode": "default"
   },
+  "disableClaudeAiConnectors": true,
   "hooks": {
     "PreToolUse": [
       {
@@ -255,6 +254,7 @@
       }
     ]
   },
+  "enableArtifact": false,
   "respondToBashCommands": false,
   "statusLine": {
     "type": "command",
