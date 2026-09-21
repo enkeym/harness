@@ -28,22 +28,24 @@ empty → cwd.
    - `плоская` → stop. Splitting a flat map is an edit with the user, not a scan.
    - `создана` → steps 3–5.
 3. `node ~/.ai-hooks/bin/seed-impact-map.mjs <project>` in the background
-   (`run_in_background: true` in Claude Code; OpenCode waits) — ~2 minutes on
-   a mid-size project. While it runs, list the domains from the feature
-   folders on both sides of the tree (`src/<domain>`,
+   (`run_in_background: true` in Claude Code; OpenCode waits) — 2–5 minutes
+   on a mid-size project, each ragsave query costs ~4 s. While it runs, list
+   the domains from the feature folders on both sides of the tree (`src/<domain>`,
    `client/src/features/<domain>`) and draft one `paths:` list per domain.
-   The output is the whole candidate list, one `path:symbol` per line with
-   the literal it matched (`path` alone from `git grep` when tokensave is
-   absent). No `tokensave_search` by hand for these kinds: its default limit
+   The output is the whole candidate list, one `path:symbol` per line
+   (`path` alone from `git grep` when tokensave is absent), grouped under
+   the literal both sides share; `одна сторона` marks a literal with one
+   line. No `tokensave_search` by hand for these kinds: its default limit
    hid two thirds of the events on the first run. Each section pairs
    differently:
 
    | Section | One line is | Its other side |
    | --- | --- | --- |
-   | События и очереди | emitter or handler with the event string | the lines with the same string; `${prefix}_x` templates by prefix |
-   | Ключи хранилищ | reader or writer with the key or its constant | the lines with the same key |
-   | Флаги и переключатели | one read of `process.env.X` / `import.meta.env.X` / a config getter | every other read of `X`; the header lists the names from `.env.example` |
+   | События и очереди | emitter or handler with the event string | the lines of the same group; `${prefix}_x` templates by prefix |
+   | Ключи хранилищ | reader or writer with the key or its constant | the lines of the same group |
+   | Флаги и переключатели | one read of `process.env.X` / `import.meta.env.X` / a config getter | the lines of the same group; the header lists the names from `.env.example` |
    | Расписание и внешние входы | `@Cron`/`@Interval`/webhook handler | none needed — the trigger → its handler is the link |
+   | Контракты и доки | a doc, config, SQL or out-of-graph line with a code literal (index, then `ragsave search --outside` when `.ragsave/rag.db` exists) | the code group of that literal — not a side, but it changes with the contract |
    | Порядок миграций | folder, count, last file | migrations naming another migration's table: `rag_search` by table name |
 
    - `не влезло в ответ: <query> в <file>` → `tokensave_search` with
