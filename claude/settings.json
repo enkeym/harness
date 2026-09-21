@@ -264,6 +264,5 @@
   "language": "Russian",
   "effortLevel": "high",
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false,
-  "model": "opus"
+  "remoteControlAtStartup": false
 }
