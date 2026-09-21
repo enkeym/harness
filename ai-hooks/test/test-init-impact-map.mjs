@@ -30,7 +30,7 @@ function git(dir, args, email = ME) {
 
 // Песочница: git-репозиторий с одним коммитом от каждого из authors и,
 // по умолчанию, с БД tokensave — признаком, что граф есть.
-function project({ authors = [ME], tokensave = true, files = {} } = {}) {
+function project({ authors = [ME], tokensave = true, rag = false, files = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'init-impact-map-test-'));
   git(dir, ['init', '-q']);
   git(dir, ['config', 'user.email', ME]);
@@ -38,6 +38,10 @@ function project({ authors = [ME], tokensave = true, files = {} } = {}) {
   if (tokensave) {
     fs.mkdirSync(path.join(dir, '.tokensave'));
     fs.writeFileSync(path.join(dir, '.tokensave', 'tokensave.db'), '');
+  }
+  if (rag) {
+    fs.mkdirSync(path.join(dir, '.ragsave'));
+    fs.writeFileSync(path.join(dir, '.ragsave', 'rag.db'), '');
   }
   for (const [rel, body] of Object.entries(files)) {
     const file = path.join(dir, rel);
@@ -60,12 +64,19 @@ function run(script, dir) {
   }
 }
 
-// Нет графа — нечего дополнять, карта не заводится.
+// Нет индекса — нечего дополнять, карта не заводится.
 {
   const dir = project({ tokensave: false });
   const { code, out } = run(SCRIPT, dir);
-  check('без .tokensave карта не создаётся', code === 0 && out.includes('нет .tokensave'), out.trim());
-  check('без .tokensave каталога нет', !fs.existsSync(path.join(dir, 'docs/links')) && !fs.existsSync(path.join(dir, '.claude/links')));
+  check('без индекса карта не создаётся', code === 0 && out.includes('нет индекса tokensave или ragsave'), out.trim());
+  check('без индекса каталога нет', !fs.existsSync(path.join(dir, 'docs/links')) && !fs.existsSync(path.join(dir, '.claude/links')));
+}
+
+// Только ragsave — карта заводится, кандидатов seed соберёт через git grep.
+{
+  const dir = project({ tokensave: false, rag: true });
+  const { code, out } = run(SCRIPT, dir);
+  check('только ragsave — карта создана', code === 0 && fs.existsSync(path.join(dir, 'docs/links/INDEX.md')), out.trim());
 }
 
 // Свой репозиторий — карта коммитится в docs/links.

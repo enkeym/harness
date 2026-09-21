@@ -9,9 +9,12 @@
 // группе, литерал с одной строкой помечен. Строки вне кода (доки, конфиги, SQL,
 // файлы вне графа), где стоит тот же литерал, — секция «Контракты и доки»: из
 // индекса tokensave и, при `.ragsave/rag.db`, из `ragsave search --outside`.
+// Без графа (есть только ragsave) строки ищет `git grep` по рабочему дереву:
+// те же стороны без символа, а упоминания вне кода он находит сам — ragsave
+// не зовётся, его `--outside` без индекса tokensave вернул бы весь проект.
 //
 // Использование: seed-impact-map.mjs [cwd] — проект берётся от cwd (git-корень).
-// Код 0 — кандидаты напечатаны (пусть даже ноль); 1 — нет графа или tokensave.
+// Код 0 — кандидаты напечатаны (пусть даже ноль); 1 — нет индекса или tokensave.
 // AI_HOOKS_TOKENSAVE_CMD, AI_HOOKS_RAGSAVE_CMD — подмена бинарей в тестах.
 
 import fs from 'node:fs';
@@ -19,6 +22,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { repoRootOr } from '../state-core.mjs';
 import { projectRoot } from '../guard-core.mjs';
+import { hasIndex } from '../links-core.mjs';
 
 const TOKENSAVE = process.env.AI_HOOKS_TOKENSAVE_CMD || 'tokensave';
 const LIMIT = 500;
@@ -100,9 +104,34 @@ const KINDS = [
 const root = repoRootOr(process.argv[2] || process.cwd());
 const say = (line) => process.stdout.write(`${line}\n`);
 
-if (!projectRoot(root)) {
-  say(`кандидаты: в ${root} нет .tokensave — impact через grep, карта не нужна`);
+const graph = Boolean(projectRoot(root));
+if (!graph && !hasIndex(root)) {
+  say(`кандидаты: в ${root} нет индекса tokensave или ragsave — impact через grep, карта не нужна`);
   process.exit(1);
+}
+
+// Без графа — `git grep` по отслеживаемым и неигнорируемым файлам. Ответ не
+// режется, символа у строки нет. Код 1 у git grep — ноль совпадений.
+function grep(query) {
+  let raw;
+  try {
+    raw = execFileSync('git', ['grep', '-n', '-z', '-I', '-F', '--untracked', '-e', query], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch (e) {
+    if (e.status === 1) return { matches: [], truncated: [] };
+    throw e;
+  }
+  const matches = [];
+  for (const row of raw.split('\n')) {
+    const [file, line, text] = row.split('\0');
+    if (text === undefined || PATH_EXCLUDE.some((p) => file.includes(p))) continue;
+    matches.push({ file, line: Number(line), text });
+  }
+  return { matches, truncated: [] };
 }
 
 function searchOnce(query, scope) {
@@ -143,6 +172,7 @@ function children(scope) {
 // Полный список совпадений: обрезанный ответ пересобирается из ответов по
 // подкаталогам; один файл, не влезающий в ответ, попадает в `truncated`.
 function search(query, scope = '') {
+  if (!graph) return grep(query);
   const one = searchOnce(query, scope);
   if (one) return { matches: one.matches, truncated: [] };
   const target = path.join(root, scope);
@@ -303,7 +333,7 @@ for (const kind of KINDS) {
 // их править. Литералы с одной стороной первыми: их вторая сторона, если
 // есть, вне графа.
 const literals = [...sides.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([l]) => l);
-const asked = fs.existsSync(path.join(root, RAG_DB)) ? literals.slice(0, RAG_LITERALS_MAX) : [];
+const asked = graph && fs.existsSync(path.join(root, RAG_DB)) ? literals.slice(0, RAG_LITERALS_MAX) : [];
 let ragMissing = false;
 const notes = [];
 const mentions = new Map();

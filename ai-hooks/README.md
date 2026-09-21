@@ -70,7 +70,7 @@ claude/ragsave-reminder.mjs     # подсказка про rag_search на см
 claude/links-context.mjs        # файл домена карты связей в контекст, когда правка попала в его paths: (не гард)
 links-core.mjs                  # карта связей на диске: каталог, файлы доменов, paths: — общее хука и чекера
 bin/init-impact-map.mjs         # первая карта: где лежит по авторству репозитория, скелет INDEX.md
-bin/seed-impact-map.mjs         # кандидаты в карту: стороны по литералу (события, ключи, флаги), cron, миграции, упоминания вне кода (tokensave + ragsave)
+bin/seed-impact-map.mjs         # кандидаты в карту: стороны по литералу (события, ключи, флаги), cron, миграции, упоминания вне кода (tokensave + ragsave; без графа — git grep)
 bin/check-impact-map.mjs        # карта против дерева: ссылки путь:символ, глобы paths:, индекс, размеры
 bin/log-error.sh                # общая запись отказов фоновых задач
 logs/errors.log                 # журнал отказов обоих инструментов (ротация 5 МБ)

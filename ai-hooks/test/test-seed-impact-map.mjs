@@ -91,10 +91,30 @@ function run(dir, env = {}) {
   }
 }
 
-// Нет графа — кандидатов не собрать.
+// Нет ни графа, ни ragsave — карта не нужна.
 {
-  const { code, out } = run(project({ tokensave: false }));
-  check('без .tokensave — код 1', code === 1 && out.includes('нет .tokensave'), out.trim());
+  const { code, out } = run(project({ tokensave: false, rag: false }));
+  check('без индексов — код 1', code === 1 && out.includes('нет индекса tokensave или ragsave'), out.trim());
+}
+
+// Только ragsave — стороны из git grep без символа, упоминания вне кода из
+// него же; ragsave не зовётся (бинарь-заглушка отсутствует — пометки нет).
+{
+  const { code, out } = run(project({ tokensave: false }), {
+    AI_HOOKS_TOKENSAVE_CMD: '/nonexistent/tokensave',
+    AI_HOOKS_RAGSAVE_CMD: '/nonexistent/ragsave',
+  });
+  const events = section(out, 'События и очереди');
+  const contracts = section(out, 'Контракты и доки');
+  check('git grep: код 0, tokensave и ragsave не зовутся',
+    code === 0 && !out.includes('/nonexistent/'), out.trim());
+  check('git grep: эмит и слушатель в группе, строка без символа',
+    events.includes('### `${group}_newData` — 2\n- `client/src/hooks/useData.ts` (стр. 2)')
+    && events.includes('- `server/src/app.gateway.ts` (стр. 4)'), events);
+  check('git grep: spec и комментарий не стороны', !events.includes('useData.spec.ts') && !out.includes('legacyData'), events);
+  check('git grep: env и compose в контрактах',
+    contracts.includes('### `DATABASE_URL` — в коде одна сторона\n- `.env.example` (стр. 1)')
+    && contracts.includes('- `docker-compose.yml` (стр. 4)'), contracts);
 }
 
 // Нет бинаря — честный отказ, а не пустая карта.

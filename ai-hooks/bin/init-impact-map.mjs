@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Первая карта неявных связей в tokensave-проекте: скелет INDEX.md там, где
+// Первая карта неявных связей в проекте с индексом tokensave или ragsave
+// (кандидатов без графа seed собирает через git grep): скелет INDEX.md там, где
 // карте место по авторству репозитория. Связи в неё пишет скилл impact-map —
 // скрипт знает только, нужна ли карта вообще и где она лежит.
 //
@@ -11,6 +12,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { repoRootOr } from '../state-core.mjs';
 import { projectRoot } from '../guard-core.mjs';
+import { hasIndex } from '../links-core.mjs';
 
 const OWN_DIR = 'docs/links';
 const SHARED_DIR = '.claude/links';
@@ -46,8 +48,8 @@ function isOwnRepository() {
   return authors.every((a) => a === me);
 }
 
-if (!projectRoot(root)) {
-  say(`карта: в ${root} нет .tokensave — impact через grep, карта не нужна`);
+if (!projectRoot(root) && !hasIndex(root)) {
+  say(`карта: в ${root} нет индекса tokensave или ragsave — impact через grep, карта не нужна`);
   process.exit(0);
 }
 
