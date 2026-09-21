@@ -388,6 +388,10 @@ def index_project(
 
         with store.transaction():
             for stale in set(known) - seen:
+                # Файл, проиндексированный до того, как его имя попало в список
+                # секретов: текст остался бы в кеше ещё на 45 дней.
+                if config.is_secret_name(Path(stale)):
+                    store.forget_cache(known[stale].hash)
                 store.drop_file(stale)
                 report.removed += 1
             # Кеш растёт от каждой уникальной версии файла во всех ветках — без

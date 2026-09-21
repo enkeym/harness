@@ -327,6 +327,10 @@ class Store:
             (time.time(), content_hash),
         )
 
+    def forget_cache(self, content_hash: str) -> None:
+        """Стереть содержимое из кеша сразу, не дожидаясь gc_cache."""
+        self.conn.execute("DELETE FROM chunk_cache WHERE content_hash=?", (content_hash,))
+
     def gc_cache(
         self,
         max_age_days: float = 45.0,

@@ -412,6 +412,28 @@ def test_indexer() -> None:
             binary = index_project(root=root, embedder=embedder)
             check("ставший бинарным файл удалён", binary.removed, 1)
 
+            # Файл, проиндексированный до того, как имя стало секретом: sync
+            # убирает его из поиска и стирает текст из кеша.
+            (root / ".envrc").write_text("export TOKEN=abc", encoding="utf-8")
+            real_is_secret = config.is_secret_name
+            config.is_secret_name = lambda path: False
+            try:
+                index_project(root=root, embedder=embedder)
+            finally:
+                config.is_secret_name = real_is_secret
+            with Store(root / ".ragsave" / "rag.db", dim=FakeEmbedder.dim) as store:
+                envrc_hash = store.conn.execute(
+                    "SELECT hash FROM files WHERE path='.envrc'").fetchone()["hash"]
+            index_project(root=root, embedder=embedder)
+            with Store(root / ".ragsave" / "rag.db", dim=FakeEmbedder.dim) as store:
+                in_files = store.conn.execute(
+                    "SELECT COUNT(*) AS n FROM files WHERE path='.envrc'").fetchone()["n"]
+                in_cache = store.conn.execute(
+                    "SELECT COUNT(*) AS n FROM chunk_cache WHERE content_hash=?",
+                    (envrc_hash,)).fetchone()["n"]
+            check("ставший секретом файл убран из индекса", in_files, 0)
+            check("его текст стёрт из кеша", in_cache, 0)
+
             # Смена модели без force должна честно отказать, а не портить индекс.
             other = FakeEmbedder()
             other.model_name = "другая-модель"
