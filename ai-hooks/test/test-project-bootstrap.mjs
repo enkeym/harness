@@ -35,8 +35,12 @@ const check = (name, ok, detail = '') => {
   if (!ok) failed++;
 };
 
+// Недельная метка лежит под HOME теста; сброс — «прошла неделя».
+const resetWeekly = () => fs.rmSync(path.join(tmp, '.claude', 'state', 'bootstrap'), { recursive: true, force: true });
+
 const first = run(repo) || '';
 check('нет CLAUDE.md', /CLAUDE\.md/.test(first), first);
+check('без индекса: про карту связей молчит', !/impact-map/.test(first));
 check('нет .env.example', /\.env\.example/.test(first));
 check('нет husky', /husky/.test(first));
 check('нет CI для GitHub', /workflows/.test(first));
@@ -75,6 +79,31 @@ fs.writeFileSync(path.join(repo, '.claude', 'bootstrap-ignore'), 'claude-md\nenv
 check('два пункта в игноре: хук молчит', run(repo) === null);
 
 check('вне репозитория: молчит', run(tmp) === null);
+
+// Индекс есть, карты нет — напоминание о /impact-map, раз в неделю.
+const indexed = path.join(tmp, 'indexed');
+fs.mkdirSync(path.join(indexed, '.ragsave'), { recursive: true });
+execFileSync('git', ['-C', indexed, 'init', '-q']);
+fs.writeFileSync(path.join(indexed, 'CLAUDE.md'), '# x');
+fs.writeFileSync(path.join(indexed, '.ragsave', 'rag.db'), '');
+check('ragsave без карты: напоминает /impact-map', /impact-map/.test(run(indexed) || ''));
+check('повтор: карта молчит неделю', run(indexed) === null);
+
+resetWeekly();
+fs.mkdirSync(path.join(indexed, 'docs', 'links'), { recursive: true });
+fs.writeFileSync(path.join(indexed, 'docs', 'links', 'INDEX.md'), '# x');
+check('карта есть: молчит', run(indexed) === null);
+
+fs.rmSync(path.join(indexed, 'docs'), { recursive: true });
+fs.rmSync(path.join(indexed, '.ragsave'), { recursive: true });
+fs.mkdirSync(path.join(indexed, '.tokensave'));
+fs.writeFileSync(path.join(indexed, '.tokensave', 'tokensave.db'), '');
+check('tokensave без карты: напоминает /impact-map', /impact-map/.test(run(indexed) || ''));
+
+resetWeekly();
+fs.mkdirSync(path.join(indexed, '.claude'));
+fs.writeFileSync(path.join(indexed, '.claude', 'bootstrap-ignore'), 'impact-map\n');
+check('bootstrap-ignore: про карту молчит', run(indexed) === null);
 
 fs.rmSync(tmp, { recursive: true, force: true });
 process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки прошли\n');

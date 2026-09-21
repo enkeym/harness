@@ -3,25 +3,27 @@
 //
 // Смотрит корень git-репозитория текущего каталога и кладёт в контекст список
 // пропусков: нет CLAUDE.md, нет husky, нет CI для GitHub-remote, нет
-// примера env при наличии .env. Пример ищется по маске `.env*.example`
+// примера env при наличии .env, нет карты неявных связей в проекте с индексом
+// tokensave/ragsave. Пример env ищется по маске `.env*.example`
 // (`.env.dev.example` тоже считается) и отдельно в каждом каталоге со своим
 // package.json — иначе монорепо ругается на пропуск, которого нет.
 // Что с этим делать — решает скилл hooks-guards, хук только сообщает факты.
-// Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI и husky
+// Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI, husky и карту
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
 // про CLAUDE.md — каждый раз, пока файла нет.
 //
 // Отсутствие бывает осознанным: проект может не хотеть CLAUDE.md или husky.
 // Тогда `.claude/bootstrap-ignore` в корне перечисляет по строке на пункт
-// (`claude-md`, `husky`, `ci`, `dependabot`, `env-example`), и о них хук
-// молчит. Без этого напоминание про намеренно удалённый файл превращается
-// в постоянный шум, ради устранения которого хук и писался.
+// (`claude-md`, `husky`, `ci`, `dependabot`, `env-example`, `impact-map`),
+// и о них хук молчит. Без этого напоминание про намеренно удалённый файл
+// превращается в постоянный шум, ради устранения которого хук и писался.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { isHarnessConfigPath } from '../guard-core.mjs';
+import { hasIndex, mapDirOf } from '../links-core.mjs';
 import { statePath, projectKey, isEntryPoint } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -120,6 +122,7 @@ export function bootstrapContext(cwd) {
     if (!ignored.has('dependabot') && /github\.com/.test(remote) && !exists(root, '.github', 'dependabot.yml')) weekly.push('нет .github/dependabot.yml');
     if (!ignored.has('ci') && /gitlab/.test(remote) && !exists(root, '.gitlab-ci.yml')) weekly.push('GitLab-remote без .gitlab-ci.yml');
   }
+  if (!ignored.has('impact-map') && hasIndex(root) && !mapDirOf(root)) weekly.push('есть индекс, но нет карты неявных связей (/impact-map)');
 
   const items = [...always];
   if (weekly.length && !remindedRecently(root)) items.push(...weekly);

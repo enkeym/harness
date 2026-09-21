@@ -15,6 +15,14 @@ export function mapDirOf(root) {
   return MAP_DIRS.map((d) => path.join(root, d)).find((d) => fs.existsSync(d)) || null;
 }
 
+// Индексы, при которых карта нужна: есть чем собрать кандидатов (seed) и есть
+// кому её подключать. Без индекса impact идёт через grep, карты нет.
+const INDEX_DBS = [path.join('.tokensave', 'tokensave.db'), path.join('.ragsave', 'rag.db')];
+
+export function hasIndex(root) {
+  return INDEX_DBS.some((db) => fs.existsSync(path.join(root, db)));
+}
+
 // Файлы доменов относительно каталога карты со слэшами вперёд: `tracking.md`
 // или `tracking/rls.md`, когда домен разбит на каталог. Индекс — не домен.
 export function domainFiles(mapDir) {
