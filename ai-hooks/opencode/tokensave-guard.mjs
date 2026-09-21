@@ -27,27 +27,35 @@ function runDetached(script, directory) {
   execFile('bash', [`${BIN}/${script}`, directory], () => {});
 }
 
-// Инструмент OpenCode → вызов в терминах Claude, которые понимает ядро.
+// Файлы из patchText инструмента patch: Add/Update/Delete File и Move to.
+const PATCH_FILE_RE = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm;
+
+// Инструмент OpenCode → вызовы в терминах Claude, которые понимает ядро.
 // Остальные (MCP: `tokensave_tokensave_read`, `tokensave_tokensave_body`)
 // идут как `mcp__opencode__<имя>`: ядро узнаёт читающие по имени и проверяет
 // путь в аргументах — иначе .env отдал бы индекс tokensave.
 const SECURITY_CALLS = {
-  read: (args) => ['Read', { file_path: args.filePath }],
-  grep: (args) => ['Grep', { path: args.path, glob: args.include }],
-  edit: (args) => ['Edit', { file_path: args.filePath }],
-  write: (args) => ['Edit', { file_path: args.filePath }],
-  bash: (args) => ['Bash', { command: args.command }],
+  read: (args) => [['Read', { file_path: args.filePath }]],
+  grep: (args) => [['Grep', { path: args.path, glob: args.include }]],
+  edit: (args) => [['Edit', { file_path: args.filePath }]],
+  write: (args) => [['Edit', { file_path: args.filePath }]],
+  multiedit: (args) => [['Edit', { file_path: args.filePath }]],
+  patch: (args) => [...String(args.patchText ?? '').matchAll(PATCH_FILE_RE)]
+    .map((m) => ['Edit', { file_path: m[1].trim() }]),
+  bash: (args) => [['Bash', { command: args.command }]],
 };
 
 // Блокируется только DENY (секреты). ASK здесь не спросить — его закрывает
 // permission.bash в конфиге OpenCode. Ошибка самого гарда вызов не блокирует:
 // fail-open, как в адаптере Claude.
 function securityReason(tool, args, directory) {
-  const call = SECURITY_CALLS[tool] ?? ((a) => [`mcp__opencode__${tool}`, a]);
+  const calls = SECURITY_CALLS[tool] ?? ((a) => [[`mcp__opencode__${tool}`, a]]);
   try {
-    const [toolName, toolInput] = call(args);
-    const verdict = securityGuard(toolName, toolInput, { cwd: directory });
-    return verdict?.level === DENY ? `security-guard, запрет: ${verdict.reason}` : null;
+    for (const [toolName, toolInput] of calls(args)) {
+      const verdict = securityGuard(toolName, toolInput, { cwd: directory });
+      if (verdict?.level === DENY) return `security-guard, запрет: ${verdict.reason}`;
+    }
+    return null;
   } catch {
     return null;
   }

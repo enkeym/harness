@@ -412,7 +412,8 @@ prompt injection из файлов чужого проекта снимала б
 
 В OpenCode тот же гард вызывается из плагина (`opencode/tokensave-guard.mjs`,
 `tool.execute.before`) раньше гардов tokensave: `read`, `grep`, `edit`,
-`write`, `bash` переводятся в `Read`/`Grep`/`Edit`/`Bash` ядра, остальные
+`write`, `multiedit`, `bash` переводятся в `Read`/`Grep`/`Edit`/`Bash` ядра,
+`patch` — в `Edit` на каждый файл из `patchText`, остальные
 (MCP `tokensave_tokensave_read` и однотипные) — в `mcp__opencode__<имя>`, корень
 сессии — `directory`. Блокируется только `deny`: спросить человека из плагина нельзя,
 поэтому `ask` там держат правила `permission.bash` в `opencode.json` и агентах

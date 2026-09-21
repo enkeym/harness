@@ -46,6 +46,11 @@ await check('grep с include .env', 'grep', { pattern: 'TOKEN', include: '.env' 
 await check('grep по пути .env', 'grep', { pattern: 'TOKEN', path: '.env.production' }, 'deny');
 await check('edit .env', 'edit', { filePath: '.env', oldString: 'a', newString: 'b' }, 'deny');
 await check('write .env', 'write', { filePath: '.env', content: 'X=1' }, 'deny');
+await check('multiedit .env', 'multiedit', { filePath: '.env', edits: [] }, 'deny');
+await check('patch правит .env', 'patch',
+  { patchText: '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-a\n+b\n*** Update File: .env\n@@\n-X=1\n+X=2\n*** End Patch' }, 'deny');
+await check('patch переносит в .env', 'patch',
+  { patchText: '*** Begin Patch\n*** Update File: notes.txt\n*** Move to: .env.local\n*** End Patch' }, 'deny');
 await check('bash cat .env', 'bash', { command: 'cat .env' }, 'deny');
 await check('bash токен Claude', 'bash', { command: 'cat ~/.claude/.credentials.json' }, 'deny');
 await check('MCP tokensave_read .env', 'tokensave_tokensave_read', { path: '.env' }, 'deny');
@@ -64,6 +69,8 @@ await check('bash git status', 'bash', { command: 'git status' }, 'allow');
 await check('инструмент без гарда', 'webfetch', { url: 'https://example.com' }, 'allow');
 await check('MCP tokensave_read обычного файла', 'tokensave_tokensave_read', { path: 'src/app.ts' }, 'allow');
 await check('todoread без пути', 'todoread', {}, 'allow');
+await check('patch обычного файла', 'patch',
+  { patchText: '*** Begin Patch\n*** Add File: src/b.ts\n+export const b = 1;\n*** End Patch' }, 'allow');
 await check('пустые args', 'read', undefined, 'allow');
 
 process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки пройдены\n');
