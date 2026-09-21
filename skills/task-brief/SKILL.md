@@ -1,6 +1,6 @@
 ---
 name: task-brief
-description: "Turns a large, loosely worded task into a technical brief before any work starts — reads the code it touches, resolves the obvious gaps itself, argues with the prompt where the code disagrees, asks only about real forks, and prints an imperative brief (task, context, constraints, out of scope, verification, steps) that waits for approval; for a single decision or idea runs a short challenge instead — objections and alternatives checked against code and docs, one recommendation. Load when the prompt describes an architectural or multi-module change, a new subsystem, data model or integration, or a feature with no location, acceptance criterion or boundary named; when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"что может пойти не так\", \"предложи как\", \"уточни если что\", \"спроси если непонятно\", or runs /task-brief."
+description: "Turns a large, loosely worded task into a technical brief before any work starts — reads the code it touches, resolves the obvious gaps itself, argues with the prompt where the code disagrees, asks only about real forks, and writes an imperative brief (task, context, constraints, out of scope, verification, steps) that waits for approval — in Claude Code as a plan-mode file under ~/.claude/plans/, in OpenCode as a chat block; for a single decision or idea runs a short challenge instead — objections and alternatives checked against code and docs, one recommendation. Load when the prompt describes an architectural or multi-module change, a new subsystem, data model or integration, or a feature with no location, acceptance criterion or boundary named; when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"что может пойти не так\", \"предложи как\", \"уточни если что\", \"спроси если непонятно\", or runs /task-brief."
 ---
 
 # Task brief
@@ -20,7 +20,9 @@ verified by code, docs or a run before it reaches the user.
 - Does not fire: a bug with an error and a location; a diff the user could
   describe in one line; a prompt that already has the sections below.
 - First line of the reply names why it fired, in Russian: `Задача крупная:
-  <причина> — собираю бриф.` The user can wave it off.
+  <причина> — собираю бриф.` The user can wave it off. Claude Code: then
+  `EnterPlanMode`; the brief is the plan file it names
+  (`~/.claude/plans/<slug>.md`). OpenCode has no plan mode: brief in chat.
 - "поспорь", "мозговой штурм", "найди дыры", "что может пойти не так" about one
   decision, library, schema or idea → *Challenge*, not the brief.
 
@@ -59,9 +61,9 @@ A choice made here that the user accepts → `tokensave_record_decision`.
    affected area, `tokensave_callers` on symbols that change,
    `tokensave_session_recall` for earlier decisions. A gap the repository
    answers is not a question.
-3. List every gap and close each one of three ways: answered by code,
-   the rules files or memory; defaulted to the neighbouring module's pattern (goes
-   to `Допущения`); or a real fork (goes to the questions).
+3. List every gap and close each one of three ways: answered by code, the
+   rules files or memory; defaulted to the neighbour's pattern (`Допущения`);
+   or a real fork (the questions).
 4. Chain the consequences: for each step ask what breaks if it is wrong —
    data, callers, auth, migration order, rollback. What breaks goes into
    `Ограничения` or `Проверка`.
@@ -69,15 +71,14 @@ A choice made here that the user accepts → `tokensave_record_decision`.
    cheaper path exists → `Возражения` with the alternative. Never comply
    silently, never override silently.
 6. Two approaches only when they differ in a real trade-off; recommend one.
-   No menu of options for its own sake.
 
 ## Questions
 
 - A real fork = two viable options whose consequences the code cannot settle.
-  Not naming, not style, not what the neighbour already decides, not anything
-  the rules files answer.
-- One question tool call (`AskUserQuestion` / `question`), at most three questions, options with the recommended
-  one first and marked. A second round only if an answer opened a new fork.
+  Not naming, style, what the neighbour decides or the rules files answer.
+- One question tool call (`AskUserQuestion` / `question`), at most three
+  questions, the recommended option first and marked. A second round only if
+  an answer opened a new fork.
 - Zero forks → zero questions; the assumptions carry the decisions.
 
 ## The brief
@@ -113,22 +114,21 @@ symbols and commands, not areas. Empty section = `нет`, never omitted.
 1. <единица размером с коммит>
 ```
 
-After the block, one line: `Правки — по разделам; «да» — начинаю с шага 1.`
-Then stop.
-
-## Sizing the steps
-
-- One step = one commit = one session, ~20–40 turns: every later turn re-pays
-  for whatever the step dragged into the window. A third subsystem, a second
-  data model or a migration plus its callers → two steps, each with its check.
+Claude Code: write the block to the plan file, then `ExitPlanMode` — it is
+the approval; no chat line. OpenCode: print the block, then one line:
+`Правки — по разделам; «да» — начинаю с шага 1.` Then stop.
 
 ## After the answer
 
+- One step = one commit = one session (~20–40 turns; every later turn re-pays
+  what the step dragged in). A third subsystem, a second data model or a
+  migration plus its callers → two steps, each with its check.
 - "да", "ок", "поехали" → step 1. A correction → rewrite the touched sections
   only, reprint just them, wait again.
-- The brief is the spec: one step, one commit (`rules/core.md` commit trigger). A
-  step that turns out different from the brief → one line saying so before
-  continuing, not after.
-- The brief lives in chat only; `handoff` carries it across sessions — copy the
-  remaining steps into its `Дальше` verbatim. An architectural choice made
-  here → `tokensave_record_decision`.
+- The brief is the spec: one step, one commit (`rules/core.md` commit trigger).
+  A step that turns out different → one line saying so before continuing.
+- Claude Code: the plan file is the brief across sessions — tick a step
+  (`1. [x] …`) when its commit lands, rewrite one that changed; `handoff`
+  points `Дальше` at the file, `cleanup.mjs` drops a plan untouched for 14
+  days. OpenCode: chat only — `handoff` copies the remaining steps. An
+  architectural choice made here → `tokensave_record_decision`.

@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Assembles a handoff block in chat when the context grows expensive — what belongs in it, what never does, and what the next session must not re-verify. No files are written; the user copies the block into a fresh session. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
+description: "Assembles a handoff block in chat when the context grows expensive — what belongs in it, what never does, how `Дальше` points at the task-brief plan file instead of copying its steps, and what the next session must not re-verify. No files are written; the user copies the block into a fresh session. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
 ---
 
 # Handoff
@@ -10,7 +10,8 @@ Trigger: in Claude Code two hooks fire at the token thresholds in
 `context-step.mjs` mid-turn, between tool calls. `SOFT` closes the step with no
 block yet; `HAND` and `HARD` ask for the block. OpenCode has no meter — only
 `/handoff` or the user's words. Don't raise context size again yourself. Never
-write a file, never start a new session for the user.
+write a new file, never start a new session for the user; the only write is
+ticking finished steps in an existing `task-brief` plan file.
 
 Mid-turn the answer is never cut in half: finish the step in hand, commit and
 push it, and only then print the block — the step not started goes first under
@@ -24,7 +25,9 @@ The hook says which case it is; follow its wording.
 ## Steps
 
 1. Finish the unit of work: commit, tests green. If finishing costs another
-   ~30k tokens, hand off now with the unfinished state stated honestly.
+   ~30k tokens, hand off now with the unfinished state stated honestly. A
+   `task-brief` plan file exists → tick the steps whose commits landed and
+   rewrite a step that changed, so the file, not the block, carries the plan.
 2. Print the block as one fenced ```markdown block. After it, one line: ready
    to copy into a new session (`/clear` in Claude Code, `/new` in OpenCode) once
    copied. Stale after the
@@ -58,7 +61,8 @@ The hook says which case it is; follow its wording.
 по ходу и ещё не записанные туда.
 
 ## Дальше
-Следующий шаг первым пунктом, конкретным действием.
+План: `@~/.claude/plans/<slug>.md`, следующий — шаг N. Без плана — следующий
+шаг первым пунктом, конкретным действием. Никогда копия шагов плана.
 
 ## Открытые вопросы
 Только то, что ждёт человека.
@@ -84,8 +88,12 @@ Start from the block, not from a fresh survey — re-reading everything it
 already names is what makes a split session cost more than the long one it
 replaced:
 
-- Open only the files the first step of `Дальше` touches. The rest of `Карта`
-  stays a pointer until a step needs it.
+- `Дальше` names a plan file → it is in context through the `@` in the first
+  prompt; missing there → `Read` it before anything else (outside the
+  repository, no router applies). Steps come from the plan, state from the
+  block; the block wins on state, the plan on steps.
+- Open only the files the first step touches. The rest of `Карта` stays a
+  pointer until a step needs it.
 - Don't re-run what `Проверено` lists. Re-check one of its lines only when the
   work changes that behaviour again, or when `git status` contradicts it —
   then say which line and why.

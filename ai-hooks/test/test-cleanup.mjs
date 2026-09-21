@@ -176,5 +176,18 @@ const totalCost = (recs) => Math.round(recs.reduce((s, r) => s + (r.cost || 0), 
   fs.rmSync(home, { recursive: true, force: true });
 }
 
+// --- 10. Планы задач: брошенный уходит через две недели, живой остаётся
+{
+  const home = sandbox();
+  const dir = path.join(home, '.claude', 'plans');
+  fs.mkdirSync(dir, { recursive: true });
+  aged(path.join(dir, 'abandoned.md'), 15);
+  aged(path.join(dir, 'active.md'), 13);
+  run(home, ['--force']);
+  check('план без правок 15 дней удалён', fs.existsSync(path.join(dir, 'abandoned.md')), false);
+  check('план с правкой 13 дней назад сохранён', fs.existsSync(path.join(dir, 'active.md')), true);
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
 process.stdout.write(failed ? `\n=== ${failed} FAIL ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);

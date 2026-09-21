@@ -255,6 +255,7 @@
     ]
   },
   "enableArtifact": false,
+  "showClearContextOnPlanAccept": true,
   "respondToBashCommands": false,
   "statusLine": {
     "type": "command",
