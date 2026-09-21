@@ -16,7 +16,6 @@ const SECURITY = path.join(ROOT, 'claude', 'security-guard.mjs');
 const ASK = path.join(ROOT, 'claude', 'ask-guard.mjs');
 const READ = path.join(ROOT, 'claude', 'read-search-router.mjs');
 const CRASH = path.join(ROOT, 'test', 'fixtures', 'crash-hook.mjs');
-const TS_PROJECT = '/home/enkeym/main/web_groza';
 
 let failed = 0;
 function check(name, got, want) {
@@ -133,18 +132,25 @@ function records(sb) {
 }
 
 // --- рассинхрон с MCP попадает в журнал сессии ---
-if (fs.existsSync(path.join(TS_PROJECT, '.tokensave'))) {
+// Проект — песочница на main без branch-meta.json: живой репозиторий может
+// стоять на ветке без записи в графе, и тогда гард молчит раньше сверки с
+// реестром. До открытия БД дело не доходит, её содержимое не важно.
+{
   const sb = sandbox();
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'hooklog-project-'));
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project, stdio: 'ignore' });
+  fs.mkdirSync(path.join(project, '.tokensave'));
+  fs.writeFileSync(path.join(project, '.tokensave', 'tokensave.db'), '');
+  fs.writeFileSync(path.join(project, 'package.json'), '{}\n');
   const servers = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-empty-'));
   const res = run(READ, {
-    session_id: 'sid-mm', tool_name: 'Read', cwd: TS_PROJECT,
-    tool_input: { file_path: path.join(TS_PROJECT, 'package.json') },
+    session_id: 'sid-mm', tool_name: 'Read', cwd: project,
+    tool_input: { file_path: path.join(project, 'package.json') },
   }, { ...sb.env, TS_SERVERS_DIR: servers, TS_SERVE_ROOTS: '' });
   check('mismatch: гард молчит', res.stdout, '');
   const r = records(sb).find((x) => x.decision === 'server-mismatch') || {};
-  check('mismatch: строка с корнем и сессией', [r.root, r.sid, r.servers], [TS_PROJECT, 'sid-mm', 0]);
-} else {
-  process.stdout.write('skip server-mismatch: нет web_groza/.tokensave\n');
+  check('mismatch: строка с корнем и сессией', [r.root, r.sid, r.servers], [project, 'sid-mm', 0]);
+  fs.rmSync(project, { recursive: true, force: true });
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');

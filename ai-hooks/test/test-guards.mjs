@@ -6,8 +6,9 @@
 // Оба должны давать одинаковые вердикты — это и есть проверка паритета.
 //
 // Правило одно: файл в индексе tokensave → deny; нет в индексе → allow.
-// Поэтому пути ниже — реальные файлы web_groza, а не выдуманные: вердикт
-// зависит от содержимого .tokensave/tokensave.db.
+// Вердикт зависит от содержимого .tokensave/tokensave.db, поэтому проект —
+// песочница со своей БД, а не живой репозиторий: тот стоит на какой угодно
+// ветке, и на ветке без записи в branch-meta.json гард по замыслу молчит.
 
 import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
@@ -15,6 +16,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import {
   guardRead, guardGrep, guardEdit, guardBash, guardExec, OPENCODE_LABELS,
   isIndexed, indexedExtensions, breakerAllows,
@@ -28,8 +30,30 @@ const READ = path.join(ROOT, 'claude', 'read-search-router.mjs');
 const EDIT = path.join(ROOT, 'claude', 'edit-router.mjs');
 const BASH = path.join(ROOT, 'claude', 'bash-router.mjs');
 
-// tokensave-проект: web_groza (есть .tokensave). Не-проект: /tmp.
-const TS_PROJECT = '/home/enkeym/main/web_groza';
+// tokensave-проект: git-репозиторий на main без branch-meta.json (одна БД),
+// в индексе — ts/tsx/md, как у tokensave по умолчанию. Файлы на диске есть,
+// но вердикт даёт таблица files. Не-проект: /tmp.
+const INDEXED = ['client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md'];
+const ON_DISK = [
+  ...INDEXED, 'client/src/index.css', 'package.json', '.env.example',
+  'client/node_modules/storm-ui/dist/index.css', '.ragsave/rag.db', '.ragsave/sync.log',
+];
+function sandboxProject() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-project-'));
+  for (const rel of ON_DISK) {
+    fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), '');
+  }
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir, stdio: 'ignore' });
+  fs.mkdirSync(path.join(dir, '.tokensave'));
+  const db = new DatabaseSync(path.join(dir, '.tokensave', 'tokensave.db'));
+  db.exec('CREATE TABLE files (path TEXT PRIMARY KEY)');
+  const insert = db.prepare('INSERT INTO files (path) VALUES (?)');
+  for (const rel of INDEXED) insert.run(rel);
+  db.close();
+  return dir;
+}
+const TS_PROJECT = sandboxProject();
 const NON_PROJECT = '/tmp';
 
 // Реестр MCP-серверов подменяем своим: гард запрещает только тогда, когда живой
@@ -41,9 +65,9 @@ fs.writeFileSync(path.join(SERVERS_DIR, `${process.pid}.json`),
   JSON.stringify({ pid: process.pid, project_path: TS_PROJECT }));
 process.env.TS_SERVERS_DIR = SERVERS_DIR;
 
-// serveRunning() иначе сходит в /proc и увидит настоящий MCP-сервер web_groza,
-// если он поднят в этой машине во время прогона. Пустая строка = «серверов
-// нет»; кейсы, где нужен живой serve, ставят TS_SERVE_ROOTS точечно.
+// serveRunning() иначе сходит в /proc за настоящими MCP-серверами этой машины.
+// Пустая строка = «серверов нет»; кейсы, где нужен живой serve, ставят
+// TS_SERVE_ROOTS точечно.
 process.env.TS_SERVE_ROOTS = '';
 
 // Диагностический журнал уводим в temp: выдуманные рассинхроны из тестов не
@@ -434,6 +458,7 @@ try {
 // и метки дедупа журнала: иначе первый настоящий рассинхрон в ближайшую минуту
 // будет молча съеден как «уже записанный»
 clearLogDedup();
+fs.rmSync(TS_PROJECT, { recursive: true, force: true });
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
