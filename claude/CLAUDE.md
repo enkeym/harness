@@ -27,5 +27,6 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 (commands in `claude/commands/`) are user-invoked only. Offer in one line when
 it fits: `/doctor` when the harness misbehaves (loops, repeated refusals, dead
 index, expired provider auth), `/optimize` and `/usage` for spend and
-settings, `/impact-map` when a `.tokensave/` project has no `docs/links/` or
-`.claude/links/`. `/test-browser` is never offered.
+settings, `/impact-map` when an indexed project (`.tokensave/` or
+`.ragsave/rag.db`) has no `docs/links/` or `.claude/links/`. `/test-browser`
+is never offered.

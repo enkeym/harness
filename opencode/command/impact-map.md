@@ -1,5 +1,5 @@
 ---
-description: Create the first implicit-links map in a tokensave-indexed project
+description: Create the first implicit-links map in a project indexed by tokensave or ragsave
 ---
 
 Load the `impact-map` skill and follow it: check for an existing map, run the

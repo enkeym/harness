@@ -1,15 +1,15 @@
 # Impact map — what the graph cannot see
 
 Read by `review-standards` and `test-coverage` before the impact pass, and by
-`task-brief` when the task touches a listed entity. The graph
+`task-brief` when the task touches a listed domain. The graph
 (`tokensave_impact`, `callers`, `callees`, `field_sites`, `affected`) answers
 "who calls this". This file answers the rest: links that exist at runtime but
 not in any call edge, and that a change silently breaks. What memory may
 answer instead: [memory-hygiene.md](memory-hygiene.md).
 
-Only in a project with `.tokensave/`. Without the graph there is nothing for a
-map to complement — do the impact pass with `grep -rn --include` over the
-changed names and say so in one line.
+Only in a project with an index — `.tokensave/` or `.ragsave/rag.db`: the
+candidates come from it. Without one, do the impact pass with
+`grep -rn --include` over the changed names and say so in one line.
 
 ## Where it lives
 
@@ -28,25 +28,50 @@ The map is committed, so the repository decides who reads it:
   then, a link the pass finds still gets its line: the first line creates the
   file.
 
-## Shape: an index plus one file per entity
+## Shape: an index plus one file per domain
 
-One flat file grows past the context it was meant to save. Split by **entity**
-(the module you touch), never by kind of link — the pass starts from what the
-diff touched:
+One flat file grows past the context it was meant to save. Split by **domain**
+(the feature a diff starts in — `tracking`, `auth`, `billing`), server and
+client sides in the same file; never by kind of link — a kind file makes one
+change open four files:
 
 ```
-docs/links/INDEX.md     — one line per entity: name → file → trigger words
-docs/links/<entity>.md  — the links of that entity
+docs/links/INDEX.md          — one line per domain: name → file → one phrase
+docs/links/<domain>.md       — `paths:` frontmatter, then the links of that domain
+docs/links/<domain>/<sub>.md — only once <domain>.md passes 80 lines
 ```
 
-- `INDEX.md` is read every pass and stays ≤30 lines: entity, file, the words
-  that should send you there. No link content in it — a detailed index is read
-  instead of the file and saves nothing.
-- An entity file stays ≤80 lines. Past that, the entity has sub-entities: give
-  each its own file and one index line.
-- A link between two entities lives in the file of the one a change starts
-  from, and the other entity's file names it in one line.
-- Index line format: `- <entity> — `<file>` — триггеры: <слова>`.
+- `INDEX.md` is read every pass and stays ≤30 lines. Line format:
+  `- <домен> — `<файл>` — <одна фраза>`; a sub-file is listed as
+  `tracking/rls.md`. No link content and no trigger words in it — routing is
+  the job of `paths:`, and a detailed index is read instead of the file.
+- A domain file stays ≤80 lines. Past that, split it into a directory of
+  sub-domains, each with its own frontmatter and index line; the parent file
+  goes away.
+- A link between two domains lives in the file of the one a change starts
+  from, and the other domain's file names it in one line.
+
+## `paths:` — how a domain file reaches the model
+
+Every domain file opens with the `.claude/rules` frontmatter:
+
+```markdown
+---
+paths:
+  - "src/tracking/**"
+  - "client/src/features/tracking/**"
+---
+```
+
+- The harness hook `links-context.mjs` injects the file once per session the
+  first time a read or edit tool touches a matching path — native path-scoped
+  rules fire on `Read` only, never on `tokensave_read`, which the router
+  forces for indexed files. `INDEX.md` stays for the impact pass and OpenCode.
+- Globs are project-relative in `path.matchesGlob` syntax; each one matches
+  at least one file in the working tree — the checker reports the rest. A
+  file without `paths:` is reached only through the index.
+- List the directories a change to the domain starts in, nothing wider: a glob
+  over `src/**` fires on every edit and the file stops being read.
 
 ## What goes in
 
@@ -70,9 +95,15 @@ decisions (those go to `tokensave_record_decision`).
 
 ## Line format
 
-One line per link, newest at the bottom of its section:
+One line per link, newest at the bottom of its section. A domain file:
 
 ```markdown
+---
+paths:
+  - "src/orders/**"
+  - "src/<feature>/**"
+---
+
 ## События
 - `order.paid` — эмит `src/orders/orders.service.ts:markPaid` → слушают
   `src/mail/mail.listener.ts:onPaid`, `src/stats/stats.listener.ts:onPaid`.
@@ -85,7 +116,8 @@ One line per link, newest at the bottom of its section:
 ```
 
 - Every side is `path:symbol`, exact — the checker resolves them and a line
-  that does not resolve is reported as broken.
+  that does not resolve is reported as broken. `path` alone only when the side
+  came from `git grep` and no symbol encloses it.
 - The consequence in the same line: what breaks if one side changes alone.
 - Russian, matching the rest of the project's docs.
 
@@ -95,11 +127,13 @@ One line per link, newest at the bottom of its section:
   later, and only that line.
 - Touched a link this change? Re-read its line first; wrong → fix it in the
   same commit as the code.
-- Deleted the last side of a link → delete the line, and the entity file with
+- Moved or renamed a directory → the glob in `paths:` moves in the same
+  commit; the checker reports a glob that matches nothing.
+- Deleted the last side of a link → delete the line, and the domain file with
   its index line when it was the last one. Never leave a section saying a rule
   no longer applies: a tombstone costs context every pass, and git history
   already keeps it.
 - `node ~/.ai-hooks/bin/check-impact-map.mjs <project>` resolves every
-  `path:symbol` and the index against the working tree. Run it in the impact
-  pass before the review skills; a broken line is a deleted module whose line
-  outlived it.
+  `path:symbol`, every `paths:` glob and the index against the working tree.
+  Run it in the impact pass before the review skills; a broken line is a
+  deleted module whose line outlived it.
