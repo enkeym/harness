@@ -10,10 +10,15 @@ fired and what it wants instead.
 
 ## security-guard
 
-- Hard-blocks reading secret stores: `.env*`, keys, certificates, `auth.json`.
-  Take a variable's shape from `.env.example`, its value from the user.
+- Hard-blocks reading secret stores: `.env*`, `.envrc`, keys, certificates,
+  `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
+  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`. Take a
+  variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
-  branches, force push, deploy, remote-host commands, outbound data.
+  branches, force push (`-f`, `+refspec`), deploy, remote-host commands,
+  outbound data.
+- Asks before editing `~/harness` (guards, hooks, rules, settings) from a
+  session rooted elsewhere — say why the edit is needed, don't retry around it.
 - Judges command **form**. Code *meaning* (auth, payments, secrets, outbound
   calls) still needs `review-security`.
 

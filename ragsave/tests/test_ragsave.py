@@ -128,14 +128,21 @@ def test_file_filters() -> None:
         # Индекс живёт дольше сессии, поэтому фильтр по имени обязателен.
         for name in (".env", ".env.local", ".env.production", "id_rsa",
                      "server.pem", "auth.json", "credentials.json",
-                     ".git-credentials", "private.key", ".npmrc"):
+                     ".git-credentials", "private.key", ".npmrc",
+                     ".credentials.json", ".envrc", ".pgpass", "tls.key",
+                     ".aws/credentials", ".docker/config.json", ".kube/config",
+                     "gh/hosts.yml", "glab-cli/config.yml"):
             secret = root / name
+            secret.parent.mkdir(parents=True, exist_ok=True)
             secret.write_text("TOKEN=value", encoding="utf-8")
             check(f"секрет отсекается: {name}", is_probably_text(secret), False)
 
         # Примеры и шаблоны секретами не являются: там имена без значений.
-        for name in (".env.example", ".env.template", "config.json"):
+        # Общие имена конфигов — тоже, пока каталог не делает их секретом.
+        for name in (".env.example", ".env.template", "config.json",
+                     "deploy/config", "app/hosts.yml"):
             sample = root / name
+            sample.parent.mkdir(parents=True, exist_ok=True)
             sample.write_text("TOKEN=", encoding="utf-8")
             check(f"не секрет: {name}", is_probably_text(sample), True)
 

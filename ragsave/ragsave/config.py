@@ -107,25 +107,42 @@ SKIP_NAMES = {
 # и rag_search вернул бы значение токена прямо в контекст агента. Индекс живёт
 # дольше сессии, поэтому фильтруем по имени, а не полагаемся на .gitignore.
 # Примеры и шаблоны не секреты: в них имена переменных без значений.
+# Список продублирован в ai-hooks/security-core.mjs:SECRET_FILE_RE — правятся вместе.
 SECRET_NAME_RE = re.compile(
     r"""(?xi)
     ^(
         \.env(\.(?!example$|sample$|template$|dist$|tpl$)[\w-]+)*   # .env, .env.local
-      | \.?(npmrc|pypirc|netrc)
+      | \.envrc
+      | \.?(npmrc|pypirc|netrc|pgpass)
       | id_(rsa|dsa|ecdsa|ed25519)
-      | (credentials|auth|secrets?|service-account[\w-]*)\.json
+      | \.?(credentials|auth|secrets?|service-account[\w-]*)\.json  # и .credentials.json Claude
       | \.git-credentials
       | [\w.-]*(private|secret)[\w.-]*\.key
+      | (server|tls|ssl|client)\.key
     )$
     """
 )
 
 SECRET_EXTS = {".pem", ".p12", ".pfx", ".keystore", ".jks"}
 
+# Учётные данные CLI: имя файла общее (`config`, `config.json`), секретом его
+# делает каталог. Пары (каталог, имя).
+SECRET_IN_DIR = {
+    (".aws", "credentials"),
+    (".docker", "config.json"),
+    (".kube", "config"),
+    ("gh", "hosts.yml"), ("gh", "hosts.yaml"),
+    ("glab-cli", "config.yml"), ("glab-cli", "config.yaml"),
+}
+
 
 def is_secret_name(path: Path) -> bool:
     """Похоже ли имя файла на хранилище секретов."""
-    return bool(SECRET_NAME_RE.match(path.name)) or path.suffix.lower() in SECRET_EXTS
+    return (
+        bool(SECRET_NAME_RE.match(path.name))
+        or path.suffix.lower() in SECRET_EXTS
+        or (path.parent.name, path.name) in SECRET_IN_DIR
+    )
 
 
 @dataclass(frozen=True)

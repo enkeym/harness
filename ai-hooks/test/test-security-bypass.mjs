@@ -67,6 +67,14 @@ check('абсолютный', `cat /home/enkeym/main/vpn-new/.env`, 'deny');
 check('перенос строки как разделитель', `ls -la\ncat .env`, 'deny');
 check('&& как разделитель', `pwd && cat .env`, 'deny');
 
+process.stdout.write('\n--- перенаправление ввода ---\n');
+check('< без пробела', `cat<.env`, 'deny');
+check('цикл read из секрета', `while read l; do echo $l; done < .env`, 'deny');
+check('< в незнакомую команду', `mytool < ~/.git-credentials`, 'deny');
+check('< обычного файла', `sort < names.txt`, 'allow');
+check('< из примера', `cat < .env.example`, 'allow');
+check('heredoc не путь', `cat <<EOF > .env\nPORT=3000\nEOF`, 'allow');
+
 process.stdout.write('\n--- ложные срабатывания недопустимы ---\n');
 // Коммит спрашивает по своей причине (создание коммита), но не запрещает:
 // `.env` в тексте сообщения — не чтение секрета.

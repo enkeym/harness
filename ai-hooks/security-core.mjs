@@ -14,7 +14,9 @@
 // нераспознанное проходит: задача не поймать любой обход, а закрыть удобный
 // путь и поставить человека там, где цена ошибки высока.
 
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -23,14 +25,26 @@ export const ASK = 'ask';
 // Секреты. Файл считается хранилищем секретов по имени: содержимое читать,
 // чтобы решить, читать ли содержимое, — бессмысленно.
 
+// Список продублирован в ragsave/config.py:SECRET_NAME_RE — правятся вместе.
 const SECRET_FILE_RE = [
   /(^|[\\/])\.env(\.[\w-]+)*$/i,
-  /(^|[\\/])\.?(npmrc|pypirc|netrc)$/i,
+  /(^|[\\/])\.envrc$/i,
+  /(^|[\\/])\.?(npmrc|pypirc|netrc|pgpass)$/i,
   /(^|[\\/])id_(rsa|dsa|ecdsa|ed25519)$/,
-  /(^|[\\/])(credentials|auth|secrets?|service-account[\w-]*)\.json$/i,
+  // С точкой — `~/.claude/.credentials.json`, OAuth-токен самого Claude Code.
+  /(^|[\\/])\.?(credentials|auth|secrets?|service-account[\w-]*)\.json$/i,
   /(^|[\\/])\.git-credentials$/,
   /\.(pem|p12|pfx|keystore|jks)$/i,
+  // `.key` без приставки не берём: `obj.key` в коде и `jq .data.key` — не файлы.
   /(^|[\\/])[\w.-]*(private|secret)[\w.-]*\.key$/i,
+  /(^|[\\/])(server|tls|ssl|client)\.key$/i,
+  // Учётные данные CLI: имена файлов общие (`config`, `config.json`), секретом
+  // их делает каталог.
+  /(^|[\\/])\.aws[\\/]credentials$/,
+  /(^|[\\/])\.docker[\\/]config\.json$/,
+  /(^|[\\/])\.kube[\\/]config$/,
+  /(^|[\\/])gh[\\/]hosts\.ya?ml$/,
+  /(^|[\\/])glab-cli[\\/]config\.ya?ml$/,
 ];
 
 // Примеры и шаблоны — не секреты, в них имена переменных без значений.
@@ -147,13 +161,16 @@ const PROTECTED_BRANCH_RE = /^(main|master|dev|develop|prod|production|release(\
 const PROD_TOKEN_RE = /(^|[^a-z])prod(uction)?([^a-z]|$)/i;
 
 function gitPushReason(toks, seg) {
-  if (toks.some((t) => /^(-f|--force|--force-with-lease.*)$/.test(t))) {
+  // `-f` бывает и в склейке с другими короткими флагами: `-uf`.
+  if (toks.some((t) => /^(-[a-z]*f[a-z]*|--force|--force-with-lease.*)$/.test(t))) {
     return 'force push переписывает историю';
   }
   // git push [remote] [refspec] — цель это последний свободный аргумент.
   const free = toks.slice(toks.indexOf('push') + 1).filter((t) => !t.startsWith('-'));
+  // `+` перед refspec — тот же force push, только для одной ветки.
+  if (free.some((t) => t.startsWith('+'))) return 'force push (+refspec) переписывает историю';
   const target = free[free.length - 1] || '';
-  const branch = target.includes(':') ? target.split(':').pop() : target;
+  const branch = (target.includes(':') ? target.split(':').pop() : target).replace(/^refs\/heads\//, '');
   if (branch && PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
   // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
   if (free.length <= 1 && !/--dry-run/.test(seg)) return 'push в текущую ветку (refspec не указан)';
@@ -234,8 +251,20 @@ function secretPathsIn(seg, toks) {
 }
 
 function readsSecret(seg, toks, cmd) {
-  const secrets = secretPathsIn(seg, toks);
+  // Цель перенаправления вывода — запись, она безвредна: `echo X > .env`,
+  // `cat <<EOF > .env`. Отсеиваем её до всего остального, иначе читающая
+  // команда слева (`cat`) делала бы запрещённой обычную запись.
+  const redirectTargets = [...String(seg).matchAll(/>>?\s*([\w@.\-/\\~]+)/g)].map((m) => m[1]);
+  const secrets = secretPathsIn(seg, toks).filter((s) => !redirectTargets.includes(s));
   if (secrets.length === 0) return null;
+
+  // Перенаправление ввода отдаёт файл любой команде, и тогда её имя ничего не
+  // решает: `while read …; done < .env`, `cat<.env`. `<<` и `<<<` — heredoc и
+  // here-string, `<(…)` — подстановка процесса: пути там нет.
+  const inputs = [...String(seg).matchAll(/(?:^|[^<])<(?![<(])\s*([\w@.\-/\\~$]+)/g)]
+    .map((m) => m[1].replace(/\\\./g, '.'))
+    .filter(isSecretPath);
+  if (inputs.length) return inputs[0];
 
   if (READS_FILE.has(cmd)) return secrets[0];
 
@@ -252,11 +281,6 @@ function readsSecret(seg, toks, cmd) {
     && toks.some((t) => UPLOAD_FLAG_RE.test(t) || /^--(data|form|json)=/.test(t))) {
     return secrets[0];
   }
-
-  // Цель перенаправления — запись, она безвредна: `echo X > .env`.
-  const redirectTargets = [...String(seg).matchAll(/>>?\s*([\w@.\-/\\]+)/g)].map((m) => m[1]);
-  const notRedirect = secrets.filter((s) => !redirectTargets.includes(s));
-  if (notRedirect.length === 0) return null;
 
   // Остальное — команда упоминает секрет, но роли его мы не поняли. Молчим:
   // ложный запрет на `git add .env` или `ls -la .env` толкает искать обход,
@@ -448,13 +472,62 @@ function mcpFileTarget(ti) {
   return ti.file || ti.file_path || ti.path || ti.symbol || '';
 }
 
-// Единая точка для адаптера хука.
-export function securityGuard(toolName, toolInput = {}) {
+// ---------------------------------------------------------------------------
+// Правка самого харнеса. Гарды, хуки, правила и settings.json живут в этом
+// репозитории, и правка применяется сразу, в том числе к текущей сессии. Из
+// сессии в ~/harness это обычная работа; из чужого проекта — след prompt
+// injection из его файлов или ошибка, и одна молчаливая правка security-core
+// снимает все гарды разом. `Edit(~/harness/**)` в permissions.allow пускает её
+// без вопроса, поэтому вопрос задаёт гард.
+
+const HARNESS_ROOT = realpathOrSelf(path.join(path.dirname(fileURLToPath(import.meta.url)), '..'));
+
+function realpathOrSelf(p) {
+  try { return fs.realpathSync(p); } catch { return p; }
+}
+
+// Реальный путь, даже если файла ещё нет: разворачиваем ближайшего
+// существующего предка, остаток пристёгиваем. Иначе `~/.ai-hooks/…` (симлинк)
+// или новый файл внутри харнеса выглядели бы чужими.
+function resolveReal(p) {
+  let dir = path.resolve(p);
+  const rest = [];
+  while (!fs.existsSync(dir) && path.dirname(dir) !== dir) {
+    rest.unshift(path.basename(dir));
+    dir = path.dirname(dir);
+  }
+  return path.join(realpathOrSelf(dir), ...rest);
+}
+
+function insideHarness(p) {
+  const rel = path.relative(HARNESS_ROOT, p);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function guardHarnessEdit(filePath, cwd) {
+  if (!filePath || !cwd) return null;
+  const base = resolveReal(cwd);
+  if (insideHarness(base)) return null;
+  const target = resolveReal(path.resolve(base, String(filePath)));
+  if (!insideHarness(target)) return null;
+  return {
+    level: ASK,
+    reason: `правка харнеса (${path.relative(HARNESS_ROOT, target)}) из сессии в ${cwd}: ` +
+      'гарды, хуки и правила меняются сразу и для всех сессий. Подтверди, что это просил человек.',
+  };
+}
+
+// Единая точка для адаптера хука. ctx.cwd — каталог сессии: от него зависит,
+// своя ли правка харнеса.
+export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   const name = String(toolName || '');
   const ti = toolInput || {};
 
-  if (name === 'Read' || name === 'NotebookEdit') return guardReadSecurity(ti.file_path || ti.path || '');
-  if (name === 'Edit' || name === 'Write') return guardReadSecurity(ti.file_path || '');
+  if (name === 'Read') return guardReadSecurity(ti.file_path || ti.path || '');
+  if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit') {
+    const file = ti.file_path || ti.notebook_path || ti.path || '';
+    return guardReadSecurity(file) || guardHarnessEdit(file, ctx.cwd);
+  }
   if (name === 'Bash') return guardBashSecurity(ti.command);
   if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code);
   if (name === 'Grep') {
