@@ -39,6 +39,7 @@
       "optimize": "deny",
       "usage": "deny",
       "hooks-guards": "deny",
+      "impact-map": "ask",
       "test-browser": "ask"
     },
     "task": {

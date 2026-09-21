@@ -24,6 +24,9 @@ The map is committed, so the repository decides who reads it:
   `CLAUDE.md`, `docs/architecture.md`, an ADR folder, another agent's rules →
   that is the map. Add the line there, in the format that file already uses.
   Never create a second place for the same link.
+- No map at all → `/impact-map` creates and seeds it (user-invoked). Until
+  then, a link the pass finds still gets its line: the first line creates the
+  file.
 
 ## Shape: an index plus one file per entity
 

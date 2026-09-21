@@ -36,11 +36,11 @@ export function frontmatter(text) {
 
 const unquote = (v) => (/^".*"$/.test(v) ? JSON.parse(v) : v);
 
-// Каталоги скиллов: shared/ — общие правила без SKILL.md, synced/ — чужие
-// скиллы claude.ai, которые синхронизирует клиент.
+// Каталоги скиллов: shared/ — общие правила без SKILL.md, synced/ и скрытые
+// (.trash/) — чужие скиллы claude.ai, которые синхронизирует клиент.
 const skillDirs = fs
   .readdirSync(SKILLS, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && !['shared', 'synced'].includes(d.name))
+  .filter((d) => d.isDirectory() && !['shared', 'synced'].includes(d.name) && !d.name.startsWith('.'))
   .map((d) => d.name)
   .sort();
 
