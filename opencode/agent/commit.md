@@ -40,6 +40,14 @@ permission:
     "git push --force*": deny
     "git push -f*": deny
     "git push --delete*": deny
+    "git push *--force*": deny
+    "git push * -f*": deny
+    "git push *+*": deny
+    "git push * :*": deny
+    "git push *--delete*": deny
+    "git push * -d*": deny
+    "git push *--mirror*": deny
+    "git push *--all*": deny
     "git branch -d*": deny
     "git branch -D*": deny
     "git reset*": deny

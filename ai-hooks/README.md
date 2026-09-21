@@ -410,6 +410,16 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 prompt injection из файлов чужого проекта снимала бы гарды одной правкой
 `security-core.mjs`. Из сессии в `~/harness` правки идут как раньше.
 
+В OpenCode тот же гард вызывается из плагина (`opencode/tokensave-guard.mjs`,
+`tool.execute.before`) раньше гардов tokensave: `read`, `grep`, `edit`,
+`write`, `bash` переводятся в `Read`/`Grep`/`Edit`/`Bash` ядра, остальные
+(MCP `tokensave_tokensave_read` и однотипные) — в `mcp__opencode__<имя>`, корень
+сессии — `directory`. Блокируется только `deny`: спросить человека из плагина нельзя,
+поэтому `ask` там держат правила `permission.bash` в `opencode.json` и агентах
+(у `@commit` — запреты force push, `+refspec`, удаления ветки, `--mirror`,
+`--all`). Ошибка самого гарда вызов не блокирует — fail-open, как в адаптере
+Claude.
+
 Гард закрывает и путь мимо `Read`: MCP-инструменты, отдающие содержимое файла
 (`tokensave_read`, `tokensave_body` и однотипные), проверяются тем же
 правилом — иначе он запирал бы парадную дверь при открытом чёрном ходе.
@@ -521,7 +531,8 @@ Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 и до роутеров).
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
-`opencode/tokensave-guard.mjs`. Плагины OpenCode грузятся автоматически из
+`opencode/tokensave-guard.mjs` — в нём и гарды tokensave, и гард безопасности.
+Плагины OpenCode грузятся автоматически из
 `~/.config/opencode/plugin/` (глобально) и `.opencode/plugin/` (в проекте).
 
 У самого бинаря tokensave есть встроенный хук (`tokensave hook-pre-tool-use`).
@@ -699,6 +710,7 @@ node ~/.ai-hooks/test/test-ask-mode.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
 node ~/.ai-hooks/test/test-security.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
+node ~/.ai-hooks/test/test-opencode-plugin.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs

@@ -52,6 +52,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | Субагенты | `permissions.deny: Agent` | `general`/`explore` отключены, `permission.task` — `deny` всем, кроме `commit` |
 | MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
 | Гарды tokensave | хуки `ai-hooks/claude/*` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
+| Гард безопасности | хук `ai-hooks/claude/security-guard.mjs`: `deny` и `ask` | тот же плагин, перед гардами tokensave: блокирует только `deny` (секреты); `ask` здесь держит `permission.bash`. Логика одна — `ai-hooks/security-core.mjs` |
 | Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask`, включён при старте (`default_agent`), Tab — в `build`: правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
 | Коммит | `/commit` | `@commit` — субагент со своей моделью и правами (`opencode/agent/commit.md`): коммит, пуш и GitLab API без подтверждений, правка файлов и переписывание истории запрещены; вся процедура из `git-flow`, MR — только по «сделай МР». Из основной сессии `git commit`/`git push` идут через `permission.bash` |
 
@@ -133,6 +134,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 node ai-hooks/test/test-guards.mjs
 node ai-hooks/test/test-ask-mode.mjs
 node ai-hooks/test/test-security.mjs
+node ai-hooks/test/test-opencode-plugin.mjs
 node ai-hooks/test/test-skills.mjs
 ```
 

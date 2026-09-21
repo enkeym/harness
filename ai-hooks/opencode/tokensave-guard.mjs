@@ -6,7 +6,8 @@
 //   Claude UserPromptSubmit (branch)        → chat.message
 //   Claude Stop (sync)                      → event: session.idle
 //
-// Срабатывает ТОЛЬКО для файлов, которые есть в индексе tokensave.
+// Гарды tokensave срабатывают ТОЛЬКО для файлов, которые есть в индексе.
+// Перед ними — гард безопасности (../security-core.mjs), общий с Claude Code.
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
@@ -14,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import {
   guardRead, guardGrep, guardEdit, guardBash, OPENCODE_LABELS,
 } from '../guard-core.mjs';
+import { securityGuard, DENY } from '../security-core.mjs';
 
 // Каталог bin рядом с этим файлом (../bin), а не зашитый абсолютный путь с
 // именем пользователя — плагин ставится в чужой $HOME.
@@ -25,10 +27,39 @@ function runDetached(script, directory) {
   execFile('bash', [`${BIN}/${script}`, directory], () => {});
 }
 
+// Инструмент OpenCode → вызов в терминах Claude, которые понимает ядро.
+// Остальные (MCP: `tokensave_tokensave_read`, `tokensave_tokensave_body`)
+// идут как `mcp__opencode__<имя>`: ядро узнаёт читающие по имени и проверяет
+// путь в аргументах — иначе .env отдал бы индекс tokensave.
+const SECURITY_CALLS = {
+  read: (args) => ['Read', { file_path: args.filePath }],
+  grep: (args) => ['Grep', { path: args.path, glob: args.include }],
+  edit: (args) => ['Edit', { file_path: args.filePath }],
+  write: (args) => ['Edit', { file_path: args.filePath }],
+  bash: (args) => ['Bash', { command: args.command }],
+};
+
+// Блокируется только DENY (секреты). ASK здесь не спросить — его закрывает
+// permission.bash в конфиге OpenCode. Ошибка самого гарда вызов не блокирует:
+// fail-open, как в адаптере Claude.
+function securityReason(tool, args, directory) {
+  const call = SECURITY_CALLS[tool] ?? ((a) => [`mcp__opencode__${tool}`, a]);
+  try {
+    const [toolName, toolInput] = call(args);
+    const verdict = securityGuard(toolName, toolInput, { cwd: directory });
+    return verdict?.level === DENY ? `security-guard, запрет: ${verdict.reason}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export const TokensaveGuard = async ({ directory }) => {
   return {
     'tool.execute.before': async (input, output) => {
       const args = output.args ?? {};
+      const security = securityReason(input.tool, args, directory);
+      if (security) throw new Error(security);
+
       let reason = null;
 
       switch (input.tool) {

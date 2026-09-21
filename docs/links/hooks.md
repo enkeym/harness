@@ -23,6 +23,11 @@ paths:
 - Список хранилищ секретов — `ai-hooks/security-core.mjs:SECRET_FILE_RE` ↔
   `ragsave/ragsave/config.py:SECRET_NAME_RE` (+ `SECRET_IN_DIR`). Новый файл в одном
   месте — гард запрещает его чтение, а rag_search отдаёт содержимое из индекса.
+- Уровень `ask` гарда безопасности — `ai-hooks/security-core.mjs:guardBashSecurity`
+  ↔ `permission.bash` в `opencode/opencode.json` и `opencode/agent/commit.md`:
+  плагин `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` блокирует только
+  `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
+  такой же запрет не добавлен в `permission.bash`.
 - `AI_HOOKS_DOCTOR_OFF` — `ai-hooks/doctor-core.mjs:doctorEnabled` ↔ выключатель в
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
