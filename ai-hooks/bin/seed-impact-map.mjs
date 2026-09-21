@@ -37,10 +37,14 @@ const RAG_LITERALS_MAX = 50;
 // КОНСТАНТА с точечным хвостом (`EVENTS.PAID`). Порядок, а не позиция в
 // строке: в `const HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG` литерал — env.
 const LITERAL_RES = [
-  /\b(?:process|import\.meta)\.env\.([A-Z][A-Z0-9_]+)/,
-  /['"`]([^'"`]+)['"`]/,
-  /\b([A-Z][A-Z0-9_]{2,}(?:\.[A-Z][A-Z0-9_]+)*)\b/,
+  /\b(?:process|import\.meta)\.env\.([A-Z][A-Z0-9_]+)/g,
+  /['"`]([^'"`]+)['"`]/g,
+  // `JSON.parse(`, `URL.createObjectURL(` — объект с методом, не имя.
+  /\b([A-Z][A-Z0-9_]{2,}(?:\.[A-Z][A-Z0-9_]+)*)\b(?!\.[a-z])/g,
 ];
+// Значение, а не имя: `'1'`, `'[]'`, пробел — стороны не различает и ищется
+// по всему дереву. Такое совпадение пропускается, литерал ищется дальше.
+const NAME_RE = /\p{L}/u;
 // Комментарий цитирует связь, а не образует её.
 const COMMENT_RE = /^(?:\/\/|\/\*|\*)/;
 // Тесты и моки эмитят те же события, что и код, но связью не являются.
@@ -237,11 +241,12 @@ function migrations() {
   return found;
 }
 
-// Литерал в один символ (`'x'`, пробел) стороны не различает и ищется по всему дереву.
+// В `setItem(INTRO_FLAG, '1')` строка в кавычках — значение, литерал — константа.
 function literalOf(text) {
   for (const re of LITERAL_RES) {
-    const m = text.match(re);
-    if (m) return m[1].trim().length > 1 ? m[1] : '';
+    for (const [, literal] of text.matchAll(re)) {
+      if (literal.trim().length > 1 && NAME_RE.test(literal)) return literal;
+    }
   }
   return '';
 }

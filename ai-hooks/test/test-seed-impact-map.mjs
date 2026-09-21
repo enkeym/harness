@@ -53,6 +53,8 @@ const FILES = {
     '  socket.on(\'connect_error\', retry);',
     '  const raw = localStorage.getItem(DRAFT_KEY);',
     '  stream.subscribe((res) => res);',
+    '  sessionStorage.setItem(INTRO_FLAG, \'1\');',
+    '  const list = JSON.parse(localStorage.getItem(LIST_KEY) || \'[]\');',
     '}',
   ].join('\n'),
   'client/src/hooks/useData.spec.ts': 'socket.emit(`${group}_newData`, {});\n',
@@ -141,7 +143,12 @@ function expectFull(out, label) {
     && events.includes('- `server/src/app.gateway.ts:handleJoinRoom` (стр. 4)'), events);
   check(`${label}: литерал с одной строкой помечен`, events.includes('### `joinRoom` — одна сторона') && events.includes('(с одной стороной: 1)'), events);
   check(`${label}: cron с методом`, has('`server/src/app.gateway.ts:cleanup` (стр. 7)'));
-  check(`${label}: ключ localStorage под константой`, section(out, 'Ключи хранилищ').includes('### `DRAFT_KEY` — одна сторона\n- `client/src/hooks/useData.ts:useData` (стр. 5)'));
+  const keys = section(out, 'Ключи хранилищ');
+  check(`${label}: ключ localStorage под константой`, keys.includes('### `DRAFT_KEY` — одна сторона\n- `client/src/hooks/useData.ts:useData` (стр. 5)'));
+  check(`${label}: значение '1' и '[]' не литерал — ключ из константы`,
+    keys.includes('### `INTRO_FLAG` — одна сторона\n- `client/src/hooks/useData.ts:useData` (стр. 7)')
+    && keys.includes('### `LIST_KEY` — одна сторона\n- `client/src/hooks/useData.ts:useData` (стр. 8)')
+    && !keys.includes('### `[]`') && !keys.includes('без литерала'), keys);
   const flags = section(out, 'Флаги и переключатели');
   check(`${label}: флаг из configService и process.env`, flags.includes('### `DATABASE_URL` — одна сторона\n- `server/src/config.service.ts:dbUrl` (стр. 2)'));
   check(`${label}: литерал флага — имя env, не константа слева`, flags.includes('### `APP_LOG_DIR` — одна сторона') && !flags.includes('### `LOG_DIR`'), flags);
