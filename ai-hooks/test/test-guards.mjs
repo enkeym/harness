@@ -223,6 +223,15 @@ bash('node -e с записью в исходник → deny', 'deny',
   `node -e "require('fs').writeFileSync('client/src/App.tsx','x')"`);
 bash('node -e по package.json → по индексу активной ветки', JSON_VERDICT,
   `node -e "require('./package.json')"`);
+// Скрипт как аргумент — запуск, не чтение: команды README (`node test/x.mjs`)
+// блокировались, а `node "$t"` проходил — запрет на пустом месте.
+bash('node <скрипт из индекса> → allow (запуск)', 'allow', 'node client/src/App.tsx');
+bash('python3 <скрипт из индекса> → allow (запуск)', 'allow', 'python3 client/src/App.tsx --flag');
+bash('node с heredoc и путём из индекса → deny', 'deny',
+  `node <<'EOF'\nconsole.log(require('fs').readFileSync('client/src/App.tsx','utf8'))\nEOF`);
+bash('node -p с путём из индекса → deny', 'deny',
+  `node -p "require('fs').readFileSync('client/src/App.tsx','utf8')"`);
+bash('jq по package.json → по индексу активной ветки', JSON_VERDICT, 'jq .name package.json');
 
 // grep-семейство
 bash('grep -rn по коду → deny', 'deny', 'grep -rn useState client/src');

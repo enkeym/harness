@@ -530,6 +530,15 @@ const INPLACE_CMDS = new Set(['sed', 'perl', 'awk', 'gawk']);
 // Интерпретаторы: путь прячется внутри строки кода, поэтому у них смотрим
 // весь сегмент целиком, а не отдельные аргументы.
 const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun', 'jq']);
+// Признак строки кода в аргументах или heredoc. Без него интерпретатор
+// исполняет скрипт (`node test/test-guards.mjs`) — это запуск, как `tsc` или
+// `eslint`, а не чтение; запрет ловил команды из README и толкал в обход
+// через переменную (`node "$t"`). jq всегда читает свой аргумент.
+const INLINE_CODE_RE = /^(-e|--eval|-p|--print|-c|-E|-r|eval)$|^--(eval|print)=/;
+function runsInlineCode(cmd, toks, seg) {
+  if (cmd === 'jq') return true;
+  return toks.slice(1).some((t) => INLINE_CODE_RE.test(t)) || /<<-?\s*['"]?\w+/.test(seg);
+}
 
 const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
 
@@ -571,7 +580,22 @@ export function segments(command) {
     if (c === '"' || c === "'") { quote = c; buf += c; continue; }
     if ((c === '|' && text[i + 1] === '|') || (c === '&' && text[i + 1] === '&')) { i++; flush(); continue; }
     if (c === '|') { nextPiped = true; flush(); continue; }
-    if (c === ';' || c === '\n') { flush(); continue; }
+    if (c === '\n') {
+      // Тело heredoc — часть команды, а не следующие команды: без этого
+      // `node <<EOF … EOF` с путём внутри распадался на безобидные строки.
+      const here = buf.match(/<<-?\s*(?:'(\w+)'|"(\w+)"|(\w+))/);
+      if (here) {
+        const term = here[1] ?? here[2] ?? here[3];
+        const rest = text.slice(i + 1);
+        const end = rest.match(new RegExp(`(^|\\n)\\t*${term}(?=\\n|$)`));
+        const taken = end ? end.index + end[0].length : rest.length;
+        buf += c + rest.slice(0, taken);
+        i += taken;
+      }
+      flush();
+      continue;
+    }
+    if (c === ';') { flush(); continue; }
     buf += c;
   }
   flush();
@@ -667,7 +691,7 @@ export function guardBash(command, cwd, labels) {
         if (hit) return bashEditReason(hit, labels);
       }
 
-      if (EVAL_CMDS.has(cmd)) {
+      if (EVAL_CMDS.has(cmd) && runsInlineCode(cmd, toks, seg)) {
         const hit = anyIndexed(seg, cwd);
         if (hit) return bashEvalReason(hit, labels);
       }
