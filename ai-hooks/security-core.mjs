@@ -225,7 +225,12 @@ function secretPathsIn(seg, toks) {
   const found = new Set([...(String(seg).match(/[\w@.\-/\\]*\.\w+|[\w./-]*\.env[\w.]*/g) || []), ...toks]);
   // `@файл` — синтаксис curl для «взять тело из файла», сама «собака» частью
   // пути не является и мешала бы сопоставлению имени.
-  return [...found].map((c) => String(c).replace(/^@/, '')).filter(isSecretPath);
+  // `\.` — экранированная точка regex (`process\.env`, `import\.meta\.env`):
+  // и в regex, и в неквотированном shell это обычная точка, а не разделитель
+  // пути перед `.env`.
+  return [...found]
+    .map((c) => String(c).replace(/^@/, '').replace(/\\\./g, '.'))
+    .filter(isSecretPath);
 }
 
 function readsSecret(seg, toks, cmd) {

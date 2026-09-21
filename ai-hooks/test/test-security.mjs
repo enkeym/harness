@@ -62,6 +62,11 @@ check('дозапись в .env', bash('echo "PORT=3000" >> .env'), 'allow');
 check('git add .env', bash('git add .env'), 'allow');
 check('ls -la .env', bash('ls -la .env'), 'allow');
 
+// --- regex-форма `\.env` — это поиск по коду, а не путь к файлу
+check('grep по process\\.env', bash('grep -rn "process\\.env\\.[A-Z_]+" src'), 'allow');
+check('grep по import\\.meta\\.env', bash('grep -rn "import\\.meta\\.env" client/src'), 'allow');
+check('grep по regex с настоящим .env', bash('grep -n "process\\.env" .env'), 'deny');
+
 // --- вывод окружения: секрет приходит не из файла
 check('printenv', bash('printenv'), 'ask');
 check('env без аргументов', bash('env'), 'ask');
