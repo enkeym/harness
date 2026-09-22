@@ -15,11 +15,13 @@ the tool inside it. Full tool names and file tools: `CLAUDE.md` or `AGENTS.md`.
 | Read a file or symbol             | `read`, `body`, `signature`                                           |
 | Context around a known entry      | `context`                                                             |
 | Symbol by name / text in code     | `search` (`literal:true` for text)                                    |
-| Who calls it, what breaks         | `callers`, `callees`, `field_sites`, `impact`, `affected`             |
+| Who calls it, what breaks         | `callers`, `callees`, `impact`, `affected`                            |
+| Where a field is read or written  | `search` `literal:true` on `.field`                                   |
 | Edit existing code                | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*`    |
 | Create a new file                 | built-in write — tokensave doesn't create files                       |
 
-Arguments from the schema, not memory.
+Arguments from the schema, not memory. `field_sites` is denied: it panics on
+non-ASCII source and takes the whole server down until `/mcp` reconnects.
 
 - Pass `seen_node_ids` from one `context` into `exclude_node_ids` of the next.
 - Scope with `path_include`/`path_exclude` — a monorepo pulls in a foreign stack.

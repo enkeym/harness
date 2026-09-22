@@ -16,7 +16,8 @@
       "Edit(~/harness/**)"
     ],
     "deny": [
-      "Agent"
+      "Agent",
+      "mcp__tokensave__tokensave_field_sites"
     ],
     "defaultMode": "default"
   },

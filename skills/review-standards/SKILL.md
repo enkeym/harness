@@ -19,7 +19,7 @@ re-done by hand; a finding is what they cannot see.
    Tests in the diff: do they assert behaviour or the mock? Run when in doubt.
 3. Impact pass on **every** symbol whose behaviour the diff changes, not only
    on changed signatures — a caller compiles fine against a function that now
-   returns filtered data. `tokensave_impact` / `callers` / `field_sites`, plus
+   returns filtered data. `tokensave_impact` / `callers` / literal `search`, plus
    the project's [../shared/impact-map.md](../shared/impact-map.md) for links
    no call edge carries. Close each hit one of three ways: unaffected (one line
    saying why), fixed in this diff, or covered by a test that fails on the old

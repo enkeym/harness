@@ -47,6 +47,11 @@ paths:
   чтения. Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
   `ai-hooks/read-core.mjs:indexRoot`: поменял правило в одном — хук читает файл не из
   того проекта.
+- Закрытые инструменты tokensave — `permissions.deny` в `claude/settings.json` ↔
+  `permission` в `opencode/opencode.json` ↔ советы в скиллах, `rules/core.md` и
+  подсказке `ai-hooks/guard-core.mjs:guardGrep`. Закрыл в одном месте — агент
+  по совету зовёт инструмент, которого нет, или роняет им сервер. Сверяет
+  `ai-hooks/test/test-skills.mjs:deniedTools`.
 - Каталоги карты `docs/links` / `.claude/links` — три копии списка:
   `ai-hooks/links-core.mjs:MAP_DIRS`, `ai-hooks/bin/init-impact-map.mjs:OWN_DIR`
   (+ `SHARED_DIR`), `ai-hooks/bin/seed-impact-map.mjs:PATH_EXCLUDE`. Новый каталог

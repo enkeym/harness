@@ -507,7 +507,7 @@ export function guardGrep({ path: searchPath, glob, type }, cwd, labels) {
   const p = labels.prefix;
   return (
     `Поиск по индексу tokensave. Вместо ${labels.grep}: ${p}search (символ; literal:true — строка), ` +
-    `${p}callers/${p}field_sites (использования), ${p}context. ` +
+    `${p}callers (использования), ${p}context. ` +
     `Вне индекса — ограничь glob/type (напр. type:"json"). ${FALLBACK}`
   );
 }
