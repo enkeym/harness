@@ -27,7 +27,8 @@ paths:
   ↔ `permission.bash` в `opencode/opencode.json` и `opencode/agent/commit.md`:
   плагин `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` блокирует только
   `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
-  такой же запрет не добавлен в `permission.bash`.
+  такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
+  `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
 - `AI_HOOKS_DOCTOR_OFF` — `ai-hooks/doctor-core.mjs:doctorEnabled` ↔ выключатель в
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
