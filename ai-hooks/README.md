@@ -42,7 +42,7 @@ ask-core.mjs                # ask mode: состояние режима и чт�
 hooklog-core.mjs                # журнал решений хуков → logs/hooks.jsonl, захват падений
 doctor-core.mjs                 # фоновый /doctor: триггер, дебаунс, промпт headless-сессии
 bin/doctor-run.mjs              # отвязанный раннер `claude -p`, итог → ~/.claude/state/doctor/
-claude/doctor-reminder.mjs      # итог доктора и затянувшийся server-mismatch — в промпт (UserPromptSubmit)
+claude/doctor-reminder.mjs      # итог доктора, server-mismatch и сервер на другой ветке — в промпт (UserPromptSubmit)
 claude/hook-io.mjs              # общий ввод/вывод PreToolUse + предохранитель повторов + журнал
 claude/read-search-router.mjs   # адаптер Claude: PreToolUse(Read|Grep)
 claude/edit-router.mjs          # адаптер Claude: PreToolUse(Edit|Write)
@@ -350,6 +350,13 @@ exit=101` в `errors.log`). Пустой каталог `.tokensave`, созда
 говорит один раз за сессию про `server-mismatch`, длящийся дольше десяти
 минут: гард в этом случае молчит осознанно (fail-open), но раньше молчал и о
 том, что молчит, и роутеры бывали выключены по несколько дней незаметно.
+
+Сервер этого корня на другой ветке (`servedBranchMismatch` в guard-core:
+живая запись реестра с `db_path`, не равным БД текущей ветки) хук ловит сам,
+не дожидаясь события гарда, и говорит на каждом промпте, пока не починено:
+строка агенту и `systemMessage` пользователю с `/mcp → tokensave → Reconnect`.
+`tokensave serve` выбирает БД ветки при старте и за `checkout` не следует —
+переподключить его может только пользователь.
 
 ## Гейт скиллов
 

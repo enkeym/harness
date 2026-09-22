@@ -251,6 +251,25 @@ function serverState(root, wantDb) {
   return result;
 }
 
+// Сервер этого корня жив, но отвечает из БД другой ветки: tokensave serve
+// выбирает БД ветки при старте и за checkout не следует. Гард в этом случае
+// молчит (serverState не ok), а чинит только перезапуск сервера — поэтому
+// наружу отдаём обе БД, чтобы напоминание назвало, что с чем разошлось.
+export function servedBranchMismatch(root) {
+  if (!fs.existsSync(path.join(root, TS_DIR))) return null;
+  const want = dbPath(root);
+  if (!want) return null;
+  const state = serverState(root, want);
+  if (state.ok) return null;
+  const own = state.servers.find((s) => s.db && path.resolve(s.project || '') === path.resolve(root));
+  if (!own) return null;
+  // Имя ветки — из branch-meta: у основной ветки файл tokensave.db, не её имя.
+  const branches = readJSON(path.join(root, TS_DIR, 'branch-meta.json'), {})?.branches || {};
+  const hit = Object.entries(branches)
+    .find(([, b]) => b?.db_file && path.resolve(root, TS_DIR, b.db_file) === path.resolve(own.db));
+  return { want, served: own.db, servedBranch: hit ? hit[0] : path.basename(own.db, '.db') };
+}
+
 // ---------------------------------------------------------------------------
 // Диагностический лог. Пишется только там, где гард отступает от своего
 // правила, — этих событий в норме ноль, поэтому файл не шумит. Всё, что нужно

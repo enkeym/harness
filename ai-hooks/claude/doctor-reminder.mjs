@@ -7,8 +7,13 @@
 // Там же — одна строка про затянувшийся server-mismatch: гард в этом случае
 // молчит осознанно (fail-open), но молчит и о том, что молчит, и роутеры
 // оказывались выключенными по несколько дней незаметно.
+//
+// И — на каждом промпте, пока не починено, — строка про сервер на другой ветке:
+// tokensave serve берёт БД ветки при старте и за checkout не следует, а
+// переподключить сервер может только пользователь (/mcp).
 
 import { repoRootOr, currentBranch } from '../state-core.mjs';
+import { servedBranchMismatch } from '../guard-core.mjs';
 import { readState, said, recordSaid, isRunning } from '../doctor-core.mjs';
 import { readRecent, insideDoctor } from '../hooklog-core.mjs';
 import { readInput } from './hook-io.mjs';
@@ -82,7 +87,19 @@ readInput((input) => {
     marks.push('runningSaid');
   }
 
-  if (doctorSymptom !== 'server-mismatch' && !said(st, 'mismatchSaid', sid)) {
+  const drift = servedBranchMismatch(root);
+  let userMessage = null;
+  if (drift) {
+    const served = drift.servedBranch;
+    lines.push(
+      `tokensave отвечает из графа ${served}, а рабочее дерево на ${currentBranch(root) || '?'}: ` +
+      'сервер выбирает ветку при старте. До переподключения ответы tokensave — из чужой ветки; ' +
+      'попроси пользователя выполнить /mcp → tokensave → Reconnect.',
+    );
+    userMessage = `tokensave работает на ветке ${served} — /mcp → tokensave → Reconnect.`;
+  }
+
+  if (!drift && doctorSymptom !== 'server-mismatch' && !said(st, 'mismatchSaid', sid)) {
     const recent = recentMismatches();
     if (recent.length) {
       lines.push(
@@ -95,8 +112,9 @@ readInput((input) => {
   }
 
   if (!lines.length) process.exit(0);
-  recordSaid(root, marks, sid, st.started);
+  if (marks.length) recordSaid(root, marks, sid, st.started);
   process.stdout.write(JSON.stringify({
+    ...(userMessage && { systemMessage: userMessage }),
     hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
       additionalContext: lines.join('\n'),

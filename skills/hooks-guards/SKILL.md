@@ -112,4 +112,6 @@ fired and what it wants instead.
    prompt line starting `doctor (…)` is the background doctor's finding: its
    report is a file to `Read`, applying it is `/doctor apply`; a line starting
    `tokensave-гард молчит` means the routers are off for this session, not
-   that the project is un-indexed.
+   that the project is un-indexed; a line `tokensave отвечает из графа <X>`
+   means the server runs on another branch — tokensave answers are stale
+   until the user runs `/mcp` → tokensave → Reconnect; say so in one line.

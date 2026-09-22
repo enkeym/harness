@@ -26,6 +26,11 @@ fs.writeFileSync(path.join(project, '.git', 'HEAD'), 'ref: refs/heads/feature/x\
 process.env.AI_HOOKS_STATE_DIR = stateDir;
 process.env.AI_HOOKS_HOOKS_LOG = path.join(tmp, 'hooks.jsonl');
 process.env.AI_HOOKS_DOCTOR_CMD = FAKE;
+// Реестр серверов tokensave и /proc — свои: иначе хук судит по живым сессиям машины.
+const serversDir = path.join(tmp, 'servers');
+fs.mkdirSync(serversDir, { recursive: true });
+process.env.TS_SERVERS_DIR = serversDir;
+process.env.TS_SERVE_ROOTS = '';
 process.env.FAKE_CLAUDE_TRACE = path.join(tmp, 'trace.json');
 delete process.env.AI_HOOKS_DOCTOR_OFF;
 delete process.env.AI_HOOKS_DOCTOR;
@@ -210,6 +215,38 @@ const call = (symptom = 'breaker-open', sid = 'sid-main') =>
   const old = { ...rec, ts: new Date(Date.now() - 3600 * 1000).toISOString() };
   fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, JSON.stringify(old) + '\n');
   check('mismatch: событие старше окна не упоминается', reminder('sid-mm-old').includes('tokensave-гард молчит'), false);
+}
+
+// --- сервер корня на БД другой ветки: строка агенту и подсказка пользователю ---
+{
+  fs.writeFileSync(process.env.AI_HOOKS_HOOKS_LOG, '');
+  const tsDir = path.join(project, '.tokensave');
+  fs.mkdirSync(tsDir, { recursive: true });
+  fs.writeFileSync(path.join(tsDir, 'branch-meta.json'), JSON.stringify({
+    default_branch: 'main',
+    branches: { 'feature/x': { db_file: 'branches/feature_x.db' }, dev: { db_file: 'branches/dev.db' } },
+  }));
+  const entry = path.join(serversDir, `${process.pid}.json`);
+  const register = (db) => fs.writeFileSync(entry, JSON.stringify({
+    pid: process.pid, project_path: project, db_path: path.join(tsDir, 'branches', db),
+  }));
+  const run = (sid) => {
+    const out = spawnSync('node', [REMINDER], {
+      input: JSON.stringify({ session_id: sid, cwd: project, prompt: 'x' }), encoding: 'utf8', env: process.env,
+    }).stdout.trim();
+    return out ? JSON.parse(out) : null;
+  };
+
+  register('dev.db');
+  const drift = run('sid-drift');
+  check('ветка сервера ≠ рабочей: строка агенту с обеими ветками',
+    /графа dev, а рабочее дерево на feature\/x/.test(drift?.hookSpecificOutput.additionalContext || ''), true);
+  check('ветка сервера ≠ рабочей: пользователю — /mcp', /\/mcp/.test(drift?.systemMessage || ''), true);
+  check('ветка сервера ≠ рабочей: повторяется, пока не починено', Boolean(run('sid-drift')?.systemMessage), true);
+  register('feature_x.db');
+  check('сервер на текущей ветке → молчит', run('sid-drift'), null);
+  fs.rmSync(entry);
+  fs.rmSync(tsDir, { recursive: true });
 }
 
 // --- отчёт по server-mismatch объявляется, только пока рассинхрон жив ---
