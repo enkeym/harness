@@ -111,6 +111,23 @@ function hostsIn(seg, toks) {
   return hosts.filter(Boolean);
 }
 
+// Переменные окружения, из которых клиент берёт хост.
+const DB_HOST_ENV_RE = /(?:^|[\s;&|(])(?:PGHOST|MYSQL_HOST)=["']?([\w.-]+)/g;
+
+// Хост клиента БД: кроме общих форм — слитный `-hHOST` (mysql, psql), строка
+// подключения psql `host=…` и переменная окружения. Переменную ищем по всей
+// команде: `export PGHOST=prod; psql app` задаёт её в соседнем сегменте.
+function dbHostsIn(raw, seg, toks) {
+  const hosts = hostsIn(seg, toks);
+  for (const t of toks) {
+    const joined = t.match(/^-h([^-].*)$/);
+    if (joined) hosts.push(joined[1]);
+    for (const m of t.matchAll(/(?:^|\s)host(?:addr)?=([\w.-]+)/g)) hosts.push(m[1]);
+  }
+  for (const m of String(raw).matchAll(DB_HOST_ENV_RE)) hosts.push(m[1]);
+  return hosts;
+}
+
 // ---------------------------------------------------------------------------
 // Ветки и деплой.
 
@@ -452,7 +469,7 @@ export function guardBashSecurity(command, depth = 0) {
     }
 
     if (DB_CLIENTS.has(cmd)) {
-      const external = hostsIn(seg, toks).filter((h) => !LOCAL_HOST_RE.test(h));
+      const external = dbHostsIn(raw, seg, toks).filter((h) => !LOCAL_HOST_RE.test(h));
       if (external.length) {
         return { level: ASK, reason: `\`${cmd}\` идёт на внешний хост ${external[0]} — возможно, боевая база.` };
       }

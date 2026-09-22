@@ -398,8 +398,9 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 проходят.
 
 `ask` — там, где операция законная, но нужен человек: `pg_dump` и другие
-выгрузки, клиент БД на неместном хосте, `git push` в main/dev/prod (в том
-числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
+выгрузки, клиент БД на неместном хосте (`-h`, слитный `-hHOST`, `--host`, URL,
+строка подключения `host=…`, `PGHOST=`/`MYSQL_HOST=` в любом месте команды),
+`git push` в main/dev/prod (в том числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
 `-uf`, `+refspec`), удаление ветки (`--delete`, `:ветка`), `--all`/`--mirror`,
 шаблон `*`, push без явной ветки, в `HEAD`/`@` или в ветку из `$…`/`` `…` ``,
 `docker compose` с прод-конфигом, `kubectl apply`, команды через

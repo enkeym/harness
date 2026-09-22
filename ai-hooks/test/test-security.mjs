@@ -107,6 +107,17 @@ check('pg_dump', bash('pg_dump -U app mydb > dump.sql'), 'ask');
 check('mysqldump', bash('mysqldump app > d.sql'), 'ask');
 check('psql на внешний хост', bash('psql -h db.example.com -U app'), 'ask');
 check('psql локально', bash('psql -h localhost -U app -c "select 1"'), 'allow');
+check('mysql со слитным -hHOST', bash('mysql -hprod.example.com app'), 'ask');
+check('mysql со слитным -h на localhost', bash('mysql -hlocalhost app'), 'allow');
+check('mongosh --host отдельным аргументом', bash('mongosh --host prod.example.com'), 'ask');
+check('хост в переменной PGHOST', bash('PGHOST=prod.example.com psql app'), 'ask');
+check('PGHOST в кавычках за env', bash('env PGHOST="prod.example.com" psql app'), 'ask');
+check('PGHOST экспортирован раньше', bash('export PGHOST=prod.example.com; psql app'), 'ask');
+check('PGHOST на localhost', bash('PGHOST=localhost psql app'), 'allow');
+check('хост в переменной MYSQL_HOST', bash('MYSQL_HOST=prod.example.com mysql app'), 'ask');
+check('хост в строке подключения psql', bash('psql "host=prod.example.com dbname=app"'), 'ask');
+check('redis-cli -u с адресом', bash('redis-cli -u redis://prod.example.com:6379'), 'ask');
+check('psql без хоста', bash('psql app -c "select 1"'), 'allow');
 check('sqlite3 .dump', bash('sqlite3 data/app.db .dump'), 'ask');
 check('sqlite3 обычный запрос', bash('sqlite3 data/app.db "select count(*) from users"'), 'allow');
 

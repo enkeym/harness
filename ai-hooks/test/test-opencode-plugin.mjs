@@ -98,6 +98,8 @@ const CORE_ASK = [
   'docker compose config', 'docker-compose config',
   'pg_dump -h prod.db app', 'pg_dumpall', 'mysqldump app', 'mongodump', 'pgbackrest backup',
   'psql -h prod.db app', 'psql postgres://u@prod.db/app', 'mysql -h prod.db app',
+  'mysql -hprod.db app', 'PGHOST=prod.db psql app', 'env PGHOST=prod.db psql app',
+  'export PGHOST=prod.db; psql app', 'MYSQL_HOST=prod.db mysql app', 'psql "host=prod.db dbname=app"',
   'mongosh mongodb://prod.db/app', 'redis-cli -h prod.cache', 'clickhouse-client --host prod.ch',
   'psql -h localhost -c "COPY users TO STDOUT"', 'redis-cli --rdb dump.rdb',
   'sqlite3 app.db .dump',
