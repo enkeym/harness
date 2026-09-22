@@ -111,9 +111,23 @@ check('git add .env', bash('git add .env'), 'allow');
 check('ls -la .env', bash('ls -la .env'), 'allow');
 
 // --- regex-форма `\.env` — это поиск по коду, а не путь к файлу
-check('grep по process\\.env', bash('grep -rn "process\\.env\\.[A-Z_]+" src'), 'allow');
-check('grep по import\\.meta\\.env', bash('grep -rn "import\\.meta\\.env" client/src'), 'allow');
+check('grep по process\\.env', bash('grep -rn --include=*.ts "process\\.env\\.[A-Z_]+" src'), 'allow');
+check('grep по import\\.meta\\.env', bash('grep -rn "import\\.meta\\.env" --include "*.tsx" client/src'), 'allow');
 check('grep по regex с настоящим .env', bash('grep -n "process\\.env" .env'), 'deny');
+
+// --- рекурсивный grep без --include читает и .env рядом с кодом
+check('grep -r без --include', bash('grep -r useState src'), 'deny');
+check('grep -rn без --include', bash('grep -rn "TODO" .'), 'deny');
+check('grep -Rni без --include', bash('grep -Rni token'), 'deny');
+check('grep --recursive без --include', bash('grep --recursive foo src'), 'deny');
+check('egrep -r без --include', bash('egrep -r "a|b" .'), 'deny');
+check('grep -r за xargs', bash('echo src | xargs grep -rn foo'), 'deny');
+check('grep -r с --include=.env*', bash('grep -rn API_KEY --include=.env* .'), 'deny');
+check('grep -r с --include=*.env', bash('grep -rn API_KEY --include=*.env .'), 'deny');
+check('grep -r с --include кода', bash('grep -rn useState --include=*.tsx src'), 'allow');
+check('grep -e с r в шаблоне', bash('grep -error src/app.ts'), 'allow');
+check('grep без рекурсии', bash('grep -n foo src/app.ts'), 'allow');
+check('grep -e с шаблоном -r', bash('grep -e -r src/app.ts'), 'allow');
 
 // --- вывод окружения: секрет приходит не из файла
 check('printenv', bash('printenv'), 'ask');

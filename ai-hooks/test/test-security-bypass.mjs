@@ -119,7 +119,7 @@ check('2>&1 не фон', `cat names.txt 2>&1 | head`, 'allow');
 check('&> не фон', `npm test &> /tmp/log`, 'allow');
 check('массив', `a=(1 2); echo $a`, 'allow');
 check('арифметика', `echo $((1+2))`, 'allow');
-check('process\\.env в grep', `grep -rn 'process\\.env' src`, 'allow');
+check('process\\.env в grep', `grep -rn --include=*.ts 'process\\.env' src`, 'allow');
 check('ssh без команды', `ssh -p 2222 vps`, 'allow');
 check('docker run обычный', `docker run --rm -v $PWD:/w alpine ls /w`, 'allow');
 check('подстановка ветки', `echo $(git branch --show-current)`, 'allow');

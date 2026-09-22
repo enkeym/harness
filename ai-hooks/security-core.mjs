@@ -286,6 +286,35 @@ function secretPathsIn(seg, toks) {
     .filter(isSecretPath);
 }
 
+// Рекурсивный grep без `--include` читает каждый файл дерева, и `.env` рядом с
+// кодом — тоже: `grep -rn token .` печатает строку с ключом. Имени секрета в
+// команде нет, поэтому по пути его не поймать — нужен glob.
+const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep']);
+// Короткие опции grep с аргументом: после них остаток склейки — аргумент,
+// а не флаги (`-error` — шаблон `rror`, не `-r`).
+const GREP_ARG_SHORT = 'efmABCdD';
+
+function grepWithoutInclude(toks) {
+  const args = toks.slice(commandIndex(toks) + 1);
+  let recursive = false;
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i];
+    if (t === '--') break;
+    if (t === '--include' || t.startsWith('--include=')) return false;
+    if (t === '--recursive' || t === '--dereference-recursive') recursive = true;
+    else if (/^-[^-]/.test(t)) {
+      for (const [k, ch] of [...t.slice(1)].entries()) {
+        if (ch === 'r' || ch === 'R') recursive = true;
+        if (!GREP_ARG_SHORT.includes(ch)) continue;
+        // Опция последняя в склейке — её аргумент следующим токеном.
+        if (k === t.length - 2) i++;
+        break;
+      }
+    }
+  }
+  return recursive;
+}
+
 function readsSecret(seg, toks, cmd) {
   // Цель перенаправления вывода — запись, она безвредна: `echo X > .env`,
   // `cat <<EOF > .env`. Отсеиваем её до всего остального, иначе читающая
@@ -452,6 +481,14 @@ export function guardBashSecurity(command, depth = 0) {
     const scope = piped && READS_FILE.has(cmd) ? raw : seg;
     const secret = readsSecret(scope, toks, cmd);
     if (secret) return secretReason(secret);
+
+    if (GREP_CMDS.has(cmd) && grepWithoutInclude(toks)) {
+      return {
+        level: DENY,
+        reason: 'рекурсивный grep без `--include` читает и `.env` в дереве. ' +
+          'Укажи файлы кода: `--include=*.ts` (можно несколько).',
+      };
+    }
 
     // Команды, печатающие окружение целиком. Секрет в них приходит не из
     // файла, а из вывода, и по имени файла его не поймать: `printenv` в
