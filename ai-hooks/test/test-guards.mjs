@@ -13,10 +13,15 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { guardBash, guardExec, OPENCODE_LABELS } from '../guard-core.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { guardBash, guardExec, guardRead, isIndexed, breakerAllows, OPENCODE_LABELS } from '../guard-core.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const BASH = path.join(ROOT, 'claude', 'bash-router.mjs');
+const READ = path.join(ROOT, 'claude', 'read-router.mjs');
+
+// Что лежит в таблице files индекса: код — да, README и конфиги — нет.
+const INDEXED = ['client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'client/src/index.css'];
 
 const ON_DISK = [
   'client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md',
@@ -30,14 +35,20 @@ function sandboxProject() {
     fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
     fs.writeFileSync(path.join(dir, rel), '');
   }
+  const db = new DatabaseSync(path.join(dir, '.tokensave', 'tokensave.db'));
+  db.exec('CREATE TABLE files (path TEXT PRIMARY KEY)');
+  const insert = db.prepare('INSERT INTO files (path) VALUES (?)');
+  for (const rel of INDEXED) insert.run(rel);
+  db.close();
   return dir;
 }
 const PROJECT = sandboxProject();
 
 // --- Claude: запуск реального хук-скрипта ---
 function claude(input) {
+  const script = input.tool_name === 'Read' ? READ : BASH;
   try {
-    const out = execFileSync('node', [BASH], { input: JSON.stringify(input), encoding: 'utf8' });
+    const out = execFileSync('node', [script], { input: JSON.stringify(input), encoding: 'utf8' });
     if (!out.trim()) return 'allow';
     return JSON.parse(out)?.hookSpecificOutput?.permissionDecision || 'allow';
   } catch (e) {
@@ -46,10 +57,12 @@ function claude(input) {
 }
 
 // --- OpenCode: вызов ядра так же, как это делает плагин ---
-function opencode(tool, args, directory) {
+function opencode(tool, args, directory, sessionID) {
   const reason = tool === 'exec'
     ? guardExec(args.code, directory, OPENCODE_LABELS)
-    : guardBash(args.command, directory, OPENCODE_LABELS);
+    : tool === 'read'
+      ? guardRead(args.filePath, directory, OPENCODE_LABELS, sessionID)
+      : guardBash(args.command, directory, OPENCODE_LABELS);
   return reason ? 'deny' : 'allow';
 }
 
@@ -62,7 +75,7 @@ function check(desc, got, want) {
 
 function both(desc, want, cc, oc) {
   check(`[claude]   ${desc}`, claude(cc), want);
-  check(`[opencode] ${desc}`, opencode(oc.tool, oc.args, oc.directory), want);
+  check(`[opencode] ${desc}`, opencode(oc.tool, oc.args, oc.directory, oc.sessionID), want);
 }
 
 const bash = (desc, want, command, cwd = PROJECT) =>
@@ -172,6 +185,34 @@ both('executeCode без путей → allow', 'allow',
   check('[core] причина чтения называет read', reason.includes('read'), true);
   const edit = guardBash("sed -i 's/a/b/' client/src/App.tsx", PROJECT, OPENCODE_LABELS);
   check('[core] причина правки называет edit/write', edit.includes('edit/write'), true);
+}
+
+// ---- роутер чтения: файл из индекса → tokensave, остальное проходит ----
+// Своя сессия на каждую проверку: предохранитель пропускает повтор той же цели.
+let readSeq = 0;
+const read = (desc, want, file, cwd = PROJECT, sid = `read-${process.pid}-${readSeq++}`) =>
+  both(desc, want,
+    { tool_name: 'Read', tool_input: { file_path: path.join(cwd, file) }, cwd, session_id: sid },
+    { tool: 'read', args: { filePath: path.join(cwd, file) }, directory: cwd, sessionID: sid + '-oc' });
+
+read('Read файла из индекса → deny', 'deny', 'client/src/App.tsx');
+read('Read по относительному пути из подкаталога → deny', 'deny', 'App.tsx', path.join(PROJECT, 'client/src'));
+read('Read файла вне индекса (README) → allow', 'allow', 'README.md');
+read('Read конфига вне индекса → allow', 'allow', 'package.json');
+read('Read нового файла → allow', 'allow', 'client/src/New.tsx');
+read('Read вне проекта → allow', 'allow', 'x.ts', os.tmpdir());
+read('Read конфига агента внутри проекта → allow', 'allow', '.claude/settings.json');
+
+{
+  const sid = `read-breaker-${process.pid}`;
+  read('предохранитель: первый Read цели → deny', 'deny', 'client/src/App.tsx', PROJECT, sid);
+  read('предохранитель: повтор той же цели → allow', 'allow', 'client/src/App.tsx', PROJECT, sid);
+  read('предохранитель: соседний файл той же сессии → deny', 'deny', 'client/src/index.css', PROJECT, sid);
+  check('[core] предохранитель: чужая сессия не задета', breakerAllows('other-' + sid, 'Read:/a/x.ts'), false);
+  check('[core] isIndexed по файлу индекса', isIndexed(PROJECT, 'client/src/App.tsx'), true);
+  check('[core] isIndexed по README', isIndexed(PROJECT, 'README.md'), false);
+  const reason = guardRead(path.join(PROJECT, 'client/src/lib/store/useMarkerStore.ts'), PROJECT, OPENCODE_LABELS, sid + '-r');
+  check('[core] причина называет tokensave_body и read', reason.includes('tokensave_body') && reason.includes('read'), true);
 }
 
 fs.rmSync(PROJECT, { recursive: true, force: true });

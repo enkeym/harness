@@ -53,6 +53,20 @@ fired and what it wants instead.
   the skills are gone from your context and from the gate alike.
 - A prompt the user started with `/<skill>` counts as loaded.
 
+## Read router
+
+- `read-router` denies `Read` of a file that is in the tokensave index (table
+  `files`); take the symbol with `tokensave_body`/`signature`, the file or a
+  range with `tokensave_read` (`lines`), an overview with `tokensave_context`.
+  New files, `README`, configs outside the index and agent config paths pass.
+  Edits are not routed: `Edit` shows a diff, reading is what costs tokens.
+- tokensave errored or answered empty → quote the answer and repeat the same
+  `Read`: a repeat of the same target within 3 minutes passes (breaker,
+  `~/.claude/state/guard-breaker.json`). Don't reach for the shell instead.
+- `read-refill` (PostToolUse on `tokensave_read`) replaces the cross-session
+  `unchanged: true` stub with the file text from disk; an empty read is a
+  changed stub format, not a missing file.
+
 ## Shell guard
 
 - `bash-router` denies reading or writing an existing file through the shell

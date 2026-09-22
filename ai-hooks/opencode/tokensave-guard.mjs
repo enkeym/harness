@@ -8,7 +8,7 @@
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { guardBash, OPENCODE_LABELS } from '../guard-core.mjs';
+import { guardBash, guardRead, OPENCODE_LABELS } from '../guard-core.mjs';
 import { securityGuard, DENY } from '../security-core.mjs';
 
 // Каталог bin рядом с этим файлом (../bin), а не зашитый абсолютный путь с
@@ -66,6 +66,10 @@ export const TokensaveGuard = async ({ directory }) => {
       // как результат инструмента — это аналог permissionDecisionReason.
       if (input.tool === 'bash') {
         const reason = guardBash(args.command, directory, OPENCODE_LABELS);
+        if (reason) throw new Error(reason);
+      }
+      if (input.tool === 'read') {
+        const reason = guardRead(args.filePath, directory, OPENCODE_LABELS, input.sessionID);
         if (reason) throw new Error(reason);
       }
     },

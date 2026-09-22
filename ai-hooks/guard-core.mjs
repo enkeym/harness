@@ -9,7 +9,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
 import { segments, tokenize, commandName } from './shell-core.mjs';
+import { statePath, readJSON, writeJSON } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const DB_REL = path.join('.tokensave', 'tokensave.db');
@@ -179,6 +181,74 @@ export function guardExec(code, cwd, labels) {
 
 function readReason(file, labels) {
   return `Файл \`${file}\` через shell не читают — ${labels.read}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Роутер чтения. Файл из индекса tokensave читают tokensave_body/tokensave_read,
+// а не Read целиком: 300 строк ради одного символа — то, на чём растёт контекст
+// (bin/tool-share.mjs). Правки не трогаем: Edit даёт дифф в чате, токены тянет
+// чтение. Только таблица files, без проверки сервера и синка: индекс есть —
+// значит, есть и инструмент.
+
+// Пути в files — относительные от корня проекта, всегда через '/'.
+function relKey(root, cwd, filePath) {
+  const abs = path.resolve(cwd || process.cwd(), String(filePath));
+  const rel = path.relative(root, abs);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join('/');
+}
+
+function inIndex(root, key) {
+  let db;
+  try {
+    db = new DatabaseSync(path.join(root, DB_REL), { readOnly: true });
+    return !!db.prepare('SELECT 1 FROM files WHERE path = ?').get(key);
+  } catch {
+    return false; // БД занята или без таблицы — не запрещаем
+  } finally {
+    try { db?.close(); } catch { /* уже закрыта */ }
+  }
+}
+
+// Файл есть в индексе tokensave? Нового файла там нет.
+export function isIndexed(cwd, filePath) {
+  if (!filePath || isHarnessConfigPath(filePath)) return false;
+  const root = projectRoot(cwd, filePath);
+  if (!root) return false;
+  const key = relKey(root, cwd, filePath);
+  return key ? inIndex(root, key) : false;
+}
+
+// Предохранитель: запрет полезен, пока у агента есть альтернатива. tokensave
+// ответил ошибкой → агент повторяет Read той же цели и получает тот же отказ,
+// в логах это семь одинаковых вызовов подряд. Повтор той же цели в окне
+// пропускаем. Ошибка состояния → false: потерянная метка безопаснее
+// пропущенного запрета.
+const BREAKER_FILE = statePath('guard-breaker.json');
+const BREAKER_WINDOW_MS = 3 * 60 * 1000;
+
+export function breakerAllows(sessionId, key) {
+  const id = `${sessionId || 'default'}|${key}`;
+  const now = Date.now();
+  const state = readJSON(BREAKER_FILE, {});
+  for (const [k, v] of Object.entries(state)) {
+    if (!v || typeof v.t !== 'number' || now - v.t > BREAKER_WINDOW_MS) delete state[k];
+  }
+  const open = Boolean(state[id]);
+  state[id] = { t: state[id]?.t ?? now };
+  writeJSON(BREAKER_FILE, state);
+  return open;
+}
+
+export function guardRead(filePath, cwd, labels, sessionId) {
+  if (!isIndexed(cwd, filePath)) return null;
+  if (breakerAllows(sessionId, `Read:${path.resolve(cwd || process.cwd(), String(filePath))}`)) return null;
+  return (
+    `Файл в индексе tokensave. Вместо ${labels.read}: tokensave_body / tokensave_signature (символ), ` +
+    'tokensave_read (файл; `lines` — диапазон), tokensave_context (обзор). ' +
+    `tokensave ответил ошибкой или пусто — процитируй ответ и повтори ${labels.read}: ` +
+    'повтор той же цели в течение 3 минут проходит.'
+  );
 }
 
 function editReason(file, labels) {

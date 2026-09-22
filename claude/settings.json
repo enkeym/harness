@@ -70,6 +70,15 @@
         ]
       },
       {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/read-router.mjs"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -92,6 +101,15 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "mcp__tokensave__tokensave_read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/read-refill.mjs"
+          }
+        ]
+      },
       {
         "matcher": "*",
         "hooks": [
