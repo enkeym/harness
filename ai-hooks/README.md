@@ -93,6 +93,7 @@ test/test-context-meter.mjs     # цифра из последнего хода,
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
 test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам, источники, --sessions
+test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент мимо, порог размера, rest
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -748,6 +749,7 @@ node ~/.ai-hooks/test/test-opencode-plugin.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-usage-report.mjs
+node ~/.ai-hooks/test/test-start-cost.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
