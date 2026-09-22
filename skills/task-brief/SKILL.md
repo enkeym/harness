@@ -129,6 +129,6 @@ the approval; no chat line. OpenCode: print the block, then one line:
   A step that turns out different → one line saying so before continuing.
 - Claude Code: the plan file is the brief across sessions — tick a step
   (`1. [x] …`) when its commit lands, rewrite one that changed; `handoff`
-  points `Дальше` at the file, `cleanup.mjs` drops a plan untouched for 14
-  days. OpenCode: chat only — `handoff` copies the remaining steps. An
-  architectural choice made here → `tokensave_record_decision`.
+  adds `## Состояние` there and leaves via `ExitPlanMode`; `cleanup.mjs`
+  drops a plan untouched for 14 days. OpenCode: chat only — `handoff` copies
+  the remaining steps. An architectural choice → `tokensave_record_decision`.
