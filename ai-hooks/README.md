@@ -95,6 +95,7 @@ test/test-usage-log.mjs         # дедуп сообщений, арифмет�
 test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам, источники, --sessions
 test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент мимо, порог размера, rest
 test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, блок mcp в opencode.json, перерегистрация в Claude
+test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -752,6 +753,7 @@ node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-usage-report.mjs
 node ~/.ai-hooks/test/test-start-cost.mjs
 node ~/.ai-hooks/test/test-mcp-sync.mjs
+node ~/.ai-hooks/test/test-log-error.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
