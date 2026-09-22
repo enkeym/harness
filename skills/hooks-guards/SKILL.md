@@ -1,6 +1,6 @@
 ---
 name: hooks-guards
-description: "How the local hook system behaves — security-guard, ask-guard, skill-gate, the edit/read/bash routers, background index sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure."
+description: "How the local hook system behaves — security-guard, ask-guard, skill-gate, the shell guard, background ragsave sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure."
 ---
 
 # Hooks and guards
@@ -52,26 +52,23 @@ fired and what it wants instead.
   the skills are gone from your context and from the gate alike.
 - A prompt the user started with `/<skill>` counts as loaded.
 
-## Routers
+## Shell guard
 
-- Edit, read-search and bash routers steer calls to tokensave/ragsave and clip
-  oversized output. They fire only on indexed files; agent configs
-  (`.claude/`, `.opencode/`, `~/.ai-hooks/`) are excluded.
-- A router or breaker block ≠ missing index. Call `tokensave_status` first.
-  Index alive → `tokensave_read` / `tokensave_context` / `tokensave_str_replace`
-  (load via `ToolSearch('select:mcp__tokensave__…')`). Real `tokensave_*` error
-  or empty result → quote it, then `Read`/`Edit`/`Write` for that file; the
-  router lets that second call through. Bash never gets the pass.
+- `bash-router` denies reading or writing an existing file through the shell
+  (`cat`, `head`, `sed -i`, `tee`, `> file`, `node -e`/`python -c` with a path,
+  a heredoc into an interpreter) and asks for `Read`/`Edit`/`Write` instead.
+  Same rule for `mcp__ide__executeCode`. Output clipping is `output-clip`.
 - `node <file>` (`python`, `bun`, `deno` alike) with no `-e`/`-p`/`-c` and no
   heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` and the
   README's commands pass; the inline-code forms stay blocked.
-- The bash router splits commands like the security guard: `&`, `$(…)`,
-  backticks, `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat` of an
-  indexed file, and a heredoc body stays with its `node`/`python`.
+- It splits commands like the security guard: `&`, `$(…)`, backticks,
+  `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat`, and a heredoc body
+  stays with its `node`/`python`. `grep`/`rg` and pipes reading stdin pass.
 
 ## Background hooks
 
-- They sync an **existing** tokensave/ragsave index; creating one is the
+- `ragsave-sync` syncs an **existing** ragsave index on Stop; tokensave
+  refreshes its own index from the MCP server. Creating an index is the
   user's call — say `tokensave init <path>` is needed, don't offer to run it.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the
   session directory. Outside a project the server doesn't come up — tools are
@@ -82,10 +79,6 @@ fired and what it wants instead.
   map's lines for this change: check them, add the missing link to that
   file. Silent ≠ no links: a domain without `paths:` is reached only through
   `INDEX.md`, so the impact pass still reads the index.
-- `read-refill` (PostToolUse on `tokensave_read`) swaps the cross-session
-  cache stub `unchanged: true` for the file text from disk, modes `full` and
-  `lines`. A stub that still arrives (`map`, `signatures`, `graph_branch`) is
-  an empty answer: read that file with `Read`.
 - `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI,
   dependabot, `.env.example`, or an impact map in an indexed project: offer
   in one line in the first reply (`/impact-map` for the map). Silent hook =
@@ -94,24 +87,14 @@ fired and what it wants instead.
 ## When something is broken
 
 1. `~/.ai-hooks/logs/hooks.jsonl` — one line per hook decision (`deny`, `ask`,
-   `breaker-open`, `server-mismatch`, `slow`, `crash`) with `sid`, `target`,
-   `ms`; allowed calls are not written. The per-session trace of "what
-   blocked, what came next".
+   `slow`, `crash`) with `sid`, `target`, `ms`; allowed calls are not written.
+   The per-session trace of "what blocked, what came next".
 2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes
-   (`exit=crash`); first read on any tokensave/ragsave report.
-3. `~/.ai-hooks/logs/guard.log` (JSONL) — only real events: `server-mismatch`
-   (MCP serves another project/branch; registry `~/.tokensave/servers/`, then
-   `tokensave serve` in `/proc` when the root has no live entry),
-   `breaker-open`. Marks live in `~/.claude/state/`.
-4. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
+   (`exit=crash`); first read on any ragsave report. Marks live in
+   `~/.claude/state/`.
+3. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red
    → roll back, don't patch further.
-5. Everything under `~/.claude/` is a symlink into `~/harness/claude/`;
+4. Everything under `~/.claude/` is a symlink into `~/harness/claude/`;
    Edit/Write refuse symlinks — address the target path.
-6. Deeper diagnosis is `/doctor` — offer it in one line, don't improvise. A
-   prompt line starting `doctor (…)` is the background doctor's finding: its
-   report is a file to `Read`, applying it is `/doctor apply`; a line starting
-   `tokensave-гард молчит` means the routers are off for this session, not
-   that the project is un-indexed; a line `tokensave отвечает из графа <X>`
-   means the server runs on another branch — tokensave answers are stale
-   until the user runs `/mcp` → tokensave → Reconnect; say so in one line.
+5. Deeper diagnosis is `/doctor` — offer it in one line, don't improvise.

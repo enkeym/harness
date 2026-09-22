@@ -19,7 +19,7 @@
 | `rules/` | `~/.claude/rules/core.md`, `~/.config/opencode/rules/core.md` | `core.md` — общие правила обоих агентов: гейты, выбор инструментов, таблица скиллов |
 | `skills/` | `~/.claude/skills`, `~/.config/opencode/skills` | скиллы — одна папка на оба агента |
 | `claude/` | `~/.claude/{CLAUDE.md,commands,settings*.json}` | только Claude Code: `CLAUDE.md`, слэш-команды, настройки и хуки; инструмент `Agent` запрещён |
-| `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, роутеры, фоновая синхронизация индексов, statusline, тесты |
+| `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, shell-гард, фоновая синхронизация ragsave, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
 | `opencode/` | `~/.config/opencode/{AGENTS.md,agent,plugin,themes,opencode.json,tui.json}` | только OpenCode: `AGENTS.md`, агенты `ask` и `@commit`, плагин tokensave-guard, тема; встроенные `general`/`explore` отключены |
 | `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
@@ -51,8 +51,8 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | Правила | `rules/core.md` (автозагрузка `~/.claude/rules/`) + `claude/CLAUDE.md` | `rules/core.md` (`instructions`) + `opencode/AGENTS.md` |
 | Субагенты | `permissions.deny: Agent` | `general`/`explore` отключены, `permission.task` — `deny` всем, кроме `commit` |
 | MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
-| Гарды tokensave | хуки `ai-hooks/claude/*` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
-| Гард безопасности | хук `ai-hooks/claude/security-guard.mjs`: `deny` и `ask` | тот же плагин, перед гардами tokensave: блокирует только `deny` (секреты); `ask` здесь держит `permission.bash`. Логика одна — `ai-hooks/security-core.mjs` |
+| Shell-гард | хук `ai-hooks/claude/bash-router.mjs` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
+| Гард безопасности | хук `ai-hooks/claude/security-guard.mjs`: `deny` и `ask` | тот же плагин, перед shell-гардом: блокирует только `deny` (секреты); `ask` здесь держит `permission.bash`. Логика одна — `ai-hooks/security-core.mjs` |
 | Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask`, включён при старте (`default_agent`), Tab — в `build`: правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
 | Коммит | `/commit` | `@commit` — субагент со своей моделью и правами (`opencode/agent/commit.md`): коммит, пуш и GitLab API без подтверждений, правка файлов и переписывание истории запрещены; вся процедура из `git-flow`, MR — только по «сделай МР». Из основной сессии `git commit`/`git push` идут через `permission.bash` |
 

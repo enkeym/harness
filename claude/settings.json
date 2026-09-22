@@ -61,24 +61,6 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/edit-router.mjs"
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/read-search-router.mjs"
-          }
-        ]
-      },
-      {
         "matcher": "Bash|mcp__ide__executeCode",
         "hooks": [
           {
@@ -127,15 +109,6 @@
             "command": "node /home/enkeym/.ai-hooks/claude/links-context.mjs"
           }
         ]
-      },
-      {
-        "matcher": "mcp__tokensave__tokensave_read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/read-refill.mjs"
-          }
-        ]
       }
     ],
     "Stop": [
@@ -147,14 +120,6 @@
             "args": [
               "hook-stop"
             ]
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/enkeym/.ai-hooks/bin/tokensave-sync.sh"
           }
         ]
       },
@@ -207,14 +172,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/enkeym/.ai-hooks/bin/tokensave-branch.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "node /home/enkeym/.ai-hooks/claude/skill-track.mjs"
           }
         ]
@@ -232,14 +189,6 @@
           {
             "type": "command",
             "command": "node /home/enkeym/.ai-hooks/claude/ask-reminder.mjs"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/doctor-reminder.mjs"
           }
         ]
       },
@@ -274,7 +223,6 @@
     ]
   },
   "enableArtifact": false,
-  "showClearContextOnPlanAccept": true,
   "respondToBashCommands": false,
   "statusLine": {
     "type": "command",
@@ -283,6 +231,7 @@
   },
   "language": "Russian",
   "effortLevel": "high",
+  "showClearContextOnPlanAccept": true,
   "theme": "dark-ansi",
   "remoteControlAtStartup": false
 }

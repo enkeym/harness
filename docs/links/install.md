@@ -12,8 +12,8 @@ paths:
   `~/.local/bin/ragsave` — запускают `ai-hooks/bin/mcp-serve.sh`,
   `ai-hooks/bin/ragsave-sync.sh`; `~/.rag-mcp` — `RAGSAVE_HOME` в `bin/ragsave`;
   `~/.ai-hooks` — пути хуков в `claude/settings.json`, абсолютный импорт в
-  `opencode/plugin/tokensave-guard.js`, вызовы `log-error.sh` в
-  `ai-hooks/bin/tokensave-sync.sh`, `ai-hooks/bin/tokensave-branch.sh`.
+  `opencode/plugin/tokensave-guard.js`, вызов `log-error.sh` в
+  `ai-hooks/bin/ragsave-sync.sh`.
   Сменил цель в `install.sh` одну — хуки, MCP и фоновые синки падают молча.
 - Домашний каталог, зашитый в конфиги, — проверка `baked` в `install.sh` ↔
   абсолютные пути в `claude/settings.json` (`permissions.allow` не раскрывает

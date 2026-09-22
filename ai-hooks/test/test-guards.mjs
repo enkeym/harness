@@ -1,14 +1,11 @@
 #!/usr/bin/env node
-// Тест-харнес для гард-хуков tokensave.
-// Прогоняет одни и те же сценарии через ДВА адаптера:
-//   - Claude Code: скрипты claude/*.mjs (stdin JSON → deny/allow)
+// Тест-харнес shell-гарда. Одни и те же сценарии через ДВА адаптера:
+//   - Claude Code: claude/bash-router.mjs (stdin JSON → deny/allow)
 //   - OpenCode:    ядро guard-core.mjs с OPENCODE_LABELS (reason → deny/allow)
 // Оба должны давать одинаковые вердикты — это и есть проверка паритета.
 //
-// Правило одно: файл в индексе tokensave → deny; нет в индексе → allow.
-// Вердикт зависит от содержимого .tokensave/tokensave.db, поэтому проект —
-// песочница со своей БД, а не живой репозиторий: тот стоит на какой угодно
-// ветке, и на ветке без записи в branch-meta.json гард по замыслу молчит.
+// Правило одно: shell запускает команды; существующий файл через shell не
+// читают (Read) и не правят (Edit). Проект — песочница с файлами на диске.
 
 import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
@@ -16,26 +13,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
-import {
-  guardRead, guardGrep, guardEdit, guardBash, guardExec, OPENCODE_LABELS,
-  isIndexed, indexedExtensions, breakerAllows,
-} from '../guard-core.mjs';
-import { statePath } from '../state-core.mjs';
-
-const BREAKER_FILE = statePath('guard-breaker.json');
+import { guardBash, guardExec, OPENCODE_LABELS } from '../guard-core.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const READ = path.join(ROOT, 'claude', 'read-search-router.mjs');
-const EDIT = path.join(ROOT, 'claude', 'edit-router.mjs');
 const BASH = path.join(ROOT, 'claude', 'bash-router.mjs');
 
-// tokensave-проект: git-репозиторий на main без branch-meta.json (одна БД),
-// в индексе — ts/tsx/md, как у tokensave по умолчанию. Файлы на диске есть,
-// но вердикт даёт таблица files. Не-проект: /tmp.
-const INDEXED = ['client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md'];
 const ON_DISK = [
-  ...INDEXED, 'client/src/index.css', 'package.json', '.env.example',
+  'client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md',
+  'client/src/index.css', 'package.json', '.env.example',
   'client/node_modules/storm-ui/dist/index.css', '.ragsave/rag.db', '.ragsave/sync.log',
 ];
 function sandboxProject() {
@@ -44,56 +29,14 @@ function sandboxProject() {
     fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
     fs.writeFileSync(path.join(dir, rel), '');
   }
-  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir, stdio: 'ignore' });
-  fs.mkdirSync(path.join(dir, '.tokensave'));
-  const db = new DatabaseSync(path.join(dir, '.tokensave', 'tokensave.db'));
-  db.exec('CREATE TABLE files (path TEXT PRIMARY KEY)');
-  const insert = db.prepare('INSERT INTO files (path) VALUES (?)');
-  for (const rel of INDEXED) insert.run(rel);
-  db.close();
   return dir;
 }
-const TS_PROJECT = sandboxProject();
-const NON_PROJECT = '/tmp';
-
-// Реестр MCP-серверов подменяем своим: гард запрещает только тогда, когда живой
-// сервер обслуживает тот же проект, и на настоящем реестре вердикты зависели бы
-// от того, какой проект открыт в соседнем окне. Запись без db_path — сверка БД
-// пропускается, проверяем именно правило «проект совпал».
-const SERVERS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-'));
-fs.writeFileSync(path.join(SERVERS_DIR, `${process.pid}.json`),
-  JSON.stringify({ pid: process.pid, project_path: TS_PROJECT }));
-process.env.TS_SERVERS_DIR = SERVERS_DIR;
-
-// serveRunning() иначе сходит в /proc за настоящими MCP-серверами этой машины.
-// Пустая строка = «серверов нет»; кейсы, где нужен живой serve, ставят
-// TS_SERVE_ROOTS точечно.
-process.env.TS_SERVE_ROOTS = '';
-
-// Диагностический журнал уводим в temp: выдуманные рассинхроны из тестов не
-// должны лежать в файле, по которому разбирают настоящие.
-const GUARD_LOG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guardlog-')), 'guard.log');
-process.env.AI_HOOKS_GUARD_LOG = GUARD_LOG;
-
-// Состав индекса зависит от ветки: на main в графе только ts/js/tsx/md, на
-// рабочих ветках туда попадают ещё json, sql, yml. Поэтому вердикт для таких
-// файлов не константа — берём его из той же БД, по которой судит гард.
-const EXTS = indexedExtensions(TS_PROJECT) || new Set();
-const PKG_JSON = TS_PROJECT + '/package.json';
-const wantExt = (ext) => (EXTS.has(ext) ? 'deny' : 'allow');
-const wantFile = (file) => (isIndexed(TS_PROJECT, file) ? 'deny' : 'allow');
-const JSON_VERDICT = wantFile(PKG_JSON);
+const PROJECT = sandboxProject();
 
 // --- Claude: запуск реального хук-скрипта ---
-// env — для сценариев с подменённым реестром серверов: кэш serverState живёт в
-// процессе, поэтому такие проверки должны идти в свежем.
-function claude(script, input, env = null) {
+function claude(input) {
   try {
-    const out = execFileSync('node', [script], {
-      input: JSON.stringify(input),
-      encoding: 'utf8',
-      env: env ? { ...process.env, ...env } : process.env,
-    });
+    const out = execFileSync('node', [BASH], { input: JSON.stringify(input), encoding: 'utf8' });
     if (!out.trim()) return 'allow';
     return JSON.parse(out)?.hookSpecificOutput?.permissionDecision || 'allow';
   } catch (e) {
@@ -103,25 +46,9 @@ function claude(script, input, env = null) {
 
 // --- OpenCode: вызов ядра так же, как это делает плагин ---
 function opencode(tool, args, directory) {
-  let reason = null;
-  switch (tool) {
-    case 'read':
-      reason = guardRead(args.filePath, directory, OPENCODE_LABELS);
-      break;
-    case 'grep':
-      reason = guardGrep({ path: args.path, glob: args.include }, directory, OPENCODE_LABELS);
-      break;
-    case 'edit':
-    case 'write':
-      reason = guardEdit(args.filePath, directory, OPENCODE_LABELS);
-      break;
-    case 'bash':
-      reason = guardBash(args.command, directory, OPENCODE_LABELS);
-      break;
-    case 'exec':
-      reason = guardExec(args.code, directory, OPENCODE_LABELS);
-      break;
-  }
+  const reason = tool === 'exec'
+    ? guardExec(args.code, directory, OPENCODE_LABELS)
+    : guardBash(args.command, directory, OPENCODE_LABELS);
   return reason ? 'deny' : 'allow';
 }
 
@@ -132,114 +59,66 @@ function check(desc, got, want) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${desc}  (got=${got}, want=${want})`);
 }
 
-// Один сценарий → два harness'а. cc/oc — вход в терминах каждого агента.
 function both(desc, want, cc, oc) {
-  const script = ['Edit', 'Write'].includes(cc.tool_name) ? EDIT
-    : ['Bash', 'mcp__ide__executeCode'].includes(cc.tool_name) ? BASH
-    : READ;
-  check(`[claude]   ${desc}`, claude(script, cc), want);
+  check(`[claude]   ${desc}`, claude(cc), want);
   check(`[opencode] ${desc}`, opencode(oc.tool, oc.args, oc.directory), want);
 }
 
-const read = (desc, want, file, cwd = TS_PROJECT) =>
-  both(desc, want,
-    { tool_name: 'Read', tool_input: { file_path: file }, cwd },
-    { tool: 'read', args: { filePath: file }, directory: cwd });
-
-// ---- READ: в индексе → deny ----
-read('read .tsx из индекса → deny', 'deny', TS_PROJECT + '/client/src/App.tsx');
-read('read .ts из индекса → deny', 'deny', TS_PROJECT + '/client/src/lib/store/useMarkerStore.ts');
-read('read README.md из индекса → deny (tokensave индексирует md)', 'deny', TS_PROJECT + '/README.md');
-
-// ---- READ: нет в индексе → allow (тот самый баг: раньше был тупик) ----
-// .css в src: попадёт в граф или нет — зависит от состава ветки, поэтому вердикт
-// берём из той же БД (как для package.json), а не литералом. Регрессию «тупика»
-// стережёт кейс .css в node_modules ниже — тот не будет в индексе никогда.
-read('read .css в src → по индексу активной ветки',
-  wantFile(TS_PROJECT + '/client/src/index.css'), TS_PROJECT + '/client/src/index.css');
-read('read package.json → по индексу активной ветки', JSON_VERDICT, PKG_JSON);
-read('read несуществующего .ts → allow', 'allow', TS_PROJECT + '/client/src/__nope__.ts');
-read('read конфига агента (.ai-hooks) → allow', 'allow', '/home/enkeym/.ai-hooks/guard-core.mjs');
-read('read конфига агента (.config/opencode) → allow', 'allow',
-  '/home/enkeym/.config/opencode/plugin/tokensave-guard.js');
-read('read исходника вне tokensave-проекта → allow', 'allow', NON_PROJECT + '/foo.ts', NON_PROJECT);
-
-// ---- GREP ----
-both('grep glob/include *.ts → deny', 'deny',
-  { tool_name: 'Grep', tool_input: { pattern: 'x', glob: '*.ts', path: TS_PROJECT }, cwd: TS_PROJECT },
-  { tool: 'grep', args: { pattern: 'x', include: '*.ts', path: TS_PROJECT }, directory: TS_PROJECT });
-
-both('grep glob/include *.json → по индексу активной ветки', wantExt('.json'),
-  { tool_name: 'Grep', tool_input: { pattern: 'x', glob: '*.json', path: TS_PROJECT }, cwd: TS_PROJECT },
-  { tool: 'grep', args: { pattern: 'x', include: '*.json', path: TS_PROJECT }, directory: TS_PROJECT });
-
-both('grep без ограничения (broad) → deny', 'deny',
-  { tool_name: 'Grep', tool_input: { pattern: 'x', path: TS_PROJECT }, cwd: TS_PROJECT },
-  { tool: 'grep', args: { pattern: 'x', path: TS_PROJECT }, directory: TS_PROJECT });
-
-both('grep по конфигу агента → allow', 'allow',
-  { tool_name: 'Grep', tool_input: { pattern: 'x', path: '/home/enkeym/.claude' }, cwd: TS_PROJECT },
-  { tool: 'grep', args: { pattern: 'x', path: '/home/enkeym/.claude' }, directory: TS_PROJECT });
-
-both('grep вне tokensave-проекта → allow', 'allow',
-  { tool_name: 'Grep', tool_input: { pattern: 'x', path: NON_PROJECT }, cwd: NON_PROJECT },
-  { tool: 'grep', args: { pattern: 'x', path: NON_PROJECT }, directory: NON_PROJECT });
-
-// регрессия: конкретный .css/.js в node_modules НЕ в индексе, хоть .css/.ts и
-// индексируются в src → allow (раньше ложно блокировалось по расширению)
-both('grep по .css в node_modules → allow', 'allow',
-  { tool_name: 'Grep', tool_input: { pattern: 'range', path: TS_PROJECT + '/client/node_modules/storm-ui/dist/index.css' }, cwd: TS_PROJECT },
-  { tool: 'grep', args: { pattern: 'range', path: TS_PROJECT + '/client/node_modules/storm-ui/dist/index.css' }, directory: TS_PROJECT });
-
-both('grep по каталогу node_modules → allow', 'allow',
-  { tool_name: 'Grep', tool_input: { pattern: 'range', path: TS_PROJECT + '/client/node_modules/storm-ui' }, cwd: TS_PROJECT },
-  { tool: 'grep', args: { pattern: 'range', path: TS_PROJECT + '/client/node_modules/storm-ui' }, directory: TS_PROJECT });
-
-// ---- BASH: shell не должен подменять tokensave на индексированных файлах ----
-const bash = (desc, want, command, cwd = TS_PROJECT) =>
+const bash = (desc, want, command, cwd = PROJECT) =>
   both(desc, want,
     { tool_name: 'Bash', tool_input: { command }, cwd },
     { tool: 'bash', args: { command }, directory: cwd });
 
-// чтение содержимого
-bash('cat исходника из индекса → deny', 'deny', 'cat client/src/App.tsx');
+// ---- чтение содержимого ----
+bash('cat исходника → deny', 'deny', 'cat client/src/App.tsx');
 bash('head/tail исходника → deny', 'deny', 'head -50 client/src/App.tsx');
-bash('cat по абсолютному пути → deny', 'deny', `cat ${TS_PROJECT}/client/src/App.tsx`);
+bash('cat по абсолютному пути → deny', 'deny', `cat ${PROJECT}/client/src/App.tsx`);
 bash('cat внутри пайплайна → deny', 'deny', 'cat client/src/App.tsx | head -5');
-bash('cat package.json → по индексу активной ветки', JSON_VERDICT, 'cat package.json');
-bash('cat вне tokensave-проекта → allow', 'allow', 'cat /tmp/foo.ts', NON_PROJECT);
+bash('cat package.json → deny', 'deny', 'cat package.json');
+bash('cat .env.example → deny (это тоже файл)', 'deny', 'cat .env.example');
+bash('cat вендорного файла → deny', 'deny', 'cat client/node_modules/storm-ui/dist/index.css');
+bash('cat несуществующего файла → allow', 'allow', 'cat client/src/__nope__.ts');
+bash('cat вне проекта, файла нет → allow', 'allow', 'cat /tmp/__nope__.ts', '/tmp');
 
-// правка на месте
+// ---- правка на месте ----
 bash('sed -i по исходнику → deny', 'deny', "sed -i 's/a/b/' client/src/App.tsx");
 bash('sed БЕЗ -i (чтение потока) → allow', 'allow', "sed -n '1,5p' package.json");
 bash('перенаправление в исходник → deny', 'deny', 'echo x > client/src/App.tsx');
-bash('перенаправление в новый файл → allow', 'allow', 'echo x > client/src/__new__.ts');
+bash('перенаправление в новый файл → deny (файлы пишет Write)', 'deny', 'echo x > client/src/__new__.ts');
+bash('дозапись в новый файл → deny', 'deny', 'echo x >> notes.txt');
+bash('перенаправление в /dev/null → allow', 'allow', 'npm test > /dev/null');
+bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
 bash('tee в исходник → deny', 'deny', 'echo x | tee client/src/App.tsx');
+bash('`=>` в строке — не перенаправление → allow', 'allow', `git log --format='%h => %s'`);
 
-// интерпретаторы: путь спрятан в строке кода
+// ---- интерпретаторы: путь спрятан в строке кода ----
 bash('python -c с чтением исходника → deny', 'deny',
   `python3 -c "print(open('client/src/App.tsx').read())"`);
 bash('node -e с записью в исходник → deny', 'deny',
   `node -e "require('fs').writeFileSync('client/src/App.tsx','x')"`);
-bash('node -e по package.json → по индексу активной ветки', JSON_VERDICT,
-  `node -e "require('./package.json')"`);
-// Скрипт как аргумент — запуск, не чтение: команды README (`node test/x.mjs`)
-// блокировались, а `node "$t"` проходил — запрет на пустом месте.
-bash('node <скрипт из индекса> → allow (запуск)', 'allow', 'node client/src/App.tsx');
-bash('python3 <скрипт из индекса> → allow (запуск)', 'allow', 'python3 client/src/App.tsx --flag');
-bash('node с heredoc и путём из индекса → deny', 'deny',
+bash('node -e по package.json → deny', 'deny', `node -e "require('./package.json')"`);
+// Скрипт как аргумент — запуск, не чтение.
+bash('node <скрипт> → allow (запуск)', 'allow', 'node client/src/App.tsx');
+bash('python3 <скрипт> → allow (запуск)', 'allow', 'python3 client/src/App.tsx --flag');
+bash('node с heredoc и путём → deny', 'deny',
   `node <<'EOF'\nconsole.log(require('fs').readFileSync('client/src/App.tsx','utf8'))\nEOF`);
 // Тело heredoc — код интерпретатора, а не команды shell: `&`, `(`, `;` в нём
 // не режут сегмент, и путь остаётся рядом с `node`.
 bash('node с heredoc, в теле скобки и & → deny', 'deny',
   `node <<'EOF'\nif (1) require('fs').writeFileSync('client/src/App.tsx', 'x') & 0\nEOF`);
-bash('node <<\\EOF с путём из индекса → deny', 'deny',
+bash('heredoc: `=>` в теле — не перенаправление → allow', 'allow',
+  `node <<'EOF'\nconst f = (a) => a + 1; console.log(f(1))\nEOF`);
+bash('node <<\\EOF с путём → deny', 'deny',
   `node <<\\EOF\nrequire('fs').readFileSync('client/src/App.tsx')\nEOF`);
 bash('heredoc, за которым `;` на той же строке → тело у node → deny', 'deny',
   `node <<'EOF'; true\nrequire('fs').readFileSync('client/src/App.tsx')\nEOF`);
 bash('<< в кавычках — не heredoc, следующая строка — команда → deny', 'deny',
   `echo "a<<X"\ncat client/src/App.tsx`);
-// Формы команды, которые разбирает shell-core: за ними та же команда чтения.
+bash('node -p с путём → deny', 'deny',
+  `node -p "require('fs').readFileSync('client/src/App.tsx','utf8')"`);
+bash('jq по package.json → deny', 'deny', 'jq .name package.json');
+
+// ---- формы команды, которые разбирает shell-core ----
 bash('фоновый & перед cat → deny', 'deny', 'echo ok & cat client/src/App.tsx');
 bash('cat в подстановке $(…) → deny', 'deny', 'echo $(cat client/src/App.tsx)');
 bash('cat в обратных кавычках → deny', 'deny', 'echo `cat client/src/App.tsx`');
@@ -248,253 +127,40 @@ bash('cat в группе ( … ) → deny', 'deny', '(cat client/src/App.tsx)')
 bash('then cat → deny', 'deny', 'if true; then cat client/src/App.tsx; fi');
 bash('xargs cat → deny', 'deny', 'echo x | xargs cat client/src/App.tsx');
 bash('2>&1 и фоновый git по исходнику → allow', 'allow', 'git log client/src/App.tsx 2>&1 & wait');
-bash('node -p с путём из индекса → deny', 'deny',
-  `node -p "require('fs').readFileSync('client/src/App.tsx','utf8')"`);
-bash('jq по package.json → по индексу активной ветки', JSON_VERDICT, 'jq .name package.json');
 
-// grep-семейство
-bash('grep -rn по коду → deny', 'deny', 'grep -rn useState client/src');
-bash('rg по коду → deny', 'deny', 'rg useState client/src');
-bash('grep с --include=*.json → по индексу активной ветки', wantExt('.json'),
-  'grep -rn foo --include=*.json .');
-bash('rg по .css в node_modules → allow (регрессия)', 'allow',
-  'rg range client/node_modules/storm-ui/dist/index.css');
-bash('rg по каталогу node_modules → allow (регрессия)', 'allow',
-  'rg range client/node_modules/storm-ui');
+// ---- grep и вывод команд — не чтение файла ----
+bash('grep -rn по коду → allow', 'allow', 'grep -rn useState client/src');
+bash('grep с --include → allow', 'allow', 'grep -rn foo --include=*.json .');
+bash('rg по файлу → allow', 'allow', 'rg range client/src/App.tsx');
+bash('ps | grep → allow', 'allow', 'ps aux | grep ragsave');
+bash('cat исходника | grep → deny (виноват cat)', 'deny', 'cat client/src/App.tsx | grep useState');
 
-// grep из пайпа читает stdin, а не файлы. Раньше блокировался любой такой
-// вызов: паттерн отбрасывался, путей не оставалось, и запрет срабатывал на
-// пустом месте. Это ловило обычную работу с выводом команд и толкало в обход.
-bash('ps | grep → allow (stdin, не файлы)', 'allow', 'ps aux | grep ragsave');
-bash('git log | grep → allow', 'allow', 'git log --oneline | grep fix');
-bash('env | grep → allow', 'allow', 'env | grep PATH');
-bash('npm ls | grep → allow', 'allow', 'npm ls | grep react');
-bash('docker ps | grep → allow', 'allow', 'docker ps | grep -c app');
-bash('ls | grep с именем файла из индекса → allow (это stdin)', 'allow',
-  'ls -la client/src | grep App.tsx');
-bash('grep в конце длинного пайпа → вердикт за cat package.json', JSON_VERDICT,
-  'cat package.json | jq .name | grep -i groza');
-bash('grep после && (не пайп, без путей) → allow', 'allow',
-  'npm run build && grep -c done');
-
-// grep без путей и без рекурсии тоже читает stdin
-bash('голый grep без путей → allow', 'allow', 'grep useState');
-bash('grep -i без путей → allow', 'allow', 'grep -i usestate');
-
-// ...но рекурсия по текущему каталогу — уже обход поиска по коду
-bash('grep -r без пути → deny (рекурсия по проекту)', 'deny', 'grep -r useState');
-bash('grep -rn без пути → deny', 'deny', 'grep -rn useState');
-bash('rg без пути → deny (rg рекурсивен по умолчанию)', 'deny', 'rg useState');
-bash('grep --recursive без пути → deny', 'deny', 'grep --recursive useState');
-
-// пайп не должен прикрывать чтение файла слева
-bash('cat исходника | grep → deny (виноват cat)', 'deny',
-  'cat client/src/App.tsx | grep useState');
-bash('grep по package.json и в пайп → по индексу активной ветки', JSON_VERDICT,
-  'grep name package.json | head -3');
-
-// длинные опции с буквой r в названии не должны читаться как рекурсия
-bash('grep --color по package.json → по индексу активной ветки', JSON_VERDICT,
-  'grep --color=always -n name package.json');
-
-// легитимные инструменты над теми же путями — не трогаем
+// ---- легитимные инструменты над теми же путями ----
 bash('git diff по исходнику → allow', 'allow', 'git diff client/src/App.tsx');
 bash('tsc по исходнику → allow', 'allow', 'npx tsc --noEmit client/src/App.tsx');
 bash('eslint по исходнику → allow', 'allow', 'npx eslint client/src/App.tsx');
+bash('ragsave sync с путём проекта → allow', 'allow', `ragsave sync ${PROJECT}`);
+bash('ragsave search с именем файла в запросе → allow', 'allow', 'ragsave search "что делает App.tsx"');
 bash('пустая команда → allow', 'allow', '');
 
 // ---- mcp__ide__executeCode: тот же канал, то же правило ----
-both('executeCode с путём из индекса → deny', 'deny',
-  { tool_name: 'mcp__ide__executeCode', tool_input: { code: "open('client/src/App.tsx').read()" }, cwd: TS_PROJECT },
-  { tool: 'exec', args: { code: "open('client/src/App.tsx').read()" }, directory: TS_PROJECT });
+both('executeCode с путём файла → deny', 'deny',
+  { tool_name: 'mcp__ide__executeCode', tool_input: { code: "open('client/src/App.tsx').read()" }, cwd: PROJECT },
+  { tool: 'exec', args: { code: "open('client/src/App.tsx').read()" }, directory: PROJECT });
 
-both('executeCode без путей из индекса → allow', 'allow',
-  { tool_name: 'mcp__ide__executeCode', tool_input: { code: 'print(2 + 2)' }, cwd: TS_PROJECT },
-  { tool: 'exec', args: { code: 'print(2 + 2)' }, directory: TS_PROJECT });
+both('executeCode без путей → allow', 'allow',
+  { tool_name: 'mcp__ide__executeCode', tool_input: { code: 'print(2 + 2)' }, cwd: PROJECT },
+  { tool: 'exec', args: { code: 'print(2 + 2)' }, directory: PROJECT });
 
-// ---- EDIT / WRITE ----
-both('edit файла из индекса → deny', 'deny',
-  { tool_name: 'Edit', tool_input: { file_path: TS_PROJECT + '/client/src/lib/store/useMarkerStore.ts' }, cwd: TS_PROJECT },
-  { tool: 'edit', args: { filePath: TS_PROJECT + '/client/src/lib/store/useMarkerStore.ts' }, directory: TS_PROJECT });
-
-both('write НОВОГО файла → allow (в индексе его нет)', 'allow',
-  { tool_name: 'Write', tool_input: { file_path: TS_PROJECT + '/client/src/__brand_new__.ts' }, cwd: TS_PROJECT },
-  { tool: 'write', args: { filePath: TS_PROJECT + '/client/src/__brand_new__.ts' }, directory: TS_PROJECT });
-
-both('edit .css в src → по индексу активной ветки', wantFile(TS_PROJECT + '/client/src/index.css'),
-  { tool_name: 'Edit', tool_input: { file_path: TS_PROJECT + '/client/src/index.css' }, cwd: TS_PROJECT },
-  { tool: 'edit', args: { filePath: TS_PROJECT + '/client/src/index.css' }, directory: TS_PROJECT });
-
-both('edit конфига агента → allow', 'allow',
-  { tool_name: 'Edit', tool_input: { file_path: '/home/enkeym/.claude/settings.json' }, cwd: TS_PROJECT },
-  { tool: 'edit', args: { filePath: '/home/enkeym/.claude/settings.json' }, directory: TS_PROJECT });
-
-both('edit исходника вне tokensave-проекта → allow', 'allow',
-  { tool_name: 'Edit', tool_input: { file_path: NON_PROJECT + '/foo.ts' }, cwd: NON_PROJECT },
-  { tool: 'edit', args: { filePath: NON_PROJECT + '/foo.ts' }, directory: NON_PROJECT });
-
-// ---- ragsave: смысловой слой не должен попадать под гарды tokensave ----
-// Гард — про подмену tokensave shell-командами. ragsave к этому отношения не
-// имеет: он ничего не читает мимо индекса и сам является легитимным
-// инструментом, поэтому его вызовы обязаны проходить.
-bash('ragsave search → allow', 'allow', 'ragsave search "как настроен деплой"');
-bash('ragsave init → allow', 'allow', 'ragsave init');
-bash('ragsave sync с путём проекта → allow', 'allow', `ragsave sync ${TS_PROJECT}`);
-bash('ragsave status в пайпе → allow', 'allow', 'ragsave status | jq .files');
-bash('ragsave search с именем исходника в запросе → allow', 'allow',
-  'ragsave search "что делает App.tsx"');
-
-read('read индекса ragsave → allow', 'allow', TS_PROJECT + '/.ragsave/rag.db');
-bash('чтение лога ragsave → allow', 'allow', 'cat .ragsave/sync.log');
-
-// ---- отсутствие тупиков ----
-// Главный риск гарда: запретить действие, не оставив рабочей альтернативы.
-// Для всего, чего нет в индексе tokensave, должен оставаться прямой путь —
-// иначе агент упирается и ищет обход. Проверяем обе двери сразу.
-// Маска, которой в индексе активной ветки заведомо нет: состав индекса
-// зависит от ветки, поэтому конкретное расширение выбираем, а не зашиваем.
-const OUTSIDE_EXT = ['.lock', '.ini', '.cfg', '.yaml', '.yml', '.json']
-  .find((e) => !EXTS.has(e)) || '.lock';
-
-read('тупик №1: .env.example читается напрямую', 'allow', TS_PROJECT + '/.env.example');
-bash(`тупик №2: маска вне индекса (*${OUTSIDE_EXT}) грепается напрямую`, 'allow',
-  `grep -rn name --include=*${OUTSIDE_EXT} .`);
-bash('тупик №3: вывод команд фильтруется грепом', 'allow', 'ls -la | grep src');
-read('тупик №4: вендорный файл с индексируемым расширением читается напрямую', 'allow',
-  TS_PROJECT + '/client/node_modules/storm-ui/dist/index.css');
-bash('тупик №5: .env.example читается через shell', 'allow', 'cat .env.example');
-
-// ---- предохранитель: повтор гасит отказ, латч класса — соседние цели ----
-// Когда tokensave лёг (MCP на чужой ветке, лок БД), он лёг на весь граф, а не
-// на один файл. Первый файл всё равно стоит отказ+повтор — так узнаём, что
-// альтернативы нет; каждый следующий файл того же класса проходит сразу.
-const decide = (sid, key, fam) => (breakerAllows(sid, key, fam) ? 'allow' : 'deny');
-const SID = `test-breaker-${process.pid}-${Date.now()}`;
-
-check('[core] breaker: первая цель → отказ держим', decide(SID, 'Read:/a/x.ts', 'read'), 'deny');
-check('[core] breaker: повтор той же цели → пропуск', decide(SID, 'Read:/a/x.ts', 'read'), 'allow');
-check('[core] breaker: соседняя цель того же класса → пропуск (латч)',
-  decide(SID, 'Read:/a/y.ts', 'read'), 'allow');
-check('[core] breaker: другой класс латчем read не задет',
-  decide(SID, 'Edit:/a/z.ts', 'edit'), 'deny');
-check('[core] breaker: без family латча нет — только точное совпадение',
-  decide(SID, 'Bash:cat /a/q.ts', null), 'deny');
-check('[core] breaker: свежая сессия — отказ как обычно',
-  decide(`${SID}-other`, 'Read:/a/x.ts', 'read'), 'deny');
-
-// Латч класса не должен продлеваться соседними целями: одна ранняя осечка не
-// обязана отравлять всю сессию — окно живёт от реального повтора, не от каждого
-// пропущенного чтения.
+// ---- причина называет замену ----
 {
-  const bf = BREAKER_FILE;
-  const famKey = `${SID}|fam:read`;
-  const t1 = JSON.parse(fs.readFileSync(bf, 'utf8'))[famKey]?.t;
-  decide(SID, 'Read:/a/neighbor-1.ts', 'read'); // соседняя цель, не повтор
-  decide(SID, 'Read:/a/neighbor-2.ts', 'read');
-  const t2 = JSON.parse(fs.readFileSync(bf, 'utf8'))[famKey]?.t;
-  check('[core] breaker: соседняя цель не двигает окно латча', t2 === t1 && !!t1, true);
+  const reason = guardBash('cat client/src/App.tsx', PROJECT, OPENCODE_LABELS);
+  check('[core] причина чтения называет read', reason.includes('read'), true);
+  const edit = guardBash("sed -i 's/a/b/' client/src/App.tsx", PROJECT, OPENCODE_LABELS);
+  check('[core] причина правки называет edit/write', edit.includes('edit/write'), true);
 }
 
-// ---- предохранитель: объяснение звучит один раз ----
-// Пока латч открыт, пропускается каждое чтение. Текст «запрет снят…» к каждому
-// из них — это и был спам, ради которого всё затевалось: одно объяснение несёт
-// столько же информации, сколько тридцать.
-{
-  const SID2 = `test-breaker-say-${process.pid}-${Date.now()}`;
-  check('[core] breaker: первая цель — отказ', breakerAllows(SID2, 'Read:/b/x.ts', 'read'), false);
-  check('[core] breaker: повтор — пропуск с объяснением',
-    breakerAllows(SID2, 'Read:/b/x.ts', 'read'), 'announce');
-  check('[core] breaker: соседняя цель — пропуск молча',
-    breakerAllows(SID2, 'Read:/b/y.ts', 'read'), 'silent');
-  check('[core] breaker: и дальше молча',
-    breakerAllows(SID2, 'Read:/b/z.ts', 'read'), 'silent');
-  check('[core] breaker: другой класс объясняется отдельно',
-    breakerAllows(SID2, 'Edit:/b/x.ts', 'edit'), false);
-}
-
-// ---- рассинхрон с MCP-сервером ----
-// Гард запрещает Read/Grep только потому, что то же отдаст tokensave. Сервер на
-// другом проекте или другой ветке замены не даёт — запрет там становится
-// тупиком, из которого агент уходит в повторы. Свежий процесс на каждый кейс:
-// результат serverState кэшируется внутри процесса.
-// Метки дедупа журнала живут минуту и переживают прогон: без сброса второй
-// запуск сьюта подряд не увидел бы записи и упал бы на ровном месте.
-function clearLogDedup() {
-  try {
-    const df = statePath('guard-log.json');
-    const st = JSON.parse(fs.readFileSync(df, 'utf8'));
-    for (const k of Object.keys(st)) if (k.includes(TS_PROJECT)) delete st[k];
-    fs.writeFileSync(df, JSON.stringify(st));
-  } catch { /* файла нет — нечего чистить */ }
-}
-
-{
-  clearLogDedup();
-  const cc = { tool_name: 'Read', tool_input: { file_path: TS_PROJECT + '/client/src/App.tsx' }, cwd: TS_PROJECT };
-
-  const alien = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-alien-'));
-  fs.writeFileSync(path.join(alien, `${process.pid}.json`),
-    JSON.stringify({ pid: process.pid, project_path: '/home/enkeym/main/other-project' }));
-  check('[claude] сервер на чужом проекте → гард молчит',
-    claude(READ, cc, { TS_SERVERS_DIR: alien }), 'allow');
-
-  const wrongBranch = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-branch-'));
-  fs.writeFileSync(path.join(wrongBranch, `${process.pid}.json`),
-    JSON.stringify({
-      pid: process.pid,
-      project_path: TS_PROJECT,
-      db_path: TS_PROJECT + '/.tokensave/branches/__parent__.db',
-    }));
-  check('[claude] сервер на чужой ветке графа → гард молчит',
-    claude(READ, cc, { TS_SERVERS_DIR: wrongBranch }), 'allow');
-
-  const dead = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-dead-'));
-  fs.writeFileSync(path.join(dead, '999999.json'),
-    JSON.stringify({ pid: 999999, project_path: TS_PROJECT }));
-  check('[claude] мёртвая запись реестра сервером не считается',
-    claude(READ, cc, { TS_SERVERS_DIR: dead }), 'allow');
-
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-none-'));
-  check('[claude] реестра нет (старый tokensave) → судим по БД, как раньше',
-    claude(READ, cc, { TS_SERVERS_DIR: path.join(empty, 'missing') }), 'deny');
-
-  // tokensave 7.11.x: каталог реестра есть, но пуст. Живой serve на этот корень
-  // (по /proc) — замена есть, судим по БД. Иначе был бы ложный рассинхрон.
-  const blank = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-blank-'));
-  check('[claude] реестр пуст, но serve на проект жив → судим по БД',
-    claude(READ, cc, { TS_SERVERS_DIR: blank, TS_SERVE_ROOTS: TS_PROJECT }), 'deny');
-  check('[claude] реестр пуст и serve нет → гард молчит',
-    claude(READ, cc, { TS_SERVERS_DIR: blank, TS_SERVE_ROOTS: '' }), 'allow');
-
-  // Два сервера: соседний проект записан в реестре, а serve этого корня записи
-  // не оставил. Чужая запись не доказывает, что этот корень никто не обслуживает.
-  check('[claude] в реестре только чужой сервер, serve на проект жив → судим по БД',
-    claude(READ, cc, { TS_SERVERS_DIR: alien, TS_SERVE_ROOTS: TS_PROJECT }), 'deny');
-  // Запись корня с чужой БД: процесс жив, но граф другой ветки — /proc это не перекрывает.
-  check('[claude] запись проекта на чужой ветке и serve жив → гард молчит',
-    claude(READ, cc, { TS_SERVERS_DIR: wrongBranch, TS_SERVE_ROOTS: TS_PROJECT }), 'allow');
-
-  for (const d of [alien, wrongBranch, dead, empty, blank]) fs.rmSync(d, { recursive: true, force: true });
-}
-
-check('[core] журнал гардов: запись ушла в тестовый файл, не в общий',
-  fs.existsSync(GUARD_LOG), true);
-
-fs.rmSync(SERVERS_DIR, { recursive: true, force: true });
-fs.rmSync(path.dirname(GUARD_LOG), { recursive: true, force: true });
-
-// убрать за собой тестовые записи из общего файла предохранителя
-try {
-  const bf = BREAKER_FILE;
-  const st = JSON.parse(fs.readFileSync(bf, 'utf8'));
-  for (const k of Object.keys(st)) if (k.startsWith('test-breaker-')) delete st[k];
-  fs.writeFileSync(bf, JSON.stringify(st));
-} catch { /* файла нет — нечего чистить */ }
-
-// и метки дедупа журнала: иначе первый настоящий рассинхрон в ближайшую минуту
-// будет молча съеден как «уже записанный»
-clearLogDedup();
-fs.rmSync(TS_PROJECT, { recursive: true, force: true });
+fs.rmSync(PROJECT, { recursive: true, force: true });
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

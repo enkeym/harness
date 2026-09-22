@@ -22,7 +22,6 @@ const env = {
   AI_HOOKS_HOOKS_LOG: path.join(tmp, 'hooks.jsonl'),
 };
 delete env.AI_HOOKS_SKILL_GATE_OFF;
-delete env.AI_HOOKS_DOCTOR;
 
 const { isGitCommit, isInstructionFile, skillName } = await import('../skill-core.mjs');
 
@@ -136,7 +135,6 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
 {
   check('без session_id → allow', gate(undefined, 'Edit', edit(SKILL_MD)), 'allow');
   check('AI_HOOKS_SKILL_GATE_OFF=1 → allow', gate('sid-off', 'Edit', edit(SKILL_MD), { AI_HOOKS_SKILL_GATE_OFF: '1' }), 'allow');
-  check('внутри доктора → allow', gate('sid-doc', 'Bash', bash('git commit -m x'), { AI_HOOKS_DOCTOR: '1' }), 'allow');
   fs.mkdirSync(env.AI_HOOKS_STATE_DIR, { recursive: true });
   fs.writeFileSync(path.join(env.AI_HOOKS_STATE_DIR, 'skill-gate.off'), '');
   check('файл state/skill-gate.off → allow', gate('sid-off', 'Edit', edit(SKILL_MD)), 'allow');

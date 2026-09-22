@@ -38,7 +38,7 @@ export function isEntryPoint(metaUrl) {
 // коммит. Переопределяется через AI_HOOKS_STATE_DIR (тесты, изоляция).
 export const STATE_ROOT = process.env.AI_HOOKS_STATE_DIR || path.join(HOME, '.claude', 'state');
 
-// Путь под корнем состояния: statePath('guard-breaker.json'),
+// Путь под корнем состояния: statePath('skill-gate.off'),
 // statePath('ask-mode', '.sessions.json'). Каталог не создаётся — вызывающий
 // делает mkdirSync(recursive) непосредственно перед записью, как и раньше, так
 // что пустые каталоги не плодятся на каждом молчаливом срабатывании хука.

@@ -13,7 +13,6 @@
 import fs from 'node:fs';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
 import { segments, tokenize, commandIndex, commandName, gitSubcommandAt } from './shell-core.mjs';
-import { insideDoctor } from './hooklog-core.mjs';
 
 const STATE_FILE = statePath('skills-loaded.json');
 // Сессия с --resume живёт днями; неделя покрывает её, а файл не растёт вечно.
@@ -68,10 +67,9 @@ export function isGitCommit(command) {
   }
 }
 
-// Выключатели: внутри доктора правки и коммиты запрещены и так; переменная —
-// для тестов чужих хуков; файл — «отключить, не трогая конфиг».
+// Выключатели: переменная — для тестов чужих хуков; файл — «отключить, не
+// трогая конфиг».
 export function gateEnabled() {
-  if (insideDoctor()) return false;
   if (process.env.AI_HOOKS_SKILL_GATE_OFF === '1') return false;
   return !fs.existsSync(statePath('skill-gate.off'));
 }

@@ -1,18 +1,15 @@
 // Журнал решений хуков — logs/hooks.jsonl. До него след «модель спотыкается»
-// нигде не собирался целиком: guard.log знает только отступления гарда,
-// errors.log — падения фоновых задач, а сами запреты (ask-guard, security,
-// роутеры), их причины и время работы хука не писались никуда. /doctor по
-// такому набору не мог восстановить последовательность «запрет → что модель
-// попробовала дальше → снова запрет».
+// нигде не собирался целиком: errors.log знает падения фоновых задач, а сами
+// запреты (ask-guard, security, bash-router), их причины и время работы хука
+// не писались никуда. /doctor по такому набору не мог восстановить
+// последовательность «запрет → что модель попробовала дальше → снова запрет».
 //
-// Пишутся только РЕШЕНИЯ, не вызовы: deny/ask, срабатывание предохранителя,
-// рассинхрон с MCP, падение самого хука и медленный проход (> SLOW_MS) — в
-// норме файл почти не растёт. session_id есть в каждой записи, чтобы разбирать
-// одну сессию, а не хвост общего журнала.
+// Пишутся только РЕШЕНИЯ, не вызовы: deny/ask, падение самого хука и
+// медленный проход (> SLOW_MS) — в норме файл почти не растёт. session_id есть
+// в каждой записи, чтобы разбирать одну сессию, а не хвост общего журнала.
 //
 // Модуль чистый и без зависимостей от формата хука: контекст (сессия, имя
-// хука, инструмент) выставляет hook-io при разборе stdin; guard-core пишет
-// сюда из глубины через тот же контекст.
+// хука, инструмент) выставляет hook-io при разборе stdin.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,17 +22,6 @@ const LOG_DIR = process.env.AI_HOOKS_LOG_DIR || path.join(HOME, '.ai-hooks', 'lo
 export const HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG || path.join(LOG_DIR, 'hooks.jsonl');
 const ERRORS_LOG = path.join(LOG_DIR, 'errors.log');
 
-// Метка окружения ребёнка-доктора (ставит doctor-core при запуске). Живёт
-// здесь, а не в doctor-core: тот импортирует этот модуль, обратная зависимость
-// была бы циклом. Хуки внутри доктора пишут в тот же журнал — их строки
-// помечаются `doctor: 1`, иначе /doctor принимал бы запреты своего же
-// фонового запуска за запреты сессии пользователя.
-export const DOCTOR_MARK = 'AI_HOOKS_DOCTOR';
-
-export function insideDoctor() {
-  return process.env[DOCTOR_MARK] === '1';
-}
-
 // Медленный хук ощущается как «спотыкание» не хуже запрещающего, но до этого
 // журнала его не видел никто. Порог с запасом над штатным стартом node +
 // sqlite-запросом гарда.
@@ -47,8 +33,7 @@ const TARGET_MAX = 200;
 // target запрета — это команда или путь, и у security-guard в команде может
 // стоять токен (`curl -H "Authorization: Bearer …"`, `TOKEN=… node …`).
 // Для разбора цикла важно, ЧТО повторялось, а не значение секрета — значения
-// маскируются до записи. guard.log таких строк не писал, поэтому раньше
-// вопроса не стояло.
+// маскируются до записи.
 const SECRET_PATTERNS = [
   [/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***'],
   [/\b((?:[A-Za-z_][A-Za-z0-9_-]*)?(?:token|secret|password|passwd|api[_-]?key|private[_-]?key|authorization))\s*[=:]\s*["']?[^\s"']{4,}/gi, '$1=***'],
@@ -93,7 +78,7 @@ function trimText(value, max) {
   return redact(String(value ?? '').replace(/\s+/g, ' ').trim()).slice(0, max);
 }
 
-// decision: deny | ask | breaker-open | server-mismatch | slow | crash.
+// decision: deny | ask | slow | crash.
 // Журнал не обязан работать, чтобы работал хук — любая ошибка глотается.
 export function logDecision(decision, data = {}) {
   try {
@@ -104,7 +89,6 @@ export function logDecision(decision, data = {}) {
       tool: ctx.tool,
       decision,
       ms: elapsedMs(),
-      ...(insideDoctor() ? { doctor: 1 } : {}),
       ...data,
     };
     if (rec.reason !== undefined) rec.reason = trimText(rec.reason, REASON_MAX);

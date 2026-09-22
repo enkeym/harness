@@ -10,10 +10,9 @@ paths:
 - `AI_HOOKS_LOG_DIR` (по умолчанию `~/.ai-hooks/logs`) — читают
   `ai-hooks/hooklog-core.mjs:LOG_DIR`, `ai-hooks/bin/log-error.sh`,
   `ragsave/ragsave/server.py:_log_failure`; тот же каталог зашит без переменной в
-  `ai-hooks/doctor-core.mjs:LOGS_DIR`, `ai-hooks/claude/usage-log.mjs:LOG_DIR`,
-  `ai-hooks/bin/cleanup.mjs:trimLog`, `ai-hooks/bin/cleanup.mjs:rollupUsage`.
-  Сменил путь в одном месте — errors.log расползается на два каталога, doctor и
-  cleanup смотрят не туда.
+  `ai-hooks/claude/usage-log.mjs:LOG_DIR`, `ai-hooks/bin/cleanup.mjs:trimLog`,
+  `ai-hooks/bin/cleanup.mjs:rollupUsage`. Сменил путь в одном месте — errors.log
+  расползается на два каталога, cleanup смотрит не туда.
 - `AI_HOOKS_STATE_DIR` / `~/.claude/state/clip-output` — `ai-hooks/state-core.mjs:STATE_ROOT`
   задаёт корень, `ai-hooks/bin/cleanup.mjs:TARGETS` чистит `clip-output` под ним,
   а `ai-hooks/bin/clip-output.sh` пишет в зашитый `${HOME}/.claude/state/clip-output`.
@@ -32,24 +31,15 @@ paths:
 - Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) ↔ проверка
   `exit_code = 3` для источника `ragsave*` в `ai-hooks/bin/log-error.sh`. Сменил код
   или дал его другому отказу — журнал снова полон пропусков или молчит о сбое.
-- `AI_HOOKS_DOCTOR_OFF` — `ai-hooks/doctor-core.mjs:doctorEnabled` ↔ выключатель в
-  `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
-  `ai-hooks/README.md`. То же.
-- `TS_GUARD_SYNC_WAIT_MS` (800 мс) — `ai-hooks/guard-core.mjs:SYNC_WAIT_MS` ↔
-  `ai-hooks/README.md`, порог `ms > 800` в `skills/doctor/SKILL.md`. Сменил
-  дефолт — doctor ставит диагноз «медленно» по старому порогу.
+  `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
+- Порог медленного хука — `ai-hooks/hooklog-core.mjs:SLOW_MS` (800) ↔ порог
+  `ms > 800` в `skills/doctor/SKILL.md`. Сменил константу — doctor ставит
+  диагноз «медленно» по старому порогу.
 - Имена файлов хуков — регистрация по путям в `claude/settings.json`;
   `opencode/plugin/tokensave-guard.js` импортирует абсолютным путём
   `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
-- Заглушка `tokensave_read` (`unchanged: true`, поля `file`/`mode`/`mtime_ns`, блоки
-  `[{type:'text'}]`) — `ai-hooks/read-core.mjs:parseStub`/`refillResponse` ↔ формат
-  ответа tokensave, тест `ai-hooks/test/test-read-refill.mjs:stub`. Сменился формат
-  при обновлении tokensave — хук молча перестаёт подменять, агент снова видит пустые
-  чтения. Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
-  `ai-hooks/read-core.mjs:indexRoot`: поменял правило в одном — хук читает файл не из
-  того проекта.
 - Каталоги карты `docs/links` / `.claude/links` — три копии списка:
   `ai-hooks/links-core.mjs:MAP_DIRS`, `ai-hooks/bin/init-impact-map.mjs:OWN_DIR`
   (+ `SHARED_DIR`), `ai-hooks/bin/seed-impact-map.mjs:PATH_EXCLUDE`. Новый каталог

@@ -2,17 +2,13 @@
 // Тест OpenCode-плагина: tool.execute.before вызывается так же, как это делает
 // OpenCode, — throw значит «вызов отклонён». Проверяется гард безопасности:
 // DENY (секреты) блокирует, ASK проходит — его держит permission.bash.
-// Гарды tokensave молчат: каталог сессии — не tokensave-проект, реестр
-// серверов пуст.
+// Shell-гард молчит: файлов из команд на диске песочницы нет.
 
 import './env-isolate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-process.env.TS_SERVERS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-'));
-process.env.TS_SERVE_ROOTS = '';
 
 const { TokensaveGuard } = await import('../opencode/tokensave-guard.mjs');
 const { guardBashSecurity } = await import('../security-core.mjs');

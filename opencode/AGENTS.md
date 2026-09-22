@@ -11,10 +11,9 @@ Here only what exists in OpenCode alone.
 - Files: built-in `read`, `edit`, `write`; exact string outside the index:
   `grep` with `include`.
 - The guard plugin (`plugin/tokensave-guard.js`, logic in
-  `~/.ai-hooks/guard-core.mjs`) blocks built-in `read`/`grep`/`edit`/`write` and
-  shell equivalents on indexed source files. Refused → tokensave `read`/`search`
-  for reading, `str_replace`/`replace_symbol`/`insert_at` for editing; a new
-  file is built-in `write`.
+  `~/.ai-hooks/guard-core.mjs`) blocks reading or writing an existing file
+  through `bash` (`cat`, `sed -i`, `> file`, `node -e` with a path). Refused →
+  built-in `read` / `edit` / `write`.
 
 ## Agents
 

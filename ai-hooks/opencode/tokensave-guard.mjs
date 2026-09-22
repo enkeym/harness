@@ -1,20 +1,14 @@
-// OpenCode-плагин: те же гарды tokensave, что и в Claude Code.
-// Единая точка истины логики — ../guard-core.mjs.
+// OpenCode-плагин: те же гарды, что и в Claude Code, — безопасность
+// (../security-core.mjs) и shell-гард (../guard-core.mjs).
 //
 // Соответствие хуков:
-//   Claude PreToolUse(Read|Grep|Edit|Write) → tool.execute.before (throw = deny)
-//   Claude UserPromptSubmit (branch)        → chat.message
-//   Claude Stop (sync)                      → event: session.idle
-//
-// Гарды tokensave срабатывают ТОЛЬКО для файлов, которые есть в индексе.
-// Перед ними — гард безопасности (../security-core.mjs), общий с Claude Code.
+//   Claude PreToolUse(Bash)         → tool.execute.before (throw = deny)
+//   Claude Stop (ragsave-sync.sh)   → event: session.idle
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  guardRead, guardGrep, guardEdit, guardBash, OPENCODE_LABELS,
-} from '../guard-core.mjs';
+import { guardBash, OPENCODE_LABELS } from '../guard-core.mjs';
 import { securityGuard, DENY } from '../security-core.mjs';
 
 // Каталог bin рядом с этим файлом (../bin), а не зашитый абсолютный путь с
@@ -68,43 +62,16 @@ export const TokensaveGuard = async ({ directory }) => {
       const security = securityReason(input.tool, args, directory);
       if (security) throw new Error(security);
 
-      let reason = null;
-
-      switch (input.tool) {
-        case 'read':
-          reason = guardRead(args.filePath, directory, OPENCODE_LABELS);
-          break;
-        case 'grep':
-          // include — glob-маска opencode-инструмента grep.
-          reason = guardGrep(
-            { path: args.path, glob: args.include },
-            directory,
-            OPENCODE_LABELS,
-          );
-          break;
-        case 'edit':
-        case 'write':
-          reason = guardEdit(args.filePath, directory, OPENCODE_LABELS);
-          break;
-        case 'bash':
-          // Shell выражает те же действия, что read/grep/edit, — гард тот же.
-          reason = guardBash(args.command, directory, OPENCODE_LABELS);
-          break;
-      }
-
       // throw в tool.execute.before блокирует вызов; текст уходит в модель
       // как результат инструмента — это аналог permissionDecisionReason.
-      if (reason) throw new Error(reason);
-    },
-
-    'chat.message': async () => {
-      runDetached('tokensave-branch.sh', directory);
-      runDetached('ragsave-sync.sh', directory);
+      if (input.tool === 'bash') {
+        const reason = guardBash(args.command, directory, OPENCODE_LABELS);
+        if (reason) throw new Error(reason);
+      }
     },
 
     event: async ({ event }) => {
       if (event.type !== 'session.idle') return;
-      runDetached('tokensave-sync.sh', directory);
       runDetached('ragsave-sync.sh', directory);
     },
   };

@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SECURITY = path.join(ROOT, 'claude', 'security-guard.mjs');
 const ASK = path.join(ROOT, 'claude', 'ask-guard.mjs');
-const READ = path.join(ROOT, 'claude', 'read-search-router.mjs');
 const CRASH = path.join(ROOT, 'test', 'fixtures', 'crash-hook.mjs');
 
 let failed = 0;
@@ -34,7 +33,6 @@ function sandbox() {
       AI_HOOKS_STATE_DIR: path.join(dir, 'state'),
       AI_HOOKS_LOG_DIR: path.join(dir, 'logs'),
       AI_HOOKS_HOOKS_LOG: path.join(dir, 'logs', 'hooks.jsonl'),
-      AI_HOOKS_GUARD_LOG: path.join(dir, 'logs', 'guard.log'),
     },
   };
 }
@@ -67,17 +65,6 @@ function records(sb) {
   check('security: цель записана', r.target, 'cat .env');
   check('security: причина обрезана и есть', typeof r.reason === 'string' && r.reason.length > 0 && r.reason.length <= 160, true);
   check('security: время — число', typeof r.ms === 'number' && r.ms >= 0, true);
-}
-
-// --- запрет внутри ребёнка-доктора помечен ---
-{
-  const sb = sandbox();
-  const input = { session_id: 'sid-doc', tool_name: 'Bash', cwd: '/tmp', tool_input: { command: 'cat .env' } };
-  run(SECURITY, input, { ...sb.env, AI_HOOKS_DOCTOR: '1' });
-  run(SECURITY, input, sb.env);
-  const recs = records(sb);
-  check('doctor: строка ребёнка помечена doctor:1', recs[0]?.doctor, 1);
-  check('doctor: строка сессии без метки', 'doctor' in (recs[1] || {}), false);
 }
 
 // --- секрет в запрещённой команде не попадает в журнал ---
@@ -129,28 +116,6 @@ function records(sb) {
   const errors = fs.readFileSync(path.join(sb.dir, 'logs', 'errors.log'), 'utf8');
   check('crash: запись в errors.log в формате log-error.sh', /\] hook crash-hook \| \/tmp \| exit=crash\n {4}Error: fixture/.test(errors), true);
   check('crash: запись закрыта разделителем', errors.trim().endsWith('---'), true);
-}
-
-// --- рассинхрон с MCP попадает в журнал сессии ---
-// Проект — песочница на main без branch-meta.json: живой репозиторий может
-// стоять на ветке без записи в графе, и тогда гард молчит раньше сверки с
-// реестром. До открытия БД дело не доходит, её содержимое не важно.
-{
-  const sb = sandbox();
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'hooklog-project-'));
-  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project, stdio: 'ignore' });
-  fs.mkdirSync(path.join(project, '.tokensave'));
-  fs.writeFileSync(path.join(project, '.tokensave', 'tokensave.db'), '');
-  fs.writeFileSync(path.join(project, 'package.json'), '{}\n');
-  const servers = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-servers-empty-'));
-  const res = run(READ, {
-    session_id: 'sid-mm', tool_name: 'Read', cwd: project,
-    tool_input: { file_path: path.join(project, 'package.json') },
-  }, { ...sb.env, TS_SERVERS_DIR: servers, TS_SERVE_ROOTS: '' });
-  check('mismatch: гард молчит', res.stdout, '');
-  const r = records(sb).find((x) => x.decision === 'server-mismatch') || {};
-  check('mismatch: строка с корнем и сессией', [r.root, r.sid, r.servers], [project, 'sid-mm', 0]);
-  fs.rmSync(project, { recursive: true, force: true });
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');
