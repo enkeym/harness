@@ -64,6 +64,12 @@ fired and what it wants instead.
 - It splits commands like the security guard: `&`, `$(…)`, backticks,
   `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat`, and a heredoc body
   stays with its `node`/`python`. `grep`/`rg` and pipes reading stdin pass.
+- `grep`/`rg`/`ag` over indexed code is refused by tokensave's own
+  `hook-pre-tool-use`, which prints how to switch itself off. That switch
+  (`TOKENSAVE_DISABLE_GREP_HOOK` anywhere in the command) and `git grep` inside
+  an indexed project are denied by `bash-router`: a refusal is final — use
+  `tokensave_search`/`signature_search`, `callers`, or `search` with
+  `literal: true` for text.
 
 ## Background hooks
 

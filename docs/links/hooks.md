@@ -36,6 +36,13 @@ paths:
 - Порог медленного хука — `ai-hooks/hooklog-core.mjs:SLOW_MS` (800) ↔ порог
   `ms > 800` в `skills/doctor/SKILL.md`. Сменил константу — doctor ставит
   диагноз «медленно» по старому порогу.
+- Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`
+  ловит имя `TOKENSAVE_DISABLE_GREP_HOOK` из подсказки самого бинаря
+  (`tokensave hook-pre-tool-use`), а запрет `git grep` в `guardBash` полагается
+  на то, что `grep`/`rg`/`ag` уже судит этот хук — matcher
+  `Agent|Grep|Bash|Glob` в `claude/settings.json`. Новая версия tokensave
+  переименовала переменную или `tokensave install` сузил matcher — обход снова
+  открыт, тесты `test-guards.mjs` этого не увидят: они бьют по нашему гарду.
 - Имена файлов хуков — регистрация по путям в `claude/settings.json`;
   `opencode/plugin/tokensave-guard.js` импортирует абсолютным путём
   `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard`. Переименовал или перенёс хук — он молча

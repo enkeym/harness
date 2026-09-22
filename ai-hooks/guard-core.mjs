@@ -118,15 +118,28 @@ function redirectTarget(seg) {
   return m[1];
 }
 
+// Родной хук tokensave отказывает grep/rg/ag по коду в индексе и сам же
+// печатает, как его снять: `TOKENSAVE_DISABLE_GREP_HOOK=1`. Агент этой
+// подсказкой пользуется, а `git grep` хук не видит вовсе. Отказ гарда
+// окончательный — оба обхода закрываем здесь, с отсылкой к тем же инструментам.
+// Только форма присваивания: имя в тексте коммита или README — не обход.
+const HOOK_OFF_RE = /\bTOKENSAVE_DISABLE_GREP_HOOK=/;
+
 // Возвращает причину запрета или null. Любая неожиданность → null (fail-open).
 // keepHeredoc: тело `node <<EOF … EOF` — часть сегмента интерпретатора, иначе
 // путь внутри него распадался бы на безобидные строки.
 export function guardBash(command, cwd, labels) {
   if (!command) return null;
   try {
+    if (HOOK_OFF_RE.test(command)) return grepReason('снятие хука tokensave через `TOKENSAVE_DISABLE_GREP_HOOK`');
+
     for (const { text: seg } of segments(command, { keepHeredoc: true })) {
       const toks = tokenize(seg);
       const cmd = commandName(toks);
+
+      if (cmd === 'git' && toks[1] === 'grep' && projectRoot(cwd)) {
+        return grepReason('`git grep` в индексированном проекте');
+      }
 
       const target = redirectTarget(seg);
       if (target) return editReason(target, labels);
@@ -170,6 +183,11 @@ function readReason(file, labels) {
 
 function editReason(file, labels) {
   return `Файл \`${file}\` через shell не правят — ${labels.edit}.`;
+}
+
+function grepReason(what) {
+  return `${what} — обход хука tokensave, отказ окончательный. Символ: tokensave_search / `
+    + 'tokensave_signature_search; использования: tokensave_callers; текст: tokensave_search с literal: true.';
 }
 
 function evalReason(file, labels) {

@@ -22,6 +22,7 @@ const ON_DISK = [
   'client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md',
   'client/src/index.css', 'package.json', '.env.example',
   'client/node_modules/storm-ui/dist/index.css', '.ragsave/rag.db', '.ragsave/sync.log',
+  '.tokensave/tokensave.db',
 ];
 function sandboxProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-project-'));
@@ -134,6 +135,19 @@ bash('grep с --include → allow', 'allow', 'grep -rn foo --include=*.json .');
 bash('rg по файлу → allow', 'allow', 'rg range client/src/App.tsx');
 bash('ps | grep → allow', 'allow', 'ps aux | grep ragsave');
 bash('cat исходника | grep → deny (виноват cat)', 'deny', 'cat client/src/App.tsx | grep useState');
+
+// ---- обход родного хука tokensave ----
+// Хук сам печатает «set TOKENSAVE_DISABLE_GREP_HOOK=1», а `git grep` не видит.
+const OUTSIDE = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-outside-'));
+bash('VAR=1 grep → deny', 'deny', 'TOKENSAVE_DISABLE_GREP_HOOK=1 grep -rn isDestroyed --include=*.ts client/src');
+bash('env VAR=1 grep → deny', 'deny', 'env TOKENSAVE_DISABLE_GREP_HOOK=1 grep -rn isDestroyed --include=*.ts client/src');
+bash('export VAR; grep → deny', 'deny', 'export TOKENSAVE_DISABLE_GREP_HOOK=1; grep -rn isDestroyed client/src');
+bash('git grep в индексированном проекте → deny', 'deny', 'git grep -n isDestroyed -- client/src');
+bash('cd && git grep в индексированном проекте → deny', 'deny', 'cd client && git grep -n isDestroyed');
+bash('git grep вне индекса → allow', 'allow', 'git grep -n isDestroyed', OUTSIDE);
+bash('имя переменной в тексте коммита → allow', 'allow', 'git commit -m "fix: deny TOKENSAVE_DISABLE_GREP_HOOK bypass"');
+bash('git log/status в индексированном проекте → allow', 'allow', 'git log --oneline -5 && git status --short');
+fs.rmSync(OUTSIDE, { recursive: true, force: true });
 
 // ---- легитимные инструменты над теми же путями ----
 bash('git diff по исходнику → allow', 'allow', 'git diff client/src/App.tsx');
