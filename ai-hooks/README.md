@@ -78,6 +78,7 @@ logs/guard.log                  # рассинхрон гарда с MCP и сн
 logs/hooks.jsonl                # решения хуков по сессиям: deny/ask, предохранитель, падения, медленные
 test/test-guards.mjs            # прогоняет одни сценарии через оба адаптера
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
+test/test-hook-io.mjs           # ответ хука: битый stdin, предохранитель respond, Bash без него, decide
 test/test-doctor.mjs            # фоновый доктор: выключатели, дебаунс, раннер, чистое окружение, напоминание
 test/env-isolate.mjs            # первым импортом в тестах хуков: журнал в temp, доктор выключен
 test/test-ragsave-reminder.mjs  # когда напоминание про rag_search молчит, когда говорит
@@ -747,6 +748,7 @@ node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
+node ~/.ai-hooks/test/test-hook-io.mjs
 node ~/.ai-hooks/test/test-doctor.mjs
 ```
 
