@@ -92,6 +92,7 @@ test/test-cleanup.mjs           # свёртка журнала: сумма, и�
 test/test-context-meter.mjs     # цифра из последнего хода, порог, одно срабатывание на сессию
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
+test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам, источники, --sessions
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -746,6 +747,7 @@ node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-opencode-plugin.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
+node ~/.ai-hooks/test/test-usage-report.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
