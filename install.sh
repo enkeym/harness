@@ -131,7 +131,8 @@ build_venv() {
 # команду. Ловим это здесь, а не через неделю по странному поведению.
 home_check() {
   local baked
-  baked="$(grep -o '/home/[a-z_][a-z0-9_-]*/\.ai-hooks' "$HARNESS/claude/settings.json" | head -1 | sed 's#/\.ai-hooks##')"
+  # Путей нет — grep выходит с 1, и без `|| true` pipefail с set -e обрывали весь скрипт.
+  baked="$(grep -o '/home/[a-z_][a-z0-9_-]*/\.ai-hooks' "$HARNESS/claude/settings.json" | head -1 | sed 's#/\.ai-hooks##')" || true
   [ -z "$baked" ] && return 0
   if [ "$baked" = "$HOME" ]; then
     good "домашний каталог совпадает с зашитым в конфигах ($HOME)"
