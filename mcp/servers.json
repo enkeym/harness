@@ -8,7 +8,7 @@
     "args": ["ragsave"]
   },
   "playwright": {
-    "command": "npx",
-    "args": ["-y", "@playwright/mcp@latest", "--headless", "--browser", "chromium"]
+    "command": "~/.nvm/versions/node/v24.18.0/bin/playwright-mcp",
+    "args": ["--headless", "--browser", "chromium"]
   }
 }
