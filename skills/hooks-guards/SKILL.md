@@ -12,7 +12,7 @@ fired and what it wants instead.
 
 - Hard-blocks reading secret stores: `.env*`, `.envrc`, keys, certificates,
   `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
-  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`. Take a
+  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file` and a `Grep` glob (`.env*`). Take a
   variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
   branches, force push (`-f`, `+refspec`), branch deletion, push to the

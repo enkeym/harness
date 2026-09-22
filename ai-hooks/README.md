@@ -388,7 +388,8 @@ checkout»: индексы `.tokensave/` и `.ragsave/` лежат в катал
 сертификатов, `auth.json`, `.git-credentials`, `.pgpass`, учётных данных CLI
 (`~/.claude/.credentials.json`, `~/.aws/credentials`, `~/.docker/config.json`,
 `~/.kube/config`, `gh/hosts.yml`, `glab-cli/config.yml`), в том числе через
-shell, `scp` и перенаправление ввода (`… < .env`). Тот же список держит
+shell (`cat`, `dd if=`, `perl`, `hexdump`, `iconv` …), `scp`, перенаправление
+ввода (`… < .env`) и `Grep` — по `path` и по `glob` (`.env*`). Тот же список держит
 ragsave, чтобы секрет не попал в индекс (`ragsave/config.py`). Секрет,
 попавший в контекст, остаётся в транскрипте навсегда и уезжает в каждый
 следующий запрос, поэтому альтернатива — `.env.example` или значение от
@@ -401,7 +402,8 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 `-uf`, `+refspec`), удаление ветки (`--delete`, `:ветка`), `--all`/`--mirror`,
 шаблон `*`, push без явной ветки, в `HEAD`/`@` или в ветку из `$…`/`` `…` ``,
 `docker compose` с прод-конфигом, `kubectl apply`, команды через
-`ssh`, `curl`/`wget` с телом запроса на внешний хост.
+`ssh`, `curl`/`wget` с телом запроса (`-d`, слитный `-dfoo`, `-F`, `-T`,
+`--post-*`, `--body-*`) на внешний хост, с URL или без схемы.
 В `permissionDecision` это отдельное значение, и оно возвращает подтверждение
 даже в auto mode — в этом вся ценность: там всё остальное проходит само.
 
