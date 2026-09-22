@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { segments, tokenize, commandIndex, commandName, afterTarget } from './shell-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -82,58 +83,6 @@ export function findSecretValue(text) {
     if (m) return m[0].slice(0, 12) + '…';
   }
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Shell. Сегменты режем так же, как в guard-core: по операторам, с учётом
-// кавычек, чтобы `git push` внутри строки не считался отдельной командой.
-
-// Возвращает сегменты вместе с признаком «пришёл из пайпа»: такая команда
-// читает stdin, и путь к файлу у неё может лежать в соседнем сегменте
-// (`echo .env | xargs cat`).
-function segments(command) {
-  const text = String(command || '');
-  const out = [];
-  let buf = '';
-  let quote = null;
-  let piped = false;
-  let nextPiped = false;
-
-  const flush = () => {
-    const t = buf.trim();
-    if (t) out.push({ text: t, piped });
-    buf = '';
-    piped = nextPiped;
-    nextPiped = false;
-  };
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      buf += c;
-      if (c === quote && text[i - 1] !== '\\') quote = null;
-      continue;
-    }
-    if (c === '\\' && i + 1 < text.length) { buf += c + text[++i]; continue; }
-    if (c === '"' || c === "'") { quote = c; buf += c; continue; }
-    if ((c === '|' && text[i + 1] === '|') || (c === '&' && text[i + 1] === '&')) { i++; flush(); continue; }
-    if (c === '|') { nextPiped = true; flush(); continue; }
-    if (c === ';' || c === '\n') { flush(); continue; }
-    buf += c;
-  }
-  flush();
-  return out;
-}
-
-function tokenize(seg) {
-  return [...String(seg).matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
-}
-
-function commandName(toks) {
-  let i = 0;
-  const wrappers = ['sudo', 'env', 'command', 'nohup', 'time', 'setsid', 'timeout', 'xargs'];
-  while (i < toks.length && (/^[A-Za-z_]\w*=/.test(toks[i]) || wrappers.includes(toks[i]) || /^\d+$/.test(toks[i]))) i++;
-  return path.basename(toks[i] || '');
 }
 
 // ---------------------------------------------------------------------------
@@ -238,8 +187,14 @@ function secretReason(file) {
   };
 }
 
+// Кандидаты в пути — куски строки между символами, которых в пути не бывает:
+// так путь находится и внутри кода (`readFileSync('.env')`), и после `if=`,
+// `HEAD:`, `$HOME`. Разрез, а не поиск regex-ом: поиск с жадным префиксом
+// квадратичен, и команда в 100 КБ разбиралась 12 секунд.
+const NOT_PATH_RE = /[^\w@.\-/\\~+]+/;
+
 function secretPathsIn(seg, toks) {
-  const found = new Set([...(String(seg).match(/[\w@.\-/\\]*\.\w+|[\w./-]*\.env[\w.]*/g) || []), ...toks]);
+  const found = new Set([...String(seg).split(NOT_PATH_RE), ...toks]);
   // `@файл` — синтаксис curl для «взять тело из файла», сама «собака» частью
   // пути не является и мешала бы сопоставлению имени.
   // `\.` — экранированная точка regex (`process\.env`, `import\.meta\.env`):
@@ -298,29 +253,43 @@ const CONTAINER_CMDS = new Set(['docker', 'docker-compose', 'podman', 'kubectl']
 // в историю, читается ими и без рабочей копии.
 const GIT_READ_SUBCMDS = new Set(['show', 'cat-file', 'diff', 'log', 'blame']);
 
-// Команды, спрятанные внутри аргументов: `-c "…"`, удалённая команда ssh,
-// тело `find -exec`, команда внутри контейнера.
+// Опции с аргументом до цели: без них `ssh -p 2222 vps cat .env` считал хостом
+// `2222`, а командой — `vps cat .env`.
+const SSH_ARG_OPTS = ['-b', '-B', '-c', '-D', '-E', '-e', '-F', '-I', '-i', '-J', '-L', '-l', '-m',
+  '-O', '-o', '-p', '-Q', '-R', '-S', '-W', '-w'];
+const EXEC_ARG_OPTS = ['-u', '--user', '-e', '--env', '--env-file', '-w', '--workdir',
+  '--detach-keys', '--index', '-n', '--namespace', '-c', '--container', '--context', '-f', '--filename'];
+const RUN_ARG_OPTS = [...EXEC_ARG_OPTS, '-v', '--volume', '-p', '--publish', '--name', '--network',
+  '--net', '--entrypoint', '-m', '--memory', '--cpus', '-l', '--label', '--mount', '--platform',
+  '--restart', '-h', '--hostname', '--add-host', '--device', '--cap-add', '--cap-drop', '--ulimit',
+  '--log-driver', '--log-opt', '--pull', '--tmpfs', '--expose', '--link', '--volumes-from', '--ipc',
+  '--pid', '--shm-size', '--stop-signal'];
+
+// Команды, спрятанные внутри аргументов: `-c "…"`, `eval`, удалённая команда
+// ssh, тело `find -exec`, команда внутри контейнера.
 function nestedCommands(toks, cmd) {
   const out = [];
+  const at = commandIndex(toks);
 
   if (SHELL_WRAPPERS.has(cmd)) {
-    for (let i = 1; i < toks.length; i++) {
+    for (let i = at + 1; i < toks.length; i++) {
       if (/^-[a-z]*c$/i.test(toks[i]) && toks[i + 1]) out.push(toks[i + 1]);
     }
   }
 
-  if (cmd === 'ssh') {
-    // ssh [опции] host команда… — первый свободный аргумент это хост.
-    const free = toks.slice(1).filter((t) => !t.startsWith('-'));
-    if (free.length > 1) out.push(free.slice(1).join(' '));
-  }
+  if (cmd === 'eval') out.push(toks.slice(at + 1).join(' '));
+
+  if (cmd === 'ssh') out.push(afterTarget(toks, at + 1, SSH_ARG_OPTS).join(' '));
 
   if (CONTAINER_CMDS.has(cmd)) {
-    const i = toks.indexOf('exec');
-    if (i !== -1) {
-      // …exec [опции] контейнер команда… — первый свободный после exec это цель.
-      const free = toks.slice(i + 1).filter((t) => !t.startsWith('-'));
-      if (free.length > 1) out.push(free.slice(1).join(' '));
+    const exec = toks.indexOf('exec');
+    const run = toks.indexOf('run');
+    if (exec !== -1 || run !== -1) {
+      const start = exec !== -1 ? exec : run;
+      let rest = afterTarget(toks, start + 1, exec !== -1 ? EXEC_ARG_OPTS : RUN_ARG_OPTS);
+      // kubectl exec pod -c ctr -- команда: опции бывают и после цели.
+      if (rest.includes('--')) rest = rest.slice(rest.indexOf('--') + 1);
+      out.push(rest.join(' '));
     }
   }
 
@@ -337,7 +306,21 @@ function nestedCommands(toks, cmd) {
 // Первое слово вложенной команды — чтобы понять, читает ли она файл, когда
 // путь остался снаружи (`find . -name .env -exec cat {} \;`).
 function nestedReadsFile(nested) {
-  return nested.some((c) => READS_FILE.has(path.basename(tokenize(c)[0] || '')));
+  return nested.some((c) => READS_FILE.has(commandName(tokenize(c))));
+}
+
+// Команда печатает окружение целиком: голый `env` (и за обёрткой — `sudo env`),
+// `printenv` без имени, `set`, `export -p`, `declare -x`. Имя команды или null.
+function printsEnv(toks) {
+  const at = commandIndex(toks);
+  const cmd = path.basename(toks[at] || '');
+  const rest = toks.slice(at + 1);
+  // `env` — обёртка: без команды после него он печатает окружение.
+  if (!cmd) return toks.some((t) => path.basename(t) === 'env') ? 'env' : null;
+  if (cmd === 'printenv' && rest.every((t) => t.startsWith('-'))) return cmd;
+  if (cmd === 'set' && rest.length === 0) return cmd;
+  if (['export', 'declare', 'typeset'].includes(cmd) && rest.every((t) => /^-[px]+$/.test(t))) return cmd;
+  return null;
 }
 
 export function guardBashSecurity(command, depth = 0) {
@@ -348,14 +331,12 @@ export function guardBashSecurity(command, depth = 0) {
     const toks = tokenize(seg);
     const cmd = commandName(toks);
 
-    // Имя берём сырое и до отсева пустого cmd: commandName пропускает `env`
-    // как обёртку, и голый `env` — тот самый случай, когда печатается всё
-    // окружение, — иначе выпал бы из проверки вместе с пустым именем.
-    const first = path.basename(toks[0] || '');
-    if (toks.length === 1 && (first === 'env' || first === 'printenv' || first === 'set')) {
+    // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
+    const envCmd = printsEnv(toks);
+    if (envCmd) {
       return {
         level: ASK,
-        reason: `\`${first}\` печатает всё окружение. Нужна одна переменная — назови её явно.`,
+        reason: `\`${envCmd}\` печатает всё окружение. Нужна одна переменная — назови её явно.`,
       };
     }
 

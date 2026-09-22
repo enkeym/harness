@@ -44,3 +44,8 @@ paths:
   (+ `SHARED_DIR`), `ai-hooks/bin/seed-impact-map.mjs:PATH_EXCLUDE`. Новый каталог
   в одном месте — init создаёт карту, которую links-context не подключает, или
   seed находит кандидатов в самой карте.
+- Разбор shell — `ai-hooks/shell-core.mjs:segments`/`commandIndex` (security-core)
+  ↔ свои копии в `ai-hooks/ask-core.mjs:segments`/`commandName` и
+  `ai-hooks/guard-core.mjs`. Форма команды, которую научили разбирать в одном
+  месте (`&`, `$(…)`, `sudo -u`), в остальных гардах проходит мимо, пока они
+  не переведены на shell-core.
