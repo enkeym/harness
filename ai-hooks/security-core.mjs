@@ -109,36 +109,64 @@ function hostsIn(seg, toks) {
 const PROTECTED_BRANCH_RE = /^(main|master|dev|develop|prod|production|release(\/.*)?)$/i;
 const PROD_TOKEN_RE = /(^|[^a-z])prod(uction)?([^a-z]|$)/i;
 
-function gitPushReason(toks, seg) {
+// Опции push с отдельным аргументом: без них `-o ci.skip origin` считал
+// remote-ом `ci.skip`, а `origin` — веткой.
+const PUSH_ARG_OPTS = ['-o', '--push-option', '--repo', '--receive-pack', '--exec'];
+
+// at — индекс подкоманды `push` в токенах.
+function gitPushReason(toks, at) {
+  const args = toks.slice(at + 1);
   // `-f` бывает и в склейке с другими короткими флагами: `-uf`.
-  if (toks.some((t) => /^(-[a-z]*f[a-z]*|--force|--force-with-lease.*)$/.test(t))) {
+  if (args.some((t) => /^(-[a-z]*f[a-z]*|--force|--force-with-lease.*)$/.test(t))) {
     return 'force push переписывает историю';
   }
-  // git push [remote] [refspec] — цель это последний свободный аргумент.
-  const free = toks.slice(toks.indexOf('push') + 1).filter((t) => !t.startsWith('-'));
-  // `+` перед refspec — тот же force push, только для одной ветки.
-  if (free.some((t) => t.startsWith('+'))) return 'force push (+refspec) переписывает историю';
-  const target = free[free.length - 1] || '';
-  const branch = (target.includes(':') ? target.split(':').pop() : target).replace(/^refs\/heads\//, '');
-  if (branch && PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
-  // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
-  if (free.length <= 1 && !/--dry-run/.test(seg)) return 'push в текущую ветку (refspec не указан)';
+  if (args.some((t) => ['--all', '--mirror', '--branches'].includes(t))) {
+    return 'push всех веток, включая защищённые';
+  }
+  if (args.some((t) => t === '-d' || t === '--delete')) return 'удаление ветки на remote';
+  // Цель вычисляется при запуске — `$(git branch --show-current)`, `$BRANCH`:
+  // в команде её имени нет, решает человек.
+  if (args.some((t) => /[$`]/.test(t))) return 'push: цель вычисляется при запуске, в команде её не видно';
+
+  const free = [];
+  for (let i = 0; i < args.length; i++) {
+    if (PUSH_ARG_OPTS.includes(args[i])) i++;
+    else if (!args[i].startsWith('-')) free.push(args[i]);
+  }
+  // git push [remote] [refspec…] — проверяется каждый refspec, не только последний.
+  const refspecs = free.slice(1);
+  if (refspecs.length === 0) {
+    // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
+    return args.some((t) => t === '--dry-run' || t === '-n') ? null : 'push в текущую ветку (refspec не указан)';
+  }
+  for (const spec of refspecs) {
+    // `+` перед refspec — тот же force push, только для одной ветки.
+    if (spec.startsWith('+')) return 'force push (+refspec) переписывает историю';
+    if (spec.startsWith(':')) return `удаление ветки «${spec.slice(1)}» на remote`;
+    const branch = spec.split(':').pop().replace(/^refs\/heads\//, '');
+    if (branch === 'HEAD' || branch === '@') return 'push в текущую ветку (HEAD)';
+    if (branch.includes('*')) return `push по шаблону «${spec}» задевает все ветки`;
+    if (PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
+  }
   return null;
 }
 
 // Подкоманда git: первый свободный токен после `git`, минуя глобальные опции
 // с аргументом (`git -C dir commit`, `git -c k=v push`). Без этого
-// `git log --grep commit` считался бы коммитом.
-function gitSubcommand(toks) {
+// `git log --grep commit` считался бы коммитом. Индекс в токенах или -1.
+function gitSubcommandAt(toks) {
   const i = toks.findIndex((t) => path.basename(t) === 'git');
-  if (i === -1) return null;
+  if (i === -1) return -1;
   for (let j = i + 1; j < toks.length; j++) {
     const t = toks[j];
-    if (['-C', '-c', '--git-dir', '--work-tree'].includes(t)) { j++; continue; }
+    if (['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix'].includes(t)) {
+      j++;
+      continue;
+    }
     if (t.startsWith('-')) continue;
-    return t;
+    return j;
   }
-  return null;
+  return -1;
 }
 
 // Коммит — точка, где человек проверяет, что именно уходит в историю.
@@ -402,13 +430,13 @@ export function guardBashSecurity(command, depth = 0) {
       return { level: ASK, reason: 'sqlite3 .dump выгружает базу целиком.' };
     }
 
-    if (cmd === 'git' && gitSubcommand(toks) === 'commit') {
-      return { level: ASK, reason: gitCommitReason(toks) };
-    }
-
-    if (cmd === 'git' && toks.includes('push')) {
-      const reason = gitPushReason(toks, seg);
-      if (reason) return { level: ASK, reason };
+    if (cmd === 'git') {
+      const at = gitSubcommandAt(toks);
+      if (toks[at] === 'commit') return { level: ASK, reason: gitCommitReason(toks) };
+      if (toks[at] === 'push') {
+        const reason = gitPushReason(toks, at);
+        if (reason) return { level: ASK, reason };
+      }
     }
 
     if (cmd === 'docker' || cmd === 'docker-compose') {

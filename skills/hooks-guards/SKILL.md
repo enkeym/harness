@@ -15,7 +15,8 @@ fired and what it wants instead.
   `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`. Take a
   variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
-  branches, force push (`-f`, `+refspec`), deploy, remote-host commands,
+  branches, force push (`-f`, `+refspec`), branch deletion, push to the
+  current branch (no refspec, `HEAD`, `@`, a `$…` name), deploy, remote-host commands,
   outbound data.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.

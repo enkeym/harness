@@ -397,8 +397,10 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 
 `ask` — там, где операция законная, но нужен человек: `pg_dump` и другие
 выгрузки, клиент БД на неместном хосте, `git push` в main/dev/prod (в том
-числе `HEAD:refs/heads/main`), force push (`-f`, `-uf`, `+refspec`) и push без
-явной ветки, `docker compose` с прод-конфигом, `kubectl apply`, команды через
+числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
+`-uf`, `+refspec`), удаление ветки (`--delete`, `:ветка`), `--all`/`--mirror`,
+шаблон `*`, push без явной ветки, в `HEAD`/`@` или в ветку из `$…`/`` `…` ``,
+`docker compose` с прод-конфигом, `kubectl apply`, команды через
 `ssh`, `curl`/`wget` с телом запроса на внешний хост.
 В `permissionDecision` это отдельное значение, и оно возвращает подтверждение
 даже в auto mode — в этом вся ценность: там всё остальное проходит само.
