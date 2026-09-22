@@ -137,8 +137,10 @@ node ai-hooks/test/test-security.mjs
 node ai-hooks/test/test-opencode-plugin.mjs
 node ai-hooks/test/test-skills.mjs
 node ai-hooks/test/test-mcp-sync.mjs
+node ai-hooks/test/test-install-check.mjs
 ```
 
 Прогонять после любой правки в `ai-hooks/`; `test-skills.mjs` — после любой
 правки в `skills/`, `rules/core.md`, `CLAUDE.md`, `AGENTS.md` или
-`opencode.json`; `test-mcp-sync.mjs` — после правки `bin/mcp-sync.mjs`. Красный тест — откат, а не дальнейшая правка.
+`opencode.json`; `test-mcp-sync.mjs` — после правки `bin/mcp-sync.mjs`;
+`test-install-check.mjs` — после правки `install.sh`. Красный тест — откат, а не дальнейшая правка.
