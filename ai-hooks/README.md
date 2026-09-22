@@ -774,3 +774,11 @@ OpenCode) — вердикты должны совпадать.
 берёт из той же БД, по которой судит гард (`isIndexed`, `indexedExtensions`),
 а не зашивает константой. Тест ask mode пишет состояние во временный каталог и
 глобальное умолчание не меняет.
+
+Внешние бинари тесты подменяют переменными: `AI_HOOKS_TOKENSAVE_CMD` —
+`bin/seed-impact-map.mjs`, `bin/tokensave-sync.sh`, `bin/tokensave-branch.sh`,
+`bin/tokensave-branch-prune.sh` (по умолчанию `tokensave` из PATH у
+seed-impact-map и `/usr/local/bin/tokensave` у shell-скриптов);
+`AI_HOOKS_RAGSAVE_CMD` — `bin/seed-impact-map.mjs`, `bin/ragsave-sync.sh`
+(по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
+`test/fixtures/`.

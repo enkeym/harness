@@ -16,7 +16,7 @@ project_dir="${1:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -z "$repo_root" ] || [ "$repo_root" = "$HOME" ] && exit 0
 
-rag_bin="$HOME/.local/bin/ragsave"
+rag_bin="${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}"  # переменная — подмена в тестах
 [ -x "$rag_bin" ] || exit 0
 
 # Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория.

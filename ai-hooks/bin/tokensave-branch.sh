@@ -12,7 +12,7 @@ project_dir="${1:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -z "$repo_root" ] || [ "$repo_root" = "$HOME" ] && exit 0
 
-ts_bin="/usr/local/bin/tokensave"
+ts_bin="${AI_HOOKS_TOKENSAVE_CMD:-/usr/local/bin/tokensave}"  # переменная — подмена в тестах
 [ -x "$ts_bin" ] || exit 0
 
 # Явный отказ от индексации проекта: touch .tokensave-disable в корне репозитория.

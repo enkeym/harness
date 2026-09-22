@@ -13,7 +13,7 @@
 set -u
 
 repo_root="${1:?usage: tokensave-branch-prune.sh <repo_root>}"
-ts_bin="/usr/local/bin/tokensave"
+ts_bin="${AI_HOOKS_TOKENSAVE_CMD:-/usr/local/bin/tokensave}"  # переменная — подмена в тестах
 meta="$repo_root/.tokensave/branch-meta.json"
 stamp="$repo_root/.tokensave/.branch-prune-stamp"
 ttl_days="${TOKENSAVE_BRANCH_TTL_DAYS:-21}"
