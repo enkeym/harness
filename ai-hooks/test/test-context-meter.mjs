@@ -245,7 +245,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const n = contextNotice(input, { phase: 'step' });
   check('160k посреди хода: hand', n.stage, 'hand');
   check('160k посреди хода: ответ не обрывать', /не обрывай/.test(n.text), true);
-  check('160k посреди хода: коммит и пуш', /коммитом и пушем/.test(n.text), true);
+  check('160k посреди хода: коммит сам не навязывает', /коммитом и пушем/.test(n.text), false);
+  check('160k посреди хода: коммит — вопрос пользователю',
+    /AskUserQuestion[^.]*закоммитить и запушить шаг или передать/.test(n.text), true);
   check('160k посреди хода: назван скилл handoff', /handoff/.test(n.text), true);
   check('160k посреди хода: следующий шаг — новой сессии',
     /Следующий шаг здесь не начинай/.test(n.text), true);

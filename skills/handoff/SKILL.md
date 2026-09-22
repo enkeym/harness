@@ -24,11 +24,14 @@ next step needs. The hook says which case it is; follow its wording.
 
 ## Steps
 
-1. Finish the unit of work: commit, tests green. If finishing costs another
-   ~30k tokens, hand off now with the unfinished state stated honestly.
-2. Questions still waiting for the user → one question tool call
-   (`AskUserQuestion` / `question`) before the snapshot; answers go under
-   `Решения`. A question left only in the snapshot hangs unanswered.
+1. Finish the unit of work, tests green. If finishing costs another ~30k
+   tokens, hand off now with the unfinished state stated honestly.
+2. One question tool call (`AskUserQuestion` / `question`) before the
+   snapshot: the questions still waiting for the user, and, with uncommitted
+   changes, whether to commit and push the step or hand them off as they are
+   — the user often runs `/handoff` mid-work they mean to finish themselves.
+   Answers go under `Решения`, the tree state under `Состояние`. A question
+   left only in the snapshot hangs unanswered.
 3. Pick the form: Claude Code → **plan form**, with or without a `task-brief`
    plan; OpenCode → **chat form**.
 4. Plan form, in this order — plan mode allows one write, the new file it
