@@ -98,6 +98,7 @@ test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи,
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-tokensave-sync.mjs    # tokensave-sync/branch/branch-prune: вызовы бинаря, отказы, лок, TTL и дроссель чистки
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, выбор каталога и бинаря, тихие выходы
+test/test-mcp-serve.mjs         # mcp-serve: выбор корня по индексу, отказ без индекса и в $HOME, argv и cwd сервера
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -758,6 +759,7 @@ node ~/.ai-hooks/test/test-mcp-sync.mjs
 node ~/.ai-hooks/test/test-log-error.mjs
 node ~/.ai-hooks/test/test-tokensave-sync.mjs
 node ~/.ai-hooks/test/test-ragsave-sync.mjs
+node ~/.ai-hooks/test/test-mcp-serve.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
