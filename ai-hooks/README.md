@@ -781,9 +781,9 @@ OpenCode) — вердикты должны совпадать.
 
 Внешние бинари тесты подменяют переменными: `AI_HOOKS_TOKENSAVE_CMD` —
 `bin/seed-impact-map.mjs`, `bin/tokensave-sync.sh`, `bin/tokensave-branch.sh`,
-`bin/tokensave-branch-prune.sh` (по умолчанию `tokensave` из PATH у
-seed-impact-map и `/usr/local/bin/tokensave` у shell-скриптов);
-`AI_HOOKS_RAGSAVE_CMD` — `bin/seed-impact-map.mjs`, `bin/ragsave-sync.sh`
-(по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
+`bin/tokensave-branch-prune.sh`, `bin/mcp-serve.sh` (по умолчанию `tokensave`
+из PATH у seed-impact-map и `/usr/local/bin/tokensave` у shell-скриптов);
+`AI_HOOKS_RAGSAVE_CMD` — `bin/seed-impact-map.mjs`, `bin/ragsave-sync.sh`,
+`bin/mcp-serve.sh` (по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
 `test/fixtures/`: `fake-tokensave.mjs` и `fake-ragsave.mjs` отвечают на поиск
 seed-impact-map, `fake-indexer.mjs` записывает вызовы фоновых синков.

@@ -38,7 +38,7 @@ case "$kind" in
       exit 1
     }
     cd "$root" || exit 1
-    exec /usr/local/bin/tokensave serve -p "$root"
+    exec "${AI_HOOKS_TOKENSAVE_CMD:-/usr/local/bin/tokensave}" serve -p "$root"  # переменная — подмена в тестах
     ;;
   ragsave)
     root="$(find_root .ragsave/rag.db)" || {
@@ -47,7 +47,7 @@ case "$kind" in
       exit 1
     }
     cd "$root" || exit 1
-    exec "$HOME/.local/bin/ragsave" serve
+    exec "${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}" serve
     ;;
   *)
     echo "неизвестный сервер: $kind (ожидалось tokensave или ragsave)" >&2
