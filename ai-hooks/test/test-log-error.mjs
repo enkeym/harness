@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тесты bin/log-error.sh — общей записи отказов фоновых задач в errors.log:
 // формат записи, чистка хвоста лога от ANSI и спиннера, предел строк и длины,
-// пропуск конкурентного sync, ротация по размеру, код 0 при любом исходе.
+// пропуск конкурентного sync (строка tokensave, код 3 ragsave), ротация по
+// размеру, код 0 при любом исходе.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -87,6 +88,20 @@ function sandbox() {
   const sb = sandbox();
   const res = sb.run('tokensave sync', '/work/p', sb.detail('error: another sync is already in progress\n'), '1');
   check('конкурентный sync — код 0 и без записи', [res.status, sb.read()], [0, '']);
+}
+
+// --- ragsave: занятый замок по коду 3, строка в логе не нужна ---
+{
+  const sb = sandbox();
+  const res = sb.run('ragsave sync', '/work/p', sb.detail('чужой вывод следующего прохода\n'), '3');
+  check('ragsave код 3 без строки — код 0 и без записи', [res.status, sb.read()], [0, '']);
+
+  sb.run('ragsave sync', '/work/p', sb.detail('Traceback\n'), '1');
+  check('ragsave код 1 — запись есть', /ragsave sync \| \/work\/p \| exit=1\n/.test(sb.read()), true);
+
+  const other = sandbox();
+  other.run('tokensave sync', '/work/p', '', '3');
+  check('tokensave код 3 без строки — запись есть', /tokensave sync \| \/work\/p \| exit=3\n/.test(other.read()), true);
 }
 
 // --- лог подробностей указан, но его нет ---

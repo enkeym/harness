@@ -45,7 +45,8 @@ from .store import FileRecord, Store
 # держал бы содержимое всего проекта в памяти дважды.
 SCAN_QUEUE = 64
 
-# Сообщение ищет log-error.sh: конкурентный запуск — штатный пропуск, а не отказ.
+# Конкурентный запуск — штатный пропуск, а не отказ: cli выходит с EXIT_BUSY,
+# по этому коду log-error.sh и не пишет запись.
 LOCK_HELD_MESSAGE = "another sync is already in progress"
 
 

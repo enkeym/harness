@@ -30,6 +30,12 @@ if [ -n "$detail_log" ] && [ -f "$detail_log" ] &&
   grep -q 'another sync is already in progress' "$detail_log" 2>/dev/null; then
   exit 0
 fi
+# У ragsave код 3 означает только занятый замок (EXIT_BUSY в cli.py). Строку
+# в логе ждать нельзя: sync.log общий, следующий проход хука открывает его
+# через `>` и может затереть строку раньше, чем её прочтут здесь.
+case "$source_name" in
+ragsave*) [ "$exit_code" = 3 ] && exit 0 ;;
+esac
 
 # Ротация: один прошлый файл сохраняем, дальше не копим.
 if [ -f "$LOG_FILE" ]; then

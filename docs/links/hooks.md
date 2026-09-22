@@ -29,6 +29,9 @@ paths:
   `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
   такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
   `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
+- Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) ↔ проверка
+  `exit_code = 3` для источника `ragsave*` в `ai-hooks/bin/log-error.sh`. Сменил код
+  или дал его другому отказу — журнал снова полон пропусков или молчит о сбое.
 - `AI_HOOKS_DOCTOR_OFF` — `ai-hooks/doctor-core.mjs:doctorEnabled` ↔ выключатель в
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔

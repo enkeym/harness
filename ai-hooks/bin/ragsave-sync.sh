@@ -4,7 +4,7 @@
 # Замок на проект (.ragsave/.sync.lock) берёт сам ragsave — один и тот же для
 # хука, ручного запуска из терминала и rag_index из MCP, поэтому пересечься
 # они не могут: второй пришедший выходит с кодом 3 и строкой
-# «another sync is already in progress», которую log-error.sh не считает отказом.
+# «another sync is already in progress»; по коду 3 log-error.sh отказа не пишет.
 # Нет БД -> init с прогрессом в лог (долго, минуты); есть -> sync --quiet
 # (доли секунды, модель не грузится, если ни один файл не изменился).
 # Каталог проекта: $1 (OpenCode) → CLAUDE_PROJECT_DIR (Claude) → PWD.
