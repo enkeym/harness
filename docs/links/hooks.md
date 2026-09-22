@@ -40,6 +40,13 @@ paths:
   `opencode/plugin/tokensave-guard.js` импортирует абсолютным путём
   `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
+- Заглушка `tokensave_read` (`unchanged: true`, поля `file`/`mode`/`mtime_ns`, блоки
+  `[{type:'text'}]`) — `ai-hooks/read-core.mjs:parseStub`/`refillResponse` ↔ формат
+  ответа tokensave, тест `ai-hooks/test/test-read-refill.mjs:stub`. Сменился формат
+  при обновлении tokensave — хук молча перестаёт подменять, агент снова видит пустые
+  чтения. Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
+  `ai-hooks/read-core.mjs:indexRoot`: поменял правило в одном — хук читает файл не из
+  того проекта.
 - Каталоги карты `docs/links` / `.claude/links` — три копии списка:
   `ai-hooks/links-core.mjs:MAP_DIRS`, `ai-hooks/bin/init-impact-map.mjs:OWN_DIR`
   (+ `SHARED_DIR`), `ai-hooks/bin/seed-impact-map.mjs:PATH_EXCLUDE`. Новый каталог

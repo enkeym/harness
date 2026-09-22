@@ -82,6 +82,10 @@ fired and what it wants instead.
   map's lines for this change: check them, add the missing link to that
   file. Silent ≠ no links: a domain without `paths:` is reached only through
   `INDEX.md`, so the impact pass still reads the index.
+- `read-refill` (PostToolUse on `tokensave_read`) swaps the cross-session
+  cache stub `unchanged: true` for the file text from disk, modes `full` and
+  `lines`. A stub that still arrives (`map`, `signatures`, `graph_branch`) is
+  an empty answer: read that file with `Read`.
 - `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI,
   dependabot, `.env.example`, or an impact map in an indexed project: offer
   in one line in the first reply (`/impact-map` for the map). Silent hook =

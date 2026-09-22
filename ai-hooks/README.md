@@ -73,6 +73,8 @@ bin/ragsave-sync.sh             # смысловой (RAG) индекс: sync с
 claude/ragsave-reminder.mjs     # подсказка про rag_search на смысловых промптах (не гард)
 claude/links-context.mjs        # файл домена карты связей в контекст, когда правка попала в его paths: (не гард)
 links-core.mjs                  # карта связей на диске: каталог, файлы доменов, paths: — общее хука и чекера
+claude/read-refill.mjs          # заглушка `unchanged: true` у tokensave_read → текст файла с диска (PostToolUse, не гард)
+read-core.mjs                   # разбор заглушки, корень индекса, full/lines с диска, подмена блока ответа
 bin/init-impact-map.mjs         # первая карта: где лежит по авторству репозитория, скелет INDEX.md
 bin/seed-impact-map.mjs         # кандидаты в карту: стороны по литералу (события, ключи, флаги), cron, миграции, упоминания вне кода (tokensave + ragsave; без графа — git grep)
 bin/check-impact-map.mjs        # карта против дерева: ссылки путь:символ, глобы paths:, индекс, размеры
@@ -88,6 +90,7 @@ test/test-doctor.mjs            # фоновый доктор: выключат�
 test/env-isolate.mjs            # первым импортом в тестах хуков: журнал в temp, доктор выключен
 test/test-ragsave-reminder.mjs  # когда напоминание про rag_search молчит, когда говорит
 test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любым инструментом
+test/test-read-refill.mjs       # заглушка tokensave_read: full/lines с диска, mtime_ns цел, когда молчит
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-security.mjs          # что deny, что ask, что проходит молча
@@ -158,6 +161,22 @@ camelCase или бэктиков. Молчит: если нет `.ragsave/rag.d
 тот же текст в контексте дважды. `INDEX.md` хук не подключает — его читает impact-проход
 и OpenCode, у которого такого хука нет. Глоб без файлов (переехавший каталог) ловит
 `bin/check-impact-map.mjs`, иначе домен молча перестал бы подключаться.
+
+`claude/read-refill.mjs` чинит чужой кэш. tokensave 7.12 хранит прочитанное в
+`read_cache` БД проекта с `session_id = 'global'`, и повторный `tokensave_read`
+неизменённого файла отдаёт заглушку `{"unchanged": true, file, mode, mtime_ns,
+digest, token_count}` без `body` — в том числе новой сессии, после `/clear` и
+сжатия, где текста в контексте нет. Выключить кэш нечем (ни env, ни конфига).
+Хук на `PostToolUse` (matcher `mcp__tokensave__tokensave_read`) находит заглушку
+среди блоков ответа, читает файл с диска — целиком для `full`, диапазон `lines`
+для `lines` — и отдаёт тот же блок без `unchanged` и с `body` через
+`updatedToolOutput`. Путь считается от `graph_root` или от корня индекса, найденного
+как в `bin/mcp-serve.sh` (вверх от каталога сессии до `.tokensave/tokensave.db`).
+Текст заглушки правится строкой, а не пересобирается: `mtime_ns` больше 2^53.
+Молчит на `map` и `signatures` (строятся из графа), на `graph_branch` (файлов
+другой ветки на диске нет) и при любой ошибке — тогда агент видит заглушку, как
+без хука. Формат ответа `tokensave_read` — контракт хука: при обновлении
+tokensave сверить живую заглушку с `stub()` в `test/test-read-refill.mjs`.
 
 Адаптеры не содержат логики — только перевод формата конкретного агента в вызов
 `guard-core`. Меняешь правило — меняешь `guard-core.mjs`, оба агента получают его сразу.
@@ -565,6 +584,8 @@ Ragsave: `bin/ragsave-sync.sh` на `UserPromptSubmit` и `Stop`,
 `node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
 (matcher `Read|Edit|Write|mcp__tokensave__tokensave_read|…_body|…_str_replace|…_multi_str_replace`).
+Заглушка кэша: `node ~/.ai-hooks/claude/read-refill.mjs` на `PostToolUse`
+(matcher `mcp__tokensave__tokensave_read`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,

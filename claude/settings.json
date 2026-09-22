@@ -126,6 +126,15 @@
             "command": "node /home/enkeym/.ai-hooks/claude/links-context.mjs"
           }
         ]
+      },
+      {
+        "matcher": "mcp__tokensave__tokensave_read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/read-refill.mjs"
+          }
+        ]
       }
     ],
     "Stop": [
