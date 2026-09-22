@@ -384,8 +384,9 @@ checkout»: индексы `.tokensave/` и `.ragsave/` лежат в катал
 и предохранителя нет: «со второй попытки можно» отменяло бы сам запрет.
 
 Два уровня ответа. `deny` — там, где законной причины нет, а безопасная
-альтернатива есть: чтение `.env` и производных, `.envrc`, ключей,
-сертификатов, `auth.json`, `.git-credentials`, `.pgpass`, учётных данных CLI
+альтернатива есть: чтение `.env` и производных (`.env.local`, `.env-prod`),
+`.envrc`, ключей (`id_ed25519_github`, `master.key`), сертификатов,
+`secrets.yaml`, Terraform state и `*.tfvars`, `/proc/*/environ`, `auth.json`, `.git-credentials`, `.pgpass`, учётных данных CLI
 (`~/.claude/.credentials.json`, `~/.aws/credentials`, `~/.docker/config.json`,
 `~/.kube/config`, `gh/hosts.yml`, `glab-cli/config.yml`), в том числе через
 shell (`cat`, `dd if=`, `perl`, `hexdump`, `iconv` …), `scp`, перенаправление

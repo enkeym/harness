@@ -28,17 +28,25 @@ export const ASK = 'ask';
 
 // Список продублирован в ragsave/config.py:SECRET_NAME_RE — правятся вместе.
 const SECRET_FILE_RE = [
-  /(^|[\\/])\.env(\.[\w-]+)*$/i,
+  // `.env-prod` тоже: разделитель бывает и дефисом.
+  /(^|[\\/])\.env([.-][\w-]+)*$/i,
   /(^|[\\/])\.envrc$/i,
   /(^|[\\/])\.?(npmrc|pypirc|netrc|pgpass)$/i,
-  /(^|[\\/])id_(rsa|dsa|ecdsa|ed25519)$/,
+  // `id_ed25519_github`, `id_rsa-work`; `.pub` сюда не попадает — точка в суффиксе не допустима.
+  /(^|[\\/])id_(rsa|dsa|ecdsa|ed25519)([_-][\w-]+)?$/,
   // С точкой — `~/.claude/.credentials.json`, OAuth-токен самого Claude Code.
   /(^|[\\/])\.?(credentials|auth|secrets?|service-account[\w-]*)\.json$/i,
+  /(^|[\\/])\.?(credentials|secrets?)\.ya?ml$/i,
   /(^|[\\/])\.git-credentials$/,
+  // Terraform: state хранит выходные значения и пароли ресурсов открытым текстом.
+  /\.(tfstate(\.backup)?|tfvars(\.json)?)$/i,
   /\.(pem|p12|pfx|keystore|jks)$/i,
   // `.key` без приставки не берём: `obj.key` в коде и `jq .data.key` — не файлы.
   /(^|[\\/])[\w.-]*(private|secret)[\w.-]*\.key$/i,
-  /(^|[\\/])(server|tls|ssl|client)\.key$/i,
+  // `master.key` — ключ к Rails credentials.yml.enc.
+  /(^|[\\/])(server|tls|ssl|client|master)\.key$/i,
+  // Окружение процесса целиком. В config.py нет: в проекте его не бывает.
+  /(^|[\\/])proc[\\/](self|\d+)[\\/]environ$/,
   // Учётные данные CLI: имена файлов общие (`config`, `config.json`), секретом
   // их делает каталог.
   /(^|[\\/])\.aws[\\/]credentials$/,
@@ -49,7 +57,7 @@ const SECRET_FILE_RE = [
 ];
 
 // Примеры и шаблоны — не секреты, в них имена переменных без значений.
-const SECRET_EXEMPT_RE = /\.(example|sample|template|dist|tpl)$|(^|[\\/])\.env\.example$/i;
+const SECRET_EXEMPT_RE = /[.-](example|sample|template|dist|tpl)$|(^|[\\/])\.env\.example$/i;
 
 export function isSecretPath(p) {
   const s = String(p || '');

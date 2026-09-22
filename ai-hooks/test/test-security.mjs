@@ -57,6 +57,17 @@ const toolSecrets = [
 ];
 for (const file of toolSecrets) check(`Read ${file}`, read(file), 'deny');
 check('cat токена Claude', bash('cat ~/.claude/.credentials.json'), 'deny');
+for (const file of ['/home/enkeym/.ssh/id_ed25519_github', '/home/enkeym/.ssh/id_rsa-work',
+  'config/master.key', 'infra/terraform.tfstate', 'infra/terraform.tfstate.backup',
+  'infra/prod.tfvars', 'infra/prod.auto.tfvars.json', '.env-prod', 'k8s/secrets.yaml',
+  'deploy/secret.yml', '/proc/self/environ', '/proc/1234/environ']) {
+  check(`Read ${file}`, read(file), 'deny');
+}
+check('cat /proc/self/environ', bash('cat /proc/self/environ'), 'deny');
+check('Read публичного ключа', read('/home/enkeym/.ssh/id_ed25519_github.pub'), 'allow');
+check('Read примера tfvars', read('infra/prod.tfvars.example'), 'allow');
+check('Read k8s-манифеста', read('k8s/deployment.yaml'), 'allow');
+check('Read .environment.ts', read('src/.environment.ts'), 'allow');
 check('Read обычного config.json', read('src/config.json'), 'allow');
 check('Read обычного config', read('deploy/config'), 'allow');
 check('jq по полю .key', bash("jq '.data.key' package.json"), 'allow');

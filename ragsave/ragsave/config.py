@@ -111,14 +111,16 @@ SKIP_NAMES = {
 SECRET_NAME_RE = re.compile(
     r"""(?xi)
     ^(
-        \.env(\.(?!example$|sample$|template$|dist$|tpl$)[\w-]+)*   # .env, .env.local
+        \.env([.-](?!example$|sample$|template$|dist$|tpl$)[\w-]+)*   # .env, .env.local, .env-prod
       | \.envrc
       | \.?(npmrc|pypirc|netrc|pgpass)
-      | id_(rsa|dsa|ecdsa|ed25519)
+      | id_(rsa|dsa|ecdsa|ed25519)([_-][\w-]+)?                  # и id_ed25519_github, без .pub
       | \.?(credentials|auth|secrets?|service-account[\w-]*)\.json  # и .credentials.json Claude
+      | \.?(credentials|secrets?)\.ya?ml
       | \.git-credentials
+      | [\w.-]*\.(tfstate(\.backup)?|tfvars(\.json)?)             # Terraform state и переменные
       | [\w.-]*(private|secret)[\w.-]*\.key
-      | (server|tls|ssl|client)\.key
+      | (server|tls|ssl|client|master)\.key                      # master.key — Rails
     )$
     """
 )

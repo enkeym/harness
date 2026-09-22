@@ -11,6 +11,7 @@ fired and what it wants instead.
 ## security-guard
 
 - Hard-blocks reading secret stores: `.env*`, `.envrc`, keys, certificates,
+  `secrets.yaml`, Terraform state and `*.tfvars`, `/proc/*/environ`,
   `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
   `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file` and a `Grep` glob (`.env*`). Take a
   variable's shape from `.env.example`, its value from the user.

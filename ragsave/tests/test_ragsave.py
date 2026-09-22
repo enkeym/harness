@@ -131,7 +131,11 @@ def test_file_filters() -> None:
                      ".git-credentials", "private.key", ".npmrc",
                      ".credentials.json", ".envrc", ".pgpass", "tls.key",
                      ".aws/credentials", ".docker/config.json", ".kube/config",
-                     "gh/hosts.yml", "glab-cli/config.yml"):
+                     "gh/hosts.yml", "glab-cli/config.yml",
+                     "id_ed25519_github", "id_rsa-work", "master.key",
+                     "terraform.tfstate", "terraform.tfstate.backup",
+                     "prod.tfvars", "prod.auto.tfvars.json", ".env-prod",
+                     "secrets.yaml", "secret.yml"):
             secret = root / name
             secret.parent.mkdir(parents=True, exist_ok=True)
             secret.write_text("TOKEN=value", encoding="utf-8")
@@ -140,7 +144,8 @@ def test_file_filters() -> None:
         # Примеры и шаблоны секретами не являются: там имена без значений.
         # Общие имена конфигов — тоже, пока каталог не делает их секретом.
         for name in (".env.example", ".env.template", "config.json",
-                     "deploy/config", "app/hosts.yml"):
+                     "deploy/config", "app/hosts.yml", "id_ed25519_github.pub",
+                     "prod.tfvars.example", "deployment.yaml", ".environment.ts"):
             sample = root / name
             sample.parent.mkdir(parents=True, exist_ok=True)
             sample.write_text("TOKEN=", encoding="utf-8")
