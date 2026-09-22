@@ -65,6 +65,9 @@ fired and what it wants instead.
 - `node <file>` (`python`, `bun`, `deno` alike) with no `-e`/`-p`/`-c` and no
   heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` and the
   README's commands pass; the inline-code forms stay blocked.
+- The bash router splits commands like the security guard: `&`, `$(…)`,
+  backticks, `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat` of an
+  indexed file, and a heredoc body stays with its `node`/`python`.
 
 ## Background hooks
 

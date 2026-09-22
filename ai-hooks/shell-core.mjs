@@ -10,10 +10,18 @@ import path from 'node:path';
 // у неё может лежать в соседнем сегменте (`echo .env | xargs cat`).
 // Команды из подстановок `$(…)`, `` `…` ``, `<(…)` идут отдельными сегментами:
 // в `echo $(cat .env)` читает не echo, а cat.
-export function segments(command) {
+//
+// keepHeredoc: тело heredoc дописывается в текст сегмента с `<<`, а не
+// разбирается построчно. Нужно гарду интерпретаторов: в `node <<EOF … EOF`
+// тело — код node, и путь внутри него принадлежит сегменту node. Остальным
+// гардам нужен построчный разбор: тело `bash <<EOF` — команды, а тело
+// `cat > README.md <<EOF` — не аргументы cat.
+export function segments(command, { keepHeredoc = false } = {}) {
   const text = String(command || '');
   const out = [];
   const subs = [];
+  // Heredoc текущей строки: терминатор и сегмент, которому достанется тело.
+  let heredocs = [];
   let buf = '';
   let quote = null;
   let piped = false;
@@ -22,7 +30,9 @@ export function segments(command) {
     const t = buf.trim();
     buf = '';
     if (t) {
-      out.push({ text: t, piped });
+      const seg = { text: t, piped };
+      out.push(seg);
+      for (const h of heredocs) h.owner ??= seg;
       piped = nextPiped;
     } else {
       // Пустой сегмент (`a | (b)`, `; ;`) не сбрасывает признак пайпа.
@@ -94,6 +104,29 @@ export function segments(command) {
     // Одиночный `&` — фоновый запуск, то есть разделитель. Кроме перенаправлений:
     // `2>&1`, `>&2`, `&>file`.
     if (c === '&' && text[i - 1] !== '>' && text[i - 1] !== '<' && next !== '>') { cut(false); continue; }
+    // `<<EOF`, `<<-'EOF'`, `<<\EOF`; `<<<` — here-string, тела у него нет.
+    if (keepHeredoc && c === '<' && next === '<' && text[i - 1] !== '<' && text[i + 2] !== '<') {
+      const m = text.slice(i).match(/^<<-?\s*(?:'(\w+)'|"(\w+)"|\\?(\w+))/);
+      if (m) {
+        heredocs.push({ term: m[1] ?? m[2] ?? m[3], owner: null });
+        buf += m[0];
+        i += m[0].length - 1;
+        continue;
+      }
+    }
+    if (c === '\n' && heredocs.length) {
+      cut(false);
+      // Тела идут подряд в порядке `<<` на строке, каждое до своего терминатора.
+      for (const h of heredocs) {
+        const rest = text.slice(i + 1);
+        const end = rest.match(new RegExp(`(^|\\n)\\t*${h.term}(?=\\n|$)`));
+        const taken = end ? end.index + end[0].length : rest.length;
+        if (h.owner) h.owner.text += '\n' + rest.slice(0, taken);
+        i += taken;
+      }
+      heredocs = [];
+      continue;
+    }
     if (c === ';' || c === '\n') { cut(false); continue; }
     // Группа `( … )` и тело функции `f() { … }`. Скобка после `=` — массив
     // (`a=(1 2)`), она часть присваивания.
@@ -102,7 +135,7 @@ export function segments(command) {
   }
   cut(false);
 
-  for (const sub of subs) out.push(...segments(sub));
+  for (const sub of subs) out.push(...segments(sub, { keepHeredoc }));
   return out;
 }
 

@@ -229,6 +229,25 @@ bash('node <скрипт из индекса> → allow (запуск)', 'allow'
 bash('python3 <скрипт из индекса> → allow (запуск)', 'allow', 'python3 client/src/App.tsx --flag');
 bash('node с heredoc и путём из индекса → deny', 'deny',
   `node <<'EOF'\nconsole.log(require('fs').readFileSync('client/src/App.tsx','utf8'))\nEOF`);
+// Тело heredoc — код интерпретатора, а не команды shell: `&`, `(`, `;` в нём
+// не режут сегмент, и путь остаётся рядом с `node`.
+bash('node с heredoc, в теле скобки и & → deny', 'deny',
+  `node <<'EOF'\nif (1) require('fs').writeFileSync('client/src/App.tsx', 'x') & 0\nEOF`);
+bash('node <<\\EOF с путём из индекса → deny', 'deny',
+  `node <<\\EOF\nrequire('fs').readFileSync('client/src/App.tsx')\nEOF`);
+bash('heredoc, за которым `;` на той же строке → тело у node → deny', 'deny',
+  `node <<'EOF'; true\nrequire('fs').readFileSync('client/src/App.tsx')\nEOF`);
+bash('<< в кавычках — не heredoc, следующая строка — команда → deny', 'deny',
+  `echo "a<<X"\ncat client/src/App.tsx`);
+// Формы команды, которые разбирает shell-core: за ними та же команда чтения.
+bash('фоновый & перед cat → deny', 'deny', 'echo ok & cat client/src/App.tsx');
+bash('cat в подстановке $(…) → deny', 'deny', 'echo $(cat client/src/App.tsx)');
+bash('cat в обратных кавычках → deny', 'deny', 'echo `cat client/src/App.tsx`');
+bash('sudo -u root cat → deny', 'deny', 'sudo -u root cat client/src/App.tsx');
+bash('cat в группе ( … ) → deny', 'deny', '(cat client/src/App.tsx)');
+bash('then cat → deny', 'deny', 'if true; then cat client/src/App.tsx; fi');
+bash('xargs cat → deny', 'deny', 'echo x | xargs cat client/src/App.tsx');
+bash('2>&1 и фоновый git по исходнику → allow', 'allow', 'git log client/src/App.tsx 2>&1 & wait');
 bash('node -p с путём из индекса → deny', 'deny',
   `node -p "require('fs').readFileSync('client/src/App.tsx','utf8')"`);
 bash('jq по package.json → по индексу активной ветки', JSON_VERDICT, 'jq .name package.json');

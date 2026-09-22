@@ -45,9 +45,9 @@ paths:
   (+ `SHARED_DIR`), `ai-hooks/bin/seed-impact-map.mjs:PATH_EXCLUDE`. Новый каталог
   в одном месте — init создаёт карту, которую links-context не подключает, или
   seed находит кандидатов в самой карте.
-- Разбор shell — `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
-  (security-core, ask-core, skill-core) ↔ своя копия в `ai-hooks/guard-core.mjs`
-  (`segments` держит тело heredoc внутри сегмента, shell-core — нет). Форма
-  команды, которую научили разбирать в одном месте (`&`, `$(…)`, `sudo -u`,
-  `git --namespace x`), в bash-гарде проходит мимо, пока он не переведён на
-  shell-core.
+- Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
+  на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`
+  включена только в `ai-hooks/guard-core.mjs:guardBash`: сняли — `node <<EOF`
+  с путём в теле проходит мимо; включили в security-core — тело
+  `cat > README.md <<EOF` читается как аргументы cat и даёт ложный запрет, а
+  команды в теле `bash <<EOF` пропадают.

@@ -15,6 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { currentBranch, statePath, readJSON, writeJSON } from './state-core.mjs';
 import { logDecision, hookContext } from './hooklog-core.mjs';
 import { maybeSpawnDoctor } from './doctor-core.mjs';
+import { segments, tokenize, commandName } from './shell-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const TS_DIR = '.tokensave';
@@ -537,88 +538,15 @@ const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', '
 const INLINE_CODE_RE = /^(-e|--eval|-p|--print|-c|-E|-r|eval)$|^--(eval|print)=/;
 function runsInlineCode(cmd, toks, seg) {
   if (cmd === 'jq') return true;
-  return toks.slice(1).some((t) => INLINE_CODE_RE.test(t)) || /<<-?\s*['"]?\w+/.test(seg);
+  return toks.slice(1).some((t) => INLINE_CODE_RE.test(t)) || /<<-?\s*['"\\]?\w+/.test(seg);
 }
 
 const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
 
-// Разбиение по операторам shell: каждый сегмент — отдельная команда.
-// Помним, пришёл ли сегмент из пайпа: такая команда читает stdin, а не файлы
-// (`ps aux | grep foo`), и к поиску по индексу отношения не имеет.
-//
-// Разбор учитывает кавычки и экранирование. Без этого `grep -rn "a\|b" файл`
-// рвался по альтернации на куски, первый из которых выглядел как рекурсивный
-// grep без пути, — и гард запрещал поиск даже вне проекта. Ложный запрет там,
-// где альтернативы нет, — худший из отказов: из него уходят в обход.
-//
-// Остальные гарды разбирают shell через shell-core.mjs; эта копия осталась
-// из-за heredoc: тело `node <<EOF … EOF` здесь — часть сегмента интерпретатора.
-export function segments(command) {
-  const text = String(command || '');
-  const out = [];
-  let buf = '';
-  let quote = null;
-  let piped = false;
-  let nextPiped = false;
-
-  const flush = () => {
-    const t = buf.trim();
-    if (t) out.push({ text: t, piped });
-    buf = '';
-    piped = nextPiped;
-    nextPiped = false;
-  };
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      buf += c;
-      if (c === quote && text[i - 1] !== '\\') quote = null;
-      continue;
-    }
-    if (c === '\\' && i + 1 < text.length) { buf += c + text[++i]; continue; }
-    if (c === '"' || c === "'") { quote = c; buf += c; continue; }
-    if ((c === '|' && text[i + 1] === '|') || (c === '&' && text[i + 1] === '&')) { i++; flush(); continue; }
-    if (c === '|') { nextPiped = true; flush(); continue; }
-    if (c === '\n') {
-      // Тело heredoc — часть команды, а не следующие команды: без этого
-      // `node <<EOF … EOF` с путём внутри распадался на безобидные строки.
-      const here = buf.match(/<<-?\s*(?:'(\w+)'|"(\w+)"|(\w+))/);
-      if (here) {
-        const term = here[1] ?? here[2] ?? here[3];
-        const rest = text.slice(i + 1);
-        const end = rest.match(new RegExp(`(^|\\n)\\t*${term}(?=\\n|$)`));
-        const taken = end ? end.index + end[0].length : rest.length;
-        buf += c + rest.slice(0, taken);
-        i += taken;
-      }
-      flush();
-      continue;
-    }
-    if (c === ';') { flush(); continue; }
-    buf += c;
-  }
-  flush();
-  return out;
-}
-
-// Токенизация с учётом кавычек. Кавычки снимаем: они разделяют слова, но не
-// являются частью пути.
-export function tokenize(seg) {
-  const out = [];
-  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
-  let m;
-  while ((m = re.exec(seg))) out.push(m[1] ?? m[2] ?? m[3]);
-  return out;
-}
-
-// Имя команды: первый токен, пропуская префиксные присваивания (FOO=bar cmd)
-// и обёртки вида `sudo`/`env`/`command`.
-export function commandName(toks) {
-  let i = 0;
-  while (i < toks.length && (/^[A-Za-z_]\w*=/.test(toks[i]) || ['sudo', 'env', 'command', 'nohup', 'time'].includes(toks[i]))) i++;
-  return path.basename(toks[i] || '');
-}
+// Сегменты, токены и имя команды — из shell-core.mjs, общего с остальными
+// гардами. Сегмент из пайпа читает stdin, а не файлы (`ps aux | grep foo`).
+// keepHeredoc: тело `node <<EOF … EOF` — часть сегмента интерпретатора, иначе
+// путь внутри него распадался бы на безобидные строки.
 
 // Кандидаты в пути: всё, что похоже на файл с расширением. Ловит и голые
 // аргументы, и пути внутри строк кода — поэтому применяется к сырому сегменту.
@@ -667,7 +595,7 @@ function bashGrep(toks, cwd, labels, cmd, piped) {
 export function guardBash(command, cwd, labels) {
   if (!command) return null;
   try {
-    for (const { text: seg, piped } of segments(command)) {
+    for (const { text: seg, piped } of segments(command, { keepHeredoc: true })) {
       const toks = tokenize(seg);
       const cmd = commandName(toks);
 
