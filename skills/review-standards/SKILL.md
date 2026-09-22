@@ -5,8 +5,8 @@ description: "Cross-stack TypeScript review checklist and the procedure to run i
 
 # Standards review
 
-The project's own code is the standard. Linter, Prettier and `tsc` are run, not
-re-done by hand; a finding is what they cannot see.
+The project's own code is the standard. Its linter, its formatter and `tsc`
+are run, not re-done by hand; a finding is what they cannot see.
 
 ## Procedure
 
@@ -40,7 +40,8 @@ structural rules and:
 - No `console.log`, debug flags, commented code, ownerless `TODO`, unused
   imports/exports/params, files outside the task, unrequested lockfile/config edits.
 
-**Not a finding:** formatting, import order, anything ESLint/Prettier own;
+**Not a finding:** formatting, import order, anything the project's linter or
+formatter own;
 taste without consequence; refactor beyond the task (one *Minor* line at most);
 "could be more generic" with no need yet.
 
