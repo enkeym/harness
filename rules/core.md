@@ -34,16 +34,21 @@ file, `node -e`/`python -c` — including new files and non-indexed configs.
 
 ## Tool choice
 
-| Question                                   | Tool                                    |
-| ------------------------------------------ | --------------------------------------- |
-| Who calls it, what breaks, where a symbol is | tokensave (`callers`, `impact`, `search`) |
-| Meaning, no name: how/where/why, docs, configs | `rag_search`                         |
-| A known file or string                     | `Read`, `Edit`, grep with a file glob   |
+In a project with `.tokensave/` the index answers first; built-in tools take
+what it cannot: a path to read in full, a file to create, a string it missed.
 
-Any of them may go first; an empty answer means a wrong guess, not missing
-code — try the next one. No subagents for research or implementation; too
-large for one pass → split into commits. Scoping, empty answers, another
-project: skill `tokensave-routing`.
+| Question                                        | Tool                                                  |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| Where a symbol or file is, who calls it, what breaks | tokensave (`search`, `files`, `callers`, `impact`) — not `find`/`grep` |
+| What a symbol does                              | `tokensave_body`/`signature`, not `Read` of the whole file |
+| Meaning, no name: how/where/why, docs, configs  | `rag_search`                                          |
+| A known path in full; a new file; not indexed   | `Read`, `Edit`, `Write`                               |
+| Exact string after `search` `literal: true` answered empty | grep with a file glob                      |
+
+An empty answer means a wrong guess, not missing code — take the next row.
+No subagents for research or implementation; too large for one pass → split
+into commits. Scoping, empty answers, another project: skill
+`tokensave-routing`.
 
 ## Skills
 

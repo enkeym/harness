@@ -7,14 +7,15 @@ description: "Which tokensave or ragsave tool answers a given question — symbo
 
 `rules/core.md` picks the family; this picks the tool inside it and says what
 to do when it answers nothing. Full tool names: `CLAUDE.md` or `AGENTS.md`.
-Built-in `Read`, `Edit`, `Write`, grep are always fine — tokensave is a
-shortcut, not a gate.
+Built-in `Read`, `Edit`, `Write`, grep take what the index cannot: a new
+file, a path outside the index, a string `search` missed.
 
 ## Tool by question
 
 | Question                              | Tool                                                          |
 | ------------------------------------- | ------------------------------------------------------------- |
 | Symbol by name; text in code          | `search` (`literal: true` for text)                           |
+| A file by name or mask                | `files` — not `find`/`ls` through Bash                        |
 | A symbol's body or signature          | `body`, `signature`                                           |
 | Context around a known entry          | `context` — plain lookup is `search`, not `context`           |
 | Who calls it, what breaks             | `callers`, `callees`, `impact`, `affected`                    |

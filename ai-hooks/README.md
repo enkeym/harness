@@ -55,6 +55,7 @@ security-core.mjs               # что запрещено насмерть, ч
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
 bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
 bin/start-cost.mjs              # стартовая цена сессий по слоям — из транскриптов
+bin/tool-share.mjs              # доля tokensave/rag_search против Read/grep и токены за сессию — из транскриптов, до/после границы
 bin/cleanup.mjs                 # уборка меток, кешей и журналов (Stop, раз в сутки)
 bin/ask-mode.mjs                # переключатель: on | off | toggle | reset | default
 opencode/tokensave-guard.mjs    # адаптер OpenCode: плагин (tool.execute.before и др.)
@@ -310,7 +311,9 @@ Claude.
 `browser_file_upload`. Read, Edit и MCP-читатели судят и по реальному пути:
 симлинк `config.txt` → `.env` запрещён, как сам `.env`. Рекурсивный `grep`
 (`-r`, `-R`, склейки вроде `-rn`, `--recursive`) без `--include` запрещён: он
-читает каждый файл дерева, `.env` тоже, а имени секрета в команде нет.
+читает каждый файл дерева, `.env` тоже, а имени секрета в команде нет; отказ
+сразу называет `tokensave_search` для индексированного проекта, чтобы поиск
+символа не шёл через два запрета подряд (наш и родной хук tokensave).
 Отдельный случай — команды, печатающие окружение целиком (`env`, `printenv`,
 `docker compose config`): секрет приходит там не из файла, а из вывода, и по
 имени файла его не поймать.

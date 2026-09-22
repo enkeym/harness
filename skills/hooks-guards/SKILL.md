@@ -15,7 +15,8 @@ fired and what it wants instead.
   `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
   `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, a `Grep` glob (`.env*`), a symlink to
   one, the browser (`file://`, `browser_file_upload`), and a recursive `grep`
-  without `--include` — it reads `.env` in the tree; add `--include=*.ts`. Take a
+  without `--include` — it reads `.env` in the tree; in an indexed project
+  look the symbol up with `tokensave_search`, elsewhere add `--include=*.ts`. Take a
   variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
   branches, force push (`-f`, `+refspec`), branch deletion, push to the
