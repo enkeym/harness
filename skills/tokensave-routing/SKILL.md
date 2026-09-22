@@ -20,8 +20,7 @@ the tool inside it. Full tool names and file tools: `CLAUDE.md` or `AGENTS.md`.
 | Edit existing code                | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*`    |
 | Create a new file                 | built-in write — tokensave doesn't create files                       |
 
-Arguments from the schema, not memory. `field_sites` is denied: it panics on
-non-ASCII source and takes the whole server down until `/mcp` reconnects.
+Arguments from the schema, not memory.
 
 - Pass `seen_node_ids` from one `context` into `exclude_node_ids` of the next.
 - Scope with `path_include`/`path_exclude` — a monorepo pulls in a foreign stack.

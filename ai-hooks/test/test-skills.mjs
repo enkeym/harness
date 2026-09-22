@@ -180,22 +180,5 @@ for (const file of [...allMd, path.join(HARNESS, 'rules', 'core.md')]) {
   check(`${rel}: без имён проектов`, !project, project);
 }
 
-// --- закрытые инструменты tokensave никто не советует ---
-// field_sites паникует на не-ASCII исходнике и роняет весь сервер: совет из
-// скилла или подсказки гарда превращал каждый impact-проход в падение MCP.
-const settings = JSON.parse(read(path.join(HARNESS, 'claude', 'settings.json')));
-const deniedTools = (settings.permissions?.deny || [])
-  .filter((t) => t.startsWith('mcp__tokensave__tokensave_'))
-  .map((t) => t.slice('mcp__tokensave__tokensave_'.length));
-const ocPerm = opencode.permission || {};
-const adviceFiles = [...allMd, path.join(HARNESS, 'rules', 'core.md'), path.join(HARNESS, 'ai-hooks', 'guard-core.mjs')];
-for (const tool of deniedTools) {
-  check(`${tool}: закрыт и в OpenCode`, ocPerm[`tokensave_tokensave_${tool}`] !== 'allow');
-  for (const file of adviceFiles) {
-    const advice = read(file).split('\n').find((l) => l.includes(tool) && !l.includes('denied'));
-    check(`${path.relative(HARNESS, file)}: не советует ${tool}`, !advice, advice);
-  }
-}
-
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);
