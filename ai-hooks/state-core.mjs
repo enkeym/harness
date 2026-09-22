@@ -33,7 +33,7 @@ export function isEntryPoint(metaUrl) {
 }
 
 // Единственный корень рантайм-состояния хуков. ~/.claude/state, потому что там
-// уже живёт большая часть (ask-mode, ragsave-reminder, bootstrap, clip-output)
+// уже живёт большая часть (ask-mode, links-context, bootstrap, clip-output)
 // и он занесён в .gitignore конфиг-репозитория ~/.claude — стейт не утечёт в
 // коммит. Переопределяется через AI_HOOKS_STATE_DIR (тесты, изоляция).
 export const STATE_ROOT = process.env.AI_HOOKS_STATE_DIR || path.join(HOME, '.claude', 'state');

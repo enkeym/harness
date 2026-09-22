@@ -56,7 +56,6 @@ bin/ask-mode.mjs                # переключатель: on | off | toggle 
 opencode/tokensave-guard.mjs    # адаптер OpenCode: плагин (tool.execute.before и др.)
 bin/mcp-serve.sh                # запуск MCP tokensave/ragsave с явно выбранным проектом
 bin/ragsave-sync.sh             # смысловой (RAG) индекс: sync существующего
-claude/ragsave-reminder.mjs     # подсказка про rag_search на смысловых промптах (не гард)
 claude/links-context.mjs        # файл домена карты связей в контекст, когда правка попала в его paths: (не гард)
 links-core.mjs                  # карта связей на диске: каталог, файлы доменов, paths: — общее хука и чекера
 bin/init-impact-map.mjs         # первая карта: где лежит по авторству репозитория, скелет INDEX.md
@@ -70,7 +69,6 @@ test/test-hooklog.mjs           # журнал решений: запрет пи
 test/test-hook-io.mjs           # ответ хука: битый stdin, respond, decide, журнал
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы и состояние в temp
-test/test-ragsave-reminder.mjs  # когда напоминание про rag_search молчит, когда говорит
 test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любым инструментом
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
@@ -108,25 +106,7 @@ ANSI-последовательности и повторы `copying DB` чис�
 для хука, терминала и MCP. tokensave такого скрипта не требует: его сервер
 синхронизирует граф сам, а `post-commit` git-хук tokensave зовёт `sync`.
 
-У tokensave есть собственный `hook-prompt-submit`, то есть агенту напоминают о
-нём в каждом промпте; у ragsave не было ни одного напоминания в момент выбора
-инструмента. Итог предсказуемый: на смысловом вопросе («как настроен деплой»)
-агент шёл угадывать имя символа в `tokensave_search`, получал пусто и добивал
-`Grep`'ом — при том что ответ лежал в доке или конфиге, которых в графе
-tokensave нет вовсе.
-
-`claude/ragsave-reminder.mjs` закрывает эту асимметрию, не становясь гардом: на
-`UserPromptSubmit` он добавляет к промпту короткий контекст с указанием начать с
-`rag_search`. Голос подаёт узко — только когда в промпте есть вопрос словами
-(«как / где / почему», RU и EN) и **нет** имени файла, символа, `snake_case`,
-camelCase или бэктиков. Молчит: если нет `.ragsave/rag.db`; если вопрос
-структурный (кто вызывает, что сломается — это точный ответ tokensave, а не
-похожие фрагменты); на слэш-командах; и повторно в той же сессии по тому же
-проекту — дроссель 15 минут, чтобы подсказка осталась сигналом, а не фоном.
-Метки дросселя: `~/.claude/state/ragsave-reminder/`. Любая ошибка → выход без
-вывода: пропущенная подсказка дешевле сломанного промпта.
-
-Той же природы `claude/links-context.mjs` — карта неявных связей проекта
+`claude/links-context.mjs` — не гард, а контекст: карта неявных связей проекта
 (`docs/links/` или `.claude/links/`, формат — `skills/shared/impact-map.md`) разбита
 на файлы доменов, и каждый открывается frontmatter `paths:` в формате `.claude/rules`.
 Родное path-scoped правило тут не работает: зонд показал, что оно срабатывает на
@@ -421,8 +401,7 @@ tokensave) в корне такого репозитория. Файл пров�
 
 **Claude Code** — `~/.claude/settings.json`, секция `hooks`:
 `node ~/.ai-hooks/claude/bash-router.mjs` (matcher `Bash|mcp__ide__executeCode`).
-Ragsave: `bin/ragsave-sync.sh` на `Stop`,
-`node ~/.ai-hooks/claude/ragsave-reminder.mjs` на `UserPromptSubmit`.
+Ragsave: `bin/ragsave-sync.sh` на `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
 (matcher `Read|Edit|Write|mcp__tokensave__tokensave_read|…_body|…_str_replace|…_multi_str_replace`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
@@ -603,7 +582,6 @@ Claude Code через `cleanupPeriodDays`, на второй держится �
 
 ```bash
 node ~/.ai-hooks/test/test-guards.mjs
-node ~/.ai-hooks/test/test-ragsave-reminder.mjs
 node ~/.ai-hooks/test/test-ask-mode.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
 node ~/.ai-hooks/test/test-security.mjs

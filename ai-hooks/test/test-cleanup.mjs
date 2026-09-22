@@ -25,7 +25,6 @@ function check(name, got, want) {
 function sandbox() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cleanup-test-'));
   fs.mkdirSync(path.join(home, '.ai-hooks', 'logs'), { recursive: true });
-  fs.mkdirSync(path.join(home, '.claude', 'state', 'ragsave-reminder'), { recursive: true });
   fs.mkdirSync(path.join(home, '.claude', 'telemetry'), { recursive: true });
   return home;
 }

@@ -180,14 +180,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/ragsave-reminder.mjs"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "node /home/enkeym/.ai-hooks/claude/ask-reminder.mjs"
           }
         ]
