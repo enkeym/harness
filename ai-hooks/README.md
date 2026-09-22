@@ -354,6 +354,13 @@ CLAUDE.md велит грузить скилл до первого действ�
 `ask-session.mjs` сбрасывает его на `SessionStart` при `startup`/`clear`, но не
 при `resume`/`compact` — иначе режим менялся бы под руками. Переключение:
 `/ask`, `/ask-off` или `bin/ask-mode.mjs on|off|toggle|reset|default on|off`.
+Команда проходит, только если сама запускает `ask-mode.mjs`: имя скрипта в
+соседнем сегменте (`rm -rf src; echo ask-mode.mjs`) режим не обходит.
+
+Разбор shell общий с security-guard (`shell-core.mjs`): запись ловится и за
+`&`, `( … )`, `$(…)`, `sudo -u …`, в `bash -c "…"`/`eval`, `find -delete`/`-exec`,
+`git -C dir commit`, `git branch -D`/`-m`/создании ветки, `prettier --write`,
+`eslint --fix` (и через `npx`/`pnpm exec`).
 
 ## Субагентов нет
 

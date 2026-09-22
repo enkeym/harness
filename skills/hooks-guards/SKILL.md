@@ -31,7 +31,10 @@ fired and what it wants instead.
 ## ask-guard
 
 - In ask mode: blocks edits, mutating commands, publishing. Reads, search and
-  tests stay; an edit is shown as a diff.
+  tests stay; an edit is shown as a diff. Wrappers don't hide a write:
+  `bash -c`, `eval`, `find -exec`, `( … )`, `&`, `prettier --write`,
+  `git branch -D` are refused too; only a command that itself runs
+  `ask-mode.mjs` passes.
 - Ask mode is on only if the statusline says so or
   `node ~/.ai-hooks/bin/ask-mode.mjs status` says so. A refusal that doesn't
   mention ask mode has another source — name it; don't prescribe `/ask-off`.

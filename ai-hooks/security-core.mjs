@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { segments, tokenize, commandIndex, commandName, afterTarget } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, afterTarget, gitSubcommandAt } from './shell-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -174,24 +174,6 @@ function gitPushReason(toks, at) {
     if (PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
   }
   return null;
-}
-
-// Подкоманда git: первый свободный токен после `git`, минуя глобальные опции
-// с аргументом (`git -C dir commit`, `git -c k=v push`). Без этого
-// `git log --grep commit` считался бы коммитом. Индекс в токенах или -1.
-function gitSubcommandAt(toks) {
-  const i = toks.findIndex((t) => path.basename(t) === 'git');
-  if (i === -1) return -1;
-  for (let j = i + 1; j < toks.length; j++) {
-    const t = toks[j];
-    if (['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix'].includes(t)) {
-      j++;
-      continue;
-    }
-    if (t.startsWith('-')) continue;
-    return j;
-  }
-  return -1;
 }
 
 // Коммит — точка, где человек проверяет, что именно уходит в историю.

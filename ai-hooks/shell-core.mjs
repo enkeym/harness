@@ -162,6 +162,24 @@ export function commandName(toks) {
   return path.basename(toks[commandIndex(toks)] || '');
 }
 
+// Подкоманда git: первый свободный токен после `git`, минуя глобальные опции
+// с аргументом (`git -C dir commit`, `git -c k=v push`). Без этого
+// `git log --grep commit` считался бы коммитом. Индекс в токенах или -1.
+export function gitSubcommandAt(toks) {
+  const i = toks.findIndex((t) => path.basename(t) === 'git');
+  if (i === -1) return -1;
+  for (let j = i + 1; j < toks.length; j++) {
+    const t = toks[j];
+    if (['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix'].includes(t)) {
+      j++;
+      continue;
+    }
+    if (t.startsWith('-')) continue;
+    return j;
+  }
+  return -1;
+}
+
 // Аргументы после цели: `ssh [опции] host команда…`, `docker exec [опции]
 // контейнер команда…`. Опции разбираются только до цели — дальше идёт чужая
 // команда со своими флагами (`cat -n .env`).

@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { STATE_ROOT, projectKey, repoRootOr } from './state-core.mjs';
+import { segments, tokenize, commandIndex, gitSubcommandAt } from './shell-core.mjs';
 
 const STATE_DIR = path.join(STATE_ROOT, 'ask-mode');
 const DEFAULT_FILE = path.join(STATE_DIR, 'default');
@@ -158,69 +159,94 @@ const EVAL_WRITE_RE =
 const REDIRECT_RE = /(?<![0-9&])>>?\s*(?!&|\/dev\/(?:null|stdout|stderr))[\w./~$-]/;
 
 // Управление самим режимом через shell должно проходить всегда, иначе из
-// ask mode нельзя выйти командой.
-const SELF_RE = /ask-mode\.mjs/;
+// ask mode нельзя выйти командой. Но только когда команда сегмента — сам
+// скрипт: упоминание имени (`rm -rf src; echo ask-mode.mjs`) ничего не даёт.
+const SELF_RE = /(^|\/)ask-mode\.mjs$/;
 
-function commandName(tokens) {
-  let i = 0;
-  while (i < tokens.length &&
-    (/^[A-Za-z_]\w*=/.test(tokens[i]) || ['sudo', 'env', 'command', 'nohup', 'time', 'setsid'].includes(tokens[i]))) i++;
-  return path.basename(tokens[i] || '');
+// Оболочки и eval: запись прячется в строке, её разбираем как команду.
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
+const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir']);
+
+// Форматтеры и линтеры переписывают файлы только с флагом записи.
+const FORMATTERS = new Set(['prettier', 'eslint', 'stylelint', 'biome', 'ruff']);
+const FORMAT_WRITE_FLAGS = new Set(['--write', '-w', '--fix']);
+
+// `git branch` без флагов списка и со свободным аргументом создаёт ветку;
+// удаление, переименование и копирование — флагами.
+const BRANCH_WRITE_RE = /^(-[a-zA-Z]*[dDmMcCf][a-zA-Z]*|--(delete|move|copy|force|set-upstream-to.*|unset-upstream|edit-description))$/;
+const BRANCH_LIST_FLAGS = new Set(['-l', '--list', '-a', '--all', '-r', '--remotes', '--contains', '--no-contains',
+  '--merged', '--no-merged', '--points-at', '--show-current', '-v', '-vv', '--verbose', '--format', '--sort']);
+
+function isSelf(tokens, at) {
+  const cmd = path.basename(tokens[at] || '');
+  if (SELF_RE.test(cmd)) return true;
+  return EVAL_CMDS.has(cmd) && SELF_RE.test(tokens.slice(at + 1).find((t) => !t.startsWith('-')) || '');
 }
 
-function firstArg(tokens, cmd) {
-  const start = tokens.findIndex((t) => path.basename(t) === cmd);
-  for (let i = start + 1; i < tokens.length; i++) {
+function firstArg(tokens, at) {
+  const cmd = path.basename(tokens[at]);
+  for (let i = at + 1; i < tokens.length; i++) {
     if (!tokens[i].startsWith('-') || MUTATING_SUBCMDS[cmd]?.has(tokens[i])) return tokens[i];
   }
   return '';
 }
 
-// Разбиение по операторам shell с учётом кавычек: `node -e "a; write(…)"` —
-// одна команда, а не две, и разрыв по `;` внутри строки прятал бы запись.
-function segments(text) {
-  const out = [];
-  let buf = '';
-  let quote = null;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      buf += c;
-      if (c === quote && text[i - 1] !== '\\') quote = null;
-      continue;
-    }
-    if (c === '"' || c === "'") { quote = c; buf += c; continue; }
-    if (c === ';' || c === '\n' || (c === '|' || c === '&') && (text[i + 1] === c || c === '|')) {
-      if (text[i + 1] === c) i++;
-      out.push(buf);
-      buf = '';
-      continue;
-    }
-    buf += c;
-  }
-  out.push(buf);
-  return out;
+function gitMutates(tokens) {
+  const at = gitSubcommandAt(tokens);
+  const sub = tokens[at];
+  if (sub !== 'branch') return MUTATING_SUBCMDS.git.has(sub);
+  const args = tokens.slice(at + 1);
+  if (args.some((t) => BRANCH_WRITE_RE.test(t))) return true;
+  return !args.some((t) => BRANCH_LIST_FLAGS.has(t)) && args.some((t) => !t.startsWith('-'));
 }
 
-export function bashMutates(command) {
+// Команды, которые запускает сама команда: `bash -c "…"`, `eval "…"`,
+// `find … -exec rm {} \;`.
+function nested(tokens, at) {
+  const cmd = path.basename(tokens[at]);
+  const rest = tokens.slice(at + 1);
+  if (SHELLS.has(cmd)) {
+    const c = rest.findIndex((t) => /^-[a-z]*c[a-z]*$/.test(t));
+    return c === -1 || !rest[c + 1] ? [] : [rest[c + 1]];
+  }
+  if (cmd === 'eval') return [rest.join(' ')];
+  if (cmd === 'find') {
+    const out = [];
+    for (let i = 0; i < rest.length; i++) {
+      if (!FIND_EXEC.has(rest[i])) continue;
+      const end = rest.findIndex((t, j) => j > i && [';', '\\;', '+'].includes(t));
+      out.push(rest.slice(i + 1, end === -1 ? undefined : end).join(' '));
+    }
+    return out;
+  }
+  return [];
+}
+
+// Разбор shell — общий с гардом безопасности (shell-core): `&`, `( … )`,
+// `$(…)`, обёртки с опциями (`sudo -u app`). Кавычки учтены: `node -e "a;
+// write(…)"` — одна команда, а не две.
+export function bashMutates(command, depth = 0) {
   const text = String(command || '');
-  if (!text.trim() || SELF_RE.test(text)) return false;
+  if (!text.trim() || depth > 3) return false;
 
-  for (const segment of segments(text)) {
-    const seg = segment.trim();
-    if (!seg) continue;
+  for (const { text: seg } of segments(text)) {
+    const tokens = tokenize(seg);
+    const at = commandIndex(tokens);
+    const cmd = path.basename(tokens[at] || '');
     if (REDIRECT_RE.test(seg)) return true;
-
-    const tokens = [...seg.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
-    const cmd = commandName(tokens);
-    if (!cmd) continue;
+    if (!cmd || isSelf(tokens, at)) continue;
 
     if (MUTATING_CMDS.has(cmd)) return true;
+    if (cmd === 'find' && tokens.includes('-delete')) return true;
+    if (nested(tokens, at).some((inner) => bashMutates(inner, depth + 1))) return true;
     if (INPLACE_CMDS.has(cmd) && tokens.some((t) => /^-i/.test(t) || t === '--in-place')) return true;
     if (EVAL_CMDS.has(cmd)
       && tokens.some((t) => t === '-e' || t === '-c' || t === '--eval')
       && EVAL_WRITE_RE.test(seg)) return true;
-    if (MUTATING_SUBCMDS[cmd]?.has(firstArg(tokens, cmd))) return true;
+    if (tokens.some((t) => FORMATTERS.has(path.basename(t))) && tokens.some((t) => FORMAT_WRITE_FLAGS.has(t))) return true;
+    if (cmd === 'git') {
+      if (gitMutates(tokens)) return true;
+    } else if (MUTATING_SUBCMDS[cmd]?.has(firstArg(tokens, at))) return true;
   }
   return false;
 }

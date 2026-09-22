@@ -94,6 +94,21 @@ const shell = [
   [`python3 -c "print(open('a.json').read())"`, false],
   [`node -e "const a=1; require('fs').rmSync('dist',{recursive:true})"`, true],
   ['echo "a;b" | tr a b', false],
+  // Управление режимом проходит, только когда команда — сам ask-mode.mjs.
+  ['node ~/.ai-hooks/bin/ask-mode.mjs off', false],
+  ['rm -rf src; echo ask-mode.mjs', true],
+  ['rm -rf src # ask-mode.mjs', true],
+  // Формы shell, которые прятали запись.
+  ['sleep 1 & rm -rf src', true], ['(rm -rf src)', true], ['{ rm -rf src; }', true],
+  ['echo $(rm -rf src)', true], ['bash -c "rm -rf src"', true], ["sh -c 'git commit -m x'", true],
+  ['eval "rm -rf src"', true], ['bash -c "ls -la"', false], ['sudo -u app rm -rf /srv/x', true],
+  ['git -C /tmp/r commit -m x', true], ['git -C /tmp/r status', false],
+  ['find . -name "*.log" -delete', true], ['find . -name "*.tmp" -exec rm {} \\;', true],
+  ['find . -name "*.ts" -exec grep -l foo {} +', false], ['find . -name "*.ts"', false],
+  ['git branch -D feat/x', true], ['git branch --delete feat/x', true], ['git branch -m a b', true],
+  ['git branch', false], ['git branch feat/new', true], ['git branch -a --list "feat/*"', false],
+  ['npx prettier --write .', true], ['prettier -w src', true], ['pnpm exec eslint --fix src', true],
+  ['npx prettier --check .', false], ['npx eslint src', false],
 ];
 for (const [command, want] of shell) {
   check(`bash: ${command}`, bashMutates(command), want);
