@@ -19,6 +19,10 @@ paths:
   абсолютные пути в `claude/settings.json` (`permissions.allow` не раскрывает
   `$HOME`) и `opencode/plugin/tokensave-guard.js`. Новый абсолютный путь вне этих
   файлов проверка не увидит.
+- Голое имя команды в `mcp/servers.json` (`playwright-mcp`) ↔ PATH оболочки,
+  из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
+  агентам найденный путь. Запуск без nvm в PATH — сервер пропущен с кодом 1;
+  смена версии node — путь у агентов устарел до следующего `./install.sh`.
 - `mcp/servers.json` → `ai-hooks/bin/mcp-serve.sh` (аргумент — имя сервера);
   раскладывает по агентам `bin/mcp-sync.mjs`. Новый сервер в JSON без ветки
   `case "$kind"` в `mcp-serve.sh` не стартует.

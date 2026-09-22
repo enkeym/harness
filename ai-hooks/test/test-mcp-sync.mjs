@@ -27,7 +27,7 @@ const SERVERS = {
   beta: { command: '/usr/bin/beta' },
 };
 
-function sandbox({ opencodeMcp, claudeServers }) {
+function sandbox({ opencodeMcp, claudeServers, servers = SERVERS }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-sync-'));
   const tree = path.join(dir, 'harness');
   const home = path.join(dir, 'home');
@@ -37,7 +37,7 @@ function sandbox({ opencodeMcp, claudeServers }) {
   fs.mkdirSync(fakeBin);
 
   fs.copyFileSync(path.join(HARNESS, 'bin', 'mcp-sync.mjs'), path.join(tree, 'bin', 'mcp-sync.mjs'));
-  fs.writeFileSync(path.join(tree, 'mcp', 'servers.json'), JSON.stringify(SERVERS));
+  fs.writeFileSync(path.join(tree, 'mcp', 'servers.json'), JSON.stringify(servers));
   fs.writeFileSync(path.join(tree, 'opencode', 'opencode.json'),
     JSON.stringify({ $schema: 'https://opencode.ai/config.json', mcp: opencodeMcp, agent: { x: 1 } }, null, 2));
   if (claudeServers) fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ projects: {}, mcpServers: claudeServers }));
@@ -52,7 +52,7 @@ function sandbox({ opencodeMcp, claudeServers }) {
   });
   const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : []);
   const opencode = () => JSON.parse(fs.readFileSync(path.join(tree, 'opencode', 'opencode.json'), 'utf8'));
-  return { dir, home, run, calls, opencode };
+  return { dir, home, fakeBin, run, calls, opencode };
 }
 
 const plain = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -112,6 +112,38 @@ const alphaClaude = (home) => ({ command: path.join(home, 'bin', 'alpha'), args:
     JSON.stringify({ mcpServers: { alpha: alphaClaude(sb.home), beta: { command: '/usr/bin/beta' } } }));
   sb.run();
   check('совпавшие серверы claude не трогает', sb.calls(), []);
+}
+
+// --- голое имя команды ищется по PATH ---
+{
+  const sb = sandbox({ opencodeMcp: {}, claudeServers: {}, servers: { delta: { command: 'delta-mcp', args: ['--x'] } } });
+  const bin = path.join(sb.fakeBin, 'delta-mcp');
+  fs.writeFileSync(bin, '#!/bin/sh\n', { mode: 0o755 });
+  const res = sb.run();
+  check('PATH: код 0', res.status, 0);
+  check('PATH: в OpenCode — найденный путь', sb.opencode().mcp.delta, { type: 'local', command: [bin, '--x'] });
+  check('PATH: в Claude — найденный путь', sb.calls(),
+    [`mcp add-json -s user delta ${JSON.stringify({ type: 'stdio', command: bin, args: ['--x'], env: {} })}`]);
+
+  // Бинарь переехал (сменилась версия node) — записанный путь устарел.
+  fs.writeFileSync(path.join(sb.home, '.claude.json'),
+    JSON.stringify({ mcpServers: { delta: { command: '/old/node/bin/delta-mcp', args: ['--x'] } } }));
+  const stale = sb.run('--check');
+  check('PATH: устаревший путь → расхождение', [stale.status, plain(stale.stdout).includes('delta — отличается от servers.json')], [1, true]);
+}
+
+{
+  const sb = sandbox({
+    opencodeMcp: { gone: { type: 'local', command: ['/old/gone-mcp'] } }, claudeServers: { gone: { command: '/old/gone-mcp' } },
+    servers: { gone: { command: 'gone-mcp-nowhere' }, beta: { command: '/usr/bin/beta' } },
+  });
+  const res = sb.run();
+  const out = plain(res.stdout);
+  check('нет в PATH: код 1 и причина', [res.status, out.includes('gone — команда gone-mcp-nowhere не найдена в PATH')], [1, true]);
+  check('нет в PATH: не «нет в servers.json»', out.includes('gone — есть в opencode.json') || out.includes('gone — зарегистрирован в Claude'), false);
+  check('нет в PATH: запись OpenCode не тронута, остальные синхронизированы',
+    sb.opencode().mcp, { beta: { type: 'local', command: ['/usr/bin/beta'] }, gone: { type: 'local', command: ['/old/gone-mcp'] } });
+  check('нет в PATH: claude не трогает сервер', sb.calls().some((c) => c.includes('gone')), false);
 }
 
 // --- нет ~/.claude.json ---

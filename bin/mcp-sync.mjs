@@ -35,12 +35,34 @@ const expand = (p) => (p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) 
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
-const servers = Object.fromEntries(
-  Object.entries(readJson(SERVERS)).map(([name, s]) => [
-    name,
-    { command: expand(s.command), args: s.args ?? [], env: s.env ?? {} },
-  ]),
-);
+// Голое имя (`playwright-mcp`) ищется по PATH того, кто запускает синк, и в
+// агентов уходит найденный путь: так в servers.json не зашита версия node из
+// nvm, а после смены версии --check видит устаревший путь как расхождение.
+// Не нашлось — null: писать агентам команду, которая не стартует, нельзя.
+function resolveCommand(cmd) {
+  if (cmd.includes('/')) return expand(cmd);
+  for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
+    const file = path.join(dir, cmd);
+    try {
+      fs.accessSync(file, fs.constants.X_OK);
+      if (fs.statSync(file).isFile()) return file;
+    } catch { /* нет в этом каталоге */ }
+  }
+  return null;
+}
+
+const servers = {};
+const unresolved = new Set();
+for (const [name, s] of Object.entries(readJson(SERVERS))) {
+  const command = resolveCommand(s.command);
+  if (!command) {
+    bad(`${name} — команда ${s.command} не найдена в PATH, сервер пропущен`);
+    unresolved.add(name);
+    continue;
+  }
+  servers[name] = { command, args: s.args ?? [], env: s.env ?? {} };
+}
+const listed = (name) => name in servers || unresolved.has(name);
 
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -61,7 +83,7 @@ function syncOpencode() {
   );
 
   for (const name of Object.keys(current)) {
-    if (!(name in wanted)) warn(`${name} — есть в opencode.json, нет в servers.json`);
+    if (!listed(name)) warn(`${name} — есть в opencode.json, нет в servers.json`);
   }
 
   const stale = Object.keys(wanted).filter((name) => !sameJson(current[name], wanted[name]));
@@ -93,7 +115,7 @@ function syncClaude() {
   const current = readJson(CLAUDE_JSON).mcpServers ?? {};
 
   for (const name of Object.keys(current)) {
-    if (!(name in servers)) warn(`${name} — зарегистрирован в Claude, нет в servers.json`);
+    if (!listed(name)) warn(`${name} — зарегистрирован в Claude, нет в servers.json`);
   }
 
   for (const [name, s] of Object.entries(servers)) {
@@ -123,4 +145,5 @@ function syncClaude() {
 
 syncOpencode();
 syncClaude();
-process.exit(CHECK && drift > 0 ? 1 : 0);
+// Ненайденная команда — ошибка и при синке: сервер у агентов не обновлён.
+process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);
