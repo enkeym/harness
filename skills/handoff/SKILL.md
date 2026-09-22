@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Hands the thread to a fresh session when the context grows expensive. In Claude Code with a task-brief plan file it updates the plan (ticked steps, a `## Состояние` snapshot) and leaves through `ExitPlanMode`, whose dialog offers to clear the context and continue from the plan — nothing to copy. Without a plan, or in OpenCode, it prints a handoff block in chat that the user pastes into a new session. Covers what belongs in the snapshot, what never does, and what the next session must not re-verify. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
+description: "Hands the thread to a fresh session when the context grows expensive. In Claude Code with a task-brief plan file it ticks the landed steps, writes the snapshot into the plan file plan mode names (linking the old plan) and leaves through `ExitPlanMode`, whose dialog offers to clear the context and continue from it — nothing to copy. Without a plan, or in OpenCode, it prints a handoff block in chat that the user pastes into a new session. Covers what belongs in the snapshot, what never does, and what the next session must not re-verify. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
 ---
 
 # Handoff
@@ -10,8 +10,8 @@ Trigger: in Claude Code two hooks fire at the token thresholds in
 `context-step.mjs` mid-turn, between tool calls. `SOFT` closes the step with no
 handoff yet; `HAND` and `HARD` ask for one. OpenCode has no meter — only
 `/handoff` or the user's words. Don't raise context size again yourself. Never
-create a file, never start a new session for the user; the only write is into
-an existing `task-brief` plan file.
+start a new session for the user; the only writes are the `task-brief` plan
+file and the plan file plan mode names.
 
 Mid-turn the answer is never cut in half: finish the step in hand, commit and
 push it, and only then hand off — the step not started goes first under
@@ -30,13 +30,16 @@ next step needs. The hook says which case it is; follow its wording.
    - Claude Code and a `task-brief` plan file exists → **plan form**: the
      file carries everything, no chat block.
    - No plan file, or OpenCode → **chat form**.
-3. Plan form: `EnterPlanMode`, then in the plan file tick the steps whose
-   commits landed, rewrite a step that changed, and replace (or add before
-   `## Шаги`) one `## Состояние` section holding the snapshot sections below
-   except `Задача` and `Дальше` — the plan already states both; name the next
-   step in one line at the top of `## Состояние`. Then `ExitPlanMode` — its
-   dialog is where the user clears the context and continues; print nothing
-   after it. Stale after the next commit — rerun `/handoff`.
+3. Plan form, in this order — plan mode allows one write, the new file it
+   names, so the old plan is edited before entering:
+   1. In the old plan tick the steps whose commits landed, rewrite a step
+      that changed.
+   2. `EnterPlanMode`; write the snapshot below into the file its prompt
+      names, `Дальше` pointing at the old plan and its first unticked step;
+      name the next step in one line at the top of `## Состояние`.
+   3. `ExitPlanMode` — its dialog is where the user clears the context and
+      continues; print nothing after it. Stale after the next commit — rerun
+      `/handoff`.
 4. Chat form: print the snapshot as one fenced ```markdown block. After it,
    one line: ready to copy into a new session (`/clear` in Claude Code, `/new`
    in OpenCode) once copied. Stale after the next commit — rerun `/handoff`,
@@ -98,12 +101,12 @@ Start from the snapshot, not from a fresh survey — re-reading everything it
 already names is what makes a split session cost more than the long one it
 replaced:
 
-- Plan form → the plan is in context after the dialog; steps and state both
-  come from it, the first unticked step is next. Chat form naming a plan file
+- Plan form → the snapshot is in context after the dialog; the old plan it
+  links under `Дальше` is `Read` only when a step in it is next (outside the
+  repository, no router applies). Chat form naming a plan file
   → it is in context through the `@` in the first prompt; missing there →
-  `Read` it before anything else (outside the repository, no router applies).
-  Steps come from the plan, state from the block; the block wins on state,
-  the plan on steps.
+  `Read` it before anything else. Either way steps come from the plan, state
+  from the snapshot; the snapshot wins on state, the plan on steps.
 - Open only the files the first step touches. The rest of `Карта` stays a
   pointer until a step needs it.
 - Don't re-run what `Проверено` lists. Re-check one of its lines only when the
