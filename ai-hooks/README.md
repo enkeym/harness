@@ -96,6 +96,7 @@ test/test-usage-report.mjs      # отчёт /usage: период, --project, с
 test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент мимо, порог размера, rest
 test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, блок mcp в opencode.json, перерегистрация в Claude
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
+test/test-tokensave-sync.mjs    # tokensave-sync/branch/branch-prune: вызовы бинаря, отказы, лок, TTL и дроссель чистки
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -754,6 +755,7 @@ node ~/.ai-hooks/test/test-usage-report.mjs
 node ~/.ai-hooks/test/test-start-cost.mjs
 node ~/.ai-hooks/test/test-mcp-sync.mjs
 node ~/.ai-hooks/test/test-log-error.mjs
+node ~/.ai-hooks/test/test-tokensave-sync.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
@@ -781,4 +783,5 @@ OpenCode) — вердикты должны совпадать.
 seed-impact-map и `/usr/local/bin/tokensave` у shell-скриптов);
 `AI_HOOKS_RAGSAVE_CMD` — `bin/seed-impact-map.mjs`, `bin/ragsave-sync.sh`
 (по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
-`test/fixtures/`.
+`test/fixtures/`: `fake-tokensave.mjs` и `fake-ragsave.mjs` отвечают на поиск
+seed-impact-map, `fake-indexer.mjs` записывает вызовы фоновых синков.
