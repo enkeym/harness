@@ -332,11 +332,11 @@ CLAUDE.md велит грузить скилл до первого действ�
 | Действие | Требует |
 | --- | --- |
 | правка `skills/*/SKILL.md`, `skills/*/reference/*.md`, `commands/*.md`, `agent/*.md`, `rules/*.md` (под `.claude/`, `.opencode/`, `opencode/` или `harness/`), любого `CLAUDE.md` или `AGENTS.md` | `skill-authoring` |
-| `git … commit` в любом сегменте команды (пайп, `&&`, `-C`) | `review-standards`, `review-security`, `git-flow` |
+| `git … commit` в любом сегменте команды (пайп, `&&`, фоновый `&`, `$(…)`, `-C`, за `sudo`/`env X=1`) | `review-standards`, `review-security`, `git-flow` |
 
 `git-flow` в списке не ради стиля: без него в сообщение попадает
 `Co-Authored-By`, а это политика компании. Список гейтов — `GATES` в
-`skill-core.mjs`; разбор shell общий с bash-гардом (`segments`/`tokenize`).
+`skill-core.mjs`; разбор shell общий с security-guard (`shell-core.mjs`).
 
 Метку «загружен» ставит `claude/skill-track.mjs` — на PreToolUse инструмента
 `Skill` и на `UserPromptSubmit` с промптом `/name` (пользовательский вызов

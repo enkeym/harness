@@ -12,7 +12,7 @@
 
 import fs from 'node:fs';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
-import { segments, tokenize, commandName } from './guard-core.mjs';
+import { segments, tokenize, commandIndex, commandName, gitSubcommandAt } from './shell-core.mjs';
 import { insideDoctor } from './hooklog-core.mjs';
 
 const STATE_FILE = statePath('skills-loaded.json');
@@ -29,10 +29,6 @@ const INSTRUCTION_FILE_RE =
 const CLAUDE_MD_RE = /(^|[\\/])(CLAUDE|AGENTS)\.md$/;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
-
-// Глобальные опции git, которые берут значение отдельным токеном: `git -C dir
-// commit` — подкоманда третья, а не вторая.
-const GIT_OPTS_WITH_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace']);
 
 export const GATES = [
   {
@@ -55,22 +51,17 @@ export function isInstructionFile(p) {
   return INSTRUCTION_FILE_RE.test(s) || CLAUDE_MD_RE.test(s);
 }
 
-function gitSubcommand(toks) {
-  let i = 1;
-  while (i < toks.length && toks[i].startsWith('-')) {
-    i += GIT_OPTS_WITH_VALUE.has(toks[i]) ? 2 : 1;
-  }
-  return toks[i] || null;
-}
-
 // Любой сегмент команды — `git … commit`. Пайп не исключение: `… | git commit
-// -F -` коммитит так же.
+// -F -` коммитит так же. Разбор — общий shell-core, как у security-guard:
+// обёртки (`sudo`, `env X=1`), фоновый `&` и `$(…)` своя копия пропускала.
 export function isGitCommit(command) {
   if (!command) return false;
   try {
     return segments(command).some(({ text }) => {
-      const toks = tokenize(text);
-      return commandName(toks) === 'git' && gitSubcommand(toks) === 'commit';
+      const all = tokenize(text);
+      // Срез от настоящей команды: `sudo -u git git commit` — git здесь второй.
+      const toks = all.slice(commandIndex(all));
+      return commandName(toks) === 'git' && toks[gitSubcommandAt(toks)] === 'commit';
     });
   } catch {
     return false;

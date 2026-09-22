@@ -79,6 +79,14 @@ const bash = (command) => ({ command });
   check('commit: commit-tree не коммит', isGitCommit('git commit-tree HEAD^{tree}'), false);
   check('commit: слово в аргументе', isGitCommit('grep -rn commit src/'), false);
   check('commit: пусто', isGitCommit(''), false);
+check('commit: за sudo', isGitCommit('sudo git commit -m x'), true);
+check('commit: за env с присваиванием', isGitCommit('env GIT_AUTHOR_NAME=x git commit -m x'), true);
+check('commit: после фонового &', isGitCommit('npm test & git commit -m x'), true);
+check('commit: в подоболочке', isGitCommit('(cd /tmp && git commit -m x)'), true);
+check('commit: в $(…)', isGitCommit('echo $(git commit -m x)'), true);
+check('commit: --config-env со значением', isGitCommit('git --config-env x=Y commit -m x'), true);
+check('commit: sudo -u git — git как значение опции', isGitCommit('sudo -u git git commit -m x'), true);
+check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep commit'), false);
 
   check('имя: plugin:skill', skillName('plugin:skill-authoring'), 'skill-authoring');
   check('имя: scoped', skillName('apps/web:deploy'), 'deploy');

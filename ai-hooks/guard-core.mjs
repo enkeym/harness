@@ -551,8 +551,8 @@ const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
 // grep без пути, — и гард запрещал поиск даже вне проекта. Ложный запрет там,
 // где альтернативы нет, — худший из отказов: из него уходят в обход.
 //
-// segments/tokenize/commandName экспортируются: skill-core распознаёт ими
-// `git commit` — второй разбор shell рядом с этим разошёлся бы с ним.
+// Остальные гарды разбирают shell через shell-core.mjs; эта копия осталась
+// из-за heredoc: тело `node <<EOF … EOF` здесь — часть сегмента интерпретатора.
 export function segments(command) {
   const text = String(command || '');
   const out = [];

@@ -46,7 +46,8 @@ paths:
   в одном месте — init создаёт карту, которую links-context не подключает, или
   seed находит кандидатов в самой карте.
 - Разбор shell — `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
-  (security-core, ask-core) ↔ своя копия в `ai-hooks/guard-core.mjs` и
-  `ai-hooks/skill-core.mjs:gitSubcommand`. Форма команды, которую научили
-  разбирать в одном месте (`&`, `$(…)`, `sudo -u`, `git --namespace x`), в
-  остальных гардах проходит мимо, пока они не переведены на shell-core.
+  (security-core, ask-core, skill-core) ↔ своя копия в `ai-hooks/guard-core.mjs`
+  (`segments` держит тело heredoc внутри сегмента, shell-core — нет). Форма
+  команды, которую научили разбирать в одном месте (`&`, `$(…)`, `sudo -u`,
+  `git --namespace x`), в bash-гарде проходит мимо, пока он не переведён на
+  shell-core.
