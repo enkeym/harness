@@ -11,6 +11,10 @@ Agent-specific tools and gates: `CLAUDE.md`, `AGENTS.md`.
   user says "покажи в чате", "не применяй", "только предложи".
 - Confirm only before: deleting files, deploy, destructive migration, force
   push, merge into a protected branch. Commit and push need no confirmation.
+- A question to the user — a fork, a choice, an open point before a handoff —
+  goes through the question tool (`AskUserQuestion` / `question`), options
+  with the recommended one first; never left as prose at the end of a reply,
+  where it hangs until the user notices it.
 - Re-check the diff before delivering. Found a mistake — fix it openly.
 - A guard refusal is final: never route around it.
 

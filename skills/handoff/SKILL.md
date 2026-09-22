@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Hands the thread to a fresh session when the context grows expensive. In Claude Code with a task-brief plan file it ticks the landed steps, writes the snapshot into the plan file plan mode names (linking the old plan) and leaves through `ExitPlanMode`, whose dialog offers to clear the context and continue from it — nothing to copy. Without a plan, or in OpenCode, it prints a handoff block in chat that the user pastes into a new session. Covers what belongs in the snapshot, what never does, and what the next session must not re-verify. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
+description: "Hands the thread to a fresh session when the context grows expensive. In Claude Code it asks the open questions through the question menu, ticks the landed steps of a task-brief plan if one exists, writes the snapshot into the plan file plan mode names and leaves through `ExitPlanMode`, whose dialog offers to clear the context and continue from it — nothing to copy. In OpenCode it prints a handoff block in chat that the user pastes into a new session. Covers what belongs in the snapshot, what never does, and what the next session must not re-verify. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
 ---
 
 # Handoff
@@ -26,24 +26,25 @@ next step needs. The hook says which case it is; follow its wording.
 
 1. Finish the unit of work: commit, tests green. If finishing costs another
    ~30k tokens, hand off now with the unfinished state stated honestly.
-2. Pick the form:
-   - Claude Code and a `task-brief` plan file exists → **plan form**: the
-     file carries everything, no chat block.
-   - No plan file, or OpenCode → **chat form**.
-3. Plan form, in this order — plan mode allows one write, the new file it
-   names, so the old plan is edited before entering:
-   1. In the old plan tick the steps whose commits landed, rewrite a step
-      that changed.
+2. Questions still waiting for the user → one question tool call
+   (`AskUserQuestion` / `question`) before the snapshot; answers go under
+   `Решения`. A question left only in the snapshot hangs unanswered.
+3. Pick the form: Claude Code → **plan form**, with or without a `task-brief`
+   plan; OpenCode → **chat form**.
+4. Plan form, in this order — plan mode allows one write, the new file it
+   names, so an old plan is edited before entering:
+   1. A `task-brief` plan exists → tick the steps whose commits landed,
+      rewrite a step that changed.
    2. `EnterPlanMode`; write the snapshot below into the file its prompt
-      names, `Дальше` pointing at the old plan and its first unticked step;
-      name the next step in one line at the top of `## Состояние`.
+      names, `Дальше` pointing at the old plan and its first unticked step,
+      or naming the next step itself when there is no plan; name the next
+      step in one line at the top of `## Состояние`.
    3. `ExitPlanMode` — its dialog is where the user clears the context and
       continues; print nothing after it. Stale after the next commit — rerun
       `/handoff`.
-4. Chat form: print the snapshot as one fenced ```markdown block. After it,
-   one line: ready to copy into a new session (`/clear` in Claude Code, `/new`
-   in OpenCode) once copied. Stale after the next commit — rerun `/handoff`,
-   don't trust the old one.
+5. Chat form: print the snapshot as one fenced ```markdown block. After it,
+   one line: ready to copy into a new session (`/new`) once copied. Stale
+   after the next commit — rerun `/handoff`, don't trust the old one.
 
 ## Snapshot (Russian, only sections that apply)
 
@@ -77,7 +78,7 @@ next step needs. The hook says which case it is; follow its wording.
 шаг первым пунктом, конкретным действием. Никогда копия шагов плана.
 
 ## Открытые вопросы
-Только то, что ждёт человека.
+Только то, что пользователь отложил в меню вопросов, — с его словами.
 ```
 
 ## Never include

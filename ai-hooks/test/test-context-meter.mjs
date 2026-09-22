@@ -176,7 +176,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const second = contextNotice({ transcript_path: hand, session_id: 's-esc' });
   check('рост до 160k: звучит hand', second.stage, 'hand');
   check('160k: назван скилл handoff', /handoff/.test(second.text), true);
-  check('160k: сказано выдать в чат', /чат/.test(second.text), true);
+  check('160k: передача через plan mode', /EnterPlanMode[^.]*ExitPlanMode/.test(second.text), true);
+  check('160k: вопросы — через меню', /AskUserQuestion/.test(second.text), true);
+  check('160k: блока в чат не просит', /чат/.test(second.text), false);
   check('160k: про /clear не просит', /\/clear/.test(second.text), false);
   check('160k: назван resume с id сессии', /--resume s-esc/.test(second.text), true);
   check('hand второй раз молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
