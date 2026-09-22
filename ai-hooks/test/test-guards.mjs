@@ -466,6 +466,14 @@ function clearLogDedup() {
   check('[claude] реестр пуст и serve нет → гард молчит',
     claude(READ, cc, { TS_SERVERS_DIR: blank, TS_SERVE_ROOTS: '' }), 'allow');
 
+  // Два сервера: соседний проект записан в реестре, а serve этого корня записи
+  // не оставил. Чужая запись не доказывает, что этот корень никто не обслуживает.
+  check('[claude] в реестре только чужой сервер, serve на проект жив → судим по БД',
+    claude(READ, cc, { TS_SERVERS_DIR: alien, TS_SERVE_ROOTS: TS_PROJECT }), 'deny');
+  // Запись корня с чужой БД: процесс жив, но граф другой ветки — /proc это не перекрывает.
+  check('[claude] запись проекта на чужой ветке и serve жив → гард молчит',
+    claude(READ, cc, { TS_SERVERS_DIR: wrongBranch, TS_SERVE_ROOTS: TS_PROJECT }), 'allow');
+
   for (const d of [alien, wrongBranch, dead, empty, blank]) fs.rmSync(d, { recursive: true, force: true });
 }
 

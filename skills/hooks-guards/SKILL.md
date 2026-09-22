@@ -100,7 +100,8 @@ fired and what it wants instead.
 2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes
    (`exit=crash`); first read on any tokensave/ragsave report.
 3. `~/.ai-hooks/logs/guard.log` (JSONL) — only real events: `server-mismatch`
-   (MCP serves another project/branch; registry `~/.tokensave/servers/`),
+   (MCP serves another project/branch; registry `~/.tokensave/servers/`, then
+   `tokensave serve` in `/proc` when the root has no live entry),
    `breaker-open`. Marks live in `~/.claude/state/`.
 4. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red

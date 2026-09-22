@@ -219,6 +219,7 @@ function serverState(root, wantDb) {
   try {
     const seen = [];
     let ok = false;
+    let rootSeen = false;
     const dir = serversDir();
     for (const name of fs.readdirSync(dir)) {
       if (!name.endsWith('.json')) continue;
@@ -227,14 +228,18 @@ function serverState(root, wantDb) {
       if (!s?.pid || !fs.existsSync(`/proc/${s.pid}`)) continue;
       seen.push({ pid: s.pid, project: s.project_path || null, db: s.db_path || null });
       if (path.resolve(s.project_path || '') !== path.resolve(root)) continue;
+      rootSeen = true;
       if (s.db_path && path.resolve(s.db_path) !== path.resolve(wantDb)) continue;
       ok = true;
     }
-    // Реестр не дал ни одной живой записи — либо серверов нет, либо это версия
-    // tokensave, которая себя не регистрирует. Сверяемся с /proc: нашёлся живой
-    // serve на этот корень — замена есть, гард работает как обычно. Не нашёлся —
-    // прежнее поведение (fail-open), но без записи выдуманного рассинхрона.
-    if (!ok && seen.length === 0 && serveRunning(root)) ok = true;
+    // Для этого корня в реестре нет живой записи — либо сервера нет, либо он из
+    // версии tokensave, которая себя не регистрирует. Записи других проектов
+    // тут ничего не доказывают: соседнее окно на новом tokensave заполняет
+    // реестр, а сервер этого корня может быть старым. Сверяемся с /proc: живой
+    // serve на этот корень — замена есть, гард работает как обычно. Запись
+    // корня с чужой БД (сервер на другой ветке) /proc не перекрывает — процесс
+    // жив, но отвечает из другого графа.
+    if (!ok && !rootSeen && serveRunning(root)) ok = true;
     result = ok ? { ok } : { ok, servers: seen };
   } catch {
     // Нет реестра (старая версия tokensave) — сверять нечем, ведём себя как
