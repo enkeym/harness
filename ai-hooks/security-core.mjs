@@ -516,10 +516,14 @@ export function guardBashSecurity(command, depth = 0) {
 }
 
 export function guardReadSecurity(filePath) {
-  if (!isSecretPath(filePath)) return null;
+  if (!filePath) return null;
+  // Симлинк с безобидным именем (`config.txt` → `.env`) читается как цель.
+  const real = isSecretPath(filePath) ? null : resolveReal(String(filePath));
+  if (real && !isSecretPath(real)) return null;
+  const shown = real ? `${filePath}\` → \`${real}` : filePath;
   return {
     level: DENY,
-    reason: `\`${filePath}\` — хранилище секретов, чтение запрещено. ` +
+    reason: `\`${shown}\` — хранилище секретов, чтение запрещено. ` +
       'Структура — `.env.example`; значение — запроси у пользователя.',
   };
 }
@@ -531,6 +535,22 @@ const MCP_FILE_READERS = /^mcp__\w+__\w*(read|body|signature|context|cat|open|fi
 
 function mcpFileTarget(ti) {
   return ti.file || ti.file_path || ti.path || ti.symbol || '';
+}
+
+// Браузер тоже читает с диска: `file://…/.env` в адресе и файл, выбранный для
+// загрузки на страницу. Имена — Playwright MCP в Claude и в OpenCode.
+const BROWSER_NAVIGATE_RE = /^mcp__\w+__\w*browser_navigate$/;
+const BROWSER_UPLOAD_RE = /^mcp__\w+__\w*browser_file_upload$/;
+
+// Путь из `file://` без %-кодов; любой другой адрес — пустая строка.
+function fileUrlPath(url) {
+  const s = String(url || '');
+  if (!/^file:/i.test(s)) return '';
+  try {
+    return fileURLToPath(s);
+  } catch {
+    return s.replace(/^file:\/*/i, '/');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -599,9 +619,11 @@ export function securityGuard(toolName, toolInput = {}, ctx = {}) {
       .find((p) => p && isSecretPath(p));
     return target ? guardReadSecurity(target) : null;
   }
-  if (MCP_FILE_READERS.test(name)) {
-    const target = mcpFileTarget(ti);
-    return isSecretPath(target) ? guardReadSecurity(target) : null;
+  if (BROWSER_NAVIGATE_RE.test(name)) return guardReadSecurity(fileUrlPath(ti.url));
+  if (BROWSER_UPLOAD_RE.test(name)) {
+    const paths = Array.isArray(ti.paths) ? ti.paths : [];
+    return paths.map((p) => guardReadSecurity(p)).find(Boolean) || null;
   }
+  if (MCP_FILE_READERS.test(name)) return guardReadSecurity(mcpFileTarget(ti));
   return null;
 }

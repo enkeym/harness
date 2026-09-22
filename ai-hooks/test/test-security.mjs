@@ -5,6 +5,8 @@
 
 import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findSecretValue } from '../security-core.mjs';
@@ -77,6 +79,25 @@ check('tokensave_read по .env', run('mcp__tokensave__tokensave_read', { file: 
 check('tokensave_body по ключу', run('mcp__tokensave__tokensave_body', { file: 'deploy/id_rsa' }), 'deny');
 check('tokensave_read по обычному файлу', run('mcp__tokensave__tokensave_read', { file: 'src/app.ts' }), 'allow');
 check('rag_search (запрос, не путь)', run('mcp__ragsave__rag_search', { query: 'как настроен деплой' }), 'allow');
+
+// --- симлинк с безобидным именем на секрет: судим по реальному пути
+const LINKS = fs.mkdtempSync(path.join(os.tmpdir(), 'sec-links-'));
+fs.writeFileSync(path.join(LINKS, '.env'), 'TOKEN=x\n');
+fs.writeFileSync(path.join(LINKS, 'notes.txt'), 'x\n');
+fs.symlinkSync(path.join(LINKS, '.env'), path.join(LINKS, 'config.txt'));
+fs.symlinkSync(path.join(LINKS, 'notes.txt'), path.join(LINKS, 'readme.txt'));
+check('Read симлинка на .env', read(path.join(LINKS, 'config.txt')), 'deny');
+check('Edit симлинка на .env', run('Edit', { file_path: path.join(LINKS, 'config.txt') }), 'deny');
+check('tokensave_read симлинка на .env', run('mcp__tokensave__tokensave_read', { file: path.join(LINKS, 'config.txt') }), 'deny');
+check('Read симлинка на обычный файл', read(path.join(LINKS, 'readme.txt')), 'allow');
+fs.rmSync(LINKS, { recursive: true, force: true });
+
+// --- браузер: file:// и загрузка файла читают его с диска
+check('browser_navigate на file:// .env', run('mcp__playwright__browser_navigate', { url: 'file:///home/enkeym/app/.env' }), 'deny');
+check('browser_navigate на file:// с %-кодом', run('mcp__playwright__browser_navigate', { url: 'file:///home/enkeym/app/%2Eenv' }), 'deny');
+check('browser_navigate на сайт', run('mcp__playwright__browser_navigate', { url: 'http://localhost:3000/.env' }), 'allow');
+check('browser_file_upload с ключом', run('mcp__playwright__browser_file_upload', { paths: ['/tmp/a.png', '/home/enkeym/.ssh/id_ed25519'] }), 'deny');
+check('browser_file_upload картинки', run('mcp__playwright__browser_file_upload', { paths: ['/tmp/a.png'] }), 'allow');
 
 // --- примеры и шаблоны секретами не являются
 check('Read .env.example', read('.env.example'), 'allow');
