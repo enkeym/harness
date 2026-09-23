@@ -164,6 +164,14 @@
             "command": "node /home/enkeym/.ai-hooks/bin/cleanup.mjs"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/enkeym/.ai-hooks/claude/question-guard.mjs"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

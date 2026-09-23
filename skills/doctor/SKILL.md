@@ -21,7 +21,7 @@ claude mcp list
 ```
 
 `hooks.jsonl` is one JSON line per hook **decision**: `sid`, `hook`, `tool`,
-`decision` (`deny` | `ask` | `slow` | `crash`), `target`, `reason`, `ms`. Read
+`decision` (`deny` | `ask` | `block` | `slow` | `crash`), `target`, `reason`, `ms`. Read
 it as a sequence per `sid` — that is the "refusal → what the model tried next
 → refusal again" trace. Allowed calls are not logged, so a quiet file means a
 quiet session.

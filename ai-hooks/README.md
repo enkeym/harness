@@ -51,6 +51,8 @@ context-core.mjs                # замер занятости окна, пор
 claude/context-meter.mjs        # порог на ходу пользователя (UserPromptSubmit)
 claude/context-step.mjs         # порог посреди хода, между вызовами (PostToolUse)
 claude/paste-guard.mjs          # промпт длиннее предела — не в контекст (UserPromptSubmit, block)
+question-core.mjs               # вопрос пользователю текстом в конце ответа: последний ход транскрипта
+claude/question-guard.mjs       # адаптер Claude: Stop — такой ход не завершается (block)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
 bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
@@ -83,6 +85,7 @@ test/test-security.mjs          # что deny, что ask, что проходи
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-context-meter.mjs     # цифра из последнего хода, порог, одно срабатывание на сессию
+test/test-question-guard.mjs    # вопрос в конце и список вариантов → block; код, цитата, меню в ходе, stop_hook_active → пропуск
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
 test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам, источники, --sessions
@@ -164,8 +167,9 @@ exit=101` в `errors.log`). Пустой каталог `.tokensave`, созда
 
 Строка на **решение**, не на вызов: `sid`, `hook`, `tool`, `target`,
 `decision`, `reason` (обрезана до 160), `ms` — время от старта процесса хука.
-Решения: `deny`, `ask`, `slow` (разрешённый вызов, хук работал дольше 800 мс —
-медленный хук ощущается как «спотыкание» не хуже запрещающего) и `crash`.
+Решения: `deny`, `ask`, `block` (ход не завершён — `question-guard`), `slow`
+(разрешённый вызов, хук работал дольше 800 мс — медленный хук ощущается как
+«спотыкание» не хуже запрещающего) и `crash`.
 Разрешённые вызовы не пишутся — в тихой сессии файл не растёт.
 
 `crash` — падение самого хука. Раньше исключение внутри обработчика роняло
@@ -208,6 +212,25 @@ CLAUDE.md велит грузить скилл до первого действ�
 (cleanup уберёт через 7 дней) или `AI_HOOKS_SKILL_GATE_OFF=1`.
 
 Тесты: `test/test-skill-gate.mjs`.
+
+## Вопрос только через меню
+
+`core.md` велит задавать вопрос пользователю через `AskUserQuestion`: вопрос
+текстом в конце ответа висит, пока человек его не заметит. Правило модель
+нарушала, проверки не было. `claude/question-guard.mjs` на `Stop` читает
+последний ход транскрипта (от последней реплики человека) и возвращает
+`{"decision":"block","reason":…}`, если последняя строка прозы кончается `?`
+или хвост ответа — список из двух и больше вариантов после вопроса. Модель
+получает причину и продолжает ход: задаёт вопрос меню или переписывает
+риторическую концовку.
+
+Не судятся: `?` в код-блоке, инлайн-коде и цитате `>`; ход, где уже был
+`AskUserQuestion` или `ExitPlanMode`; повторный Stop того же хода
+(`stop_hook_active: true`) — не больше одного блока на ход, иначе петля.
+Текст ответа берётся из `last_assistant_message` входа, если он есть, —
+последняя запись транскрипта может не успеть на диск. Блок пишется в
+hooks.jsonl (`decision: block`). Логика — `question-core.mjs`, тесты —
+`test/test-question-guard.mjs`.
 
 ## Ask mode
 
@@ -434,6 +457,7 @@ tokensave) в корне такого репозитория. Файл пров�
 (matcher `Skill`) и на `UserPromptSubmit`, `node ~/.ai-hooks/claude/skill-gate.mjs`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash`, после гардов
 и до shell-гарда).
+Вопрос только через меню: `node ~/.ai-hooks/claude/question-guard.mjs` на `Stop`.
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs` — в нём shell-гард и гард безопасности.
@@ -622,6 +646,7 @@ node ~/.ai-hooks/test/test-mcp-serve.mjs
 node ~/.ai-hooks/test/test-install-check.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
 node ~/.ai-hooks/test/test-output-clip.mjs
+node ~/.ai-hooks/test/test-question-guard.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
 node ~/.ai-hooks/test/test-hook-io.mjs
 node ~/.ai-hooks/test/test-statusline.mjs

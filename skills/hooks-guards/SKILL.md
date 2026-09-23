@@ -1,6 +1,6 @@
 ---
 name: hooks-guards
-description: "How the local hook system behaves — security-guard, ask-guard, skill-gate, the shell guard, background ragsave sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure."
+description: "How the local hook system behaves — security-guard, ask-guard, skill-gate, question-guard, the shell guard, background ragsave sync, project-bootstrap — and how to react when one blocks or warns. Load when a hook refuses or warns, when ask mode, a guard, a permission prompt or a secret file is in question, when background indexing or project bootstrap comes up, or before reporting a tooling failure."
 ---
 
 # Hooks and guards
@@ -69,6 +69,16 @@ fired and what it wants instead.
   `unchanged: true` stub with the file text from disk; an empty read is a
   changed stub format, not a missing file.
 
+## question-guard
+
+- Stop hook: a reply whose last prose line ends with `?`, or whose tail is a
+  list of options after a question, does not end the turn — the block reason
+  says to ask through `AskUserQuestion` (rule in `core.md`, Working style).
+- Ask the same question through the menu, recommended option first; a
+  rhetorical question → rewrite the ending without it.
+- Not judged: `?` in code or a `>` quote, a turn that already called
+  `AskUserQuestion`/`ExitPlanMode`, the turn's second Stop — one block per turn.
+
 ## Shell guard
 
 - `bash-router` denies reading or writing an existing file through the shell
@@ -110,7 +120,7 @@ fired and what it wants instead.
 ## When something is broken
 
 1. `~/.ai-hooks/logs/hooks.jsonl` — one line per hook decision (`deny`, `ask`,
-   `slow`, `crash`) with `sid`, `target`, `ms`; allowed calls are not written.
+   `block`, `slow`, `crash`) with `sid`, `target`, `ms`; allowed calls are not written.
    The per-session trace of "what blocked, what came next".
 2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes
    (`exit=crash`); first read on any ragsave report. Marks live in

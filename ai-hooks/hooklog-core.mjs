@@ -78,7 +78,7 @@ function trimText(value, max) {
   return redact(String(value ?? '').replace(/\s+/g, ' ').trim()).slice(0, max);
 }
 
-// decision: deny | ask | slow | crash.
+// decision: deny | ask | block | slow | crash.
 // Журнал не обязан работать, чтобы работал хук — любая ошибка глотается.
 export function logDecision(decision, data = {}) {
   try {
