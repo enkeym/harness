@@ -19,7 +19,7 @@ const SCRIPT = path.join(ROOT, 'claude', 'security-guard.mjs');
 function verdict(command) {
   const out = execFileSync('node', [SCRIPT], {
     input: JSON.stringify({
-      session_id: 'bypass', cwd: '/home/enkeym/main/vpn-new',
+      session_id: 'bypass', cwd: '/home/user/main/vpn-new',
       tool_name: 'Bash', tool_input: { command },
     }),
     encoding: 'utf8',
@@ -63,7 +63,7 @@ check('docker exec обычная', `docker compose exec app node -v`, 'allow');
 process.stdout.write('\n--- формы пути ---\n');
 check('относительный ./', `cat ./.env`, 'deny');
 check('родительский каталог', `cat ../vpn-new/.env`, 'deny');
-check('абсолютный', `cat /home/enkeym/main/vpn-new/.env`, 'deny');
+check('абсолютный', `cat /home/user/main/vpn-new/.env`, 'deny');
 check('перенос строки как разделитель', `ls -la\ncat .env`, 'deny');
 check('&& как разделитель', `pwd && cat .env`, 'deny');
 

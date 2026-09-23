@@ -46,7 +46,7 @@ function aged(file, days, content = 'x') {
 function session(id, endedDaysAgo, cost, model = 'claude-sonnet-5') {
   return {
     session_id: id,
-    project: '/home/enkeym/main/vpn-new',
+    project: '/home/user/main/vpn-new',
     ended: new Date(Date.now() - endedDaysAgo * DAY).toISOString(),
     updated: new Date(Date.now() - endedDaysAgo * DAY).toISOString(),
     subagents: 1,
