@@ -54,6 +54,46 @@ cd ~/harness
 так их пишет `tokensave install`, и `tokensave doctor` сверяет именно путь.
 Бинарь в другом месте (Homebrew) — `--check` назовёт оба пути.
 
+### tokensave: только бинарь, без `tokensave install`
+
+Всё, что делает `tokensave install`, харнес уже держит сам: хуки и права — в
+`claude/settings.json`, MCP-сервер — в `mcp/servers.json`, правила — в
+`skills/tokensave-routing`. Запуск поверх раскатки ломает её (проверено на
+tokensave 7.12.1 в песочном HOME):
+
+- `--agent claude` — запись `tokensave` в `~/.claude.json` заменяется на `tokensave
+  serve` мимо `mcp-serve.sh`, появляется `~/.claude/rules/tokensave.md` (дубль
+  правил в каждой сессии);
+- `--agent opencode` — пишет через симлинк прямо в `opencode/opencode.json`
+  репозитория: свою MCP-команду и абсолютный путь в `instructions`, плюс
+  `~/.config/opencode/tokensave.md`;
+- оба заносят агента в `installed_agents` (`~/.tokensave/state.toml`), и после
+  каждой смены версии любая команда tokensave тихо повторяет install для них
+  (то же делает `tokensave reinstall`).
+
+Поэтому на новой машине:
+
+1. Поставить бинарь tokensave (в `/usr/local/bin`, иначе поправить путь хуков).
+   `tokensave install` и `reinstall` не запускать.
+2. `./install.sh` — хуки, права, MCP и правила придут из репозитория.
+3. `tokensave githooks on` — глобальные git-хуки в `~/.config/git/hooks` (куда уже
+   смотрит `core.hooksPath` из `git/gitconfig`). Конфиги агентов он не трогает.
+
+`tokensave doctor` после этого покажет ✘ «MCP server args missing "serve"» и
+«rules file not found» и посоветует `tokensave install` — это ожидаемо, совет
+не выполнять. Следы уже случившегося install (файлы правил, агенты в
+`installed_agents`, чужая MCP-запись) ловит `./install.sh --check`. Откат:
+
+```bash
+tokensave uninstall --agent claude     # и/или opencode: убирает правила и installed_agents
+git checkout claude/settings.json opencode/opencode.json   # uninstall вырезал из них хуки и права
+./install.sh                           # вернуть MCP-запись tokensave
+```
+
+Перед `git checkout` стоит смотреть `git diff` этих файлов: своя незакоммиченная
+правка там потеряется. `opencode.json.bak` и `tokensave.md.bak` в `~/.config/opencode/`
+— бэкапы tokensave, они не нужны.
+
 MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), подробности — в
 [`mcp/servers.md`](mcp/servers.md).
 
@@ -95,7 +135,8 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 
 - `claude` и `opencode` должны быть установлены и залогинены — учётных данных в
   репозитории нет и не будет;
-- `tokensave` — сторонний бинарь, ставится отдельно;
+- `tokensave` — сторонний бинарь, ставится отдельно, без `tokensave install`; git-хуки —
+  `tokensave githooks on`;
 - **перезапуск сессии.** `CLAUDE.md`, `settings.json` и хуки читаются при старте
   сессии. Агент, который только что всё разложил, работает ещё по пустому
   конфигу — правила подхватит только следующая сессия;
@@ -138,8 +179,8 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.config/opencode/node_modules` | воспроизводится из `package.json` | `bun install` в каталоге |
 | `~/.claude.json` | регистрация MCP вперемешку с историей проектов | `./install.sh` (из `mcp/servers.json`) |
 | рантайм `~/.claude` (`projects/`, `sessions/`, `history.jsonl`, `state/`) | локальное состояние машины | создаётся само |
-| `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно |
-| `~/.config/git/hooks` | глобальные git-хуки генерирует сам `tokensave` (chain-repo-hook, auto-init) | появляются при установке `tokensave` |
+| `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно, без `tokensave install` (см. «Раскатка на новой машине») |
+| `~/.config/git/hooks` | глобальные git-хуки генерирует сам `tokensave` (chain-repo-hook, auto-init) | `tokensave githooks on` |
 | `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
 | `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |

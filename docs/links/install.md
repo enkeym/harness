@@ -23,6 +23,14 @@ paths:
 - Путь к бинарю tokensave в хуках `claude/settings.json` ↔
   `install.sh:tokensave_hook_check` и `tokensave doctor`: оба сверяют путь
   буквально. `tokensave install`/`reinstall` переписывают хуки своим путём.
+- `tokensave install` ↔ файлы, которые он пишет поверх харнеса: MCP-запись
+  `tokensave` в `~/.claude.json` и `opencode/opencode.json` (через симлинк —
+  в репозиторий), `~/.claude/rules/tokensave.md`,
+  `~/.config/opencode/tokensave.md`, `installed_agents` в
+  `~/.tokensave/state.toml` (по нему тихий reinstall после смены версии).
+  Ловят `bin/mcp-sync.mjs --check`, `install.sh:machine_paths_check` и
+  `install.sh:tokensave_install_check`; новый файл, который начнёт писать
+  install, проверка не увидит.
 - Шаблоны `local/*.example` ↔ `install.sh:LOCALS` ↔ кто их читает:
   `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`), `git/gitconfig`
   (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в

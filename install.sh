@@ -197,6 +197,27 @@ tokensave_hook_check() {
   drift=$((drift + 1))
 }
 
+# `tokensave install` пишет поверх харнеса: свою MCP-запись вместо mcp-serve.sh
+# (ловит mcp-sync --check), opencode.json через симлинк прямо в репозиторий,
+# файлы правил — и заносит агента в installed_agents. После смены версии любая
+# команда tokensave тихо переустанавливает этих агентов, и всё повторяется.
+tokensave_install_check() {
+  local f agents
+  for f in "$HOME/.claude/rules/tokensave.md" "$HOME/.config/opencode/tokensave.md"; do
+    [ -e "$f" ] || continue
+    bad "$f — след tokensave install: правила tokensave уже в skills"
+    drift=$((drift + 1))
+  done
+  agents="$(awk '/^installed_agents/ { f = 1 }
+    f { while (match($0, /"[^"]+"/)) { s = s substr($0, RSTART + 1, RLENGTH - 2) " "; $0 = substr($0, RSTART + RLENGTH) } }
+    f && /]/ { exit }
+    END { printf "%s", s }' "$HOME/.tokensave/state.toml" 2>/dev/null)" || true
+  [ -z "$agents" ] && return 0
+  bad "tokensave install записал агентов: ${agents% } — после обновления tokensave перепишет их конфиги"
+  warn "откат: tokensave uninstall --agent <имя>, затем git checkout claude/settings.json opencode/opencode.json и ./install.sh"
+  drift=$((drift + 1))
+}
+
 # MCP-серверы — один список mcp/servers.json на оба агента. Claude держит их в
 # ~/.claude.json (не симлинкуется), OpenCode — в opencode.json; bin/mcp-sync.mjs
 # сверяет или приводит оба к списку.
@@ -220,6 +241,7 @@ externals() {
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
   command -v tokensave >/dev/null && tokensave_hook_check
+  tokensave_install_check
   command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (агенты ask и @commit не будут доступны)"
   # Модель @commit — из frontmatter opencode/agent/commit.md, единственное место, где она задана.
   if command -v opencode >/dev/null; then
@@ -231,9 +253,10 @@ externals() {
   fi
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$RAG_HOME/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
-  # gitconfig ссылается на глобальные git-хуки, которые кладёт сам tokensave
-  # (chain-repo-hook + auto-init); без них git молча работает без хуков.
-  [ -x "$HOME/.config/git/hooks/post-checkout" ] && good "глобальные git-хуки tokensave на месте" || warn "глобальных git-хуков tokensave нет — tokensave ставит их сам при установке"
+  # gitconfig ссылается на глобальные git-хуки tokensave (chain-repo-hook +
+  # auto-init); без них git молча работает без хуков. Ставит их `tokensave
+  # githooks on` — он пишет только в каталог хуков, в отличие от `tokensave install`.
+  [ -x "$HOME/.config/git/hooks/post-checkout" ] && good "глобальные git-хуки tokensave на месте" || warn "глобальных git-хуков tokensave нет — tokensave githooks on"
   # Токен для MR берётся из ~/.git-credentials (credential.helper = store);
   # без файла GITLAB_TOKEN выйдет пустым — агент отдаст описание MR в чат.
   [ -f "$HOME/.git-credentials" ] && good "~/.git-credentials есть (источник GITLAB_TOKEN)" || warn "~/.git-credentials нет — GITLAB_TOKEN будет пустым, MR через API недоступен"

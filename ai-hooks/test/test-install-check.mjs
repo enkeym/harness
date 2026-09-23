@@ -226,6 +226,29 @@ check('LOCALS разобран и не смешан с LINKS',
 }
 
 {
+  const state = (agents) => `last_installed_version = "7.12.1"\ninstalled_agents = ${agents}\ncached_country_flags = ["ru"]\n`;
+  const clean = sandbox();
+  fs.writeFileSync(clean.target('.tokensave/state.toml'), state('[]'));
+  const res = clean.run();
+  check('state.toml без агентов, правил tokensave нет — следов install нет',
+    [res.status, res.out.includes('tokensave install'), res.out.includes(summary(ALL, 0, 0))], [0, false, true]);
+
+  const sb = sandbox();
+  fs.writeFileSync(sb.target('.tokensave/state.toml'), state('[\n    "opencode",\n    "claude",\n]'));
+  const rules = [sb.target('.claude/rules/tokensave.md'), sb.target('.config/opencode/tokensave.md')];
+  for (const f of rules) fs.writeFileSync(f, '');
+  const after = sb.run();
+  check('следы tokensave install — ✗ на агентов и оба файла правил, код 1',
+    [after.status, after.out.includes('✗ tokensave install записал агентов: opencode claude —'),
+      ...rules.map((f) => after.out.includes(`✗ ${f} — след tokensave install`)), after.out.includes(summary(ALL, 3, 0))],
+    [1, true, true, true, true]);
+
+  const one = sandbox();
+  fs.writeFileSync(one.target('.tokensave/state.toml'), state('["claude"]'));
+  check('installed_agents в одну строку — агент назван', one.run().out.includes('записал агентов: claude —'), true);
+}
+
+{
   const sb = sandbox();
   const res = sb.run();
   check('внешних бинарей нет — названы, код не меняют',
