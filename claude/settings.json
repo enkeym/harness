@@ -228,6 +228,14 @@
             "command": "node /home/enkeym/.ai-hooks/claude/project-bootstrap.mjs"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
+          }
+        ]
       }
     ]
   },

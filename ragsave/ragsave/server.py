@@ -140,6 +140,10 @@ TOOLS: list[types.Tool] = [
             },
             "required": ["query"],
         },
+        # Claude Code держит инструменты MCP в deferred, пока модель не загрузит
+        # их через ToolSearch. tokensave свои основные помечает этой меткой, и
+        # без неё rag_search проигрывал ему выбор ещё до первого вызова.
+        _meta={"anthropic/alwaysLoad": True},
     ),
     types.Tool(
         name="rag_status",

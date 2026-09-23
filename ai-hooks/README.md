@@ -26,7 +26,8 @@ Bash, результат тот же.
 
 tokensave и ragsave — MCP-серверы, а не гарды: агент зовёт их по своему выбору.
 tokensave синхронизирует индекс сам (при подключении и перед вызовами), у
-ragsave своей синхронизации нет — её делает `bin/ragsave-sync.sh` на Stop.
+ragsave своей синхронизации нет — её делает `bin/ragsave-sync.sh` на
+SessionStart и Stop.
 
 ## Структура
 
@@ -112,7 +113,7 @@ ANSI-последовательности и повторы `copying DB` чис�
 25 записей журнала реальными отказами были 3.
 
 `ragsave-sync.sh` обслуживает смысловой индекс (`~/.rag-mcp`, см. его README):
-уходит в фон на Stop, замок держит не скрипт, а сам `ragsave` — один и тот же
+уходит в фон на SessionStart и Stop, замок держит не скрипт, а сам `ragsave` — один и тот же
 для хука, терминала и MCP. tokensave такого скрипта не требует: его сервер
 синхронизирует граф сам, а `post-commit` git-хук tokensave зовёт `sync`.
 
@@ -445,7 +446,7 @@ tokensave) в корне такого репозитория. Файл пров�
 иначе ошибка tokensave превращается в цикл одинаковых отказов. На
 `PostToolUse(mcp__tokensave__tokensave_read)` — `read-refill.mjs`: заглушку
 `unchanged: true` из межсессионного кэша tokensave подменяет текстом с диска
-(`read-core.mjs`). Ragsave: `bin/ragsave-sync.sh` на `Stop`.
+(`read-core.mjs`). Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
 (matcher `Read|Edit|Write|mcp__tokensave__tokensave_read|…_body|…_str_replace|…_multi_str_replace`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
