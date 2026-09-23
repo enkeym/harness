@@ -51,7 +51,7 @@ const loadViaTool = (sid, skill) =>
 const loadViaPrompt = (sid, prompt) =>
   run(TRACK, { session_id: sid, prompt, cwd: tmp });
 
-const SKILL_MD = '/home/enkeym/harness/skills/doctor/SKILL.md';
+const SKILL_MD = path.join(os.homedir(), 'harness', 'skills', 'doctor', 'SKILL.md');
 const edit = (p) => ({ file_path: p, old_string: 'a', new_string: 'b' });
 const bash = (command) => ({ command });
 

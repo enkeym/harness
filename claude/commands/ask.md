@@ -1,9 +1,9 @@
 ---
 description: Включить ask mode — только ответы в чате, без правок файлов
-allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)
+allowed-tools: Bash(node ~/.ai-hooks/bin/ask-mode.mjs:*)
 ---
 
-!`node /home/enkeym/.ai-hooks/bin/ask-mode.mjs on`
+!`node ~/.ai-hooks/bin/ask-mode.mjs on`
 
 Ask mode включён. Дальше в этой сессии: отвечай в чате, файлы не меняй, команд,
 меняющих состояние, не запускай — правку показывай текстом или диффом. Сейчас

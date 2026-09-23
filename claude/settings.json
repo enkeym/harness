@@ -9,8 +9,8 @@
       "mcp__ragsave__rag_search",
       "mcp__ragsave__rag_status",
       "mcp__tokensave__*",
-      "Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)",
-      "Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*)",
+      "Bash(node ~/.ai-hooks/bin/ask-mode.mjs:*)",
+      "Bash(node ~/.ai-hooks/bin/usage-report.mjs:*)",
       "mcp__playwright__*",
       "Edit(~/.ai-hooks/**)",
       "Edit(~/harness/**)"
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/ask-guard.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/ask-guard.mjs\""
           }
         ]
       },
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/security-guard.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/security-guard.mjs\""
           }
         ]
       },
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/skill-track.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/skill-track.mjs\""
           }
         ]
       },
@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/skill-gate.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/skill-gate.mjs\""
           }
         ]
       },
@@ -65,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/bash-router.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/bash-router.mjs\""
           }
         ]
       },
@@ -74,7 +74,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/read-router.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/read-router.mjs\""
           }
         ]
       },
@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/output-clip.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/output-clip.mjs\""
           }
         ]
       },
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/read-refill.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/read-refill.mjs\""
           }
         ]
       },
@@ -115,7 +115,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/context-step.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/context-step.mjs\""
           }
         ]
       },
@@ -124,7 +124,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/links-context.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/links-context.mjs\""
           }
         ]
       }
@@ -145,7 +145,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
+            "command": "\"$HOME/.ai-hooks/bin/ragsave-sync.sh\""
           }
         ]
       },
@@ -153,7 +153,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/usage-log.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/usage-log.mjs\""
           }
         ]
       },
@@ -161,7 +161,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/bin/cleanup.mjs"
+            "command": "node \"$HOME/.ai-hooks/bin/cleanup.mjs\""
           }
         ]
       },
@@ -169,7 +169,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/question-guard.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/question-guard.mjs\""
           }
         ]
       }
@@ -179,7 +179,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/paste-guard.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/paste-guard.mjs\""
           }
         ]
       },
@@ -198,7 +198,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/skill-track.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/skill-track.mjs\""
           }
         ]
       },
@@ -206,7 +206,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/ask-reminder.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/ask-reminder.mjs\""
           }
         ]
       },
@@ -214,7 +214,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/context-meter.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/context-meter.mjs\""
           }
         ]
       }
@@ -225,7 +225,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/enkeym/.ai-hooks/claude/project-bootstrap.mjs"
+            "command": "node \"$HOME/.ai-hooks/claude/project-bootstrap.mjs\""
           }
         ]
       },
@@ -233,7 +233,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/enkeym/.ai-hooks/bin/ragsave-sync.sh"
+            "command": "\"$HOME/.ai-hooks/bin/ragsave-sync.sh\""
           }
         ]
       }
@@ -243,7 +243,7 @@
   "respondToBashCommands": false,
   "statusLine": {
     "type": "command",
-    "command": "node /home/enkeym/.ai-hooks/claude/statusline.mjs",
+    "command": "node \"$HOME/.ai-hooks/claude/statusline.mjs\"",
     "refreshInterval": 5
   },
   "language": "Russian",
