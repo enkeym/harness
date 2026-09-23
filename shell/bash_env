@@ -5,6 +5,12 @@
 # Токен GitLab для агента: тот же, что уже лежит в ~/.git-credentials, второй
 # копии секрета не заводим. Агенту нужен MR через API, а читать credentials ему
 # запрещено (security-guard: содержимое файла осталось бы в транскрипте) — он
-# пользуется переменной, не заглядывая внутрь. Файла или строки для хоста нет —
-# переменная выйдет пустой, и агент просто отдаст описание в чат.
-export GITLAB_TOKEN=$(sed -n 's|https://[^:]*:\([^@]*\)@git\.stormapi\.su.*|\1|p' ~/.git-credentials 2>/dev/null | head -1)
+# пользуется переменной, не заглядывая внутрь. Хост — GITLAB_HOST из
+# ~/.config/harness/env. Хоста, файла или строки для него нет — переменная
+# выйдет пустой, и агент просто отдаст описание в чат.
+[ -f "$HOME/.config/harness/env" ] && . "$HOME/.config/harness/env"
+GITLAB_TOKEN=
+if [ -n "${GITLAB_HOST:-}" ]; then
+  GITLAB_TOKEN=$(grep -F "@$GITLAB_HOST" ~/.git-credentials 2>/dev/null | sed -n 's|https://[^:]*:\([^@]*\)@.*|\1|p' | head -1)
+fi
+export GITLAB_TOKEN

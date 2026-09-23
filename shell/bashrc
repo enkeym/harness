@@ -122,7 +122,7 @@ case ":$PATH:" in
 esac
 
 # pnpm
-export PNPM_HOME="/home/enkeym/.local/share/pnpm"
+export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME/bin:"*) ;;
   *) export PATH="$PNPM_HOME/bin:$PATH" ;;
@@ -138,3 +138,7 @@ export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1
 # Bash-тул харнесса Claude Code), минуя ранний return выше. Секреты (GITLAB_TOKEN
 # и т.п.) вынесены туда, а не сюда — см. ~/.bash_env.
 export BASH_ENV="$HOME/.bash_env"
+
+# Значения этой машины (GITLAB_HOST, ANTHROPIC_MODEL…) — вне git, в
+# ~/.config/harness/env; install.sh создаёт его из local/env.example.
+[ -f "$HOME/.config/harness/env" ] && . "$HOME/.config/harness/env"
