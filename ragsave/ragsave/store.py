@@ -343,8 +343,8 @@ class Store:
         self,
         max_age_days: float = 45.0,
         max_files: int = 20_000,
-        max_chunk_ratio: float = 20.0,
-        min_cached_chunks: int = 2_000,
+        max_dead_ratio: float = 1.0,
+        min_dead_chunks: int = 2_000,
     ) -> int:
         """Убрать давно не использованные записи. Возвращает число удалённых.
 
@@ -357,74 +357,84 @@ class Store:
         и по числу версий далеко до общего лимита — а на диске сотни мегабайт,
         и сами они не уйдут никогда.
 
-        Мера здесь — не абсолютный размер, а отношение кеша к живому индексу.
-        Абсолютный порог одинаково неверен для обоих краёв: у большого проекта
-        он режет полезный кеш, у маленького не срабатывает вовсе. Кеш вдесятеро
-        больше индекса — это версии, которых в проекте давно нет.
+        Мера здесь — не абсолютный размер, а отношение мёртвых версий (их хеша
+        нет среди живых файлов) к живому индексу. Абсолютный порог одинаково
+        неверен для обоих краёв: у большого проекта он режет полезный кеш, у
+        маленького не срабатывает вовсе. Считать весь кеш тоже нельзя: живые
+        версии в нём повторяют индекс, и у большого проекта мёртвые успевали
+        вырасти до сотни мегабайт, не доходя до порога.
+
+        Своя транзакция, поэтому вызывать вне store.transaction(): VACUUM после
+        неё обязателен — без него удаление строк не меняет размер файла, SQLite
+        оставляет освободившиеся страницы себе.
         """
         db = self.conn
         cutoff = time.time() - max_age_days * 86_400
-        removed = db.execute(
-            "DELETE FROM chunk_cache WHERE last_used < ?", (cutoff,)
-        ).rowcount
-
-        surplus = db.execute(
-            "SELECT COUNT(DISTINCT content_hash) AS n FROM chunk_cache"
-        ).fetchone()["n"] - max_files
-        if surplus > 0:
-            removed += db.execute(
-                "DELETE FROM chunk_cache WHERE content_hash IN ("
-                "  SELECT content_hash FROM chunk_cache"
-                "  GROUP BY content_hash ORDER BY MAX(last_used) ASC LIMIT ?"
-                ")",
-                (surplus,),
+        with self.transaction():
+            removed = db.execute(
+                "DELETE FROM chunk_cache WHERE last_used < ?", (cutoff,)
             ).rowcount
 
-        removed += self._gc_oversized_cache(max_chunk_ratio, min_cached_chunks)
-        return removed
+            surplus = db.execute(
+                "SELECT COUNT(DISTINCT content_hash) AS n FROM chunk_cache"
+            ).fetchone()["n"] - max_files
+            if surplus > 0:
+                removed += db.execute(
+                    "DELETE FROM chunk_cache WHERE content_hash IN ("
+                    "  SELECT content_hash FROM chunk_cache"
+                    "  GROUP BY content_hash ORDER BY MAX(last_used) ASC LIMIT ?"
+                    ")",
+                    (surplus,),
+                ).rowcount
 
-    def _gc_oversized_cache(self, max_ratio: float, min_chunks: int) -> int:
-        """Срезать кеш, разросшийся относительно живого индекса, и сжать файл.
+            dead = self._gc_dead_versions(max_dead_ratio, min_dead_chunks)
 
-        Режем самые давно не использованные версии целиком (частично удалённая
-        версия бесполезна: восстановление файла из кеша требует всех его
-        фрагментов). VACUUM обязателен — без него удаление строк не меняет
-        размер файла, SQLite оставляет освободившиеся страницы себе.
+        # Всплеск мёртвых версий — сотни мегабайт; чистка по возрасту за проход
+        # снимает единицы версий, и пересобирать ради неё весь файл незачем.
+        if dead:
+            db.execute("VACUUM")
+        return removed + dead
+
+    def _gc_dead_versions(self, max_ratio: float, min_chunks: int) -> int:
+        """Срезать мёртвые версии, перешедшие долю от живого индекса.
+
+        Живые версии не трогаем: их удаление ничего не освобождает надолго —
+        следующая правка и откат снова положат их в кеш. Мёртвые режем от самых
+        давно не использованных целиком (частично удалённая версия бесполезна:
+        восстановление файла из кеша требует всех его фрагментов).
         """
         if max_ratio <= 0:
             return 0
 
         db = self.conn
         live = db.execute("SELECT COUNT(*) AS n FROM chunks").fetchone()["n"]
-        cached = db.execute("SELECT COUNT(*) AS n FROM chunk_cache").fetchone()["n"]
-        target = max(min_chunks, int(live * max_ratio))
-        if cached <= target:
+        limit = max(min_chunks, int(live * max_ratio))
+        dead = db.execute(
+            "SELECT COUNT(*) AS n FROM chunk_cache "
+            "WHERE content_hash NOT IN (SELECT hash FROM files)"
+        ).fetchone()["n"]
+        if dead <= limit:
             return 0
 
-        # Идём от самых старых версий, пока не уложимся в цель. Шаг — половина
-        # избытка по версиям, чтобы не делать десятки проходов на большом кеше.
-        removed = 0
-        for _ in range(12):
-            versions = db.execute(
-                "SELECT COUNT(DISTINCT content_hash) AS n FROM chunk_cache"
-            ).fetchone()["n"]
-            if versions == 0:
-                break
-            step = max(1, versions // 2)
-            removed += db.execute(
-                "DELETE FROM chunk_cache WHERE content_hash IN ("
-                "  SELECT content_hash FROM chunk_cache"
-                "  GROUP BY content_hash ORDER BY MAX(last_used) ASC LIMIT ?"
-                ")",
-                (step,),
-            ).rowcount
-            db.commit()
-            if db.execute("SELECT COUNT(*) AS n FROM chunk_cache").fetchone()["n"] <= target:
-                break
-
-        if removed:
-            db.execute("VACUUM")
-        return removed
+        # Срезаем до половины предела, а не до него самого: иначе у проекта на
+        # пределе каждая новая версия запускала бы VACUUM всей БД. Нарастающий
+        # итог фрагментов от свежих версий к старым — всё, что за целью, уходит
+        # одним запросом. Запрос начинается с DELETE, а не с WITH: иначе
+        # python-sqlite не отдаёт rowcount.
+        return db.execute(
+            "DELETE FROM chunk_cache WHERE content_hash IN ("
+            "  SELECT content_hash FROM ("
+            "    SELECT content_hash, SUM(COUNT(*)) OVER ("
+            "      ORDER BY MAX(last_used) DESC, content_hash"
+            "      ROWS UNBOUNDED PRECEDING"
+            "    ) AS total"
+            "    FROM chunk_cache"
+            "    WHERE content_hash NOT IN (SELECT hash FROM files)"
+            "    GROUP BY content_hash"
+            "  ) WHERE total > ?"
+            ")",
+            (limit // 2,),
+        ).rowcount
 
     def cache_stats(self) -> tuple[int, int]:
         """(уникальных версий файлов в кеше, всего фрагментов)."""

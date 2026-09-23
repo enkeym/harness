@@ -477,9 +477,10 @@ def _index_pass(
                     store.forget_cache(known[stale].hash)
                 store.drop_file(stale)
                 report.removed += 1
-            # Кеш растёт от каждой уникальной версии файла во всех ветках — без
-            # чистки он копил бы историю бесконечно.
-            report.cache_pruned = store.gc_cache()
+        # Кеш растёт от каждой уникальной версии файла во всех ветках — без
+        # чистки он копил бы историю бесконечно. После удалений: их версии уже
+        # мёртвые.
+        report.cache_pruned = store.gc_cache()
 
     return report
 

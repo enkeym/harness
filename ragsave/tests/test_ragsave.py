@@ -627,6 +627,40 @@ def test_cache_gc() -> None:
             store.commit()
             check("лимит по объёму соблюдён", store.cache_stats()[0], 1)
 
+    # Мёртвые версии сверх доли от живого индекса: живой файл из одного
+    # фрагмента, его версия — самая старая в кеше и всё равно остаётся.
+    with tempfile.TemporaryDirectory() as tmp:
+        with Store(Path(tmp) / "rag.db", dim=dim) as store:
+            store.stamp("test-model", dim, "fake-1")
+            record = FileRecord(path="live.md", hash="live", size=5, mtime=1.0)
+            store.add_file("live.md", record, [("живой", 1, 1)],
+                           [fake_vector(1, dim)], in_tokensave=False)
+            store.put_cache("live", [("живой", 1, 1)], [fake_vector(1, dim)])
+            for index in range(4):
+                store.put_cache(
+                    f"dead{index}",
+                    [(f"старый {index}", 1, 1)],
+                    [fake_vector(index + 2, dim)],
+                )
+            for content_hash, age in (("live", 400), ("dead0", 300),
+                                      ("dead1", 200), ("dead2", 100)):
+                store.conn.execute(
+                    "UPDATE chunk_cache SET last_used = last_used - ? WHERE content_hash = ?",
+                    (age, content_hash),
+                )
+            store.commit()
+
+            removed = store.gc_cache(max_age_days=10_000, max_dead_ratio=4, min_dead_chunks=0)
+            check("мёртвые на пределе не тронуты", removed, 0)
+
+            # Предел 3 при четырёх мёртвых: срез до половины предела, иначе
+            # каждая новая версия запускала бы VACUUM.
+            removed = store.gc_cache(max_age_days=10_000, max_dead_ratio=3, min_dead_chunks=0)
+            kept = {row["content_hash"] for row in store.conn.execute(
+                "SELECT content_hash FROM chunk_cache")}
+            check("срезаны старые мёртвые версии", removed, 3)
+            check("остались живая и самая свежая мёртвая", kept, {"live", "dead3"})
+
 
 def test_sync_lock() -> None:
     print("\n--- замок на проект ---")
