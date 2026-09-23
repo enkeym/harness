@@ -12,4 +12,6 @@ if [ ! -x "$PYTHON" ]; then
 fi
 
 export PYTHONPATH="$RAGSAVE_HOME${PYTHONPATH:+:$PYTHONPATH}"
+# Модели — в тот же каталог: config.py по умолчанию смотрит в ~/.rag-mcp/models.
+export RAGSAVE_MODEL_CACHE="${RAGSAVE_MODEL_CACHE:-$RAGSAVE_HOME/models}"
 exec "$PYTHON" -m ragsave.cli "$@"

@@ -34,11 +34,25 @@
 ## Раскатка на новой машине
 
 ```bash
-git clone git@github.com:enkeym/harness.git ~/harness
+git clone git@github.com:enkeym/harness.git ~/harness   # каталог любой
 cd ~/harness
-./install.sh            # симлинки + MCP-серверы в Claude и OpenCode
+./install.sh            # симлинки, локальные файлы из шаблонов, MCP-серверы
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
+
+В репозитории нет ни имени пользователя, ни путей этой машины: конфиги
+ссылаются на `$HOME`, `~` или `{env:HOME}` (OpenCode). Значения машины —
+в двух файлах вне git, `install.sh` создаёт их из `local/*.example`, только если
+их ещё нет, и просит заполнить:
+
+- `~/.gitconfig.local` — `[user]` name и email; без них git не даст коммитить;
+- `~/.config/harness/env` — `GITLAB_HOST` (хост для `GITLAB_TOKEN`),
+  `ANTHROPIC_MODEL`, при нужде `RAGSAVE_HOME` (каталог ragsave вместо
+  `~/.rag-mcp`; задать до запуска `install.sh` — в него лягут и симлинки).
+
+Хуки tokensave в `claude/settings.json` зовут `/usr/local/bin/tokensave` —
+так их пишет `tokensave install`, и `tokensave doctor` сверяет именно путь.
+Бинарь в другом месте (Homebrew) — `--check` назовёт оба пути.
 
 MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), подробности — в
 [`mcp/servers.md`](mcp/servers.md).
@@ -89,11 +103,13 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
   котором эта строка уже отработала, передаст его в Bash-тул агента. Claude
   Code, запущенный из старого терминала, `GITLAB_TOKEN` не увидит.
 
-**Домашний каталог обязан совпадать.** Пути к хукам в `settings.json` и правила
-`permissions.allow` абсолютные и буквальные, `$HOME` в них не раскрывается. При
-другом имени пользователя хуки не запустятся, и отказа не будет — команда просто
-не найдётся. `./install.sh --check` проверяет это первым делом и печатает готовую
-команду замены.
+**Абсолютный путь в домашний каталог — поломка.** Хук или команда с
+`/home/<имя>/` у другого пользователя не запустится, и отказа не будет — она
+просто не найдётся. `./install.sh --check` ищет `/home/<имя>/` и
+`/Users/<имя>/` во всех источниках симлинков (кроме тестов и логов) и
+называет `файл:строка`. В `permissions.allow` и в месте вызова (скилл,
+команда) — одна и та же запись `~/.ai-hooks/…`: правило сравнивается
+буквально.
 
 Установка раскладывает **симлинки**, а не копии: правка в `~/.claude/skills`
 сразу видна `git status` в этом репозитории, и нет отдельного шага
@@ -127,8 +143,8 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
 | `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
-| `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `ANTHROPIC_MODEL`, `RAGSAVE_HOME` | копия `local/env.example`, заполнить |
-| `~/.gitconfig.local` | git `[user]` этой машины | копия `local/gitconfig.local.example`, заполнить |
+| `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `ANTHROPIC_MODEL`, `RAGSAVE_HOME` | `./install.sh` (из `local/env.example`), заполнить |
+| `~/.gitconfig.local` | git `[user]` этой машины | `./install.sh` (из `local/gitconfig.local.example`), заполнить |
 
 ## Тесты
 

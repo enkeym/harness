@@ -95,7 +95,7 @@ test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи,
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, занятый замок не трогает sync.log, выбор каталога и бинаря, тихие выходы
 test/test-mcp-serve.mjs         # mcp-serve: выбор корня по индексу, отказ без индекса и в $HOME, argv и cwd сервера
-test/test-install-check.mjs     # install.sh --check: отчёт о симлинках без записи, итог и код выхода, домашний каталог, mcp-sync
+test/test-install-check.mjs     # install.sh --check: отчёт о симлинках без записи, итог и код выхода, пути без машины, локальные файлы из шаблонов, хуки tokensave, mcp-sync
 ```
 
 Фоновые задачи молчаливы по устройству — уходят в `setsid`, их вывод оседает в
@@ -146,8 +146,7 @@ ANSI-последовательности и повторы `copying DB` чис�
 
 Автоматический init нельзя было отменить и он не отличал проект от контейнера:
 `~/main` — сам git-репозиторий с вложенными проектами, и сессия, открытая в нём,
-запускала индексацию всего дерева (`tokensave init | /home/enkeym/main |
-exit=101` в `errors.log`). Пустой каталог `.tokensave`, созданный «на всякий
+запускала индексацию всего дерева (`tokensave init | ~/main | exit=101` в `errors.log`). Пустой каталог `.tokensave`, созданный «на всякий
 случай», при этом выглядел для остальных хуков как инициализированный проект.
 
 ## Выбор проекта для MCP

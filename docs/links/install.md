@@ -10,15 +10,23 @@ paths:
 ## Контракты и доки
 - Цели симлинков `install.sh` ↔ зашитые пути у потребителей:
   `~/.local/bin/ragsave` — запускают `ai-hooks/bin/mcp-serve.sh`,
-  `ai-hooks/bin/ragsave-sync.sh`; `~/.rag-mcp` — `RAGSAVE_HOME` в `bin/ragsave`;
-  `~/.ai-hooks` — пути хуков в `claude/settings.json`, абсолютный импорт в
+  `ai-hooks/bin/ragsave-sync.sh`; `$RAG_HOME` — `RAGSAVE_HOME` в `bin/ragsave`
+  (и venv, и `PYTHONPATH`, и модели);
+  `~/.ai-hooks` — пути хуков в `claude/settings.json`, импорт по `os.homedir()` в
   `opencode/plugin/tokensave-guard.js`, вызов `log-error.sh` в
   `ai-hooks/bin/ragsave-sync.sh`.
   Сменил цель в `install.sh` одну — хуки, MCP и фоновые синки падают молча.
-- Домашний каталог, зашитый в конфиги, — проверка `baked` в `install.sh` ↔
-  абсолютные пути в `claude/settings.json` (`permissions.allow` не раскрывает
-  `$HOME`) и `opencode/plugin/tokensave-guard.js`. Новый абсолютный путь вне этих
-  файлов проверка не увидит.
+- Пути без машины — `install.sh:machine_paths_check` ищет `/home/<имя>/` и
+  `/Users/<имя>/` во всех источниках `LINKS`, кроме каталогов `test`, `tests`,
+  `logs`. Путь в новом формате (`$USER`, `/root/`) или новый источник вне
+  `LINKS` проверка не увидит; фикстура с чужим HOME вне `test/` — ложное ✗.
+- Путь к бинарю tokensave в хуках `claude/settings.json` ↔
+  `install.sh:tokensave_hook_check` и `tokensave doctor`: оба сверяют путь
+  буквально. `tokensave install`/`reinstall` переписывают хуки своим путём.
+- Шаблоны `local/*.example` ↔ `install.sh:LOCALS` ↔ кто их читает:
+  `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`), `git/gitconfig`
+  (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в
+  шаблоне; переименовал файл — install создаёт один, shell ищет другой.
 - Голое имя команды в `mcp/servers.json` (`playwright-mcp`) ↔ PATH оболочки,
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь, OpenCode — голое имя (его PATH тоже должен видеть

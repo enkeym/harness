@@ -16,10 +16,17 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const INSTALL = path.join(path.dirname(ROOT), 'install.sh');
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-indexer.mjs');
-const LINKS = [...fs.readFileSync(INSTALL, 'utf8').matchAll(/^\s*"\$HOME\/([^|"]+)\|([^"]+)"$/gm)]
-  .map(([, target, src]) => ({ target, src }));
-// mkdir/mv/ln/rm --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
-const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'mkdir', 'mv', 'ln', 'rm'];
+// Пары target|source из массива install.sh; $RAG_HOME без RAGSAVE_HOME — ~/.rag-mcp.
+const pairs = (name) => {
+  const block = fs.readFileSync(INSTALL, 'utf8').match(new RegExp(`^${name}=\\(\\n([\\s\\S]*?)^\\)`, 'm'))[1];
+  return [...block.matchAll(/^\s*"\$(HOME|RAG_HOME)\/([^|"]+)\|([^"]+)"$/gm)]
+    .map(([, base, target, src]) => ({ target: base === 'RAG_HOME' ? `.rag-mcp/${target}` : target, src }));
+};
+const LINKS = pairs('LINKS');
+const LOCALS = pairs('LOCALS');
+const ALL = LINKS.length + LOCALS.length;
+// mkdir/mv/ln/rm/cp --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
+const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'mkdir', 'mv', 'ln', 'rm', 'cp'];
 const BASH = spawnSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
 
 let failed = 0;
@@ -62,6 +69,10 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
     fs.writeFileSync(path.join(harness, src), '');
   }
   fs.writeFileSync(path.join(harness, 'claude', 'settings.json'), settings);
+  for (const { src } of LOCALS) {
+    fs.mkdirSync(path.dirname(path.join(harness, src)), { recursive: true });
+    fs.writeFileSync(path.join(harness, src), `шаблон ${src}`);
+  }
   fs.mkdirSync(path.join(harness, 'bin'), { recursive: true });
   fs.symlinkSync(FAKE, path.join(harness, 'bin', 'mcp-sync.mjs'));
   fs.symlinkSync(INSTALL, path.join(harness, 'install.sh'));
@@ -79,6 +90,11 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
     fs.mkdirSync(path.dirname(target(t)), { recursive: true });
     fs.symlinkSync(path.join(harness, src), target(t));
   }
+  // Локальные файлы — уже заполненные копии.
+  for (const { target: t } of LOCALS) {
+    fs.mkdirSync(path.dirname(target(t)), { recursive: true });
+    fs.writeFileSync(target(t), 'свои значения');
+  }
 
   const calls = path.join(home, 'calls.jsonl');
   const skip = [harness, bin, calls];
@@ -93,14 +109,18 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
 const summary = (ok, drift, missing) => `на месте: ${ok}, требуют внимания: ${drift}, нет источника: ${missing}`;
 
 check('LINKS разобран из install.sh', LINKS.length > 20 && LINKS.some((l) => l.target === '.ai-hooks' && l.src === 'ai-hooks'), true);
+check('LINKS: $RAG_HOME — ~/.rag-mcp', LINKS.some((l) => l.target === '.rag-mcp/ragsave' && l.src === 'ragsave/ragsave'), true);
+check('LOCALS разобран и не смешан с LINKS',
+  [LOCALS.map((l) => l.target), LINKS.some((l) => l.src.startsWith('local/'))],
+  [['.config/harness/env', '.gitconfig.local'], false]);
 
 {
   const sb = sandbox();
   const res = sb.run();
   check('всё на месте — код 0', res.status, 0);
-  check('всё на месте — итог', res.out.includes(summary(LINKS.length, 0, 0)), true);
+  check('всё на месте — итог', res.out.includes(summary(ALL, 0, 0)), true);
   check('mcp-sync зовётся с --check', res.calls, [['--check']]);
-  check('settings.json без зашитого /home — проверка домашнего каталога пропущена', res.out.includes('домашний каталог'), false);
+  check('чистые источники — ✓ без зашитых домашних каталогов', res.out.includes('✓ в источниках симлинков нет зашитых'), true);
 }
 
 {
@@ -120,7 +140,7 @@ check('LINKS разобран из install.sh', LINKS.length > 20 && LINKS.some(
   const res = sb.run();
   // rules/core.md — источник двух целей (Claude и OpenCode).
   check('расхождения — код 1', res.status, 1);
-  check('расхождения — итог', res.out.includes(summary(LINKS.length - 5, 3, 2)), true);
+  check('расхождения — итог', res.out.includes(summary(ALL - 5, 3, 2)), true);
   check('симлинк мимо репозитория назван', res.out.includes(`${wrong} — симлинк ведёт мимо репозитория: ${elsewhere}`), true);
   check('обычный файл назван', res.out.includes(`${file} — обычный файл, а не симлинк`), true);
   check('нет цели — названа', res.out.includes(`${gone} — нет`), true);
@@ -132,27 +152,77 @@ check('LINKS разобран из install.sh', LINKS.length > 20 && LINKS.some(
   const sb = sandbox();
   fs.rmSync(path.join(sb.harness, 'git', 'gitconfig'));
   const res = sb.run();
-  check('нет только источника — код 1', [res.status, res.out.includes(summary(LINKS.length - 1, 0, 1))], [1, true]);
+  check('нет только источника — код 1', [res.status, res.out.includes(summary(ALL - 1, 0, 1))], [1, true]);
 }
 
 {
   const sb = sandbox();
   const res = sb.run(['--check'], { FAKE_INDEXER_EXIT: '1' });
-  check('mcp-sync --check расходится — код 1 и +1 к вниманию', [res.status, res.out.includes(summary(LINKS.length, 1, 0))], [1, true]);
+  check('mcp-sync --check расходится — код 1 и +1 к вниманию', [res.status, res.out.includes(summary(ALL, 1, 0))], [1, true]);
 }
 
 {
   const sb = sandbox({ tools: TOOLS.filter((t) => t !== 'node') });
   const res = sb.run();
-  check('node нет — MCP не сверен, +1 к вниманию', [res.status, res.out.includes('node не найден — MCP не сверить'), res.out.includes(summary(LINKS.length, 1, 0))], [1, true, true]);
+  check('node нет — MCP не сверен, +1 к вниманию', [res.status, res.out.includes('node не найден — MCP не сверить'), res.out.includes(summary(ALL, 1, 0))], [1, true, true]);
 }
 
 {
-  const sb = sandbox({ settings: '{"hooks":"/home/someone/.ai-hooks/claude/x.mjs"}' });
+  const sb = sandbox({ settings: '{\n"hooks": "node /home/someone/.ai-hooks/claude/x.mjs"\n}' });
+  fs.writeFileSync(path.join(sb.harness, 'rules', 'core.md'), 'allowed-tools: Bash(node /Users/someone/.ai-hooks/bin/x.mjs)\n');
+  // Тесты и логи не в счёт: фикстуры нарочно подставляют чужой HOME.
+  fs.rmSync(path.join(sb.harness, 'ai-hooks'));
+  for (const dir of ['test', 'logs']) {
+    fs.mkdirSync(path.join(sb.harness, 'ai-hooks', dir), { recursive: true });
+    fs.writeFileSync(path.join(sb.harness, 'ai-hooks', dir, 'x.mjs'), "const HOME = '/home/someone/';\n");
+  }
   const res = sb.run();
-  check('зашитый домашний каталог не совпадает — код 1', res.status, 1);
-  check('зашитый домашний каталог не совпадает — названы оба', res.out.includes(`в конфигах /home/someone, здесь ${sb.home}`), true);
-  check('зашитый домашний каталог не совпадает — +1 к вниманию', res.out.includes(summary(LINKS.length, 1, 0)), true);
+  check('зашитый домашний каталог — код 1 и ✗', [res.status, res.out.includes('✗ в источниках симлинков зашит домашний каталог')], [1, true]);
+  check('зашитый домашний каталог — /home и /Users названы файл:строка',
+    [res.out.includes('claude/settings.json:2\n'), res.out.includes('rules/core.md:1\n')], [true, true]);
+  check('зашитый домашний каталог — test/ и logs/ пропущены', res.out.includes('x.mjs'), false);
+  check('зашитый домашний каталог — +1 к вниманию', res.out.includes(summary(ALL, 1, 0)), true);
+}
+
+{
+  const sb = sandbox();
+  const env = sb.target('.config/harness/env');
+  fs.rmSync(env);
+  const before = sb.snap();
+  const res = sb.run();
+  check('нет локального env — предупреждение и код 1',
+    [res.status, res.out.includes(`${env} — нет, ./install.sh создаст его из local/env.example`), res.out.includes(summary(ALL - 1, 1, 0))],
+    [1, true, true]);
+  check('нет локального env — --check его не создаёт', changes(before, sb.snap()), []);
+}
+
+{
+  const sb = sandbox();
+  const [env, gitLocal] = LOCALS.map(({ target }) => sb.target(target));
+  fs.rmSync(env);
+  fs.rmSync(path.dirname(env), { recursive: true });
+  const res = sb.run([]);
+  check('install создаёт локальный файл из шаблона и просит заполнить',
+    [read(env), fs.lstatSync(env).isSymbolicLink(), res.out.includes(`${env} — создан из local/env.example, заполнить`)],
+    ['шаблон local/env.example', false, true]);
+  check('install не затирает существующий локальный файл', read(gitLocal), 'свои значения');
+  fs.writeFileSync(env, 'заполнен');
+  sb.run([]);
+  check('повторный install не затирает заполненный файл', read(env), 'заполнен');
+}
+
+{
+  const hooks = (bin) => `{"hooks": [{"type": "command", "command": "${bin}", "args": ["hook-stop"]}]}`;
+  const other = sandbox({ settings: hooks('/usr/local/bin/tokensave'), fakes: ['tokensave'] });
+  const res = other.run();
+  const here = path.join(other.home, 'path', 'tokensave');
+  check('хуки tokensave зовут другой путь — ✗, оба пути и код 1',
+    [res.status, res.out.includes(`✗ хуки tokensave в claude/settings.json зовут /usr/local/bin/tokensave, а tokensave здесь: ${here}`)],
+    [1, true]);
+  const same = sandbox({ fakes: ['tokensave'] });
+  const sameBin = path.join(same.home, 'path', 'tokensave');
+  fs.writeFileSync(path.join(same.harness, 'claude', 'settings.json'), hooks(sameBin));
+  check('хуки tokensave зовут найденный бинарь — ✓', same.run().out.includes(`✓ хуки tokensave в claude/settings.json зовут ${sameBin}`), true);
 }
 
 {

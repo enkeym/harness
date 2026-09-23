@@ -10,13 +10,16 @@
 #   ./install.sh --venv   собрать venv для ragsave (~250 МБ) и поставить зависимости
 #
 # Идемпотентно: повторный запуск ничего не ломает. Реальный файл на месте
-# симлинка не удаляется, а уезжает в <имя>.bak-<дата>.
+# симлинка не удаляется, а уезжает в <имя>.bak-<дата>. Локальные файлы
+# машины (LOCALS) создаются из шаблона только там, где их ещё нет.
 
 set -euo pipefail
 
 HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 MODE="${1:-install}"
+# Каталог ragsave — тот же, что у bin/ragsave: он ищет там и venv, и код (PYTHONPATH).
+RAG_HOME="${RAGSAVE_HOME:-$HOME/.rag-mcp}"
 
 ok=0; fixed=0; drift=0; missing=0
 
@@ -34,9 +37,9 @@ LINKS=(
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.claude/settings.local.json|claude/settings.local.json"
   "$HOME/.ai-hooks|ai-hooks"
-  "$HOME/.rag-mcp/ragsave|ragsave/ragsave"
-  "$HOME/.rag-mcp/tests|ragsave/tests"
-  "$HOME/.rag-mcp/README.md|ragsave/README.md"
+  "$RAG_HOME/ragsave|ragsave/ragsave"
+  "$RAG_HOME/tests|ragsave/tests"
+  "$RAG_HOME/README.md|ragsave/README.md"
   "$HOME/.local/bin/ragsave|bin/ragsave"
   "$HOME/.config/opencode/AGENTS.md|opencode/AGENTS.md"
   "$HOME/.config/opencode/agent|opencode/agent"
@@ -52,6 +55,13 @@ LINKS=(
   "$HOME/.gitconfig|git/gitconfig"
   "$HOME/.gitignore_global|git/gitignore_global"
   "$HOME/.tokensave/config.toml|tokensave/config.toml"
+)
+
+# target|шаблон — значения этой машины вне git. Копия, а не симлинк: заполненный
+# файл не должен попасть в репозиторий, а существующий — быть затёртым шаблоном.
+LOCALS=(
+  "$HOME/.config/harness/env|local/env.example"
+  "$HOME/.gitconfig.local|local/gitconfig.local.example"
 )
 
 check_one() {
@@ -108,8 +118,27 @@ link_one() {
   fixed=$((fixed + 1))
 }
 
+local_one() {
+  local target="$1" src="$HARNESS/$2"
+  if [ -f "$target" ]; then
+    good "$target"; ok=$((ok + 1)); return
+  fi
+  if [ "$MODE" = "--check" ]; then
+    warn "$target — нет, ./install.sh создаст его из $2"
+    drift=$((drift + 1)); return
+  fi
+  if [ ! -f "$src" ]; then
+    bad "$target — нет шаблона $2 в репозитории"
+    missing=$((missing + 1)); return
+  fi
+  mkdir -p "$(dirname "$target")"
+  cp "$src" "$target"
+  warn "$target — создан из $2, заполнить своими значениями"
+  fixed=$((fixed + 1))
+}
+
 build_venv() {
-  local home="$HOME/.rag-mcp"
+  local home="$RAG_HOME"
   say "venv для ragsave в $home/venv"
   if [ -x "$home/venv/bin/python" ]; then
     good "venv уже собран"
@@ -124,23 +153,47 @@ build_venv() {
   say "при первом запуске в $home/models."
 }
 
-# Пути к хукам в settings.json и opencode.json записаны абсолютными: правила
-# permissions.allow сопоставляются буквально и $HOME в них не раскрывается.
-# Значит домашний каталог на новой машине обязан совпадать, иначе хуки просто
-# не запустятся, а отказов не будет — Claude Code молча пропустит несуществующую
-# команду. Ловим это здесь, а не через неделю по странному поведению.
-home_check() {
-  local baked
-  # Путей нет — grep выходит с 1, и без `|| true` pipefail с set -e обрывали весь скрипт.
-  baked="$(grep -o '/home/[a-z_][a-z0-9_-]*/\.ai-hooks' "$HARNESS/claude/settings.json" | head -1 | sed 's#/\.ai-hooks##')" || true
-  [ -z "$baked" ] && return 0
-  if [ "$baked" = "$HOME" ]; then
-    good "домашний каталог совпадает с зашитым в конфигах ($HOME)"
+# Источники симлинков читаются на любой машине как есть: абсолютный путь в
+# домашний каталог там — хук, команда или правило прав, которые у другого
+# пользователя молча не найдутся. Пути строятся через $HOME, ~ или {env:HOME}. Тесты
+# и логи не в счёт: фикстуры нарочно подставляют чужие домашние каталоги,
+# а ai-hooks/logs — рантайм этой машины вне git.
+machine_paths_check() {
+  local srcs=() pair src hits line rest
+  for pair in "${LINKS[@]}"; do
+    src="$HARNESS/${pair##*|}"
+    [ -e "$src" ] || continue
+    case " ${srcs[*]:-} " in *" $src "*) ;; *) srcs+=("$src") ;; esac
+  done
+  [ "${#srcs[@]}" -eq 0 ] && return 0
+  # Ничего не нашлось — grep выходит с 1, и без `|| true` pipefail с set -e оборвали бы скрипт.
+  hits="$(grep -rnE --exclude-dir=test --exclude-dir=tests --exclude-dir=logs --exclude-dir=node_modules --exclude-dir=__pycache__ \
+    '/(home|Users)/[A-Za-z0-9._-]+/' "${srcs[@]}" 2>/dev/null)" || true
+  if [ -z "$hits" ]; then
+    good "в источниках симлинков нет зашитых /home/<имя>/ и /Users/<имя>/"
     return 0
   fi
-  bad "домашний каталог не совпадает: в конфигах $baked, здесь $HOME"
-  warn "хуки не запустятся. Заменить пути во всём репозитории:"
-  warn "  grep -rl '$baked' --exclude-dir=.git . | xargs sed -i 's#$baked#$HOME#g'"
+  bad "в источниках симлинков зашит домашний каталог — на другой машине не найдётся:"
+  while IFS= read -r line; do
+    line="${line#"$HARNESS/"}"; rest="${line#*:}"
+    warn "  ${line%%:*}:${rest%%:*}"
+  done <<<"$hits"
+  warn "заменить на \$HOME, ~ или {env:HOME} (opencode.json)"
+  drift=$((drift + 1))
+}
+
+# Хуки tokensave в settings.json зовут бинарь по абсолютному пути: так их пишет
+# `tokensave install`, и `tokensave doctor` сверяет именно путь — голое имя он считает
+# поломкой. На машине, где tokensave лежит в другом месте, хуки молча не стартуют.
+tokensave_hook_check() {
+  local hook_bin
+  hook_bin="$(grep -oE '"command": *"[^"]*/tokensave"' "$HARNESS/claude/settings.json" 2>/dev/null | head -1 | sed -E 's/.*"([^"]*)"$/\1/')" || true
+  [ -z "$hook_bin" ] && return 0
+  if [ "$hook_bin" = "$(command -v tokensave)" ]; then
+    good "хуки tokensave в claude/settings.json зовут $hook_bin"
+    return 0
+  fi
+  bad "хуки tokensave в claude/settings.json зовут $hook_bin, а tokensave здесь: $(command -v tokensave) — поправить command в settings.json"
   drift=$((drift + 1))
 }
 
@@ -161,11 +214,12 @@ mcp_sync() {
 
 externals() {
   say
-  home_check
+  machine_paths_check
   say
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
+  command -v tokensave >/dev/null && tokensave_hook_check
   command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (агенты ask и @commit не будут доступны)"
   # Модель @commit — из frontmatter opencode/agent/commit.md, единственное место, где она задана.
   if command -v opencode >/dev/null; then
@@ -176,7 +230,7 @@ externals() {
       || warn "$commit_model недоступна — opencode auth login ($commit_provider) или сменить model в opencode/agent/commit.md"
   fi
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
-  [ -x "$HOME/.rag-mcp/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
+  [ -x "$RAG_HOME/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
   # gitconfig ссылается на глобальные git-хуки, которые кладёт сам tokensave
   # (chain-repo-hook + auto-init); без них git молча работает без хуков.
   [ -x "$HOME/.config/git/hooks/post-checkout" ] && good "глобальные git-хуки tokensave на месте" || warn "глобальных git-хуков tokensave нет — tokensave ставит их сам при установке"
@@ -189,6 +243,7 @@ case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS):"
     for pair in "${LINKS[@]}"; do check_one "${pair%%|*}" "${pair##*|}"; done
+    for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync --check
     externals
     say
@@ -201,6 +256,7 @@ case "$MODE" in
   install)
     say "Раскатка харнеса из $HARNESS:"
     for pair in "${LINKS[@]}"; do link_one "${pair%%|*}" "${pair##*|}"; done
+    for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync
     externals
     say
