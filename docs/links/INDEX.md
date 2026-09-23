@@ -6,5 +6,7 @@
 `- <домен> — <файл>.md — <одна фраза>`, проверка ссылок и глобов:
 `node ~/.ai-hooks/bin/check-impact-map.mjs`.
 
-- hooks — `hooks.md` — общие пути логов и состояния, выключатели и их доки, регистрация хуков, каталоги карты
+- hooks/guards — `hooks/guards.md` — ключ ask mode, пары гардов с OpenCode и ragsave, форматы tokensave, регистрация хуков, разбор shell
+- hooks/ragsave — `hooks/ragsave.md` — код занятого замка, лог и отказ от автосинка
+- hooks/logs — `hooks/logs.md` — общие пути логов и состояния, порог медленного хука, каталоги карты
 - install — `install.md` — цели симлинков и зашитые пути у потребителей, список MCP-серверов

@@ -1,23 +1,16 @@
 ---
 paths:
-  - "ai-hooks/**"
-  - "ragsave/ragsave/server.py"
+  - "ai-hooks/*-core.mjs"
+  - "ai-hooks/claude/**"
+  - "ai-hooks/opencode/**"
+  - "ai-hooks/bin/ask-mode.mjs"
+  - "ai-hooks/bin/mcp-serve.sh"
+  - "ai-hooks/README.md"
 ---
 
-# hooks — связи, которых граф не видит
+# hooks/guards — связи, которых граф не видит
 
 ## Флаги и переключатели
-- `AI_HOOKS_LOG_DIR` (по умолчанию `~/.ai-hooks/logs`) — читают
-  `ai-hooks/hooklog-core.mjs:LOG_DIR`, `ai-hooks/bin/log-error.sh`,
-  `ragsave/ragsave/server.py:_log_failure`; тот же каталог зашит без переменной в
-  `ai-hooks/claude/usage-log.mjs:LOG_DIR`, `ai-hooks/bin/cleanup.mjs:trimLog`,
-  `ai-hooks/bin/cleanup.mjs:rollupUsage`. Сменил путь в одном месте — errors.log
-  расползается на два каталога, cleanup смотрит не туда.
-- `AI_HOOKS_STATE_DIR` / `~/.claude/state/clip-output` — `ai-hooks/state-core.mjs:STATE_ROOT`
-  задаёт корень, `ai-hooks/bin/cleanup.mjs:TARGETS` чистит `clip-output` под ним,
-  а `ai-hooks/bin/clip-output.sh` пишет в зашитый `${HOME}/.claude/state/clip-output`.
-  Сдвиг корня без скрипта — полные выводы копятся и не чистятся.
-
 - Ключ ask mode — `session_id` из входного JSON в `ai-hooks/claude/ask-guard.mjs`,
   `ask-reminder.mjs`, `statusline.mjs` ↔ `CLAUDE_CODE_SESSION_ID` в
   `ai-hooks/bin/ask-mode.mjs` (его вызывают `/ask`, `/ask-off`). Claude Code
@@ -35,19 +28,8 @@ paths:
   `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
   такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
   `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
-- Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) ↔ проверка
-  `exit_code = 3` для источника `ragsave*` в `ai-hooks/bin/log-error.sh`. Сменил код
-  или дал его другому отказу — журнал снова полон пропусков или молчит о сбое.
-- Лог синка и отказ от него — `.ragsave/sync.log` и `.ragsave-disable` в
-  `ai-hooks/bin/ragsave-sync.sh` ↔ `ragsave/ragsave/config.py:SYNC_LOG_NAME`/`DISABLE_MARK`,
-  по ним `ragsave/ragsave/indexer.py:sync_state` строит `autosync`/`last_sync` в
-  `rag_status`. Переименовал в одном месте — статус снова показывает живой
-  автосинк, которого нет.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
-- Порог медленного хука — `ai-hooks/hooklog-core.mjs:SLOW_MS` (800) ↔ порог
-  `ms > 800` в `skills/doctor/SKILL.md`. Сменил константу — doctor ставит
-  диагноз «медленно» по старому порогу.
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`
   ловит имя `TOKENSAVE_DISABLE_GREP_HOOK` из подсказки самого бинаря
   (`tokensave hook-pre-tool-use`), а запрет `git grep` в `guardBash` полагается
@@ -69,11 +51,6 @@ paths:
   `opencode/plugin/tokensave-guard.js` импортирует абсолютным путём
   `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
-- Каталоги карты `docs/links` / `.claude/links` — три копии списка:
-  `ai-hooks/links-core.mjs:MAP_DIRS`, `ai-hooks/bin/init-impact-map.mjs:OWN_DIR`
-  (+ `SHARED_DIR`), `ai-hooks/bin/seed-impact-map.mjs:PATH_EXCLUDE`. Новый каталог
-  в одном месте — init создаёт карту, которую links-context не подключает, или
-  seed находит кандидатов в самой карте.
 - Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
   на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`
   включена только в `ai-hooks/guard-core.mjs:guardBash`: сняли — `node <<EOF`
