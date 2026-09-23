@@ -40,6 +40,9 @@ INSTRUCTIONS = (
     "вызовы, зависимости) используй tokensave."
 )
 
+# Индекс создаёт человек: модель не запускает многоминутную индексацию сама.
+NO_INDEX_HINT = "Попроси пользователя выполнить в терминале: ragsave init"
+
 # Один энкодер на процесс: модель весит гигабайты, повторная загрузка недопустима.
 _embedder = Embedder()
 
@@ -164,9 +167,10 @@ TOOLS: list[types.Tool] = [
     types.Tool(
         name="rag_index",
         description=(
-            "Построить или обновить смысловой индекс. Инкрементально: "
-            "неизменённые файлы пропускаются. Обычно вызывается автоматически "
-            "хуком, вручную нужен для первичной индексации или после смены модели."
+            "Обновить уже построенный смысловой индекс. Инкрементально: "
+            "неизменённые файлы пропускаются. Обычно обновляет хук, вручную — "
+            "после смены модели. Индекса нет — не строит: первую индексацию "
+            "запускает пользователь командой ragsave init."
         ),
         inputSchema={
             "type": "object",
@@ -218,8 +222,7 @@ def _do_search(args: dict[str, Any]) -> types.CallToolResult:
     paths = ProjectPaths(root=root)
     if not paths.db.exists():
         return _error(
-            f"индекс для {root} не построен. Выполните rag_index "
-            f"или в терминале: ragsave init"
+            f"индекс для {root} не построен. {NO_INDEX_HINT}"
         )
 
     query = str(args.get("query") or "").strip()
@@ -264,7 +267,7 @@ def _do_status(args: dict[str, Any]) -> types.CallToolResult:
     if not paths.db.exists():
         return _text(
             {"project": str(root), "indexed": False,
-             "hint": "индекс не построен, выполните rag_index"}
+             "hint": f"индекс не построен. {NO_INDEX_HINT}"}
         )
     with Store(paths.db) as store:
         stats = store.stats()
@@ -287,6 +290,10 @@ def _sync_note(paths: ProjectPaths) -> str | None:
 
 def _do_index(args: dict[str, Any]) -> types.CallToolResult:
     root = _resolve_root(args.get("project"))
+    if not ProjectPaths(root=root).db.exists():
+        # Первая индексация длится минуты — её запускает человек, не модель.
+        raise ValueError(f"индекс для {root} не построен, rag_index его не "
+                         f"создаёт. {NO_INDEX_HINT}")
     report = index_project(
         root=root, embedder=_embedder, force=bool(args.get("force"))
     )

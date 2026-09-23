@@ -692,6 +692,52 @@ def test_sync_state() -> None:
         config.EMBED_DIM, server._embedder = original_dim, original_embedder
 
 
+def test_index_needs_init() -> None:
+    print("\n--- rag_index не строит индекс с нуля ---")
+
+    import asyncio
+
+    import mcp.types as types
+
+    from ragsave import server
+    from ragsave.config import ProjectPaths
+    from ragsave.indexer import index_project
+
+    original_dim, original_embedder = config.EMBED_DIM, server._embedder
+    config.EMBED_DIM = FakeEmbedder.dim
+    server._embedder = FakeEmbedder()
+
+    def call(tool: str, root: Path) -> types.CallToolResult:
+        params = types.CallToolRequestParams(name=tool, arguments={"project": str(root)})
+        return asyncio.run(server.on_call_tool(None, params))
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(root)], check=True,
+                           capture_output=True)
+            (root / "a.md").write_text("# деплой", encoding="utf-8")
+            paths = ProjectPaths(root=root)
+
+            check_true("поиск без БД не предлагает rag_index",
+                       "rag_index" not in call("rag_search", root).content[0].text)
+            refused = call("rag_index", root)
+            check_true("без БД rag_index отказывает", refused.is_error)
+            check_true("отказ указывает на ragsave init",
+                       "ragsave init" in refused.content[0].text, refused.content[0].text)
+            check_true("БД не создана", not paths.db.exists())
+            check("эмбеддинг не запускался", server._embedder.calls, 0)
+
+            index_project(root=root, embedder=server._embedder)
+            (root / "b.md").write_text("# миграции", encoding="utf-8")
+            updated = call("rag_index", root)
+            check_true("готовый индекс rag_index обновляет",
+                       not updated.is_error and '"added": 1' in updated.content[0].text,
+                       updated.content[0].text)
+    finally:
+        config.EMBED_DIM, server._embedder = original_dim, original_embedder
+
+
 def test_fts_query() -> None:
     print("\n--- разбор запроса FTS ---")
 
@@ -714,6 +760,7 @@ def main() -> int:
     test_cache_gc()
     test_sync_lock()
     test_sync_state()
+    test_index_needs_init()
     test_fts_query()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")
     return 1 if FAILED else 0

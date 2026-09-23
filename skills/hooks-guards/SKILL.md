@@ -103,7 +103,7 @@ fired and what it wants instead.
 - `ragsave-sync` syncs an **existing** ragsave index on SessionStart and Stop
   unless the repository root has `.ragsave-disable` (`rag_status`: `autosync`,
   `last_sync`); tokensave syncs itself. Creating an index is the user's call —
-  say `tokensave init <path>` is needed, don't offer to run it.
+  say `tokensave init <path>` / `ragsave init` is needed, don't run either.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the
   session directory. Outside a project the server doesn't come up — tools are
   absent, not wrong.
