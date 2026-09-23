@@ -6,13 +6,16 @@
 // harness отдаёт наружу: состояние в файле, PreToolUse-гард на изменяющие
 // инструменты, подсказка в промпт и индикатор в statusline.
 //
-// Ключ состояния — рабочий каталог, а не сессия: слэш-команда, хук и statusline
-// видят cwd одинаково, а session_id из них знают не все. Практическое следствие:
-// две сессии в одном каталоге делят режим.
+// Ключ состояния — сессия: хуки и statusline получают session_id во входном
+// JSON, `/ask` и `!node … ask-mode.mjs` — из CLAUDE_CODE_SESSION_ID. Раньше
+// ключом был каталог, а сброс на SessionStart — способом начать новую сессию с
+// умолчания; вторая сессия в том же каталоге этим сбросом молча выключала
+// /ask в первой, уже работающей. Без session_id (запуск из терминала вне
+// Claude Code) ключ — каталог.
 //
-// Режим по умолчанию (файл default) действует там, где каталог ничего не сказал
-// о себе, то есть в каждой новой сессии. Каталог всегда пишет состояние явно —
-// «файла нет» больше не значит «выключено», иначе /ask-off не смог бы отменить
+// Режим по умолчанию (файл default) действует там, где сессия ничего не сказала
+// о себе, то есть в каждой новой. Сессия всегда пишет состояние явно —
+// «файла нет» не значит «выключено», иначе /ask-off не смог бы отменить
 // включённый по умолчанию режим.
 
 import fs from 'node:fs';
@@ -40,9 +43,10 @@ export function anchorDir(cwd) {
   return process.env.CLAUDE_PROJECT_DIR || cwd;
 }
 
-// Ключ — корень проекта (projectKey из state-core): внутри одного репозитория
-// подкаталоги делят режим.
-function keyFor(cwd) {
+// Ключ — сессия; без неё корень проекта (projectKey из state-core): внутри
+// одного репозитория подкаталоги делят режим.
+function keyFor(cwd, sid) {
+  if (sid) return `sess-${String(sid).replace(/[^\w-]/g, '_')}`;
   return `dir-${projectKey(anchorDir(cwd))}`;
 }
 
@@ -69,28 +73,28 @@ export function setDefault(on) {
   return on;
 }
 
-// Откуда взято состояние — нужно statusline и команде status. dir возвращаем
-// явно: когда statusline и гард всё же разойдутся, вопрос «к какому каталогу
+// Откуда взято состояние — нужно команде status. Якорь возвращаем явно: когда
+// statusline и гард всё же разойдутся, вопрос «к какой сессии или каталогу
 // привязан режим» должен иметь ответ, а не догадку.
-export function state(cwd) {
-  const dir = repoRootOr(anchorDir(cwd));
-  const v = read(path.join(STATE_DIR, keyFor(cwd)));
-  if (v === 'on' || v === 'off') return { on: v === 'on', source: 'каталог', dir };
-  return { on: defaultOn(), source: 'по умолчанию', dir };
+export function state(cwd, sid) {
+  const anchor = sid ? `сессия ${sid}` : repoRootOr(anchorDir(cwd));
+  const v = read(path.join(STATE_DIR, keyFor(cwd, sid)));
+  if (v === 'on' || v === 'off') return { on: v === 'on', source: sid ? 'сессия' : 'каталог', anchor };
+  return { on: defaultOn(), source: 'по умолчанию', anchor };
 }
 
-export function isOn(cwd) {
-  return state(cwd).on;
+export function isOn(cwd, sid) {
+  return state(cwd, sid).on;
 }
 
-export function setMode(cwd, on) {
-  write(path.join(STATE_DIR, keyFor(cwd)), on ? 'on' : 'off');
+export function setMode(cwd, on, sid) {
+  write(path.join(STATE_DIR, keyFor(cwd, sid)), on ? 'on' : 'off');
   return on;
 }
 
-// Снять решение каталога и вернуться к режиму по умолчанию.
-export function resetMode(cwd) {
-  try { fs.unlinkSync(path.join(STATE_DIR, keyFor(cwd))); } catch { /* уже сброшен */ }
+// Снять решение сессии (каталога) и вернуться к режиму по умолчанию.
+export function resetMode(cwd, sid) {
+  try { fs.unlinkSync(path.join(STATE_DIR, keyFor(cwd, sid))); } catch { /* уже сброшен */ }
   return defaultOn();
 }
 

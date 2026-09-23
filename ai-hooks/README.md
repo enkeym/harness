@@ -44,7 +44,6 @@ read-core.mjs                   # подмена заглушки `unchanged: tr
 claude/read-refill.mjs          # адаптер Claude: PostToolUse(mcp__tokensave__tokensave_read)
 claude/ask-guard.mjs            # адаптер Claude: PreToolUse(*) — запрет изменений в ask mode
 claude/ask-reminder.mjs         # правило ask mode в промпт (UserPromptSubmit)
-claude/ask-session.mjs          # сброс режима к значению по умолчанию (SessionStart)
 claude/statusline.mjs           # каталог, ветка, модель, индикатор ask mode
 claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты по сессии → logs/usage.jsonl (Stop)
@@ -219,10 +218,13 @@ CLAUDE.md велит грузить скилл до первого действ�
 поэтому режим собран из хуков: `ask-guard.mjs` запрещает, `ask-reminder.mjs`
 объясняет правило до первого отказа, `statusline.mjs` показывает состояние.
 
-Состояние — файл на каталог в `~/.claude/state/ask-mode/`, плюс `default` для
-всех новых сессий (значение задаёт `bin/ask-mode.mjs default on|off`). Решение каталога живёт до конца сессии:
-`ask-session.mjs` сбрасывает его на `SessionStart` при `startup`/`clear`, но не
-при `resume`/`compact` — иначе режим менялся бы под руками. Переключение:
+Состояние — файл на сессию (`sess-<session_id>`) в `~/.claude/state/ask-mode/`,
+плюс `default` для всех новых сессий (значение задаёт
+`bin/ask-mode.mjs default on|off`). Хуки и statusline берут `session_id` из
+входного JSON, `ask-mode.mjs` — из `CLAUDE_CODE_SESSION_ID`. Новая сессия и
+`/clear` дают новый id — режим по умолчанию; `resume`/`compact` сохраняют id и
+режим. Две сессии в одном каталоге режим не делят. Без сессии (запуск из
+терминала) ключ — корень проекта (`dir-<hash>`). Переключение:
 `/ask`, `/ask-off` или `bin/ask-mode.mjs on|off|toggle|reset|default on|off`.
 Команда проходит, только если сама запускает `ask-mode.mjs`: имя скрипта в
 соседнем сегменте (`rm -rf src; echo ask-mode.mjs`) режим не обходит.
@@ -566,7 +568,7 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 `bin/cleanup.mjs` висит на `Stop` и проходит раз в сутки (метка
 `~/.claude/state/.cleanup-stamp`). Убирает то, что мертво по устройству: метки
 подсказок ragsave (дроссель внутри — 15 минут, метка старше двух суток
-бессмысленна), метки диагностики проектов и ask mode по каталогам, метки
+бессмысленна), метки диагностики проектов и ask mode по сессиям (`default` не трогает), метки
 подключённых доменов карты связей (`links-context`, старше двух суток), служебные
 метки в корне состояния, неотправленную телеметрию
 Claude Code, кеш вставок,

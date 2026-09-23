@@ -11,7 +11,7 @@ process.stdin.on('data', (c) => { raw += c; });
 process.stdin.on('end', () => {
   let input;
   try { input = JSON.parse(raw); } catch { process.exit(0); }
-  if (!isOn(input.cwd)) process.exit(0);
+  if (!isOn(input.cwd, input.session_id)) process.exit(0);
 
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {

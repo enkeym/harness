@@ -97,7 +97,9 @@ function records(sb) {
   run(ASK, input, sb.env);
   check('ask off: журнал пуст', records(sb).length, 0);
 
-  execFileSync('node', [path.join(ROOT, 'bin', 'ask-mode.mjs'), 'on'], { cwd: sb.dir, env: sb.env, encoding: 'utf8' });
+  execFileSync('node', [path.join(ROOT, 'bin', 'ask-mode.mjs'), 'on'], {
+    cwd: sb.dir, env: { ...sb.env, CLAUDE_CODE_SESSION_ID: input.session_id }, encoding: 'utf8',
+  });
   const res = run(ASK, input, sb.env);
   check('ask on: запрет отдан', JSON.parse(res.stdout).hookSpecificOutput.permissionDecision, 'deny');
   const r = records(sb)[0] || {};

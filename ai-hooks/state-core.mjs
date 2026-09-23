@@ -39,7 +39,7 @@ export function isEntryPoint(metaUrl) {
 export const STATE_ROOT = process.env.AI_HOOKS_STATE_DIR || path.join(HOME, '.claude', 'state');
 
 // Путь под корнем состояния: statePath('skill-gate.off'),
-// statePath('ask-mode', '.sessions.json'). Каталог не создаётся — вызывающий
+// statePath('ask-mode', 'default'). Каталог не создаётся — вызывающий
 // делает mkdirSync(recursive) непосредственно перед записью, как и раньше, так
 // что пустые каталоги не плодятся на каждом молчаливом срабатывании хука.
 export function statePath(...parts) {

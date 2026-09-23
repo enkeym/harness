@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Тесты статусной строки (claude/statusline.mjs): каталог сокращается до ~,
 // ветка видна только в репозитории, цвет модели — по тем-классу, ctx — в
-// токенах с цветом порогов context-meter, ask mode читается по корню сессии,
-// а не по текущему каталогу, и показывается всегда — даже при битом stdin.
+// токенах с цветом порогов context-meter, ask mode читается по сессии (без
+// неё — по корню сессии, а не по текущему каталогу) и показывается
+// всегда — даже при битом stdin.
 
 import './env-isolate.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -97,6 +98,11 @@ check('включён для корня → on', plain(line(at(project))).endsWi
 check('cd в соседний каталог — режим корня сессии',
   plain(line({ workspace: { current_dir: other, project_dir: project } })).endsWith('ask mode on'), true);
 check('другой корень — свой режим', plain(line(at(other))).endsWith('ask mode off'), true);
+
+// /ask внутри сессии пишет под её session_id; соседняя сессия в том же корне его не видит.
+execFileSync('node', [ASK_MODE, 'on'], { cwd: other, env: { ...env, CLAUDE_CODE_SESSION_ID: 'sid-a' }, encoding: 'utf8' });
+check('сессия с /ask → on', plain(line(at(other, { session_id: 'sid-a' }))).endsWith('ask mode on'), true);
+check('соседняя сессия → off', plain(line(at(other, { session_id: 'sid-b' }))).endsWith('ask mode off'), true);
 
 // --- битый stdin ---
 check('битый stdin — строка всё равно есть', plain(line('{не json')).includes('ask mode'), true);

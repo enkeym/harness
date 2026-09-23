@@ -39,8 +39,10 @@ fired and what it wants instead.
 - Ask mode is on only if the statusline says so or
   `node ~/.ai-hooks/bin/ask-mode.mjs status` says so. A refusal that doesn't
   mention ask mode has another source — name it; don't prescribe `/ask-off`.
-- State is bound to the session root (`CLAUDE_PROJECT_DIR`), not the cwd.
-  `ask-mode.mjs status` prints the anchor it used.
+- State is bound to the session (`session_id`, `CLAUDE_CODE_SESSION_ID` in
+  Bash): another session in the same directory has its own mode.
+  `ask-mode.mjs status` prints the anchor it used. The ask mode reminder in
+  an earlier turn is history — no reminder on the current prompt means off.
 
 ## skill-gate
 

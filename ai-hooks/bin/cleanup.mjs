@@ -30,10 +30,11 @@ const TARGETS = [
   [statePath('links-context'), 2, 'метки подключённых доменов карты связей'],
   // Метка «про недостающий CI этому проекту уже говорили» — недельный цикл.
   [statePath('bootstrap'), 90, 'метки диагностики проектов'],
-  // Метки режима ask mode по каталогам (dir-<hash>). Файла `default` в этом
-  // каталоге нет — он лежит в подкаталоге ask-mode/, а pruneDir не рекурсивен,
-  // так что бессрочная метка режима по умолчанию не пострадает.
-  [statePath('ask-mode'), 120, 'метки ask mode по каталогам'],
+  // Метки режима ask mode по сессиям (sess-<id>, без сессии — dir-<hash>).
+  // Сессию можно возобновить, пока жив её транскрипт (cleanupPeriodDays: 45),
+  // дольше метка не нужна. Файл `default` лежит тут же и переписывается
+  // редко — он в KEEP.
+  [statePath('ask-mode'), 45, 'метки ask mode по сессиям'],
   // Счётчик ходов до следующей подсказки о стоимости — живёт внутри сессии.
   [statePath('context-cost'), 2, 'счётчики стоимости контекста'],
   // Служебные метки в корне состояния — временные файлы хуков. Всё
@@ -75,6 +76,11 @@ function stamp() {
   } catch { /* без метки просто уберёмся ещё раз */ }
 }
 
+// Бессрочные файлы внутри чистимых каталогов: старый mtime тут не значит
+// «мёртвый». Режим ask mode по умолчанию задают один раз — удалим его, и все
+// сессии молча стартуют с другим режимом.
+const KEEP = new Set([statePath('ask-mode', 'default')]);
+
 function pruneDir(dir, maxAgeDays) {
   let files = 0;
   let bytes = 0;
@@ -84,6 +90,7 @@ function pruneDir(dir, maxAgeDays) {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const file = path.join(dir, entry.name);
+    if (KEEP.has(file)) continue;
     try {
       const st = fs.statSync(file);
       if (st.mtimeMs >= cutoff) continue;

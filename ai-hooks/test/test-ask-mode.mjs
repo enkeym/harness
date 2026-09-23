@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Тест ask mode: состояние (умолчание, решение каталога, сброс на старте
-// сессии) и классификация «меняет / не меняет». Состояние пишется во временные
+// Тест ask mode: состояние (умолчание, решение сессии, без сессии —
+// каталога) и классификация «меняет / не меняет». Состояние пишется во временные
 // каталоги, глобальное умолчание тест не трогает — только читает.
 
 import './env-isolate.mjs';
@@ -13,7 +13,6 @@ import { state, isOn, setMode, resetMode, defaultOn, askGuard, bashMutates } fro
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const GUARD = path.join(ROOT, 'claude', 'ask-guard.mjs');
-const SESSION = path.join(ROOT, 'claude', 'ask-session.mjs');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ask-mode-'));
 const sub = path.join(tmp, 'client', 'src');
@@ -32,33 +31,30 @@ const hook = (input) => {
   return out.trim() ? JSON.parse(out).hookSpecificOutput.permissionDecision : 'allow';
 };
 
-// ---- состояние ----
-check('новый каталог берёт умолчание', state(tmp).source, 'по умолчанию');
-check('умолчание применилось', state(tmp).on, defaultOn());
+// ---- состояние: ключ — сессия ----
+const A = `sid-a-${process.pid}`;
+const B = `sid-b-${process.pid}`;
+check('новая сессия берёт умолчание', state(tmp, A).source, 'по умолчанию');
+check('умолчание применилось', state(tmp, A).on, defaultOn());
+check('/ask включает', setMode(tmp, true, A), true);
+check('решение сессии перекрывает умолчание', state(tmp, A).source, 'сессия');
+// Регрессия: вторая сессия в том же каталоге молча сбрасывала /ask первой.
+check('соседняя сессия в том же каталоге — свой режим', isOn(tmp, B), defaultOn());
+check('reset возвращает умолчание', resetMode(tmp, A), defaultOn());
+
+// ---- без сессии (терминал) — ключ каталога ----
 check('/ask-off выключает', setMode(tmp, false), false);
 check('решение каталога перекрывает умолчание', state(tmp).source, 'каталог');
 check('подкаталог наследует решение корня', isOn(sub), false);
-check('reset возвращает умолчание', resetMode(tmp), defaultOn());
+check('решение каталога сессию не задевает', state(tmp, A).source, 'по умолчанию');
+resetMode(tmp);
 
-// ---- SessionStart: сброс строго один раз на session_id ----
-const sess = (source, session_id) =>
-  execFileSync('node', [SESSION], { input: JSON.stringify({ cwd: tmp, source, session_id }) });
-
-setMode(tmp, true);
-sess('compact', `test-ask-c-${process.pid}`);
-check('compact не трогает режим', isOn(tmp), true);
-
-const sid = `test-ask-${process.pid}-${Date.now()}`;
-setMode(tmp, true);
-sess('startup', sid);
-check('первый startup сбрасывает к умолчанию', isOn(tmp), defaultOn());
-
-setMode(tmp, true);
-sess('startup', sid);
-check('повторный startup того же session_id режим не трогает', isOn(tmp), true);
-
-sess('startup', `${sid}-new`);
-check('startup новой сессии снова сбрасывает', isOn(tmp), defaultOn());
+// ---- гард читает режим своей сессии ----
+const edit = (session_id) => hook({ cwd: tmp, session_id, tool_name: 'Edit', tool_input: { file_path: 'a.ts' } });
+setMode(tmp, true, A);
+check('сессия в ask mode: Edit запрещён', edit(A), 'deny');
+check('соседняя сессия: Edit разрешён', edit(B), 'allow');
+resetMode(tmp, A);
 
 // ---- классификация инструментов ----
 setMode(tmp, true);
@@ -124,14 +120,6 @@ check('ask off: Edit разрешён', hook({ cwd: tmp, tool_name: 'Edit', tool
 
 resetMode(tmp);
 fs.rmSync(tmp, { recursive: true, force: true });
-
-// убрать за собой тестовые session_id из общего файла дедупа
-try {
-  const sf = path.join(os.homedir(), '.claude', 'state', 'ask-mode', '.sessions.json');
-  const st = JSON.parse(fs.readFileSync(sf, 'utf8'));
-  for (const k of Object.keys(st)) if (k.startsWith('test-ask-')) delete st[k];
-  fs.writeFileSync(sf, JSON.stringify(st));
-} catch { /* файла нет — нечего чистить */ }
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

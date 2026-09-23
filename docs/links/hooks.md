@@ -18,6 +18,13 @@ paths:
   а `ai-hooks/bin/clip-output.sh` пишет в зашитый `${HOME}/.claude/state/clip-output`.
   Сдвиг корня без скрипта — полные выводы копятся и не чистятся.
 
+- Ключ ask mode — `session_id` из входного JSON в `ai-hooks/claude/ask-guard.mjs`,
+  `ask-reminder.mjs`, `statusline.mjs` ↔ `CLAUDE_CODE_SESSION_ID` в
+  `ai-hooks/bin/ask-mode.mjs` (его вызывают `/ask`, `/ask-off`). Claude Code
+  переименовал переменную — `/ask` пишет режим под ключ каталога, гард читает
+  ключ сессии, и режим молча не включается. `ai-hooks/test/env-isolate.mjs`
+  удаляет эту переменную у тестов.
+
 ## Контракты и доки
 - Список хранилищ секретов — `ai-hooks/security-core.mjs:SECRET_FILE_RE` ↔
   `ragsave/ragsave/config.py:SECRET_NAME_RE` (+ `SECRET_IN_DIR`). Новый файл в одном

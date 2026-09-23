@@ -188,5 +188,20 @@ const totalCost = (recs) => Math.round(recs.reduce((s, r) => s + (r.cost || 0), 
   fs.rmSync(home, { recursive: true, force: true });
 }
 
+// --- 11. Ask mode: метка сессии уходит, режим по умолчанию остаётся навсегда
+{
+  const home = sandbox();
+  const dir = path.join(home, '.claude', 'state', 'ask-mode');
+  fs.mkdirSync(dir, { recursive: true });
+  aged(path.join(dir, 'sess-old'), 46, 'on');
+  aged(path.join(dir, 'sess-live'), 1, 'on');
+  aged(path.join(dir, 'default'), 400, 'on');
+  run(home, ['--force']);
+  check('метка сессии старше 45 дней удалена', fs.existsSync(path.join(dir, 'sess-old')), false);
+  check('метка живой сессии сохранена', fs.existsSync(path.join(dir, 'sess-live')), true);
+  check('default не удаляется по возрасту', fs.existsSync(path.join(dir, 'default')), true);
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
 process.stdout.write(failed ? `\n=== ${failed} FAIL ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);

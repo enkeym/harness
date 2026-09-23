@@ -14,5 +14,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-hooks-test-'));
 process.env.AI_HOOKS_HOOKS_LOG = path.join(dir, 'hooks.jsonl');
 process.env.AI_HOOKS_LOG_DIR = path.join(dir, 'logs');
 process.env.AI_HOOKS_STATE_DIR = path.join(dir, 'state');
+// Сессия живого Claude Code, из которого запущен тест: иначе ask-mode.mjs
+// в тестах писал бы режим под её session_id, а не под ключ теста.
+delete process.env.CLAUDE_CODE_SESSION_ID;
 
 export const ISOLATED_HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG;
