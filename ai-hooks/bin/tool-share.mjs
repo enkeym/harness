@@ -22,6 +22,8 @@ import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 
 const ROOT = join(homedir(), '.claude', 'projects');
+// Каталог проекта — его путь, где всё кроме [a-zA-Z0-9] заменено на '-'.
+const HOME_DIR = homedir().replace(/[^a-zA-Z0-9]/g, '-');
 const CUTOFF = process.argv[2] || '2026-09-22T08:54:12Z';
 const MIN_SIZE = Number(process.argv[3]) || 50_000;
 
@@ -82,7 +84,7 @@ for (const proj of readdirSync(ROOT)) {
     const file = join(dir, f);
     if (statSync(file).size < MIN_SIZE) continue;
     const r = session(file);
-    if (r) rows.push({ proj: proj.replace('-home-enkeym', '') || '/', ...r });
+    if (r) rows.push({ proj: proj.replace(HOME_DIR, '') || '/', ...r });
   }
 }
 rows.sort((a, b) => a.start.localeCompare(b.start));

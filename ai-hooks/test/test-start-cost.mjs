@@ -25,6 +25,8 @@ function check(name, got, want) {
 // Транскрипты лежат под HOME/.claude/projects — скрипт видит только песочницу.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'start-cost-'));
 const projects = path.join(home, '.claude', 'projects');
+// Каталог проекта — его путь, где всё кроме [a-zA-Z0-9] заменено на '-'.
+const homeDir = home.replace(/[^a-zA-Z0-9]/g, '-');
 
 function transcript(proj, name, recs) {
   const dir = path.join(projects, proj);
@@ -40,7 +42,7 @@ const assistant = (read, create, extra = {}) => ({
   message: { model: 'claude-opus-5', usage: { cache_read_input_tokens: read, cache_creation_input_tokens: create } },
 });
 
-transcript('-home-enkeym-demo', 'aaaaaaaa-1.jsonl', [
+transcript(`${homeDir}-demo`, 'aaaaaaaa-1.jsonl', [
   { type: 'system', version: '2.5.0' },
   att({ type: 'prompt_snapshot', systemPrompt: lat(100) }),
   att({ type: 'skill_listing', content: lat(20) }),
@@ -55,9 +57,9 @@ transcript('-home-enkeym-demo', 'aaaaaaaa-1.jsonl', [
   assistant(300, 50),
   att({ type: 'skill_listing', content: lat(9999) }),
 ]);
-transcript('-home-enkeym', 'bbbbbbbb-2.jsonl', [assistant(10, 0)]);
-transcript('-home-enkeym', 'cccccccc-3.jsonl', [att({ type: 'skill_listing', content: lat(10) })]);
-transcript('-home-enkeym', 'notes.txt', [assistant(1, 1)]);
+transcript(homeDir, 'bbbbbbbb-2.jsonl', [assistant(10, 0)]);
+transcript(homeDir, 'cccccccc-3.jsonl', [att({ type: 'skill_listing', content: lat(10) })]);
+transcript(homeDir, 'notes.txt', [assistant(1, 1)]);
 
 function table(...args) {
   const out = spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, HOME: home } }).stdout;
@@ -75,7 +77,7 @@ const [demo, root] = rows;
 
 // --- проект ---
 check('каталог без префикса HOME — /', root.proj, '/');
-check('префикс -home-enkeym срезан', demo.proj, '-demo');
+check('префикс каталога HOME срезан', demo.proj, '-demo');
 
 // --- слои ---
 check('версия и модель без claude-', [demo.ver, demo.model], ['2.5.0', 'opus-5']);
