@@ -5,21 +5,21 @@
     "tokensave": {
       "type": "local",
       "command": [
-        "/home/enkeym/.ai-hooks/bin/mcp-serve.sh",
+        "{env:HOME}/.ai-hooks/bin/mcp-serve.sh",
         "tokensave"
       ]
     },
     "ragsave": {
       "type": "local",
       "command": [
-        "/home/enkeym/.ai-hooks/bin/mcp-serve.sh",
+        "{env:HOME}/.ai-hooks/bin/mcp-serve.sh",
         "ragsave"
       ]
     },
     "playwright": {
       "type": "local",
       "command": [
-        "/home/enkeym/.nvm/versions/node/v24.18.0/bin/playwright-mcp",
+        "playwright-mcp",
         "--headless",
         "--browser",
         "chromium"
@@ -129,7 +129,7 @@
     }
   },
   "instructions": [
-    "/home/enkeym/.config/opencode/rules/core.md"
+    "~/.config/opencode/rules/core.md"
   ],
   "plugin": [
     "@ex-machina/opencode-anthropic-auth@1.8.4"

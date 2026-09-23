@@ -47,9 +47,9 @@ paths:
   `ai-hooks/guard-core.mjs:inIndex`/`relKey` ↔ схема БД tokensave. Сменилась схема —
   роутер чтения молча пропускает всё, тесты `test-guards.mjs` не заметят: они
   создают таблицу сами.
-- Имена файлов хуков — регистрация по путям в `claude/settings.json`;
-  `opencode/plugin/tokensave-guard.js` импортирует абсолютным путём
-  `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard`. Переименовал или перенёс хук — он молча
+- Имена файлов хуков — регистрация по путям `$HOME/.ai-hooks/…` в
+  `claude/settings.json`; `opencode/plugin/tokensave-guard.js` импортирует
+  `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
 - Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
   на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`

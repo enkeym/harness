@@ -30,13 +30,18 @@ const warn = (s) => console.log(`  \x1b[33m!\x1b[0m ${s}`);
 const bad = (s) => console.log(`  \x1b[31m✗\x1b[0m ${s}`);
 
 // `~/` в servers.json — чтобы список не зависел от имени пользователя; в
-// конфиги агентов уходит уже абсолютный путь.
+// ~/.claude.json уходит уже абсолютный путь.
 const expand = (p) => (p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
+
+// opencode.json лежит в репозитории, поэтому машинных путей в нём нет: `~/`
+// → `{env:HOME}/` (OpenCode подставляет переменные в текст конфига), голое имя
+// остаётся как есть — OpenCode запускают из оболочки, где PATH уже с nvm.
+const forOpencode = (cmd) => (cmd.startsWith('~/') ? `{env:HOME}/${cmd.slice(2)}` : cmd);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 // Голое имя (`playwright-mcp`) ищется по PATH того, кто запускает синк, и в
-// агентов уходит найденный путь: так в servers.json не зашита версия node из
+// Claude уходит найденный путь: так в servers.json не зашита версия node из
 // nvm, а после смены версии --check видит устаревший путь как расхождение.
 // Не нашлось — null: писать агентам команду, которая не стартует, нельзя.
 function resolveCommand(cmd) {
@@ -60,7 +65,7 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
     unresolved.add(name);
     continue;
   }
-  servers[name] = { command, args: s.args ?? [], env: s.env ?? {} };
+  servers[name] = { command, opencodeCommand: forOpencode(s.command), args: s.args ?? [], env: s.env ?? {} };
 }
 const listed = (name) => name in servers || unresolved.has(name);
 
@@ -76,7 +81,7 @@ function syncOpencode() {
       name,
       {
         type: 'local',
-        command: [s.command, ...s.args],
+        command: [s.opencodeCommand, ...s.args],
         ...(Object.keys(s.env).length ? { environment: s.env } : {}),
       },
     ]),

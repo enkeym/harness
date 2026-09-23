@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тесты bin/mcp-sync.mjs: --check только сообщает о расхождениях и выходит с
 // кодом 1, ничего не меняя; синхронизация переписывает блок mcp в
-// opencode.json (остальные поля и чужие серверы на месте, ~/ раскрыт) и
+// opencode.json (остальные поля и чужие серверы на месте, ~/ → {env:HOME}/,
+// голое имя как есть) и
 // регистрирует в Claude только отличающиеся серверы — изменённый снимается и
 // добавляется заново. Скрипт берёт пути от своего расположения, поэтому
 // запускается копия во временном дереве; `claude` подменён через PATH.
@@ -90,8 +91,8 @@ const alphaClaude = (home) => ({ command: path.join(home, 'bin', 'alpha'), args:
   check('sync: порядок ключей файла сохранён', Object.keys(cfg), ['$schema', 'mcp', 'agent']);
   check('sync: прочие поля на месте', cfg.agent, { x: 1 });
   check('sync: mcp — из servers.json, чужой сервер сохранён', Object.keys(cfg.mcp), ['alpha', 'beta', 'extra']);
-  check('sync: ~/ раскрыт, env → environment',
-    cfg.mcp.alpha, { type: 'local', command: [path.join(sb.home, 'bin', 'alpha'), 'serve'], environment: { A: '1' } });
+  check('sync: ~/ → {env:HOME}/, env → environment',
+    cfg.mcp.alpha, { type: 'local', command: ['{env:HOME}/bin/alpha', 'serve'], environment: { A: '1' } });
   check('sync: без env нет environment', cfg.mcp.beta, { type: 'local', command: ['/usr/bin/beta'] });
 
   const calls = sb.calls();
@@ -121,7 +122,7 @@ const alphaClaude = (home) => ({ command: path.join(home, 'bin', 'alpha'), args:
   fs.writeFileSync(bin, '#!/bin/sh\n', { mode: 0o755 });
   const res = sb.run();
   check('PATH: код 0', res.status, 0);
-  check('PATH: в OpenCode — найденный путь', sb.opencode().mcp.delta, { type: 'local', command: [bin, '--x'] });
+  check('PATH: в OpenCode — голое имя', sb.opencode().mcp.delta, { type: 'local', command: ['delta-mcp', '--x'] });
   check('PATH: в Claude — найденный путь', sb.calls(),
     [`mcp add-json -s user delta ${JSON.stringify({ type: 'stdio', command: bin, args: ['--x'], env: {} })}`]);
 
