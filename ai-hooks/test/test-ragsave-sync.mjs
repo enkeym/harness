@@ -104,8 +104,10 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
 {
   const sb = sandbox();
   sb.run({ FAKE_INDEXER_EXIT: '1' });
+  // Заголовок записи попадает в файл раньше хвоста лога — ждём её конец `---`.
   check('отказ бинаря — запись в errors.log',
-    waitFor(() => sb.errors().includes(`] ragsave sync | ${sb.root} | exit=1`)), true);
+    waitFor(() => sb.errors().includes(`] ragsave sync | ${sb.root} | exit=1`)
+      && sb.errors().endsWith('---\n')), true);
   check('отказ бинаря — хвост sync.log в записи', sb.errors().includes(`    fake sync ${sb.root} --quiet`), true);
   check('отказ бинаря — лог остаётся в sync.log для last_sync',
     waitFor(() => read(path.join(sb.dir, 'sync.log')).includes('fake sync')), true);
