@@ -16,6 +16,10 @@ from pathlib import Path
 INDEX_DIR = ".ragsave"
 DB_NAME = "rag.db"
 LOCK_NAME = ".sync.lock"
+# Лог фонового синка и отказ от него пишет и читает ai-hooks/bin/ragsave-sync.sh:
+# имена правятся вместе.
+SYNC_LOG_NAME = "sync.log"
+DISABLE_MARK = ".ragsave-disable"
 
 # Индекс tokensave — по нему помечаем, что уже покрыто структурным слоем
 TOKENSAVE_DB = os.path.join(".tokensave", "tokensave.db")
@@ -164,6 +168,14 @@ class ProjectPaths:
     @property
     def lock(self) -> Path:
         return self.index_dir / LOCK_NAME
+
+    @property
+    def sync_log(self) -> Path:
+        return self.index_dir / SYNC_LOG_NAME
+
+    @property
+    def disable_mark(self) -> Path:
+        return self.root / DISABLE_MARK
 
     @property
     def tokensave_db(self) -> Path:

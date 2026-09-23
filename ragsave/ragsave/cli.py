@@ -17,7 +17,7 @@ from pathlib import Path
 from . import __version__, config
 from .config import ProjectPaths, find_project_root
 from .embedder import Embedder
-from .indexer import SyncInProgress, index_project, stderr_progress
+from .indexer import SyncInProgress, index_project, stderr_progress, sync_state
 from .store import Store
 
 _BAR_WIDTH = 28
@@ -166,6 +166,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
         stats = store.stats()
     stats.update({"project": str(root), "indexed": True,
                   "current_model": config.EMBED_MODEL})
+    stats.update(sync_state(paths))
     print(json.dumps(stats, ensure_ascii=False, indent=2))
     return 0
 

@@ -25,7 +25,7 @@ from mcp.server.stdio import stdio_server
 from . import config
 from .config import ProjectPaths, find_project_root
 from .embedder import Embedder
-from .indexer import SyncInProgress, index_project
+from .indexer import SyncInProgress, index_project, sync_state
 from .store import Store
 
 SERVER_NAME = "ragsave"
@@ -240,10 +240,11 @@ def _do_search(args: dict[str, Any]) -> types.CallToolResult:
             only_outside_tokensave=bool(args.get("only_outside_tokensave")),
         )
 
+    note = _sync_note(paths)
     if not hits:
-        return _text(f"Ничего не найдено по запросу: {query}")
-
-    blocks = [f"Найдено фрагментов: {len(hits)} (проект: {root})", ""]
+        blocks = [f"Ничего не найдено по запросу: {query}"]
+    else:
+        blocks = [f"Найдено фрагментов: {len(hits)} (проект: {root})", ""]
     for index, hit in enumerate(hits, start=1):
         marker = "" if hit.in_tokensave else "  [вне tokensave]"
         blocks.append(
@@ -252,6 +253,8 @@ def _do_search(args: dict[str, Any]) -> types.CallToolResult:
         )
         blocks.append(hit.text)
         blocks.append("")
+    if note:
+        blocks.append(note)
     return _text("\n".join(blocks))
 
 
@@ -267,7 +270,19 @@ def _do_status(args: dict[str, Any]) -> types.CallToolResult:
         stats = store.stats()
     stats.update({"project": str(root), "indexed": True,
                   "current_model": _embedder.model_name})
+    stats.update(sync_state(paths))
     return _text(stats)
+
+
+def _sync_note(paths: ProjectPaths) -> str | None:
+    """Строка к выдаче поиска, если индекс может отставать от файлов."""
+    state = sync_state(paths)
+    if state["autosync"] != "ok":
+        return (f"ragsave: автосинк выключен ({config.DISABLE_MARK} в корне) — "
+                f"индекс может отставать от файлов")
+    if state["sync_in_progress"]:
+        return "ragsave: идёт синхронизация индекса — свежих правок в выдаче может не быть"
+    return None
 
 
 def _do_index(args: dict[str, Any]) -> types.CallToolResult:

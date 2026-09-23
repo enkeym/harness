@@ -607,6 +607,63 @@ def test_sync_lock() -> None:
         config.EMBED_DIM = original_dim
 
 
+def test_sync_state() -> None:
+    print("\n--- состояние автосинка ---")
+
+    from ragsave import server
+    from ragsave.config import ProjectPaths
+    from ragsave.indexer import index_project, sync_lock, sync_state
+
+    original_dim, original_embedder = config.EMBED_DIM, server._embedder
+    config.EMBED_DIM = FakeEmbedder.dim
+    server._embedder = FakeEmbedder()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(root)], check=True,
+                           capture_output=True)
+            (root / "a.md").write_text("# деплой", encoding="utf-8")
+            index_project(root=root, embedder=server._embedder)
+            paths = ProjectPaths(root=root)
+
+            state = sync_state(paths)
+            check("автосинк включён", state["autosync"], "ok")
+            check("синк не идёт", state["sync_in_progress"], False)
+            check("лога синка нет — last_sync пуст", state["last_sync"], None)
+
+            paths.sync_log.write_text(
+                "warning: pooling\n{\n  \"added\": 1,\n  \"errors\": 0\n}\n",
+                encoding="utf-8")
+            check("отчёт последнего синка",
+                  sync_state(paths)["last_sync"]["report"], {"added": 1, "errors": 0})
+            paths.sync_log.write_text("Traceback\nRuntimeError: сломалось\n",
+                                      encoding="utf-8")
+            check("ошибка последнего синка",
+                  sync_state(paths)["last_sync"]["error"], "RuntimeError: сломалось")
+
+            with sync_lock(paths.lock):
+                holder = sync_state(paths)["sync_in_progress"]
+                check_true("идущий синк виден с PID", "PID" in str(holder), str(holder))
+                found = server._do_search({"query": "деплой", "project": str(root)})
+                check_true("поиск во время синка предупреждает",
+                           "идёт синхронизация" in found.content[0].text)
+            with sync_lock(paths.lock):
+                check_true("проба не держит замок", True)
+
+            found = server._do_search({"query": "деплой", "project": str(root)})
+            check_true("без синка поиск не предупреждает",
+                       "ragsave:" not in found.content[0].text, found.content[0].text)
+
+            paths.disable_mark.write_text("", encoding="utf-8")
+            check("отказ от автосинка виден", sync_state(paths)["autosync"],
+                  "disabled (.ragsave-disable)")
+            found = server._do_search({"query": "деплой", "project": str(root)})
+            check_true("поиск при выключенном автосинке предупреждает",
+                       "автосинк выключен" in found.content[0].text)
+    finally:
+        config.EMBED_DIM, server._embedder = original_dim, original_embedder
+
+
 def test_fts_query() -> None:
     print("\n--- разбор запроса FTS ---")
 
@@ -628,6 +685,7 @@ def main() -> int:
     test_branch_cache()
     test_cache_gc()
     test_sync_lock()
+    test_sync_state()
     test_fts_query()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")
     return 1 if FAILED else 0

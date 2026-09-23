@@ -38,6 +38,11 @@ paths:
 - Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) ↔ проверка
   `exit_code = 3` для источника `ragsave*` в `ai-hooks/bin/log-error.sh`. Сменил код
   или дал его другому отказу — журнал снова полон пропусков или молчит о сбое.
+- Лог синка и отказ от него — `.ragsave/sync.log` и `.ragsave-disable` в
+  `ai-hooks/bin/ragsave-sync.sh` ↔ `ragsave/ragsave/config.py:SYNC_LOG_NAME`/`DISABLE_MARK`,
+  по ним `ragsave/ragsave/indexer.py:sync_state` строит `autosync`/`last_sync` в
+  `rag_status`. Переименовал в одном месте — статус снова показывает живой
+  автосинк, которого нет.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - Порог медленного хука — `ai-hooks/hooklog-core.mjs:SLOW_MS` (800) ↔ порог

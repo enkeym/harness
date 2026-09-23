@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import json
 import os
 import queue
 import sqlite3
@@ -124,6 +125,55 @@ def sync_lock(lock_path: Path, wait: float = 0.0) -> Iterator[None]:
         yield
     finally:
         handle.close()
+
+
+def lock_holder(lock_path: Path) -> str | None:
+    """Кто сейчас держит замок проекта; None — никто.
+
+    Проба разделяемая: PID в файл не пишет, а хук, пришедший в то же мгновение,
+    получит «занято» только на время самой пробы.
+    """
+    try:
+        handle = lock_path.open("r", encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    with handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return handle.read().strip() or "неизвестный процесс"
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return None
+
+
+def last_sync(log_path: Path) -> dict[str, object] | None:
+    """Итог последнего фонового синка по его логу: время и отчёт либо ошибка.
+
+    Отчёт — JSON, который `ragsave sync` печатает последним; нет его — синк
+    упал, и причина стоит в последней строке лога.
+    """
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        mtime = log_path.stat().st_mtime
+    except OSError:
+        return None
+    at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(mtime))
+    try:
+        report = json.loads(text[text.rfind("\n{") + 1:])
+    except ValueError:
+        lines = [line for line in text.splitlines() if line.strip()]
+        return {"at": at, "error": lines[-1][-200:] if lines else "пустой лог"}
+    return {"at": at, "report": report}
+
+
+def sync_state(paths: ProjectPaths) -> dict[str, object]:
+    """Состояние автосинка: без него выключенный хук две недели выглядел живым."""
+    disabled = paths.disable_mark.exists()
+    return {
+        "autosync": f"disabled ({config.DISABLE_MARK})" if disabled else "ok",
+        "sync_in_progress": lock_holder(paths.lock) or False,
+        "last_sync": last_sync(paths.sync_log),
+    }
 
 
 def tokensave_files(paths: ProjectPaths) -> set[str]:
