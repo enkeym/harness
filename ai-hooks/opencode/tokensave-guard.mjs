@@ -2,8 +2,9 @@
 // (../security-core.mjs) и shell-гард (../guard-core.mjs).
 //
 // Соответствие хуков:
-//   Claude PreToolUse(Bash)         → tool.execute.before (throw = deny)
-//   Claude Stop (ragsave-sync.sh)   → event: session.idle
+//   Claude PreToolUse(Bash)                 → tool.execute.before (throw = deny)
+//   Claude SessionStart (ragsave-sync.sh)   → event: session.created
+//   Claude Stop (ragsave-sync.sh)           → event: session.idle
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
@@ -20,6 +21,10 @@ const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin')
 function runDetached(script, directory) {
   execFile('bash', [`${BIN}/${script}`, directory], () => {});
 }
+
+// События, после которых индекс догоняет файлы: начало сессии — правки между
+// сессиями, конец хода — правки хода.
+const SYNC_EVENTS = new Set(['session.created', 'session.idle']);
 
 // Файлы из patchText инструмента patch: Add/Update/Delete File и Move to.
 const PATCH_FILE_RE = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm;
@@ -75,7 +80,7 @@ export const TokensaveGuard = async ({ directory }) => {
     },
 
     event: async ({ event }) => {
-      if (event.type !== 'session.idle') return;
+      if (!SYNC_EVENTS.has(event.type)) return;
       runDetached('ragsave-sync.sh', directory);
     },
   };

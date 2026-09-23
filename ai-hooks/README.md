@@ -27,7 +27,7 @@ Bash, результат тот же.
 tokensave и ragsave — MCP-серверы, а не гарды: агент зовёт их по своему выбору.
 tokensave синхронизирует индекс сам (при подключении и перед вызовами), у
 ragsave своей синхронизации нет — её делает `bin/ragsave-sync.sh` на
-SessionStart и Stop.
+SessionStart и Stop (в OpenCode — `session.created` и `session.idle`).
 
 ## Структура
 
@@ -431,6 +431,7 @@ tokensave) в корне такого репозитория. Файл пров�
 | ---------------------------- | ----------------------------------- | ------------------------------- |
 | Блокировка вызова инструмента| `PreToolUse` → `permissionDecision: "deny"` | `tool.execute.before` → `throw` |
 | Shell / исполнение кода      | `Bash`, `mcp__ide__executeCode`     | `bash`                          |
+| Сессия началась              | `SessionStart`                      | `event` → `session.created`     |
 | Ответ завершён               | `Stop`                              | `event` → `session.idle`        |
 
 Имена инструментов различаются (Claude: `Read`, `Edit/Write`; OpenCode:

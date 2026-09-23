@@ -2,7 +2,8 @@
 // Тест OpenCode-плагина: tool.execute.before вызывается так же, как это делает
 // OpenCode, — throw значит «вызов отклонён». Проверяется гард безопасности:
 // DENY (секреты) блокирует, ASK проходит — его держит permission.bash.
-// Shell-гард молчит: файлов из команд на диске песочницы нет.
+// Shell-гард молчит: файлов из команд на диске песочницы нет. В конце — event:
+// какие события запускают ragsave-sync.sh.
 
 import './env-isolate.mjs';
 import fs from 'node:fs';
@@ -126,6 +127,41 @@ for (const command of ['git status', 'git log --oneline', 'npm test', 'ls -la', 
   const ok = core === 'allow' && oc === 'allow';
   process.stdout.write(`${ok ? 'ok  ' : 'FAIL'} permission.bash без вопроса: ${command} (core=${core}, opencode=${oc})\n`);
   if (!ok) failed++;
+}
+
+// --- event: синк ragsave на начале сессии и конце хода. Бинарь — fixtures/fake-indexer.mjs,
+// фоновый setsid дожидаемся по файлу его вызовов.
+{
+  const { spawnSync } = await import('node:child_process');
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'oc-plugin-sync-')));
+  spawnSync('git', ['init', '-q', root]);
+  fs.mkdirSync(path.join(root, '.ragsave'));
+  fs.writeFileSync(path.join(root, '.ragsave', 'rag.db'), '');
+  const calls = path.join(root, 'calls.jsonl');
+  process.env.AI_HOOKS_RAGSAVE_CMD = path.join(HARNESS, 'ai-hooks', 'test', 'fixtures', 'fake-indexer.mjs');
+  process.env.FAKE_INDEXER_CALLS = calls;
+
+  const { event } = await TokensaveGuard({ directory: root });
+  const count = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').split('\n').filter(Boolean).length : 0);
+  const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  const waitCount = (n) => {
+    const end = Date.now() + 5000;
+    while (Date.now() < end && count() < n) sleep(50);
+    return count();
+  };
+  const expect = (name, got, want) => {
+    const ok = got === want;
+    process.stdout.write(`${ok ? 'ok  ' : 'FAIL'} ${name} (got=${got}, want=${want})\n`);
+    if (!ok) failed++;
+  };
+
+  await event({ event: { type: 'session.created' } });
+  expect('session.created запускает синк', waitCount(1), 1);
+  await event({ event: { type: 'message.updated' } });
+  sleep(500);
+  expect('прочие события синк не запускают', count(), 1);
+  await event({ event: { type: 'session.idle' } });
+  expect('session.idle запускает синк', waitCount(2), 2);
 }
 
 process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки пройдены\n');

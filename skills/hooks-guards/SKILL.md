@@ -100,8 +100,8 @@ fired and what it wants instead.
 
 ## Background hooks
 
-- `ragsave-sync` syncs an **existing** ragsave index on SessionStart and Stop
-  unless the repository root has `.ragsave-disable` (`rag_status`: `autosync`,
+- `ragsave-sync` syncs an **existing** ragsave index at session start and turn
+  end unless the repo root has `.ragsave-disable` (`rag_status`: `autosync`,
   `last_sync`); tokensave syncs itself. Creating an index is the user's call —
   say `tokensave init <path>` / `ragsave init` is needed, don't run either.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the
