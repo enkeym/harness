@@ -19,6 +19,14 @@ process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true }));
 process.env.AI_HOOKS_HOOKS_LOG = path.join(dir, 'hooks.jsonl');
 process.env.AI_HOOKS_LOG_DIR = path.join(dir, 'logs');
 process.env.AI_HOOKS_STATE_DIR = path.join(dir, 'state');
+// Глобальные git-хуки tokensave (core.hooksPath) на каждый commit песочницы
+// с .tokensave/ запускали `tokensave sync`, и она оставалась в
+// ~/.tokensave/global.db навсегда. Переменные окружения git сильнее
+// ~/.gitconfig и наследуются дочерними процессами; каталога хуков нет.
+const gitConfigs = Number(process.env.GIT_CONFIG_COUNT) || 0;
+process.env[`GIT_CONFIG_KEY_${gitConfigs}`] = 'core.hooksPath';
+process.env[`GIT_CONFIG_VALUE_${gitConfigs}`] = path.join(dir, 'git-hooks');
+process.env.GIT_CONFIG_COUNT = String(gitConfigs + 1);
 // Сессия живого Claude Code, из которого запущен тест: иначе ask-mode.mjs
 // в тестах писал бы режим под её session_id, а не под ключ теста.
 delete process.env.CLAUDE_CODE_SESSION_ID;

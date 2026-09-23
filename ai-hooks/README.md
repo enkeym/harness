@@ -78,7 +78,7 @@ test/test-guards.mjs            # shell-гард: одни сценарии че
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, respond, decide, журнал
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
-test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние и TMPDIR в temp, удаляется при выходе
+test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
 test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любым инструментом
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
@@ -191,7 +191,9 @@ ANSI-последовательности и повторы `copying DB` чис�
 Он же ставит `TMPDIR` в свой каталог и удаляет его при выходе — песочницы
 теста и его дочерних процессов не копятся в `/tmp`; так его импортирует и
 любой тест с `mkdtemp`. Тест, которому состояние нужно под своим `HOME`,
-передаёт `AI_HOOKS_STATE_DIR: ''`.
+передаёт `AI_HOOKS_STATE_DIR: ''`. Через `GIT_CONFIG_*` он же уводит
+`core.hooksPath` в пустой каталог: глобальные git-хуки tokensave на commit
+песочницы с `.tokensave/` регистрировали её в `~/.tokensave/global.db`.
 Ротация — `bin/cleanup.mjs`, хвост 2000 строк.
 
 ## Гейт скиллов
