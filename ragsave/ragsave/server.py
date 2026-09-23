@@ -264,7 +264,7 @@ def _do_search(args: dict[str, Any]) -> types.CallToolResult:
         return _error("пустой запрос")
 
     with Store(paths.db) as store:
-        mismatch = store.model_mismatch(_embedder.model_name)
+        mismatch = store.model_mismatch(_embedder.model_name, _embedder.engine_version)
         if mismatch:
             return _error(mismatch)
         vector = _embedder.embed_query(query)

@@ -120,7 +120,7 @@ def _cmd_search(args: argparse.Namespace) -> int:
 
     embedder = Embedder()
     with Store(paths.db) as store:
-        mismatch = store.model_mismatch(embedder.model_name)
+        mismatch = store.model_mismatch(embedder.model_name, embedder.engine_version)
         if mismatch:
             print(f"ragsave: {mismatch}", file=sys.stderr)
             return 1

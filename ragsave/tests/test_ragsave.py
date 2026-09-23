@@ -176,7 +176,7 @@ def test_store_search() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "rag.db"
         with Store(db_path, dim=dim) as store:
-            store.stamp("test-model", dim)
+            store.stamp("test-model", dim, "fake-1")
 
             documents = [
                 ("docs/deploy.md", "Деплой выполняется через GitHub Actions", 1),
@@ -286,9 +286,17 @@ def test_store_search() -> None:
 
             check_true(
                 "несовпадение модели обнаруживается",
-                store.model_mismatch("другая-модель") is not None,
+                store.model_mismatch("другая-модель", "fake-1") is not None,
             )
-            check("совпадение модели не мешает", store.model_mismatch("test-model"), None)
+            check("совпадение модели не мешает",
+                  store.model_mismatch("test-model", "fake-1"), None)
+            check_true(
+                "несовпадение версии fastembed обнаруживается",
+                store.model_mismatch("test-model", "fake-2") is not None,
+            )
+            store.conn.execute("DELETE FROM meta WHERE key='fastembed'")
+            check("индекс без отметки версии считается совпавшим",
+                  store.model_mismatch("test-model", "fake-2"), None)
 
 
 class FakeEmbedder:
@@ -298,6 +306,7 @@ class FakeEmbedder:
 
     def __init__(self) -> None:
         self.model_name = "fake-model"
+        self.engine_version = "fake-1"
         self.calls = 0
         self.unloads = 0
 
@@ -542,13 +551,56 @@ def test_branch_cache() -> None:
         config.EMBED_DIM = original_dim
 
 
+def test_engine_version() -> None:
+    print("\n--- версия fastembed в штампе индекса ---")
+
+    from ragsave import server
+    from ragsave.embedder import Embedder
+    from ragsave.indexer import index_project
+
+    check_true("версия fastembed читается без загрузки модели",
+               bool(Embedder().engine_version))
+
+    original_dim, original_embedder = config.EMBED_DIM, server._embedder
+    config.EMBED_DIM = FakeEmbedder.dim
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(root)], check=True,
+                           capture_output=True)
+            (root / "a.md").write_text("# деплой через GitHub Actions", encoding="utf-8")
+            index_project(root=root, embedder=FakeEmbedder())
+
+            upgraded = FakeEmbedder()
+            upgraded.engine_version = "fake-2"
+            server._embedder = upgraded
+            found = server._do_search({"query": "деплой", "project": str(root)})
+            check_true("поиск после апгрейда fastembed отказывает",
+                       found.is_error and "fastembed" in found.content[0].text,
+                       found.content[0].text)
+            check("запрос не эмбеддился", upgraded.calls, 0)
+            try:
+                index_project(root=root, embedder=upgraded)
+                check_true("синк после апгрейда без force запрещён", False,
+                           "ожидалось RuntimeError")
+            except RuntimeError:
+                check_true("синк после апгрейда без force запрещён", True)
+
+            forced = index_project(root=root, embedder=upgraded, force=True)
+            check("старые векторы из кеша не восстановлены", forced.restored, 0)
+            with Store(root / ".ragsave" / "rag.db", dim=FakeEmbedder.dim) as store:
+                check("штамп обновлён", store.get_meta("fastembed"), "fake-2")
+    finally:
+        config.EMBED_DIM, server._embedder = original_dim, original_embedder
+
+
 def test_cache_gc() -> None:
     print("\n--- чистка кеша ---")
 
     dim = 8
     with tempfile.TemporaryDirectory() as tmp:
         with Store(Path(tmp) / "rag.db", dim=dim) as store:
-            store.stamp("test-model", dim)
+            store.stamp("test-model", dim, "fake-1")
             for index in range(5):
                 store.put_cache(
                     f"hash{index}",
@@ -807,6 +859,7 @@ def main() -> int:
     test_store_search()
     test_indexer()
     test_branch_cache()
+    test_engine_version()
     test_cache_gc()
     test_sync_lock()
     test_sync_state()

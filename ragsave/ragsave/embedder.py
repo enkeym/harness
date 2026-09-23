@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import gc
+from importlib.metadata import version
 from typing import Iterable, Iterator, Sequence
 
 from . import config
@@ -26,6 +27,14 @@ class Embedder:
     @property
     def model_name(self) -> str:
         return self._model_name
+
+    @property
+    def engine_version(self) -> str:
+        """Версия fastembed: при той же модели она меняет векторы (pooling e5 уже менялся).
+
+        Берётся из метаданных пакета — импорт fastembed стоит секунды.
+        """
+        return version("fastembed")
 
     def _ensure(self):
         if self._model is None:

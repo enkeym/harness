@@ -184,13 +184,14 @@ class Store:
             (key, value),
         )
 
-    def stamp(self, model: str, dim: int) -> None:
+    def stamp(self, model: str, dim: int, engine: str) -> None:
         with self.transaction():
             self.set_meta("schema_version", SCHEMA_VERSION)
             self.set_meta("model", model)
             self.set_meta("dim", str(dim))
+            self.set_meta("fastembed", engine)
 
-    def model_mismatch(self, model: str) -> str | None:
+    def model_mismatch(self, model: str, engine: str) -> str | None:
         """Сообщение о несовместимости индекса с текущей моделью, иначе None."""
         stored = self.get_meta("model")
         if stored is None:
@@ -199,6 +200,13 @@ class Store:
             return (
                 f"индекс построен моделью {stored}, сейчас выбрана {model}. "
                 f"Размерности векторов различаются — выполните: ragsave reindex"
+            )
+        # Индекс старше этой отметки считается совпавшим: штамп поставит ближайший синк.
+        stored_engine = self.get_meta("fastembed")
+        if stored_engine is not None and stored_engine != engine:
+            return (
+                f"индекс построен fastembed {stored_engine}, сейчас стоит {engine}. "
+                f"Векторы разных версий несовместимы — выполните: ragsave reindex"
             )
         return None
 
@@ -522,6 +530,7 @@ class Store:
             "db_size_mb": round(size / 1_048_576, 2),
             "model": self.get_meta("model"),
             "dim": self.get_meta("dim"),
+            "fastembed": self.get_meta("fastembed"),
             "cache_versions": cached_files,
             "cache_chunks": cached_chunks,
         }

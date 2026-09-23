@@ -362,7 +362,7 @@ def _index_pass(
     """Один проход синхронизации; замок держит вызывающий."""
     report = IndexReport()
     with Store(paths.db) as store:
-        mismatch = store.model_mismatch(encoder.model_name)
+        mismatch = store.model_mismatch(encoder.model_name, encoder.engine_version)
         if mismatch and not force:
             raise RuntimeError(mismatch)
         if force:
@@ -370,7 +370,7 @@ def _index_pass(
             # и должны уйти вместе с индексом. Обычный force модель не меняет,
             # тогда кеш остаётся и переиндексация проходит без обращения к ней.
             _reset(store, drop_cache=mismatch is not None)
-        store.stamp(encoder.model_name, config.EMBED_DIM)
+        store.stamp(encoder.model_name, config.EMBED_DIM, encoder.engine_version)
 
         covered = tokensave_files(paths)
         log(f"tokensave покрывает файлов: {len(covered)}")
