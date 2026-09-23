@@ -3,6 +3,7 @@
 // кэша заменяется текстом файла с диска (full и lines), остальное — тишина.
 // Гоняется на временном проекте с пустым .tokensave/tokensave.db как маркером.
 
+import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

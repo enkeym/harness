@@ -78,7 +78,7 @@ test/test-guards.mjs            # shell-гард: одни сценарии че
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, respond, decide, журнал
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
-test/env-isolate.mjs            # первым импортом в тестах хуков: журналы и состояние в temp
+test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние и TMPDIR в temp, удаляется при выходе
 test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любым инструментом
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
@@ -189,6 +189,10 @@ exit=101` в `errors.log`). Пустой каталог `.tokensave`, созда
 первым: он уводит в temp `AI_HOOKS_HOOKS_LOG`, `AI_HOOKS_LOG_DIR` и
 `AI_HOOKS_STATE_DIR`, иначе каждый прогон test-security дописывал бы сотню
 выдуманных запретов в общий журнал, а метки — в состояние живых сессий.
+Он же ставит `TMPDIR` в свой каталог и удаляет его при выходе — песочницы
+теста и его дочерних процессов не копятся в `/tmp`; так его импортирует и
+любой тест с `mkdtemp`. Тест, которому состояние нужно под своим `HOME`,
+передаёт `AI_HOOKS_STATE_DIR: ''`.
 Ротация — `bin/cleanup.mjs`, хвост 2000 строк.
 
 ## Гейт скиллов

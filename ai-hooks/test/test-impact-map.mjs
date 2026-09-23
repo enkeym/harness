@@ -3,6 +3,7 @@
 // строка, пережившая удалённый модуль, и карта, разъехавшаяся с индексом.
 // Гоняется на временном проекте, чтобы не зависеть от рабочих репозиториев.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

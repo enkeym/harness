@@ -3,6 +3,7 @@
 // написан: карта в проекте без графа, карта в чужую историю, вторая карта
 // поверх существующей. Гоняется на временных git-репозиториях.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

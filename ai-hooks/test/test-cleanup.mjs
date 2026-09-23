@@ -4,6 +4,7 @@
 // проходе, а --dry-run обязан быть безвредным. Файловая часть гоняется на
 // временном HOME, чтобы тест не трогал настоящее состояние.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -32,7 +33,7 @@ function sandbox() {
 function run(home, args = []) {
   return execFileSync('node', [SCRIPT, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, AI_HOOKS_STATE_DIR: '' },  // состояние — под HOME песочницы
   });
 }
 

@@ -11,6 +11,11 @@ import path from 'node:path';
 import os from 'node:os';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-hooks-test-'));
+// Песочницы теста (os.tmpdir()) и его дочерних процессов (mktemp, tempfile)
+// создаются внутри dir и уходят вместе с ним при выходе: без этого каждый
+// прогон оставлял в /tmp десятки каталогов.
+process.env.TMPDIR = dir;
+process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true }));
 process.env.AI_HOOKS_HOOKS_LOG = path.join(dir, 'hooks.jsonl');
 process.env.AI_HOOKS_LOG_DIR = path.join(dir, 'logs');
 process.env.AI_HOOKS_STATE_DIR = path.join(dir, 'state');

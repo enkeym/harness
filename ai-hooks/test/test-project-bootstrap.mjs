@@ -3,6 +3,7 @@
 // remote даёт полный список пропусков, вне репозитория хук молчит,
 // а недельная метка не мешает первому напоминанию (каталог метки временный).
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,7 +25,7 @@ function run(cwd) {
   const out = execFileSync('node', [SCRIPT], {
     input: JSON.stringify({ session_id: 't', cwd, hook_event_name: 'SessionStart', source: 'startup' }),
     encoding: 'utf8',
-    env: { ...process.env, HOME: tmp },
+    env: { ...process.env, HOME: tmp, AI_HOOKS_STATE_DIR: '' },  // недельная метка — под HOME песочницы
   });
   return out.trim() ? JSON.parse(out).hookSpecificOutput.additionalContext : null;
 }

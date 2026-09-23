@@ -4,6 +4,7 @@
 // обязан сохранять код возврата — упавшие тесты, выданные за зелёные, дороже
 // любого сэкономленного токена.
 
+import './env-isolate.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

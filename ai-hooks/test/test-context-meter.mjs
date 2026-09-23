@@ -5,6 +5,7 @@
 // верхний — повторяться каждый ход, пока сессия не сменится. Файлов передача не
 // создаёт, `/clear` не зовёт.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

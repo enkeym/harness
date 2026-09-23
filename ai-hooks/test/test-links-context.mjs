@@ -3,6 +3,7 @@
 // тронутый путь попал в его `paths:`, один раз на сессию, любым инструментом.
 // Гоняется на временном проекте с собственным каталогом состояния.
 
+import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

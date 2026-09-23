@@ -5,6 +5,7 @@
 // кода и отсев шума — DOM-события, тесты, смысловые соседи ragsave.
 // `tokensave` и `ragsave` подменяются fixtures/fake-tokensave.mjs и fake-ragsave.mjs.
 
+import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

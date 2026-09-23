@@ -4,6 +4,7 @@
 // где легко ошибиться незаметно — дедупликация сообщений, арифметика цены,
 // кеш записи двух видов, обход транскриптов субагентов и upsert по сессии.
 
+import './env-isolate.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
