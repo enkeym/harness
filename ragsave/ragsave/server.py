@@ -11,12 +11,13 @@ API mcp 2.0: обработчики передаются в Server как on_lis
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import time
 import traceback
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import mcp.types as types
 from mcp.server import Server
@@ -43,8 +44,39 @@ INSTRUCTIONS = (
 # Индекс создаёт человек: модель не запускает многоминутную индексацию сама.
 NO_INDEX_HINT = "Попроси пользователя выполнить в терминале: ragsave init"
 
-# Один энкодер на процесс: модель весит гигабайты, повторная загрузка недопустима.
+# Один энкодер на процесс: модель весит гигабайты, между вызовами она живёт
+# до простоя в config.IDLE_UNLOAD секунд.
 _embedder = Embedder()
+
+# Вызовы идут в потоках (asyncio.to_thread), а счётчик и таймер живут в цикле:
+# выгрузка срабатывает в цикле и только при нуле занятых вызовов, поэтому
+# модель не уходит из-под идущего поиска.
+_busy = 0
+_unload_timer: asyncio.TimerHandle | None = None
+
+
+@contextlib.contextmanager
+def _model_in_use() -> Iterator[None]:
+    global _busy, _unload_timer
+    if _unload_timer is not None:
+        _unload_timer.cancel()
+        _unload_timer = None
+    _busy += 1
+    try:
+        yield
+    finally:
+        _busy -= 1
+        if _busy == 0 and config.IDLE_UNLOAD > 0:
+            _unload_timer = asyncio.get_running_loop().call_later(
+                config.IDLE_UNLOAD, _unload_if_idle
+            )
+
+
+def _unload_if_idle() -> None:
+    global _unload_timer
+    _unload_timer = None
+    if _busy == 0:
+        _embedder.unload()
 
 
 def _resolve_root(raw: str | None) -> Path:
@@ -203,11 +235,13 @@ async def on_call_tool(
     args = params.arguments or {}
     try:
         if name == "rag_search":
-            return await asyncio.to_thread(_do_search, args)
+            with _model_in_use():
+                return await asyncio.to_thread(_do_search, args)
         if name == "rag_status":
             return await asyncio.to_thread(_do_status, args)
         if name == "rag_index":
-            return await asyncio.to_thread(_do_index, args)
+            with _model_in_use():
+                return await asyncio.to_thread(_do_index, args)
         return _error(f"неизвестный инструмент: {name}")
     except (ValueError, SyncInProgress) as exc:
         # Плохой ввод и занятый проект — штатные отказы, не баги: в лог не идут.

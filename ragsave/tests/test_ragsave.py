@@ -299,6 +299,10 @@ class FakeEmbedder:
     def __init__(self) -> None:
         self.model_name = "fake-model"
         self.calls = 0
+        self.unloads = 0
+
+    def unload(self) -> None:
+        self.unloads += 1
 
     def embed_stream(self, texts):
         self.calls += 1
@@ -738,6 +742,52 @@ def test_index_needs_init() -> None:
         config.EMBED_DIM, server._embedder = original_dim, original_embedder
 
 
+def test_idle_unload() -> None:
+    print("\n--- выгрузка модели по простою ---")
+
+    import asyncio
+
+    import mcp.types as types
+
+    from ragsave import server
+    from ragsave.indexer import index_project
+
+    original = config.EMBED_DIM, config.IDLE_UNLOAD, server._embedder
+    config.EMBED_DIM = FakeEmbedder.dim
+    server._embedder = FakeEmbedder()
+
+    async def scenario(root: Path, idle: float) -> list[int]:
+        """Сколько выгрузок было после каждого шага."""
+        config.IDLE_UNLOAD = idle
+        server._embedder.unloads = 0
+        params = types.CallToolRequestParams(
+            name="rag_search", arguments={"query": "деплой", "project": str(root)})
+        seen = []
+        await server.on_call_tool(None, params)
+        seen.append(server._embedder.unloads)
+        await asyncio.sleep(0.15)
+        await server.on_call_tool(None, params)  # новый вызов сдвигает таймер
+        await asyncio.sleep(0.15)
+        seen.append(server._embedder.unloads)
+        await asyncio.sleep(0.4)
+        seen.append(server._embedder.unloads)
+        return seen
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(root)], check=True,
+                           capture_output=True)
+            (root / "a.md").write_text("# деплой", encoding="utf-8")
+            index_project(root=root, embedder=server._embedder)
+
+            check("модель живёт между близкими вызовами и выгружается после простоя",
+                  asyncio.run(scenario(root, 0.25)), [0, 0, 1])
+            check("IDLE_UNLOAD=0 — не выгружает", asyncio.run(scenario(root, 0)), [0, 0, 0])
+    finally:
+        config.EMBED_DIM, config.IDLE_UNLOAD, server._embedder = original
+
+
 def test_fts_query() -> None:
     print("\n--- разбор запроса FTS ---")
 
@@ -761,6 +811,7 @@ def main() -> int:
     test_sync_lock()
     test_sync_state()
     test_index_needs_init()
+    test_idle_unload()
     test_fts_query()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")
     return 1 if FAILED else 0

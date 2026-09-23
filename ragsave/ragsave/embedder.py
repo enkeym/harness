@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import ctypes
+import gc
 from typing import Iterable, Iterator, Sequence
 
 from . import config
@@ -35,6 +37,22 @@ class Embedder:
                 threads=config.EMBED_THREADS,
             )
         return self._model
+
+    def unload(self) -> None:
+        """Отдать память модели (~1,5 ГБ у e5-large); следующий вызов загрузит её снова.
+
+        Вызывать, только когда моделью никто не пользуется. Одного gc мало:
+        замер — 1533 → 361 МБ, остальное glibc держит в своих аренах, пока его
+        не попросить вернуть через malloc_trim (дальше 94 МБ).
+        """
+        if self._model is None:
+            return
+        self._model = None
+        gc.collect()
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except (OSError, AttributeError):
+            pass  # не glibc — остаётся то, что отдал gc
 
     def warmup(self) -> None:
         """Принудительно скачать и инициализировать модель."""
