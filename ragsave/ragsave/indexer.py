@@ -31,7 +31,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -82,6 +82,11 @@ class IndexReport:
             "embed_seconds": round(self.embed_seconds, 1),
         }
 
+    def absorb(self, other: "IndexReport") -> None:
+        """Прибавить итог повторного прохода."""
+        for field in fields(self):
+            setattr(self, field.name, getattr(self, field.name) + getattr(other, field.name))
+
 
 @dataclass(frozen=True)
 class Scanned:
@@ -114,8 +119,8 @@ def sync_lock(lock_path: Path, wait: float = 0.0) -> Iterator[None]:
                     handle.seek(0)
                     holder = handle.read().strip() or "неизвестный процесс"
                     raise SyncInProgress(
-                        f"{LOCK_HELD_MESSAGE} ({holder}); "
-                        f"ход работы — в {lock_path.parent / 'sync.log'}"
+                        f"{LOCK_HELD_MESSAGE} ({holder}); по окончании он "
+                        f"пройдёт ещё раз и подхватит свежие правки"
                     ) from None
                 time.sleep(0.5)
         handle.seek(0)
@@ -321,15 +326,42 @@ def index_project(
 
     lock_wait — сколько секунд ждать, если проект уже индексирует другой
     процесс; по истечении — SyncInProgress.
+
+    Пришедший к занятому замку оставляет отметку .sync.again, и держатель
+    замка по окончании проходит ещё раз: иначе правка, сделанная после того,
+    как идущий проход просканировал файл, ждала бы следующего Stop, а после
+    последнего хода — следующей сессии. Отметка ставится до попытки взять
+    замок и снимается уже под ним, поэтому окно, где запрос теряется, —
+    только между последней проверкой и отпусканием замка.
     """
     paths = ProjectPaths(root=root)
     paths.ensure_dir()
     encoder = embedder or Embedder()
-    report = IndexReport()
     log = progress or (lambda message: None)
     bump = tick or (lambda done, total, detail: None)
 
-    with sync_lock(paths.lock, wait=lock_wait), Store(paths.db) as store:
+    paths.again_mark.touch()
+    with sync_lock(paths.lock, wait=lock_wait):
+        paths.again_mark.unlink(missing_ok=True)
+        report = _index_pass(root, paths, encoder, force, log, bump)
+        while paths.again_mark.exists():
+            paths.again_mark.unlink(missing_ok=True)
+            log("пока шёл проход, синк запросили ещё раз — повторный проход")
+            report.absorb(_index_pass(root, paths, encoder, False, log, bump))
+    return report
+
+
+def _index_pass(
+    root: Path,
+    paths: ProjectPaths,
+    encoder: Embedder,
+    force: bool,
+    log: Callable[[str], None],
+    bump: Callable[[float, int, str], None],
+) -> IndexReport:
+    """Один проход синхронизации; замок держит вызывающий."""
+    report = IndexReport()
+    with Store(paths.db) as store:
         mismatch = store.model_mismatch(encoder.model_name)
         if mismatch and not force:
             raise RuntimeError(mismatch)

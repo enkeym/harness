@@ -598,11 +598,39 @@ def test_sync_lock() -> None:
                                str(exc))
                     check_true("в сообщении есть PID держателя", "PID" in str(exc))
 
+            again = root / ".ragsave" / ".sync.again"
+            check_true("отказ оставил отметку на повтор", again.exists())
+
             # Замок отпущен — индексация проходит, а после неё замок свободен.
             report = index_project(root=root, embedder=FakeEmbedder())
             check("после освобождения замка индексация идёт", report.added, 1)
+            check_true("отметка снята", not again.exists())
             with sync_lock(lock_path):
                 check_true("замок отпущен после индексации", True)
+
+            # Правка после сканирования, пока идёт эмбеддинг, и синк, упёршийся
+            # в замок: держатель обязан пройти ещё раз сам.
+            class EditsDuringSync(FakeEmbedder):
+                def embed_stream(self, texts):
+                    if self.calls == 0:
+                        (root / "a.md").write_text("# правка во время синка",
+                                                   encoding="utf-8")
+                        try:
+                            index_project(root=root, embedder=FakeEmbedder())
+                            check_true("второй синк упирается в замок", False)
+                        except SyncInProgress:
+                            check_true("второй синк упирается в замок", True)
+                    return super().embed_stream(texts)
+
+            (root / "a.md").write_text("# до синка", encoding="utf-8")
+            racing = index_project(root=root, embedder=EditsDuringSync())
+            check("правка подхвачена повторным проходом", racing.updated, 2)
+            with Store(root / ".ragsave" / "rag.db", dim=FakeEmbedder.dim) as store:
+                text = store.conn.execute(
+                    "SELECT text FROM chunks WHERE path='a.md'").fetchone()["text"]
+            check("в индексе правка, а не версия первого прохода",
+                  text, "# правка во время синка")
+            check_true("после повтора отметки нет", not again.exists())
     finally:
         config.EMBED_DIM = original_dim
 

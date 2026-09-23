@@ -16,6 +16,7 @@ from pathlib import Path
 INDEX_DIR = ".ragsave"
 DB_NAME = "rag.db"
 LOCK_NAME = ".sync.lock"
+AGAIN_NAME = ".sync.again"
 # Лог фонового синка и отказ от него пишет и читает ai-hooks/bin/ragsave-sync.sh:
 # имена правятся вместе.
 SYNC_LOG_NAME = "sync.log"
@@ -168,6 +169,10 @@ class ProjectPaths:
     @property
     def lock(self) -> Path:
         return self.index_dir / LOCK_NAME
+
+    @property
+    def again_mark(self) -> Path:
+        return self.index_dir / AGAIN_NAME
 
     @property
     def sync_log(self) -> Path:

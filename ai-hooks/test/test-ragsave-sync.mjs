@@ -81,12 +81,34 @@ function expectSilent(name, sb, res, { got = () => [], want = [] } = {}) {
   check('успех — errors.log пуст', sb.errors(), '');
 }
 
+const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.log.'));
+
+{
+  const sb = sandbox();
+  sb.run();
+  check('успех — временного лога не остаётся',
+    waitFor(() => read(path.join(sb.dir, 'sync.log')) !== '' && tmpLogs(sb).length === 0), true);
+}
+
+{
+  const sb = sandbox();
+  const log = path.join(sb.dir, 'sync.log');
+  fs.writeFileSync(log, 'итог прошлого синка\n');
+  sb.run({ FAKE_INDEXER_EXIT: '3' });
+  sb.waitCalls(1);
+  check('занятый замок — временный лог удалён', waitFor(() => tmpLogs(sb).length === 0), true);
+  check('занятый замок — sync.log идущего синка не тронут', read(log), 'итог прошлого синка\n');
+  check('занятый замок — errors.log пуст', sb.errors(), '');
+}
+
 {
   const sb = sandbox();
   sb.run({ FAKE_INDEXER_EXIT: '1' });
   check('отказ бинаря — запись в errors.log',
     waitFor(() => sb.errors().includes(`] ragsave sync | ${sb.root} | exit=1`)), true);
   check('отказ бинаря — хвост sync.log в записи', sb.errors().includes(`    fake sync ${sb.root} --quiet`), true);
+  check('отказ бинаря — лог остаётся в sync.log для last_sync',
+    waitFor(() => read(path.join(sb.dir, 'sync.log')).includes('fake sync')), true);
 }
 
 {
