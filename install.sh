@@ -36,6 +36,7 @@ LINKS=(
   "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.claude/settings.local.json|claude/settings.local.json"
+  "$HOME/.claude/keybindings.json|claude/keybindings.json"
   "$HOME/.ai-hooks|ai-hooks"
   "$RAG_HOME/ragsave|ragsave/ragsave"
   "$RAG_HOME/tests|ragsave/tests"
