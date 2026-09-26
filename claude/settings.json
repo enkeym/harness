@@ -248,6 +248,11 @@
   },
   "language": "Russian",
   "effortLevel": "high",
+  "modelSettings": {
+    "claude-sonnet-5": {
+      "effortLevel": "high"
+    }
+  },
   "showClearContextOnPlanAccept": true,
   "theme": "dark-ansi",
   "remoteControlAtStartup": false
