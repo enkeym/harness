@@ -27,6 +27,7 @@ Here only what exists in OpenCode alone.
 
 Denied here through `permission.skill`: `commit`, `doctor`, `optimize`,
 `usage`, `hooks-guards`. Slash commands `/ask`, `/ask-off`, `/commit` do not
-exist — use the `ask` agent. `/handoff` and `/test-browser` are thin commands in
-`opencode/command/` that load the shared skill; `test-browser` asks before
-loading and is never loaded or offered on your own.
+exist — use the `ask` agent. `/handoff`, `/review` and `/test-browser` are thin
+commands in `opencode/command/` that load the shared skill; `review` and
+`test-browser` ask before loading and are never loaded on your own;
+`test-browser` is never offered either.

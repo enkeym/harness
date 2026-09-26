@@ -23,11 +23,12 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 
 ## User-invoked
 
-`/commit`, `/doctor`, `/impact-map`, `/optimize`, `/usage`, `/test-browser`
-(skills with `disable-model-invocation: true`) and `/ask`, `/ask-off`
-(commands in `claude/commands/`) are user-invoked only. Offer in one line when
+`/commit`, `/doctor`, `/impact-map`, `/optimize`, `/review`, `/usage`,
+`/test-browser` (skills with `disable-model-invocation: true`) and `/ask`,
+`/ask-off` (commands in `claude/commands/`) are user-invoked only. Offer in one line when
 it fits: `/doctor` when the harness misbehaves (loops, repeated refusals, dead
 index, expired provider auth), `/optimize` and `/usage` for spend and
 settings, `/impact-map` when an indexed project (`.tokensave/` or
-`.ragsave/rag.db`) has no `docs/links/` or `.claude/links/`. `/test-browser`
+`.ragsave/rag.db`) has no `docs/links/` or `.claude/links/`, `/review` when
+the user asks to review a colleague's branch or MR. `/test-browser`
 is never offered.

@@ -38,6 +38,7 @@
       "usage": "deny",
       "hooks-guards": "deny",
       "impact-map": "ask",
+      "review": "ask",
       "test-browser": "ask"
     },
     "task": {
