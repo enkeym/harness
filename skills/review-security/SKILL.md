@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: "Security checklist for a diff or module and the procedure to run it — leaked secrets (code, tests, fixtures, untracked files about to be staged), env and config, input validation and mass assignment, auth and ownership, injection (SQL/ORM, shell, path, HTML, regex), SSRF and outbound calls, bot webhooks and payment provider callbacks, sensitive data in logs and responses, client bundle exposure, dependencies, docker and CI. Load on the diff before every commit and whenever asked to check security or audit a module. Complements the security-guard hook, which sees commands, not code."
+description: "Security checklist for a diff or module and the procedure to run it — leaked secrets (code, tests, fixtures, untracked files about to be staged), hardcoded environment values and insecure fallbacks, controls a new entry point lacks, input validation and mass assignment, file uploads, auth, ownership, CSRF and rate limits, injection (SQL/ORM, shell, path, HTML, regex, prototype pollution, deserialisation, open redirect), SSRF and outbound calls, bot webhooks and payment provider callbacks, sensitive data in logs and responses, client bundle exposure, dependencies, docker and CI. Load on the diff before every commit and whenever asked to check security or audit a module. Complements the security-guard hook, which sees commands, not code."
 ---
 
 # Security review
@@ -21,13 +21,19 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
    phones in fixtures. `tokensave_unsafe_patterns` first when indexed.
    Hit → stop, tell the user in one line. Secret in an earlier branch commit →
    needs **rotation**, not deletion; say so.
-3. Checklist for the categories the diff touches; walk callers of touched
+3. Missing controls. For every new or changed entry point — route, action,
+   handler, webhook, job, upload, bot or CLI command — list what it needs:
+   authentication, ownership, input validation, size and rate limits,
+   idempotency, response mapping. Find each in code or in a guard it passes
+   through; an absent control is a finding, as much as a wrong one.
+4. Checklist for the categories the diff touches; walk callers of touched
    symbols (`tokensave_callers`) — the vulnerable path is often the caller.
-4. High stakes (auth, sessions, payments, secrets/config, upload, outbound
+5. High stakes (auth, sessions, payments, secrets/config, upload, outbound
    HTTP, docker, CI) → read the whole handler/module, every caller, and write
    the attack scenario tried per item before calling it clean.
-5. Critical blocks the commit. Important: fixed inside the diff, reported
-   outside. Info: one line.
+6. Critical blocks the commit. Triage as in `review-standards` step 6:
+   certain fix inside the diff → applied; a fix with a choice, a behaviour
+   change or outside the diff → `AskUserQuestion`. Info: one line.
 
 ## Checklist
 
@@ -35,7 +41,10 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 - No literal secret in code, tests, fixtures, seeds, logs, errors, docker
   layers, CI output, comments. A "test" key that is real is real.
 - Config through the project's config layer, validated at startup; new
-  variable → `.env.example` with comment, no value.
+  variable → `.env.example` with comment, no value. Environment values in
+  constants: `code-rules.md`.
+- A fallback that weakens protection when a variable is missing — auth or
+  verification skipped, debug on, CORS open, a built-in key → Critical.
 - `.env*`, dumps, keys, `*.pem`, local DBs in `.gitignore`.
 - Tokens never in URLs, query strings, or the client bundle (`NEXT_PUBLIC_`,
   `VITE_` = public). Sensitive cookies `httpOnly`, `secure`, `sameSite`.
@@ -45,8 +54,12 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
   `whitelist` + `forbidNonWhitelisted`; client schema); numbers/ids parsed,
   enums checked, lengths and array sizes bounded.
 - No mass assignment: body never spread into an entity/update; fields picked.
-- Files: type and size checked server-side, name sanitised, stored outside the
-  web root, never executed or included.
+- Files: type from content, not the name or the client's content type,
+  against an allowlist; size and count bounded while streaming; name
+  replaced; stored outside the web root; never executed, included or served
+  inline as active content — download disposition and `nosniff`. Archives:
+  entry paths and unpacked size checked. Document parsers: external entities
+  and macros off.
 
 **Auth and access**
 - Every non-public route guarded; `@Public()` is deliberate and named.
@@ -56,6 +69,10 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
   against config; side-effect commands refused from groups/inline; callback
   data validated.
 - Sessions/tokens: expiry, refresh rotated, logout invalidates.
+- Cookie-authenticated state change → CSRF protection the project's way.
+- Login, reset, one-time codes, sign-up, expensive endpoints → rate limit or
+  lockout.
+- Signatures, tokens and hashes compared in constant time.
 
 **Injection**
 - SQL/ORM: parameters or QueryBuilder bindings; raw queries only parameterised;
@@ -64,6 +81,10 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 - Path: `path.join` against a fixed root + inside-root check.
 - HTML: no `dangerouslySetInnerHTML`/`innerHTML` with user data.
 - Regex from input, `eval`, `new Function`, `vm` — finding until proven otherwise.
+- Deep merge or dynamic key assignment from input → key allowlist or a
+  null-prototype object.
+- Untrusted data deserialised only by a format that cannot run code.
+- Redirect target from input → relative path or allowlist.
 
 **Outbound and integrations**
 - URL from input = SSRF until an allowlist says otherwise. Timeouts, bounded

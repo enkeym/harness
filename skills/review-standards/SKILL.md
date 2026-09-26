@@ -1,6 +1,6 @@
 ---
 name: review-standards
-description: "Cross-stack TypeScript review checklist and the procedure to run it on a diff — types (no any, one representation per value set, derived not copied), constants (no magic values, existing enum/config reused), reuse of existing code and installed libraries, naming that matches neighbours, styles only through project tokens, duplication, error handling, leftovers. Load on the diff before every commit and whenever asked to review code, a branch, an MR or someone else's change. Finds what the linter cannot."
+description: "Cross-stack TypeScript review checklist and the procedure to run it on a diff — broken callers and reintroduced bugs, edge cases, deprecated or superseded constructs, drift from the project's architecture, inefficient code, types (no any, one representation per value set, derived not copied), constants and environment values, reuse of existing code and installed libraries, naming, styles through project tokens, duplication, error handling, leftovers; certain fixes applied, doubtful ones offered as a choice. Load on the diff before every commit and whenever asked to review code, a branch, an MR or someone else's change. Finds what the linter cannot."
 ---
 
 # Standards review
@@ -25,9 +25,20 @@ are run, not re-done by hand; a finding is what they cannot see.
    saying why), fixed in this diff, or covered by a test that fails on the old
    behaviour. A link the map lacks → add its line in this commit. No graph
    (`.tokensave/` missing or stale) → grep the symbol name, say so in one line.
-4. Fix inside the diff silently (one line in chat per fix). Pre-existing
-   problems the diff touches → one line under *Minor*, never a widening refactor.
-5. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
+4. Regression pass: `git log -L <start>,<end>:<file>` (or `tokensave_blame`)
+   on each removed or rewritten hunk. A line an earlier fix commit added, now
+   gone or reverted → the old bug is back unless the diff replaces the guard.
+5. Depth pass: the *Correctness and design* section below on every changed
+   symbol and the code it now depends on.
+6. Triage every finding:
+   - Certain, one obvious fix, inside the diff, no change to a public contract
+     → fix it, one line in chat.
+   - Doubtful — several valid fixes, a behaviour or API change, a new
+     dependency, code outside the diff, an architectural call → no edit;
+     `AskUserQuestion`, one question per finding (≤4 per call), options are
+     concrete fixes with the recommended first, plus leaving it as is.
+   - Nothing found → no edit, one line saying the diff is clean.
+7. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
    output. Red = no commit.
 
 ## Checklist
@@ -36,18 +47,36 @@ Every section of [../shared/code-rules.md](../shared/code-rules.md) — read it
 now unless it is already in this session's context — plus the stack skill's
 structural rules and:
 
+**Correctness and design**
+- Every branch of changed logic against what its callers expect: empty,
+  missing, boundary, error path, repeated call, concurrent call, order of
+  awaited steps.
+- Superseded construct: an API marked deprecated in the installed version's
+  types or changelog, or a form the project has already moved away from (the
+  newer form dominates the neighbours) → the current form. Judge by the
+  installed version and the project's majority, never by a general list; a
+  construct still current for both is not a finding.
+- Architecture: the diff keeps the project's layers and data flow — no layer
+  skipped, no second mechanism for state, data access, validation or errors
+  beside the one in use, no import across a boundary the project keeps.
+- Efficiency, where it scales with data or runs hot: a query or request in a
+  loop, independent awaits in sequence, the same work repeated per call or
+  render, an unbounded set loaded or rendered whole. Micro-gains are not
+  findings.
+
 **Leftovers**
 - No `console.log`, debug flags, commented code, ownerless `TODO`, unused
   imports/exports/params, files outside the task, unrequested lockfile/config edits.
 
 **Not a finding:** formatting, import order, anything the project's linter or
 formatter own;
-taste without consequence; refactor beyond the task (one *Minor* line at most);
+taste without consequence; refactor beyond the task (offered in step 6, never
+applied unasked);
 "could be more generic" with no need yet.
 
 ## Output
 
-Before a commit: one line per fix, then the commit.
+Before a commit: one line per fix and the answered questions, then the commit.
 
 Requested review (someone's diff, branch, MR) — spec first, then quality, ≤40
 lines, ≤5 lines of quoted code:

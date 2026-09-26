@@ -49,6 +49,10 @@ at the first hit:
 - Config only through the project's config layer: never `process.env` in
   module code, never a default that is a secret; a new variable → `.env.example`
   in the same change (name + comment, no value).
+- A value that differs between environments (host, URL, port, credentials,
+  external account or resource id, a switch, a per-environment limit) is
+  config, never a constant. A required variable has no fallback in code: a
+  missing one fails at startup instead of pointing at another environment.
 
 ## Styles
 
