@@ -250,10 +250,15 @@ function secretReason(file) {
 // так путь находится и внутри кода (`readFileSync('.env')`), и после `if=`,
 // `HEAD:`, `$HOME`. Разрез, а не поиск regex-ом: поиск с жадным префиксом
 // квадратичен, и команда в 100 КБ разбиралась 12 секунд.
-const NOT_PATH_RE = /[^\w@.\-/\\~+]+/;
+// `*`/`?` режутся вторым шагом: шаблон, который целиком кончается суффиксом
+// примера (`--include=.env*.example`), совпадает только с примерами и
+// выбрасывается до разреза, иначе давал бы кандидат `.env`. `.env*` остаётся.
+const NOT_GLOB_PATH_RE = /[^\w@.\-/\\~+*?]+/;
 
 function secretPathsIn(seg, toks) {
-  const found = new Set([...String(seg).split(NOT_PATH_RE), ...toks]);
+  const words = String(seg).split(NOT_GLOB_PATH_RE)
+    .flatMap((w) => (/[*?]/.test(w) && SECRET_EXEMPT_RE.test(w) ? [] : w.split(/[*?]+/)));
+  const found = new Set([...words, ...toks]);
   // `@файл` — синтаксис curl для «взять тело из файла», сама «собака» частью
   // пути не является и мешала бы сопоставлению имени.
   // `\.` — экранированная точка regex (`process\.env`, `import\.meta\.env`):
