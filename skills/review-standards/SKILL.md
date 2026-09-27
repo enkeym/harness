@@ -78,8 +78,8 @@ applied unasked);
 
 Before a commit: one line per fix and the answered questions, then the commit.
 
-Requested review (someone's diff, branch, MR) — spec first, then quality, ≤40
-lines, ≤5 lines of quoted code:
+Requested review (someone's diff, branch, MR) — spec first, then quality; readable
+in one pass, quoting only the lines a finding hinges on:
 
 ```
 Spec: ✅ | ❌ — <what is missing / extra>

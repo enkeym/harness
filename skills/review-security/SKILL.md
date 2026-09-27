@@ -113,7 +113,7 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 Before a commit: fixes one line each; secret/Critical first; then
 `Checked, no issues: <categories>`.
 
-Requested review — ≤40 lines, ≤5 lines of quoted code:
+Requested review — readable in one pass, quoting only the lines a finding hinges on:
 
 ```
 Verdict: pass | findings
