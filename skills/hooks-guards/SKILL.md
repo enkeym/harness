@@ -59,7 +59,7 @@ fired and what it wants instead.
 
 - `read-router` denies `Read` of a file that is in the tokensave index (table
   `files`); take the symbol with `tokensave_body`/`signature`, the file or a
-  range with `tokensave_read` (`lines`), an overview with `tokensave_context`.
+  range with `tokensave_read` (`mode: "lines"` plus `lines: "A-B"`; `lines` alone returns the whole file), an overview with `tokensave_context`.
   New files, `README`, configs outside the index and agent config paths pass.
   Edits are not routed: `Edit` shows a diff, reading is what costs tokens.
 - tokensave errored or answered empty → quote the answer and repeat the same

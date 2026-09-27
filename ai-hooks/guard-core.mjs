@@ -245,7 +245,7 @@ export function guardRead(filePath, cwd, labels, sessionId) {
   if (breakerAllows(sessionId, `Read:${path.resolve(cwd || process.cwd(), String(filePath))}`)) return null;
   return (
     `Файл в индексе tokensave. Вместо ${labels.read}: tokensave_body / tokensave_signature (символ), ` +
-    'tokensave_read (файл; `lines` — диапазон), tokensave_context (обзор). ' +
+    'tokensave_read (файл; диапазон — `mode: "lines", lines: "A-B"`, без `mode` придёт весь файл), tokensave_context (обзор). ' +
     `tokensave ответил ошибкой или пусто — процитируй ответ и повтори ${labels.read}: ` +
     'повтор той же цели в течение 3 минут проходит.'
   );
