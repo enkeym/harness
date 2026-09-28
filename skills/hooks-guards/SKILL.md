@@ -16,7 +16,8 @@ fired and what it wants instead.
   `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, a `Grep` glob (`.env*`), a symlink to
   one, the browser (`file://`, `browser_file_upload`), a recursive `grep` without
   `--include` over a directory (files like `*.mjs` pass) — it reads `.env`; in an indexed project
-  look the symbol up with `tokensave_search`, elsewhere add `--include=*.ts`. Take a
+  look the symbol up with `tokensave_search`, docs, configs and yml with `rag_search`,
+  elsewhere add `--include=*.ts`. Take a
   variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
   branches, force push (`-f`, `+refspec`), branch deletion, push to the
@@ -61,7 +62,7 @@ fired and what it wants instead.
   `files`); take the symbol with `tokensave_body`/`signature`, the file or a
   range with `tokensave_read` (`mode: "lines"` plus `lines: "A-B"`; `lines` alone returns the whole file), an overview with `tokensave_context`.
   New files, `README`, configs outside the index and agent config paths pass.
-  Edits are not routed: `Edit` shows a diff, reading is what costs tokens.
+  Its edits: `tokensave_str_replace` — `Edit` needs a `Read` first.
 - tokensave errored or answered empty → quote the answer and repeat the same
   `Read`: a repeat of the same target within 3 minutes passes (breaker,
   `~/.claude/state/guard-breaker.json`). Don't reach for the shell instead.
@@ -83,8 +84,9 @@ fired and what it wants instead.
 
 - `bash-router` denies reading or writing an existing file through the shell
   (`cat`, `head`, `sed -i`, `tee`, `> file`, `node -e`/`python -c` with a path,
-  a heredoc into an interpreter) and asks for `Read`/`Edit`/`Write` instead.
-  Same rule for `mcp__ide__executeCode`. Output clipping is `output-clip`.
+  a heredoc into an interpreter) and names the tool that passes. Same rule for
+  `mcp__ide__executeCode`; `jq` over a `.json`/`.jsonl` outside the index and
+  `>`/`>>` into `/tmp/` outside a project pass. Output clipping is `output-clip`.
 - `node <file>` (`python`, `bun`, `deno` alike) with no `-e`/`-p`/`-c` and no
   heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` and the
   README's commands pass; the inline-code forms stay blocked.
@@ -92,11 +94,9 @@ fired and what it wants instead.
   `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat`, and a heredoc body
   stays with its `node`/`python`. `grep`/`rg` and pipes reading stdin pass.
 - `grep`/`rg`/`ag` over indexed code is refused by tokensave's own
-  `hook-pre-tool-use`, which prints how to switch itself off. That switch
-  (`TOKENSAVE_DISABLE_GREP_HOOK` anywhere in the command) and `git grep` inside
-  an indexed project are denied by `bash-router`: a refusal is final — use
-  `tokensave_search`/`signature_search`, `callers`, or `search` with
-  `literal: true` for text.
+  `hook-pre-tool-use`; its off switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git
+  grep` in an indexed project are denied by `bash-router`, finally — use
+  `tokensave_search`, `callers`, `search` `literal: true`, `rag_search` for docs.
 
 ## Background hooks
 

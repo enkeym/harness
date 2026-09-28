@@ -81,15 +81,18 @@ const INPLACE_CMDS = new Set(['sed', 'perl', 'awk', 'gawk']);
 
 // Интерпретаторы: путь прячется внутри строки кода, поэтому у них смотрим
 // весь сегмент целиком, а не отдельные аргументы.
-const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun', 'jq']);
+const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun']);
 // Признак строки кода в аргументах или heredoc. Без него интерпретатор
 // исполняет скрипт (`node test/test-guards.mjs`) — это запуск, как `tsc` или
-// `eslint`, а не чтение. jq всегда читает свой аргумент.
+// `eslint`, а не чтение.
 const INLINE_CODE_RE = /^(-e|--eval|-p|--print|-c|-E|-r|eval)$|^--(eval|print)=/;
-function runsInlineCode(cmd, toks, seg) {
-  if (cmd === 'jq') return true;
+function runsInlineCode(toks, seg) {
   return toks.slice(1).some((t) => INLINE_CODE_RE.test(t)) || /<<-?\s*['"\\]?\w+/.test(seg);
 }
+
+// jq читает свой аргумент всегда. Данные вне индекса (логи хуков, отчёты)
+// другим инструментом не разобрать: Read отдаст весь .jsonl целиком.
+const JQ_DATA_RE = /\.jsonl?$/;
 
 // Кандидаты в пути: всё, что похоже на файл с расширением. Ловит и голые
 // аргументы, и пути внутри строк кода — поэтому применяется к сырому сегменту.
@@ -112,12 +115,20 @@ function anyFile(text, cwd) {
 
 // Перенаправление пишет в файл, даже новый; /dev/null и прочие устройства — нет.
 // Смотрим первую строку без кавычек: `=>` и `->` в строке кода или теле
-// heredoc — не перенаправление.
-function redirectTarget(seg) {
+// heredoc — не перенаправление. Вывод команды в /tmp вне проекта — черновик,
+// не правка.
+function redirectTarget(seg, cwd) {
   const bare = seg.split('\n')[0].replace(/"[^"]*"|'[^']*'/g, '');
   const m = bare.match(/(?:^|[^=\-<>])>>?\s*([\w@.\-/\\]+)/);
-  if (!m || m[1].startsWith('/dev/')) return null;
+  if (!m || m[1].startsWith('/dev/') || isScratch(cwd, m[1])) return null;
   return m[1];
+}
+
+const SCRATCH_DIRS = [...new Set(['/tmp', os.tmpdir()])].map((d) => path.resolve(d) + path.sep);
+
+function isScratch(cwd, p) {
+  const abs = path.resolve(cwd || process.cwd(), p);
+  return SCRATCH_DIRS.some((d) => abs.startsWith(d)) && !findRoot(path.dirname(abs));
 }
 
 // Родной хук tokensave отказывает grep/rg/ag по коду в индексе и сам же
@@ -143,22 +154,27 @@ export function guardBash(command, cwd, labels) {
         return grepReason('`git grep` в индексированном проекте');
       }
 
-      const target = redirectTarget(seg);
-      if (target) return editReason(target, labels);
+      const target = redirectTarget(seg, cwd);
+      if (target) return editReason(target, fileTools(cwd, target, labels));
 
       if (READ_CMDS.has(cmd)) {
         const hit = anyFile(seg, cwd);
-        if (hit) return readReason(hit, labels);
+        if (hit) return readReason(hit, fileTools(cwd, hit, labels));
       }
 
       if (WRITE_CMDS.has(cmd) || (INPLACE_CMDS.has(cmd) && toks.some((t) => /^-i/.test(t) || t === '--in-place'))) {
         const hit = anyFile(seg, cwd);
-        if (hit) return editReason(hit, labels);
+        if (hit) return editReason(hit, fileTools(cwd, hit, labels));
       }
 
-      if (EVAL_CMDS.has(cmd) && runsInlineCode(cmd, toks, seg)) {
+      if (EVAL_CMDS.has(cmd) && runsInlineCode(toks, seg)) {
         const hit = anyFile(seg, cwd);
-        if (hit) return evalReason(hit, labels);
+        if (hit) return evalReason(hit, fileTools(cwd, hit, labels));
+      }
+
+      if (cmd === 'jq') {
+        const hit = [...pathCandidates(seg)].find((c) => isFile(cwd, c) && !(JQ_DATA_RE.test(c) && !isIndexed(cwd, c)));
+        if (hit) return evalReason(hit, fileTools(cwd, hit, labels));
       }
     }
   } catch {
@@ -181,6 +197,14 @@ export function guardExec(code, cwd, labels) {
 
 function readReason(file, labels) {
   return `Файл \`${file}\` через shell не читают — ${labels.read}.`;
+}
+
+// Файл из индекса: Read запрещён роутером чтения, а Edit без Read не работает —
+// отказ сразу называет инструмент, который пройдёт.
+const INDEX_TOOLS = { read: 'tokensave_read', edit: 'tokensave_str_replace' };
+
+function fileTools(cwd, file, labels) {
+  return isIndexed(cwd, file) ? INDEX_TOOLS : labels;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +281,8 @@ function editReason(file, labels) {
 
 function grepReason(what) {
   return `${what} — обход хука tokensave, отказ окончательный. Символ: tokensave_search / `
-    + 'tokensave_signature_search; использования: tokensave_callers; текст: tokensave_search с literal: true.';
+    + 'tokensave_signature_search; использования: tokensave_callers; текст: tokensave_search с literal: true; '
+    + 'доки, конфиги, yml: rag_search.';
 }
 
 function evalReason(file, labels) {

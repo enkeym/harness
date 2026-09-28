@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findSecretValue } from '../security-core.mjs';
+import { findSecretValue, guardBashSecurity } from '../security-core.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HARNESS = path.dirname(ROOT);
@@ -118,6 +118,8 @@ check('grep по regex с настоящим .env', bash('grep -n "process\\.env
 // --- рекурсивный grep без --include читает и .env рядом с кодом
 check('grep -r без --include', bash('grep -r useState src'), 'deny');
 check('grep -rn без --include', bash('grep -rn "TODO" .'), 'deny');
+check('отказ grep называет rag_search для доков и конфигов',
+  /rag_search/.test(guardBashSecurity('grep -rn deploy ansible')?.reason || ''), true);
 check('grep -Rni без --include', bash('grep -Rni token'), 'deny');
 check('grep --recursive без --include', bash('grep --recursive foo src'), 'deny');
 check('egrep -r без --include', bash('egrep -r "a|b" .'), 'deny');

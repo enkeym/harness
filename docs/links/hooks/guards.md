@@ -28,6 +28,10 @@ paths:
   `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
   такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
   `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
+- Разрешения shell — `ai-hooks/guard-core.mjs:JQ_DATA_RE`/`isScratch` ↔ абзац
+  «Allowed» раздела Bash в `rules/core.md` и «Shell guard» в
+  `skills/hooks-guards/SKILL.md`. Сузил гард без правки правил — агент по
+  тексту правил идёт в отказ; расширил — правила молча запрещают разрешённое.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`

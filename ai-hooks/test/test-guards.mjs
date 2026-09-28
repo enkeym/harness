@@ -21,13 +21,13 @@ const BASH = path.join(ROOT, 'claude', 'bash-router.mjs');
 const READ = path.join(ROOT, 'claude', 'read-router.mjs');
 
 // Что лежит в таблице files индекса: код — да, README и конфиги — нет.
-const INDEXED = ['client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'client/src/index.css'];
+const INDEXED = ['client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'client/src/index.css', 'client/src/data.json'];
 
 const ON_DISK = [
   'client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md',
   'client/src/index.css', 'package.json', '.env.example',
   'client/node_modules/storm-ui/dist/index.css', '.ragsave/rag.db', '.ragsave/sync.log',
-  '.tokensave/tokensave.db',
+  '.tokensave/tokensave.db', 'client/src/data.json', 'logs/hooks.jsonl',
 ];
 function sandboxProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-project-'));
@@ -101,6 +101,11 @@ bash('перенаправление в исходник → deny', 'deny', 'ech
 bash('перенаправление в новый файл → deny (файлы пишет Write)', 'deny', 'echo x > client/src/__new__.ts');
 bash('дозапись в новый файл → deny', 'deny', 'echo x >> notes.txt');
 bash('перенаправление в /dev/null → allow', 'allow', 'npm test > /dev/null');
+const SCRATCH = path.join(os.tmpdir(), `ts-guards-scratch-${process.pid}.out`);
+bash('вывод в /tmp вне проекта → allow', 'allow', `npm test > ${SCRATCH} 2>&1`);
+bash('дозапись в /tmp вне проекта → allow', 'allow', `npm test >> ${SCRATCH}`);
+bash('перенаправление в проект внутри /tmp → deny', 'deny', `echo x > ${PROJECT}/README.md`);
+bash('/tmp/.. наружу → deny', 'deny', 'echo x > /tmp/../ts-guards-outside.txt');
 bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
 bash('tee в исходник → deny', 'deny', 'echo x | tee client/src/App.tsx');
 bash('`=>` в строке — не перенаправление → allow', 'allow', `git log --format='%h => %s'`);
@@ -130,7 +135,17 @@ bash('<< в кавычках — не heredoc, следующая строка �
   `echo "a<<X"\ncat client/src/App.tsx`);
 bash('node -p с путём → deny', 'deny',
   `node -p "require('fs').readFileSync('client/src/App.tsx','utf8')"`);
-bash('jq по package.json → deny', 'deny', 'jq .name package.json');
+bash('jq по .json вне индекса → allow', 'allow', 'jq .name package.json');
+bash('jq по .jsonl вне индекса → allow', 'allow', 'jq -r .ts logs/hooks.jsonl');
+bash('jq по .json из индекса → deny', 'deny', 'jq . client/src/data.json');
+bash('jq по не-json файлу → deny', 'deny', 'jq -R . client/src/App.tsx');
+bash('jq -n без файлов → allow', 'allow', "jq -n '1 + 1'");
+
+// ---- текст отказа называет инструмент, который пройдёт ----
+const why = (command) => guardBash(command, PROJECT, OPENCODE_LABELS) || '';
+check('cat файла из индекса → tokensave_read', /tokensave_read/.test(why('cat client/src/App.tsx')), true);
+check('> в файл из индекса → tokensave_str_replace', /tokensave_str_replace/.test(why('echo x > client/src/App.tsx')), true);
+check('git grep → rag_search для конфигов', /rag_search/.test(why('git grep -n foo')), true);
 
 // ---- формы команды, которые разбирает shell-core ----
 bash('фоновый & перед cat → deny', 'deny', 'echo ok & cat client/src/App.tsx');
@@ -181,10 +196,10 @@ both('executeCode без путей → allow', 'allow',
 
 // ---- причина называет замену ----
 {
-  const reason = guardBash('cat client/src/App.tsx', PROJECT, OPENCODE_LABELS);
-  check('[core] причина чтения называет read', reason.includes('read'), true);
-  const edit = guardBash("sed -i 's/a/b/' client/src/App.tsx", PROJECT, OPENCODE_LABELS);
-  check('[core] причина правки называет edit/write', edit.includes('edit/write'), true);
+  const reason = guardBash('cat package.json', PROJECT, OPENCODE_LABELS);
+  check('[core] причина чтения вне индекса называет read', reason.includes('— read.'), true);
+  const edit = guardBash("sed -i 's/a/b/' package.json", PROJECT, OPENCODE_LABELS);
+  check('[core] причина правки вне индекса называет edit/write', edit.includes('edit/write'), true);
 }
 
 // ---- роутер чтения: файл из индекса → tokensave, остальное проходит ----
