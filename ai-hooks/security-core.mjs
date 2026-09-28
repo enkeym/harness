@@ -277,25 +277,47 @@ const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep']);
 // а не флаги (`-error` — шаблон `rror`, не `-r`).
 const GREP_ARG_SHORT = 'efmABCdD';
 
+// Операнд — файл, а не каталог: у имени есть расширение (`app.ts`, `*.mjs`,
+// `vitest.config.*`). Рекурсия по одним явным файлам дерево не обходит, и
+// `.env` так не прочесть — а сам `.env` операндом ловит secretPathsIn.
+const FILE_OPERAND_RE = /(^|\/)[^/.][^/]*\.[^/]+$/;
+const REDIRECT_RE = /^\d*[<>]/;
+
 function grepWithoutInclude(toks) {
   const args = toks.slice(commandIndex(toks) + 1);
   let recursive = false;
+  // Шаблон задан через -e/-f — тогда первый операнд уже путь, а не шаблон.
+  let patternOpt = false;
+  const operands = [];
   for (let i = 0; i < args.length; i++) {
     const t = args[i];
-    if (t === '--') break;
+    if (t === '--') {
+      operands.push(...args.slice(i + 1));
+      break;
+    }
     if (t === '--include' || t.startsWith('--include=')) return false;
     if (t === '--recursive' || t === '--dereference-recursive') recursive = true;
-    else if (/^-[^-]/.test(t)) {
+    else if (/^--(regexp|file)=/.test(t)) patternOpt = true;
+    else if (t === '--regexp' || t === '--file') {
+      patternOpt = true;
+      i++;
+    } else if (/^-[^-]/.test(t)) {
       for (const [k, ch] of [...t.slice(1)].entries()) {
         if (ch === 'r' || ch === 'R') recursive = true;
         if (!GREP_ARG_SHORT.includes(ch)) continue;
+        if (ch === 'e' || ch === 'f') patternOpt = true;
         // Опция последняя в склейке — её аргумент следующим токеном.
         if (k === t.length - 2) i++;
         break;
       }
-    }
+    } else if (REDIRECT_RE.test(t)) {
+      // `2>/dev/null` — перенаправление, не путь; голый `>` забирает следующий токен.
+      if (/^\d*[<>]+$/.test(t)) i++;
+    } else if (!t.startsWith('--')) operands.push(t);
   }
-  return recursive;
+  if (!recursive) return false;
+  const paths = patternOpt ? operands : operands.slice(1);
+  return !(paths.length && paths.every((p) => FILE_OPERAND_RE.test(p)));
 }
 
 function readsSecret(seg, toks, cmd) {

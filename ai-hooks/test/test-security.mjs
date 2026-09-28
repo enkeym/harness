@@ -130,6 +130,14 @@ check('grep -r с --include кода', bash('grep -rn useState --include=*.tsx s
 check('grep -e с r в шаблоне', bash('grep -error src/app.ts'), 'allow');
 check('grep без рекурсии', bash('grep -n foo src/app.ts'), 'allow');
 check('grep -e с шаблоном -r', bash('grep -e -r src/app.ts'), 'allow');
+check('grep -rn по glob файлов', bash('grep -rn "noteWork" ai-hooks/test/*.mjs'), 'allow');
+check('grep -rn по одному файлу', bash('grep -rn "model" ~/.claude/settings.json'), 'allow');
+check('grep -rn по файлам с перенаправлением', bash('grep -rn X vitest.config.* 2>/dev/null'), 'allow');
+check('grep -r -e по файлу', bash('grep -r -e foo src/app.ts'), 'allow');
+check('grep -rn: файл и каталог', bash('grep -rn foo src/app.ts src'), 'deny');
+check('grep -r -e по каталогу', bash('grep -r -e foo .'), 'deny');
+check('grep -rn по переменной', bash('grep -rn foo "$dir"'), 'deny');
+check('grep -rn по .env как файлу', bash('grep -rn KEY .env'), 'deny');
 
 // --- вывод окружения: секрет приходит не из файла
 check('printenv', bash('printenv'), 'ask');
