@@ -32,6 +32,9 @@ rag_bin="${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}"  # переменн�
 
 log="$repo_root/.ragsave/sync.log"
 
+# Сироты sync.log.<pid> прерванных синков: живой синк сутки не идёт.
+find "$repo_root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>/dev/null
+
 # Каждый запуск пишет в свой файл: `>"$log"` обнулял лог идущего синка ещё до
 # проверки замка. Занятый замок (код 3) — лог удаляется, ragsave сам оставил
 # держателю отметку на повторный проход; иначе итог становится sync.log,

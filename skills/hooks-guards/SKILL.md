@@ -107,8 +107,8 @@ fired and what it wants instead.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the
   session directory. Outside a project the server doesn't come up — tools are
   absent, not wrong.
-- `links-context` (PostToolUse on read/edit tools, native and tokensave)
-  injects a domain file of the project's impact map when the touched path
+- `links-context` (PostToolUse on edit tools, native and tokensave; reads
+  stay silent) injects a domain file of the project's impact map when the edited path
   matches its `paths:` — once per session per domain. Treat the text as the
   map's lines for this change: check them, add the missing link to that
   file. Silent ≠ no links: a domain without `paths:` is reached only through

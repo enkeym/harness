@@ -92,6 +92,19 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
 
 {
   const sb = sandbox();
+  const old = path.join(sb.dir, 'sync.log.111');
+  const fresh = path.join(sb.dir, 'sync.log.222');
+  fs.writeFileSync(old, '');
+  fs.writeFileSync(fresh, '');
+  const day = new Date(Date.now() - 25 * 3600 * 1000);
+  fs.utimesSync(old, day, day);
+  sb.run();
+  check('сирота sync.log.<pid> старше суток удалён, свежий нет',
+    waitFor(() => !fs.existsSync(old)) && fs.existsSync(fresh), true);
+}
+
+{
+  const sb = sandbox();
   const log = path.join(sb.dir, 'sync.log');
   fs.writeFileSync(log, 'итог прошлого синка\n');
   sb.run({ FAKE_INDEXER_EXIT: '3' });

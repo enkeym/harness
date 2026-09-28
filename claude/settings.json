@@ -120,7 +120,7 @@
         ]
       },
       {
-        "matcher": "Read|Edit|Write|mcp__tokensave__tokensave_read|mcp__tokensave__tokensave_body|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace",
+        "matcher": "Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace|mcp__tokensave__tokensave_insert_at|mcp__tokensave__tokensave_insert_at_symbol|mcp__tokensave__tokensave_replace_symbol",
         "hooks": [
           {
             "type": "command",

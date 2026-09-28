@@ -64,9 +64,9 @@ paths:
 ```
 
 - The harness hook `links-context.mjs` injects the file once per session the
-  first time a read or edit tool touches a matching path — native path-scoped
-  rules fire on `Read` only, never on `tokensave_read`, which the router
-  forces for indexed files. `INDEX.md` stays for the impact pass and OpenCode.
+  first time an edit tool touches a matching path; reads stay silent. Native
+  path-scoped rules fire on `Read` only, never on `tokensave_read`, which the
+  router forces for indexed files. `INDEX.md` stays for the impact pass and OpenCode.
 - Globs are project-relative in `path.matchesGlob` syntax; each one matches
   at least one file in the working tree — the checker reports the rest. A
   file without `paths:` is reached only through the index.

@@ -70,7 +70,7 @@ bin/ask-mode.mjs                # переключатель: on | off | toggle 
 opencode/tokensave-guard.mjs    # адаптер OpenCode: плагин (tool.execute.before и др.)
 bin/mcp-serve.sh                # запуск MCP tokensave/ragsave с явно выбранным проектом
 bin/ragsave-sync.sh             # смысловой (RAG) индекс: sync существующего
-claude/links-context.mjs        # файл домена карты связей в контекст, когда чтение или правка попали в его paths: (не гард)
+claude/links-context.mjs        # файл домена карты связей в контекст, когда правка попала в его paths: (не гард)
 links-core.mjs                  # карта связей на диске: каталог, файлы доменов, paths: — общее хука и чекера
 bin/init-impact-map.mjs         # первая карта: где лежит по авторству репозитория, скелет INDEX.md
 bin/seed-impact-map.mjs         # кандидаты в карту: стороны по литералу (события, ключи, флаги), cron, миграции, упоминания вне кода (tokensave + ragsave; без графа — git grep)
@@ -83,7 +83,7 @@ test/test-hooklog.mjs           # журнал решений: запрет пи
 test/test-hook-io.mjs           # ответ хука: битый stdin, respond, decide, журнал
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
-test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любым инструментом
+test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любой правкой; чтение молчит
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-security.mjs          # что deny, что ask, что проходит молча
@@ -129,10 +129,11 @@ ANSI-последовательности и повторы `copying DB` чис�
 (`docs/links/` или `.claude/links/`, формат — `skills/shared/impact-map.md`) разбита
 на файлы доменов, и каждый открывается frontmatter `paths:` в формате `.claude/rules`.
 Родное path-scoped правило тут не работает: зонд показал, что оно срабатывает на
-встроенном `Read` и молчит на `tokensave_read`. Хук висит на `PostToolUse` инструментов чтения и правки
-(`Read|Edit|Write` и `tokensave_read|body|str_replace|multi_str_replace`), берёт путь
-из `tool_input` (`file_path` / `file` / `path`; для `tokensave_body` — поле `file` из
-ответа), сверяет с глобами через `path.matchesGlob` и добавляет тело совпавшего
+встроенном `Read` и молчит на `tokensave_read`. Хук висит на `PostToolUse` инструментов
+правки (`Edit|Write|MultiEdit` и `tokensave_str_replace|multi_str_replace|insert_at|insert_at_symbol|replace_symbol`;
+тот же список — `EDIT_TOOL_RE` в самом хуке): на чтении домен (~1,4k токенов)
+оплачивала бы и сессия без правок. Путь — из `tool_input` (`file_path` / `path`; для
+`replace_symbol`/`insert_at_symbol` — поле `file`/`file_path` из ответа), сверяет с глобами через `path.matchesGlob` и добавляет тело совпавшего
 файла домена как `additionalContext`. Один домен — один раз на сессию (метки
 `~/.claude/state/links-context/`, ключ — сессия + проект + домен): второй показ —
 тот же текст в контексте дважды. `INDEX.md` хук не подключает — его читает impact-проход
@@ -467,7 +468,7 @@ tokensave) в корне такого репозитория. Файл пров�
 `unchanged: true` из межсессионного кэша tokensave подменяет текстом с диска
 (`read-core.mjs`). Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
-(matcher `Read|Edit|Write|mcp__tokensave__tokensave_read|…_body|…_str_replace|…_multi_str_replace`).
+(matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,

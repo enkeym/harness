@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Claude Code, PostToolUse на инструментах чтения и правки: подключает файл
-// домена из карты неявных связей, когда тронутый путь попал в его `paths:`.
+// Claude Code, PostToolUse на инструментах правки: подключает файл домена из
+// карты неявных связей, когда правленый путь попал в его `paths:`. На чтении
+// молчит: карта нужна для сверки правки, а сессия без правок платила бы за
+// домен целиком (~1,4k токенов) ни за что.
 //
 // Зачем хук, а не path-scoped правило .claude/rules. Проверено зондом: такое
 // правило срабатывает на встроенном Read и молчит на mcp__tokensave__tokensave_read,
@@ -9,6 +11,7 @@
 // не зависит от того, какой инструмент его открыл.
 //
 // Не гард: ничего не запрещает, только добавляет контекст. Молчит, когда:
+//   инструмент не правит файл                          → сверять нечего;
 //   путь не в репозитории или у репозитория нет карты → нечего подключать;
 //   ни один глоб `paths:` не совпал                     → домен не тронут;
 //   домен в этой сессии уже подключали                 → дроссель, файл уже в контексте.
@@ -21,14 +24,19 @@ import { bodyOf, domainFiles, mapDirOf, pathsOf } from '../links-core.mjs';
 
 const STATE_DIR = statePath('links-context');
 
-// Путь тронутого файла: Read/Edit/Write — file_path, tokensave_read — file,
-// tokensave_str_replace — path. Ответ tokensave_body называет файл символа в
-// поле `file` — оттуда берём, когда во входе пути нет.
+// Та же выборка, что matcher хука в claude/settings.json: там — чтобы не
+// запускать node на каждом чтении, здесь — чтобы правило проверялось тестом.
+const EDIT_TOOL_RE =
+  /^(Edit|Write|MultiEdit|mcp__tokensave__tokensave_(str_replace|multi_str_replace|insert_at|insert_at_symbol|replace_symbol))$/;
+
+// Путь правленого файла: Edit/Write — file_path, tokensave_str_replace и
+// insert_at — path. replace_symbol и insert_at_symbol пути на входе не несут —
+// берём `file`/`file_path` из ответа.
 function touchedFile(input) {
   const ti = input.tool_input || {};
-  const fromInput = ti.file_path || ti.file || ti.path;
+  const fromInput = ti.file_path || ti.path;
   if (fromInput) return String(fromInput);
-  const m = JSON.stringify(input.tool_response || '').match(/\\?"file\\?":\s*\\?"([^"\\]+)/);
+  const m = JSON.stringify(input.tool_response || '').match(/\\?"file(?:_path)?\\?":\s*\\?"([^"\\]+)/);
   return m ? m[1] : null;
 }
 
@@ -61,8 +69,7 @@ function matchedDomains(root, mapDir, rel) {
 function render(hits) {
   return hits
     .map(({ file, body }) => [
-      `Карта неявных связей: файл из домена \`${file}\`. Эти связи граф не видит —`,
-      'сверь с ними правку, если она будет, а новую связь допиши в этот файл строкой того же формата.',
+      `Карта неявных связей \`${file}\`: сверь с ней правку, новую связь допиши туда строкой того же формата.`,
       '',
       body,
     ].join('\n'))
@@ -75,6 +82,7 @@ process.stdin.on('data', (c) => { raw += c; });
 process.stdin.on('end', () => {
   try {
     const input = JSON.parse(raw);
+    if (!EDIT_TOOL_RE.test(String(input.tool_name || ''))) process.exit(0);
     const touched = touchedFile(input);
     if (!touched) process.exit(0);
 

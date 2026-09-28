@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Тесты хука подключения домена карты: файл домена приходит в контекст, когда
-// тронутый путь попал в его `paths:`, один раз на сессию, любым инструментом.
+// правленый путь попал в его `paths:`, один раз на сессию, любым инструментом
+// правки; чтение молчит.
 // Гоняется на временном проекте с собственным каталогом состояния.
 
 import './env-isolate.mjs';
@@ -73,9 +74,9 @@ const dir = project();
   const first = run(dir, 'Edit', { file_path: path.join(dir, 'src/orders/service.ts') }, { sessionId });
   check('первое касание подключает домен',
     first.includes('docs/links/orders.md') && first.includes('order.paid') && !first.includes('paths:'), first);
-  const second = run(dir, 'Read', { file_path: path.join(dir, 'src/orders/service.ts') }, { sessionId });
+  const second = run(dir, 'Write', { file_path: path.join(dir, 'src/orders/service.ts') }, { sessionId });
   check('второе касание в той же сессии молчит', second === '', second);
-  const other = run(dir, 'Read', { file_path: path.join(dir, 'src/orders/service.ts') });
+  const other = run(dir, 'Edit', { file_path: path.join(dir, 'src/orders/service.ts') });
   check('другая сессия получает домен снова', other.includes('order.paid'), other);
 }
 
@@ -83,15 +84,24 @@ const dir = project();
 {
   const out = run(dir, 'mcp__tokensave__tokensave_str_replace', { path: 'src/orders/service.ts', old_str: 'a', new_str: 'b' });
   check('относительный путь из tokensave_str_replace', out.includes('order.paid'), out);
-  const read = run(dir, 'mcp__tokensave__tokensave_read', { file: 'src/orders/service.ts' });
-  check('поле file из tokensave_read', read.includes('order.paid'), read);
+  const insert = run(dir, 'mcp__tokensave__tokensave_insert_at', { path: 'src/orders/service.ts', anchor: '1', content: 'x' });
+  check('путь из tokensave_insert_at', insert.includes('order.paid'), insert);
 }
 
-// tokensave_body не получает путь на входе — файл берётся из ответа.
+// Чтение домен не подключает: сессия без правок за карту не платит.
 {
+  const file = path.join(dir, 'src/orders/service.ts');
+  check('Read молчит', run(dir, 'Read', { file_path: file }) === '');
+  check('tokensave_read молчит', run(dir, 'mcp__tokensave__tokensave_read', { file: 'src/orders/service.ts' }) === '');
   const toolResponse = { content: [{ type: 'text', text: JSON.stringify({ file: 'src/orders/service.ts', body: '...' }) }] };
-  const out = run(dir, 'mcp__tokensave__tokensave_body', { symbol: 'markPaid' }, { toolResponse });
-  check('файл из ответа tokensave_body', out.includes('order.paid'), out);
+  check('tokensave_body молчит', run(dir, 'mcp__tokensave__tokensave_body', { symbol: 'markPaid' }, { toolResponse }) === '');
+}
+
+// replace_symbol не получает путь на входе — файл берётся из ответа.
+{
+  const toolResponse = { content: [{ type: 'text', text: JSON.stringify({ file_path: 'src/orders/service.ts', success: true }) }] };
+  const out = run(dir, 'mcp__tokensave__tokensave_replace_symbol', { symbol: 'markPaid', new_source: '...' }, { toolResponse });
+  check('файл из ответа tokensave_replace_symbol', out.includes('order.paid'), out);
 }
 
 // Путь вне глобов — домен не тронут; домен без paths: достижим только по индексу.
