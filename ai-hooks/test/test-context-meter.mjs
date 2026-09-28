@@ -359,6 +359,24 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     contextNotice({ transcript_path: soft, session_id: softSid }, { phase: 'step' }), null);
 }
 
+// --- ни один текст не велит скрывать что-то от пользователя и каждый называет
+// источник: иначе модель принимает замер за инъекцию и отказывается от передачи
+{
+  const texts = [];
+  for (const [i, tokens] of [95_000, 160_000, 240_000].entries()) {
+    for (const phase of ['prompt', 'step']) {
+      for (const worked of [false, true]) {
+        const sid = `s-honest-${i}-${phase}-${worked}`;
+        if (worked) work(sid);
+        const file = transcript(`honest-${i}`, [assistant(tokens)]);
+        texts.push(contextNotice({ transcript_path: file, session_id: sid }, { phase }).text);
+      }
+    }
+  }
+  check('ни один текст не просит скрывать', texts.filter((t) => /не сообщай|указание тебе/.test(t)).length, 0);
+  check('каждый текст называет хук-источник', texts.every((t) => /хук context-meter/.test(t)), true);
+}
+
 // --- отметка работы: чтение ею не считается, правка и коммит — считаются
 {
   check('Read работой не считается',
