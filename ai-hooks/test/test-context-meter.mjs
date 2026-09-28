@@ -391,6 +391,12 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('правка через mcp по пути от корня считается',
     noteWork({ session_id: 's-mcp', cwd: REPO, tool_name: 'mcp__tokensave__tokensave_str_replace',
       tool_input: { path: 'src/a.ts' } }), true);
+  check('правка символа (без пути) в репозитории считается',
+    noteWork({ session_id: 's-sym', cwd: REPO, tool_name: 'mcp__tokensave__tokensave_replace_symbol',
+      tool_input: { symbol: 'x', new_source: '' } }), true);
+  check('правка символа вне репозитория работой не считается',
+    noteWork({ session_id: 's-sym-out', cwd: tmp, tool_name: 'mcp__tokensave__tokensave_insert_at_symbol',
+      tool_input: { symbol: 'x', content: '' } }), false);
   check('без id сессии отметки нет',
     noteWork({ cwd: REPO, tool_name: 'Edit', tool_input: { file_path: path.join(REPO, 'a.ts') } }), false);
   check('скрипт в /tmp работой не считается', edit('s-tmp', '/tmp/x.mjs'), false);

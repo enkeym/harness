@@ -34,7 +34,9 @@ paths:
   тексту правил идёт в отказ; расширил — правила молча запрещают разрешённое.
 - Инструменты правки — matcher `links-context` в `claude/settings.json` ↔
   `ai-hooks/claude/links-context.mjs:EDIT_TOOL_RE`. Новый инструмент правки только
-  в одном месте — карта на нём молча не подключается.
+  в одном месте — карта на нём молча не подключается. То же для skill-gate:
+  matcher в `claude/settings.json` ↔ `ai-hooks/skill-core.mjs:MCP_EDIT_RE` —
+  правка SKILL.md через tokensave молча проходит мимо skill-authoring.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`

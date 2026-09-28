@@ -23,7 +23,7 @@ const env = {
 };
 delete env.AI_HOOKS_SKILL_GATE_OFF;
 
-const { isGitCommit, isInstructionFile, skillName } = await import('../skill-core.mjs');
+const { isGitCommit, isInstructionFile, skillName, missingSkills } = await import('../skill-core.mjs');
 
 let failed = 0;
 function check(name, got, want) {
@@ -100,6 +100,16 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   check('Write CLAUDE.md без скилла → deny', decision(gate('sid-a', 'Write', { file_path: '/home/x/p/CLAUDE.md', content: '' })), 'deny');
   check('обычный файл → allow', gate('sid-a', 'Edit', edit('/home/x/p/src/a.ts')), 'allow');
   check('Read SKILL.md → allow (гейт только на правку)', gate('sid-a', 'Read', { file_path: SKILL_MD }), 'allow');
+
+  // Файл из индекса правят инструментами tokensave — гейт обязан их видеть.
+  const TS = 'mcp__tokensave__tokensave_';
+  check('tokensave_str_replace SKILL.md → deny', decision(gate('sid-a', `${TS}str_replace`, { path: SKILL_MD, old_str: 'a', new_str: 'b' })), 'deny');
+  check('tokensave_multi_str_replace CLAUDE.md → deny', decision(gate('sid-a', `${TS}multi_str_replace`, { path: '/home/x/p/CLAUDE.md', replacements: [] })), 'deny');
+  check('tokensave_insert_at обычный файл → allow', gate('sid-a', `${TS}insert_at`, { path: '/home/x/p/src/a.ts', anchor: '1', content: '' }), 'allow');
+  check('tokensave_insert_at_symbol (без пути) → allow', gate('sid-a', `${TS}insert_at_symbol`, { symbol: 'x', content: '' }), 'allow');
+  const HARNESS = path.join(os.homedir(), 'harness');
+  check('относительный path — от cwd', missingSkills(`${TS}str_replace`, { path: 'skills/doctor/SKILL.md' }, new Set(), HARNESS)?.id, 'instructions');
+  check('относительный path вне инструкций → null', missingSkills(`${TS}str_replace`, { path: 'src/a.ts' }, new Set(), HARNESS), null);
 
   const log = fs.readFileSync(env.AI_HOOKS_HOOKS_LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   check('запрет в hooks.jsonl с именем хука', [log[0]?.hook, log[0]?.decision, log[0]?.sid], ['skill-gate', 'deny', 'sid-a']);

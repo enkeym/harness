@@ -11,7 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { segments, tokenize, commandName } from './shell-core.mjs';
-import { statePath, readJSON, writeJSON } from './state-core.mjs';
+import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const DB_REL = path.join('.tokensave', 'tokensave.db');
@@ -116,7 +116,8 @@ function anyFile(text, cwd) {
 // Перенаправление пишет в файл, даже новый; /dev/null и прочие устройства — нет.
 // Смотрим первую строку без кавычек: `=>` и `->` в строке кода или теле
 // heredoc — не перенаправление. Вывод команды в /tmp вне проекта — черновик,
-// не правка.
+// не правка. Проект — индекс tokensave или git вверх по дереву: клон
+// чужой ветки в /tmp черновиком не считается.
 function redirectTarget(seg, cwd) {
   const bare = seg.split('\n')[0].replace(/"[^"]*"|'[^']*'/g, '');
   const m = bare.match(/(?:^|[^=\-<>])>>?\s*([\w@.\-/\\]+)/);
@@ -128,7 +129,8 @@ const SCRATCH_DIRS = [...new Set(['/tmp', os.tmpdir()])].map((d) => path.resolve
 
 function isScratch(cwd, p) {
   const abs = path.resolve(cwd || process.cwd(), p);
-  return SCRATCH_DIRS.some((d) => abs.startsWith(d)) && !findRoot(path.dirname(abs));
+  const dir = path.dirname(abs);
+  return SCRATCH_DIRS.some((d) => abs.startsWith(d)) && !findRoot(dir) && !repoRoot(dir);
 }
 
 // Родной хук tokensave отказывает grep/rg/ag по коду в индексе и сам же

@@ -11,6 +11,7 @@
 // сессию, и скилл в ней снова не загружен — как и в контексте модели.
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
 import { segments, tokenize, commandIndex, commandName, gitSubcommandAt } from './shell-core.mjs';
 
@@ -28,14 +29,24 @@ const INSTRUCTION_FILE_RE =
 const CLAUDE_MD_RE = /(^|[\\/])(CLAUDE|AGENTS)\.md$/;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+// Файл из индекса tokensave правят его инструментами: Read на нём режет
+// read-router, а Edit без Read не работает. Путь у них бывает относительным от
+// корня проекта. replace_symbol и insert_at_symbol пути не несут, а символов у
+// файлов инструкций нет.
+const MCP_EDIT_RE = /tokensave_(str_replace|multi_str_replace|insert_at)$/;
+
+function editedFile(toolName, toolInput, cwd) {
+  if (EDIT_TOOLS.has(toolName)) return toolInput?.file_path || toolInput?.notebook_path;
+  if (MCP_EDIT_RE.test(toolName) && toolInput?.path) return path.resolve(cwd || process.cwd(), String(toolInput.path));
+  return null;
+}
 
 export const GATES = [
   {
     id: 'instructions',
     requires: ['skill-authoring'],
     what: 'правка файла инструкций (SKILL.md, reference/, commands/*.md, CLAUDE.md)',
-    matches: (toolName, toolInput) =>
-      EDIT_TOOLS.has(toolName) && isInstructionFile(toolInput?.file_path || toolInput?.notebook_path),
+    matches: (toolName, toolInput, cwd) => isInstructionFile(editedFile(toolName, toolInput, cwd)),
   },
   {
     id: 'commit',
@@ -105,9 +116,9 @@ export function loadedSkills(sessionId) {
 }
 
 // Гейт, который не пройден: { id, what, missing } либо null.
-export function missingSkills(toolName, toolInput, loaded) {
+export function missingSkills(toolName, toolInput, loaded, cwd) {
   for (const gate of GATES) {
-    if (!gate.matches(toolName, toolInput)) continue;
+    if (!gate.matches(toolName, toolInput, cwd)) continue;
     const missing = gate.requires.filter((s) => !loaded.has(s));
     if (missing.length) return { id: gate.id, what: gate.what, missing };
   }

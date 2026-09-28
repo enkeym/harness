@@ -153,7 +153,8 @@ function inRepo(file, cwd) {
 function isWork(toolName, toolInput, cwd) {
   if (!toolName) return false;
   if (EDIT_TOOL.test(toolName)) return inRepo(toolInput?.file_path || toolInput?.notebook_path, cwd);
-  if (EDIT_MCP.test(toolName)) return inRepo(toolInput?.path, cwd);
+  // replace_symbol и insert_at_symbol пути не несут: символ — из индекса проекта сессии.
+  if (EDIT_MCP.test(toolName)) return toolInput?.path ? inRepo(toolInput.path, cwd) : Boolean(repoRoot(cwd));
   if (toolName === 'Bash') return /\bgit\s+commit\b/.test(String(toolInput?.command || ''));
   return false;
 }

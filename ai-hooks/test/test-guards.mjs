@@ -106,6 +106,10 @@ bash('вывод в /tmp вне проекта → allow', 'allow', `npm test > 
 bash('дозапись в /tmp вне проекта → allow', 'allow', `npm test >> ${SCRATCH}`);
 bash('перенаправление в проект внутри /tmp → deny', 'deny', `echo x > ${PROJECT}/README.md`);
 bash('/tmp/.. наружу → deny', 'deny', 'echo x > /tmp/../ts-guards-outside.txt');
+const CLONE = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-clone-'));
+fs.mkdirSync(path.join(CLONE, '.git'));
+bash('перенаправление в git-клон внутри /tmp без индекса → deny', 'deny', 'npm test > src/a.ts', CLONE);
+fs.rmSync(CLONE, { recursive: true, force: true });
 bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
 bash('tee в исходник → deny', 'deny', 'echo x | tee client/src/App.tsx');
 bash('`=>` в строке — не перенаправление → allow', 'allow', `git log --format='%h => %s'`);

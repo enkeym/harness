@@ -12,7 +12,8 @@ Shell-гард держит одно правило: **shell запускает 
 `tokensave_read`/`tokensave_str_replace` — `Read` запрещён роутером чтения, а
 `Edit` без `Read` не работает. Исключения: `jq` по `.json`/`.jsonl` вне индекса
 (логи хуков, отчёты — `Read` отдал бы их целиком) и `>`/`>>` в `/tmp/` или
-`os.tmpdir()` вне проекта (вывод тестов).
+`os.tmpdir()` вне проекта (вывод тестов); проект — индекс tokensave или
+`.git` вверх по дереву, клон в `/tmp` черновиком не считается.
 
 Разбор нарочно грубый: распознаются формы, а не синтаксис shell. Всё
 нераспознанное проходит — `git diff`, `tsc`, `eslint`, `grep`/`rg` над теми же
@@ -205,7 +206,9 @@ ANSI-последовательности и повторы `copying DB` чис�
 
 CLAUDE.md велит грузить скилл до первого действия в его области, и это
 правило модель забывает чаще прочих: правит SKILL.md по памяти, коммитит без
-ревью. `claude/skill-gate.mjs` (PreToolUse `Edit|Write|MultiEdit|NotebookEdit|Bash`)
+ревью. `claude/skill-gate.mjs` (PreToolUse `Edit|Write|MultiEdit|NotebookEdit|Bash` и
+правки tokensave `str_replace|multi_str_replace|insert_at` — ими правят файлы из
+индекса; относительный `path` берётся от `cwd`)
 делает из правила запрет для двух областей, где цена забывания видна сразу:
 
 | Действие | Требует |
@@ -476,8 +479,8 @@ tokensave) в корне такого репозитория. Файл пров�
 цепочке — заблокированный промпт остальным хукам не достаётся.
 Гейт скиллов: `node ~/.ai-hooks/claude/skill-track.mjs` на `PreToolUse`
 (matcher `Skill`) и на `UserPromptSubmit`, `node ~/.ai-hooks/claude/skill-gate.mjs`
-на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash`, после гардов
-и до shell-гарда).
+на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_insert_at`,
+после гардов и до shell-гарда).
 Вопрос только через меню: `node ~/.ai-hooks/claude/question-guard.mjs` на `Stop`.
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
