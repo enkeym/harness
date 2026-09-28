@@ -96,7 +96,11 @@ bash('cat вне проекта, файла нет → allow', 'allow', 'cat /tm
 
 // ---- правка на месте ----
 bash('sed -i по исходнику → deny', 'deny', "sed -i 's/a/b/' client/src/App.tsx");
-bash('sed БЕЗ -i (чтение потока) → allow', 'allow', "sed -n '1,5p' package.json");
+bash('sed -n по файлу (чтение) → deny', 'deny', "sed -n '1,5p' package.json");
+bash('cd && sed -n по файлу → deny', 'deny', `cd ${PROJECT} && sed -n 1,120p client/src/App.tsx`);
+bash('awk по файлу → deny', 'deny', "awk '{print $1}' package.json");
+bash('sed в пайпе (чтение потока) → allow', 'allow', "git log --oneline | sed -n '1,5p'");
+bash('awk в пайпе → allow', 'allow', "git status --short | awk '{print $2}'");
 bash('перенаправление в исходник → deny', 'deny', 'echo x > client/src/App.tsx');
 bash('перенаправление в новый файл → deny (файлы пишет Write)', 'deny', 'echo x > client/src/__new__.ts');
 bash('дозапись в новый файл → deny', 'deny', 'echo x >> notes.txt');

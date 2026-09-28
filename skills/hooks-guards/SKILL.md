@@ -83,7 +83,7 @@ fired and what it wants instead.
 ## Shell guard
 
 - `bash-router` denies reading or writing an existing file through the shell
-  (`cat`, `head`, `sed -i`, `tee`, `> file`, `node -e`/`python -c` with a path,
+  (`cat`, `head`, `sed -n`/`awk` with a file, `sed -i`, `tee`, `> file`, `node -e`/`python -c` with a path,
   a heredoc into an interpreter) and names the tool that passes. Same rule for
   `mcp__ide__executeCode`; `jq` over a `.json`/`.jsonl` outside the index,
   `>`/`>>` into `/tmp/` outside a project and `cat`/`tail` of such a file pass.

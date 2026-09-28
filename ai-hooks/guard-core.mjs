@@ -78,6 +78,9 @@ const READ_CMDS = new Set([
 // Команды, которые пишут в файл на месте. sed/perl/awk — только с -i.
 const WRITE_CMDS = new Set(['tee', 'dd', 'truncate', 'install']);
 const INPLACE_CMDS = new Set(['sed', 'perl', 'awk', 'gawk']);
+// sed/awk без -i с файлом в аргументах читают его, как cat: `sed -n 1,120p
+// file`. Поток из пайпа файла не называет и проходит.
+const FILTER_CMDS = new Set(['sed', 'awk', 'gawk']);
 
 // Интерпретаторы: путь прячется внутри строки кода, поэтому у них смотрим
 // весь сегмент целиком, а не отдельные аргументы.
@@ -161,12 +164,13 @@ export function guardBash(command, cwd, labels) {
 
       // Черновик в /tmp вне проекта читается так же, как пишется: `> /tmp/x`
       // разрешён, значит и `tail /tmp/x`.
-      if (READ_CMDS.has(cmd)) {
+      const inPlace = INPLACE_CMDS.has(cmd) && toks.some((t) => /^-i/.test(t) || t === '--in-place');
+      if (READ_CMDS.has(cmd) || (FILTER_CMDS.has(cmd) && !inPlace)) {
         const hit = [...pathCandidates(seg)].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
         if (hit) return readReason(hit, fileTools(cwd, hit, labels));
       }
 
-      if (WRITE_CMDS.has(cmd) || (INPLACE_CMDS.has(cmd) && toks.some((t) => /^-i/.test(t) || t === '--in-place'))) {
+      if (WRITE_CMDS.has(cmd) || inPlace) {
         const hit = anyFile(seg, cwd);
         if (hit) return editReason(hit, fileTools(cwd, hit, labels));
       }
