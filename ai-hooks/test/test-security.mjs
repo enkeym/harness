@@ -259,6 +259,12 @@ check('новый файл в харнесе из чужого проекта', 
 check('Edit гарда из самого харнеса', run('Edit', { file_path: guardFile }, HARNESS), 'allow');
 check('Edit гарда из подкаталога харнеса', run('Edit', { file_path: guardFile }, path.join(ROOT, 'test')), 'allow');
 check('cd в харнес из чужой сессии', run('Edit', { file_path: guardFile }, HARNESS, '/home/user/main/vpn-new'), 'ask');
+const TS_EDIT = 'mcp__tokensave__tokensave_str_replace';
+check('tokensave_str_replace гарда из чужого проекта', run(TS_EDIT, { path: guardFile }), 'ask');
+check('tokensave_multi_str_replace от project_root харнеса', run('mcp__tokensave__tokensave_multi_str_replace', { path: 'ai-hooks/security-core.mjs', project_root: HARNESS }), 'ask');
+check('tokensave_insert_at гарда из самого харнеса', run('mcp__tokensave__tokensave_insert_at', { path: guardFile }, HARNESS), 'allow');
+check('tokensave_str_replace по .env', run(TS_EDIT, { path: '/home/user/main/vpn-new/.env' }), 'deny');
+check('tokensave_str_replace файла чужого проекта', run(TS_EDIT, { path: 'src/app.ts' }), 'allow');
 check('Edit файла чужого проекта', run('Edit', { file_path: '/home/user/main/vpn-new/src/app.ts' }), 'allow');
 check('соседний каталог с общим префиксом', run('Edit', { file_path: `${HARNESS}-old/x.mjs` }), 'allow');
 

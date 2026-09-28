@@ -33,7 +33,7 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // read-router, а Edit без Read не работает. Путь у них бывает относительным от
 // корня проекта. replace_symbol и insert_at_symbol пути не несут, а символов у
 // файлов инструкций нет.
-const MCP_EDIT_RE = /tokensave_(str_replace|multi_str_replace|insert_at)$/;
+export const MCP_EDIT_RE = /tokensave_(str_replace|multi_str_replace|insert_at)$/;
 
 function editedFile(toolName, toolInput, cwd) {
   if (EDIT_TOOLS.has(toolName)) return toolInput?.file_path || toolInput?.notebook_path;

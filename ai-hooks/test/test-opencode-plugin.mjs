@@ -53,6 +53,7 @@ await check('bash cat .env', 'bash', { command: 'cat .env' }, 'deny');
 await check('bash токен Claude', 'bash', { command: 'cat ~/.claude/.credentials.json' }, 'deny');
 await check('MCP tokensave_read .env', 'tokensave_tokensave_read', { path: '.env' }, 'deny');
 await check('MCP tokensave_body ключа', 'tokensave_tokensave_body', { file: 'deploy/id_rsa' }, 'deny');
+await check('MCP tokensave_str_replace .env', 'tokensave_tokensave_str_replace', { path: '.env', old_str: 'a', new_str: 'b' }, 'deny');
 
 // --- ASK не блокируется плагином
 await check('bash дамп БД (ask)', 'bash', { command: 'pg_dump -h prod.db mydb' }, 'allow');

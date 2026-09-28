@@ -36,7 +36,10 @@ paths:
   `ai-hooks/claude/links-context.mjs:EDIT_TOOL_RE`. Новый инструмент правки только
   в одном месте — карта на нём молча не подключается. То же для skill-gate:
   matcher в `claude/settings.json` ↔ `ai-hooks/skill-core.mjs:MCP_EDIT_RE` —
-  правка SKILL.md через tokensave молча проходит мимо skill-authoring.
+  правка SKILL.md через tokensave молча проходит мимо skill-authoring. Тот же
+  `MCP_EDIT_RE` берёт `ai-hooks/security-core.mjs:securityGuard` (matcher `*`):
+  новый инструмент правки tokensave, не вписанный туда, правит харнес из чужой
+  сессии без ask и `.env` без запрета.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`

@@ -330,7 +330,9 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 В `permissionDecision` это отдельное значение, и оно возвращает подтверждение
 даже в auto mode — в этом вся ценность: там всё остальное проходит само.
 
-Ещё один `ask` — правка самого харнеса (Edit/Write/MultiEdit/NotebookEdit в
+Ещё один `ask` — правка самого харнеса (Edit/Write/MultiEdit/NotebookEdit и
+`tokensave_str_replace`/`multi_str_replace`/`insert_at` — tokensave пишет и по
+абсолютному пути вне своего проекта — в
 `~/harness`, в том числе через симлинки `~/.ai-hooks`, `~/.claude/…`) из
 сессии, корень которой (`CLAUDE_PROJECT_DIR`) вне харнеса. `Edit(~/harness/**)`
 в `permissions.allow` пускает такую правку молча, а она применяется сразу:

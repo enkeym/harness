@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { segments, tokenize, commandIndex, commandName, afterTarget, gitSubcommandAt } from './shell-core.mjs';
+import { MCP_EDIT_RE } from './skill-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -650,6 +651,13 @@ export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   if (name === 'Read') return guardReadSecurity(ti.file_path || ti.path || '');
   if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit') {
     const file = ti.file_path || ti.notebook_path || ti.path || '';
+    return guardReadSecurity(file) || guardHarnessEdit(file, ctx.cwd);
+  }
+  // tokensave пишет по абсолютному пути и вне своего проекта — та же правка, что Edit.
+  // Относительный путь он считает от `project_root` (синоним `cwd`), иначе — от корня сессии.
+  if (MCP_EDIT_RE.test(name) && ti.path) {
+    const base = ti.project_root || ti.cwd;
+    const file = base ? path.resolve(String(base), String(ti.path)) : String(ti.path);
     return guardReadSecurity(file) || guardHarnessEdit(file, ctx.cwd);
   }
   if (name === 'Bash') return guardBashSecurity(ti.command);
