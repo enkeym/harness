@@ -2,7 +2,7 @@
 name: review
 description: "Reviews a colleague's branch or merge request without touching the code — runs the review-standards and review-security passes, prints every finding in chat with the current code, the fix as code, the explanation and a ready-to-paste GitLab comment, then offers to fix selected findings in the checked-out branch through the question menu. User-invoked as /review."
 disable-model-invocation: true
-allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git fetch:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git remote:*), Read
+allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git remote:*), Read
 argument-hint: "[branch | !MR-iid | path] [focus, in your own words]"
 ---
 
@@ -12,6 +12,10 @@ Report first, edit never — until the user picks fixes in the closing menu.
 The checks are `review-standards` and `review-security`; this skill replaces
 their step 6 (triage with edits) and their Output sections, nothing else.
 
+**Offline: no `git fetch`, `pull` or `remote update`, not even the base** —
+the user has already fetched and checked out what they want reviewed. Refs
+are used as they are on disk; a missing one → name it in one line and stop.
+
 ## 1. Target
 
 Base branch: project memory first, else
@@ -20,19 +24,14 @@ Base branch: project memory first, else
 | `$ARGUMENTS` | Ref | Diff |
 |---|---|---|
 | empty, or the checked-out branch | `HEAD` + working tree | `git diff $(git merge-base <base> HEAD)` + `git status --short` |
-| another `<branch>` | `origin/<branch>`; fetch only when that ref is missing locally | `git diff <base>...origin/<branch>` |
-| `!<iid>` or an MR URL | `git fetch origin merge-requests/<iid>/head` → `FETCH_HEAD` (GitHub: `pull/<n>/head`) | `git diff <base>...FETCH_HEAD` |
+| another `<branch>` | local `<branch>`, else `origin/<branch>` | `git diff <base>...<ref>` |
+| `!<iid>` or an MR URL | none locally — ask for its source branch, then the row above | — |
 | a path | `HEAD` | the empty-row diff limited to that path |
 
 - No checkout, no stash, no switch: the user's working tree stays as it was.
-- No `git fetch` for the base or for `HEAD` — the user has already fetched and
-  checked out what they want reviewed; local `<base>` (else `origin/<base>`)
-  is used as is. Fetch fails → go on with local refs, no retry, no remark.
 - Ref other than `HEAD`: read files as `git show <ref>:<path>`, search as
   `git grep -n <name> <ref>`. The tokensave graph shows the checked-out tree —
   use it for callers outside the diff only, and say so in one line.
-- MR: its target branch is unknown without the API — diff against the
-  resolved base and name it in the header line; the user corrects it in words.
 - Free words after the target are the focus: check them first, still run the
   full pass.
 - Header line before the pass: target, base, `git log --oneline <base>..<ref>`
