@@ -14,16 +14,20 @@ their step 6 (triage with edits) and their Output sections, nothing else.
 
 ## 1. Target
 
-Base branch and remote: [../shared/project-facts.md](../shared/project-facts.md).
+Base branch: project memory first, else
+[../shared/project-facts.md](../shared/project-facts.md) over local refs.
 
 | `$ARGUMENTS` | Ref | Diff |
 |---|---|---|
-| empty | `HEAD` + working tree | `git diff $(git merge-base <base> HEAD)` + `git status --short` |
-| `<branch>` | `git fetch origin <branch>` → `origin/<branch>` | `git diff <base>...origin/<branch>` |
+| empty, or the checked-out branch | `HEAD` + working tree | `git diff $(git merge-base <base> HEAD)` + `git status --short` |
+| another `<branch>` | `origin/<branch>`; fetch only when that ref is missing locally | `git diff <base>...origin/<branch>` |
 | `!<iid>` or an MR URL | `git fetch origin merge-requests/<iid>/head` → `FETCH_HEAD` (GitHub: `pull/<n>/head`) | `git diff <base>...FETCH_HEAD` |
 | a path | `HEAD` | the empty-row diff limited to that path |
 
 - No checkout, no stash, no switch: the user's working tree stays as it was.
+- No `git fetch` for the base or for `HEAD` — the user has already fetched and
+  checked out what they want reviewed; local `<base>` (else `origin/<base>`)
+  is used as is. Fetch fails → go on with local refs, no retry, no remark.
 - Ref other than `HEAD`: read files as `git show <ref>:<path>`, search as
   `git grep -n <name> <ref>`. The tokensave graph shows the checked-out tree —
   use it for callers outside the diff only, and say so in one line.
@@ -42,10 +46,15 @@ Base branch and remote: [../shared/project-facts.md](../shared/project-facts.md)
 2. Run both procedures through their checklists, steps 1–5: impact, regression,
    depth, secrets, missing controls. Every finding verified by search or by
    reading the caller — a guess is not reported.
-3. No edits of any kind — not even a certain one-line fix. `tsc`, linter and
-   tests only when the target is `HEAD`; otherwise list them in the
-   not-checked line of the summary.
-4. A secret in the diff → report it first, as a Critical that needs key
+3. The diff is the scope. Code outside it is read only to confirm or refute a
+   suspicion about a changed line — its caller, the guard it passes through,
+   the sibling it must match; no audit of unchanged code, no other branches.
+   A fact one lookup does not settle (a config value, a TTL) goes to the
+   not-checked line, not into a search series.
+4. No edits of any kind — not even a certain one-line fix. Target `HEAD`: the
+   project's typecheck and linter scripts, then only the test files the diff
+   adds or changes. Another ref: list them in the not-checked line.
+5. A secret in the diff → report it first, as a Critical that needs key
    rotation, not just deletion; continue the pass.
 
 ## 3. Report
