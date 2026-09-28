@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Hands the thread to a fresh session when the context grows expensive. In Claude Code it asks the open questions through the question menu, ticks the landed steps of a task-brief plan if one exists, writes the snapshot into the plan file plan mode names and leaves through `ExitPlanMode`, whose dialog offers to clear the context and continue from it — nothing to copy. In OpenCode it prints a handoff block in chat that the user pastes into a new session. Covers what belongs in the snapshot, what never does, and what the next session must not re-verify. Load when the context meter asks for a handoff, when the user runs /handoff, or says \"передай в новую сессию\", \"контекст кончается\"."
+description: "Hands the thread to a fresh session — a snapshot of the task written into the plan file and `ExitPlanMode` in Claude Code, a pasted chat block in OpenCode. Load when the context meter names it, on /handoff, or when the user says \"передай в новую сессию\", \"контекст кончается\"."
 ---
 
 # Handoff

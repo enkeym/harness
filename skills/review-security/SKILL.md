@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: "Security checklist for a diff or module and the procedure to run it — leaked secrets (code, tests, fixtures, untracked files about to be staged), hardcoded environment values and insecure fallbacks, controls a new entry point lacks, input validation and mass assignment, file uploads, auth, ownership, CSRF and rate limits, injection (SQL/ORM, shell, path, HTML, regex, prototype pollution, deserialisation, open redirect), SSRF and outbound calls, bot webhooks and payment provider callbacks, sensitive data in logs and responses, client bundle exposure, dependencies, docker and CI. Load on the diff before every commit and whenever asked to check security or audit a module. Complements the security-guard hook, which sees commands, not code."
+description: "Security checklist for a diff or module — secrets, env fallbacks, input validation, auth and ownership, injection, SSRF, webhooks, data in logs and bundles, dependencies, docker and CI. Load on the diff before every commit, after review-standards, and when asked to check security or audit a module."
 ---
 
 # Security review

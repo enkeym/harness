@@ -1,6 +1,6 @@
 ---
 name: review-standards
-description: "Cross-stack TypeScript review checklist and the procedure to run it on a diff — broken callers and reintroduced bugs, edge cases, deprecated or superseded constructs, drift from the project's architecture, inefficient code, types (no any, one representation per value set, derived not copied), constants and environment values, reuse of existing code and installed libraries, naming, styles through project tokens, duplication, error handling, leftovers; certain fixes applied, doubtful ones offered as a choice. Load on the diff before every commit and whenever asked to review code, a branch, an MR or someone else's change. Finds what the linter cannot."
+description: "Cross-stack TypeScript review of a diff — broken callers, edge cases, architecture drift, types, reuse, naming, duplication, error handling, leftovers. Load on the diff before every commit and when asked to review code, a branch or an MR."
 ---
 
 # Standards review

@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: "Diagnoses failures of the harness itself — loops, repeated guard refusals, dead background indexing, expired external CLI auth, an unresponsive MCP server, a crashing or slow hook, odd session behaviour. Reads logs and state, names the cause, proposes a hook or rule fix. User-invoked as /doctor."
+description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook — from logs and state, and proposes a fix. User-invoked as /doctor."
 disable-model-invocation: true
 allowed-tools: Bash(tail:*), Bash(ps:*), Bash(claude mcp list), Bash(claude plugin list), Bash(node ~/.ai-hooks/test/*), Bash(git -C ~/.ai-hooks *), Read, Grep, Glob
 argument-hint: "[what broke, in your own words]"

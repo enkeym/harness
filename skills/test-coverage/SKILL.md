@@ -1,6 +1,6 @@
 ---
 name: test-coverage
-description: "Test-gap procedure for a diff or a whole branch — inventory of changed behaviour (exported symbols, endpoints, components, migrations), a case matrix per behaviour, matching against existing tests, changed-lines coverage, a red-check that every new test can fail, and a behaviour → test report. Load when the object to test is a diff, a branch or the current change as a whole (\"протестируй\" with no object, \"покрой тестами\", \"что не покрыто\"), and before preparing a merge request or its Jira text. Not when the object is one named symbol or file (test-conventions) or code with no production behaviour to guard (a sample, a scratch script)."
+description: "Test-gap procedure for a diff or branch — behaviour inventory, case matrix, match against existing tests, red-check, behaviour → test report. Load when the object to test is a diff, a branch or the current change as a whole, and before an MR or its Jira text; one named symbol → test-conventions."
 ---
 
 # Test coverage

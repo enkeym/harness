@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Reviews a colleague's branch or merge request without touching the code — runs the review-standards and review-security passes, prints every finding in chat with the current code, the fix as code, the explanation and a ready-to-paste GitLab comment, then offers to fix selected findings in the checked-out branch through the question menu. User-invoked as /review."
+description: "Reviews a colleague's branch or MR without touching the code — review-standards and review-security findings in chat with fixes and ready GitLab comments, then an offer to apply selected ones. User-invoked as /review."
 disable-model-invocation: true
 allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git remote:*), Read
 argument-hint: "[branch | !MR-iid | path] [focus, in your own words]"

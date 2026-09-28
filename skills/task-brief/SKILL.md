@@ -1,6 +1,6 @@
 ---
 name: task-brief
-description: "Turns a large, loosely worded task into a technical brief before any work starts — reads the code it touches, resolves the obvious gaps itself, argues with the prompt where the code disagrees, asks only about real forks, and writes an imperative brief (task, context, constraints, out of scope, verification, steps) that waits for approval — in Claude Code as a plan-mode file under ~/.claude/plans/, in OpenCode as a chat block; for a single decision or idea runs a short challenge instead — objections and alternatives checked against code and docs, one recommendation. Load when the prompt describes an architectural or multi-module change, a new subsystem, data model or integration, or a feature with no location, acceptance criterion or boundary named; when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"что может пойти не так\", \"предложи как\", \"уточни если что\", \"спроси если непонятно\", or runs /task-brief."
+description: "Turns a large or loosely worded task into a brief checked against the code that waits for approval; for a single decision runs a short challenge with one recommendation. Load for a multi-module change, a new subsystem, data model or integration, a feature with no place or acceptance criterion named, on /task-brief, or when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"предложи как\", \"спроси если непонятно\"."
 ---
 
 # Task brief

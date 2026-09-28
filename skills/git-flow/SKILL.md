@@ -1,6 +1,6 @@
 ---
 name: git-flow
-description: "Branching, committing, pushing, and preparing a merge request for GitLab — commit message style, the unsigned-commit rule, the test-coverage pass before an MR, when an MR may be opened, and the entity-based Jira/MR description format for a PM/QA audience. Load before committing, branching, pushing, or when asked for an MR or its Jira text (\"открой MR\", \"описание для Jira\")."
+description: "Branches, commit messages, push and GitLab merge requests with their Jira/MR description. Load before committing, branching, pushing, or writing an MR or Jira text."
 ---
 
 # Git flow

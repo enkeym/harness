@@ -1,6 +1,6 @@
 ---
 name: test-browser
-description: "Manual QA of a running web app through Playwright MCP (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_console_messages, browser_network_requests) — every change of the current branch mapped to a browser scenario, forms, empty and error states, keyboard, mobile width, console and network errors, a bug report with reproduction steps. User-invoked as /test-browser."
+description: "Manual QA of a running web app through Playwright MCP — every change of the branch as a browser scenario, console and network errors, a bug report with reproduction steps. User-invoked as /test-browser."
 disable-model-invocation: true
 argument-hint: "[URL, page or flow to narrow the pass]"
 ---

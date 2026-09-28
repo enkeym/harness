@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: "Format and style rules for this harness's own instruction files — SKILL.md frontmatter and body, claude/commands/*.md command files, OpenCode agent files, the shared rules/core.md with its Skills table, CLAUDE.md and AGENTS.md. Load before creating, editing or reviewing any skill, command, agent or rules file, when the user says \"создай скилл\", \"создай агента\", \"проверь скиллы\", \"проверь CLAUDE.md\", \"проверь правила\", or when a skill's description fails to trigger it."
+description: "Format rules for this harness's instruction files — SKILL.md, command files, OpenCode agents, rules/core.md, CLAUDE.md, AGENTS.md. Load before creating, editing or reviewing any of them, or when a skill fails to trigger."
 ---
 
 # Skill authoring
@@ -32,11 +32,13 @@ loaded — this skill decides how one is written.
 - `name` = directory name: lowercase letters, digits, hyphens; ≤64 chars; no
   "claude"/"anthropic". Noun phrase in the collection's form (`git-flow`,
   `review-security`, `nestjs-backend`); never `helper`, `utils`, `misc`.
-- `description`: third person, ≤1024 chars, no XML. It is loaded into every
-  session, so every word pays. Sentence 1: what the skill covers, with the
-  terms Claude would match on. Sentence 2: `Load before/when …` with concrete
-  triggers — task verbs, file kinds, the user's own phrases quoted verbatim.
-  Never "helps with", "I can", "you can use".
+- `description`: third person, ≤1024 chars, no XML, two sentences. It is
+  loaded into every session, so every word pays. Sentence 1: what the skill
+  covers, with the terms Claude would match on — not the body's contents
+  list. Sentence 2: `Load before/when …` with concrete triggers — task verbs,
+  file kinds. Quote the user's phrases only where the skill failed to trigger
+  without them (`handoff`, `task-brief`); the `rules/core.md` table carries
+  the rest. Never "helps with", "I can", "you can use".
 - Command skill (`/name`): add `disable-model-invocation: true`,
   `allowed-tools` limited to the commands it runs, `argument-hint`; end the
   description with `User-invoked as /name.`

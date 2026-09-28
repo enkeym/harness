@@ -1,6 +1,6 @@
 ---
 name: seo
-description: "Technical and on-page SEO audit and setup for Google and Yandex — robots.txt, sitemap.xml, canonical, hreflang, indexing and status codes, meta and Open Graph, Schema.org JSON-LD, headings, alt and aria-label, Core Web Vitals, rendered-HTML checks, keyword and intent fit of page copy. Load only when the user explicitly asks: \"настрой SEO\", \"проверь SEO\", \"SEO-аудит\", \"оптимизируй под поиск\", \"микроразметка\", \"robots\", \"sitemap\"."
+description: "Technical and on-page SEO for Google and Yandex — robots.txt, sitemap, canonical, hreflang, meta and Open Graph, Schema.org, headings, Core Web Vitals. Load only when the user asks for an SEO audit or setup, schema markup, robots or sitemap."
 ---
 
 # SEO
