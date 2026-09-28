@@ -330,6 +330,31 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('после первой правки: просят блок передачи', /handoff/.test(after.text), true);
 }
 
+// --- HAND прозвучал до первой правки: правка будит его снова, уже с передачей, —
+// иначе сессия молча доезжает до HARD
+{
+  const sid = 's-idle-then-work';
+  const hand = transcript('idle-then-work', [assistant(160_000)]);
+  const input = { transcript_path: hand, session_id: sid };
+
+  check('без правок на 160k: передачу не просят', /Правок в этой сессии/.test(contextNotice(input).text), true);
+  check('без правок повтор молчит', contextNotice(input, { phase: 'step' }), null);
+
+  work(sid);
+  const after = contextNotice(input, { phase: 'step' });
+  check('первая правка после HAND: тот же порог звучит снова', after?.stage, 'hand');
+  check('первая правка после HAND: просят передачу', /Следующий шаг здесь не начинай/.test(after?.text), true);
+  check('и дальше не повторяется', contextNotice(input, { phase: 'step' }), null);
+  check('и на следующем промпте тоже', contextNotice(input), null);
+
+  const softSid = 's-idle-soft-then-work';
+  const soft = transcript('idle-soft-then-work', [assistant(95_000)]);
+  contextNotice({ transcript_path: soft, session_id: softSid });
+  work(softSid);
+  check('SOFT без правок не будится правкой: следующим прозвучит HAND',
+    contextNotice({ transcript_path: soft, session_id: softSid }, { phase: 'step' }), null);
+}
+
 // --- отметка работы: чтение ею не считается, правка и коммит — считаются
 {
   check('Read работой не считается',

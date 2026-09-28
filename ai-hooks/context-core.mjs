@@ -169,6 +169,15 @@ function mayRepeat(phase, stage, tokens, seen) {
   return tokens - (seen.tokens || 0) >= STEP_REPEAT;
 }
 
+// HAND или HARD, объявленный сессии без правок, передачу не просил: передавать
+// было нечего. Первая правка это меняет, и тот же порог звучит ещё раз — уже с
+// передачей. Без этого следующим сигналом был бы только HARD: по транскриптам
+// сессии, начавшие правки после HAND на 177k и 203k, доехали до 224k и 233k.
+// SOFT не повторяем: на HAND сессия с правками и так получит передачу.
+function workSinceIdle(seen, worked) {
+  return worked && seen.idle === true && RANK[seen.stage] >= RANK.hand;
+}
+
 const k = (tokens) => `${Math.round(tokens / 1000)}k`;
 
 // null — промпт проходит. Иначе текст отказа для пользователя: промпт длиннее
@@ -320,16 +329,18 @@ export function contextNotice(input, { phase = 'prompt' } = {}) {
   if (phase === 'step' && !sessionId) return null;
 
   const seen = sessionId ? record(sessionId) : null;
+  const worked = seen?.worked === true;
   if (seen?.stage && RANK[seen.stage] >= RANK[stage]
-    && !mayRepeat(phase, stage, used.tokens, seen)) {
+    && !mayRepeat(phase, stage, used.tokens, seen)
+    && !workSinceIdle(seen, worked)) {
     return null;
   }
-  if (sessionId) update(sessionId, { stage, tokens: used.tokens });
+  if (sessionId) update(sessionId, { stage, tokens: used.tokens, idle: !worked });
 
   return {
     stage,
     pct: used.pct,
     tokens: used.tokens,
-    text: noticeText(stage, used.tokens, { sessionId, phase, worked: seen?.worked === true }),
+    text: noticeText(stage, used.tokens, { sessionId, phase, worked }),
   };
 }
