@@ -39,8 +39,14 @@ const ENV = {
 Object.assign(process.env, ENV);
 const { contextUsed, contextNotice, noteWork, level, oversizedPrompt, WINDOW, SOFT, HAND, HARD, STEP_REPEAT } = await import('../context-core.mjs');
 
+// Работа — правка внутри git-корня сессии; песочница — свой репозиторий.
+const REPO = path.join(tmp, 'repo');
+fs.mkdirSync(path.join(REPO, '.git'), { recursive: true });
+const edit = (sessionId, file, cwd = REPO) =>
+  noteWork({ session_id: sessionId, cwd, tool_name: 'Edit', tool_input: { file_path: file } });
+
 // В сессии появилась работа: без неё текст порога другой — передавать нечего.
-const work = (sessionId) => noteWork({ session_id: sessionId, tool_name: 'Edit', tool_input: {} });
+const work = (sessionId) => edit(sessionId, path.join(REPO, 'a.ts'));
 
 let seq = 0;
 function assistant(tokens, extra = {}) {
@@ -177,11 +183,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const second = contextNotice({ transcript_path: hand, session_id: 's-esc' });
   check('рост до 160k: звучит hand', second.stage, 'hand');
   check('160k: назван скилл handoff', /handoff/.test(second.text), true);
-  check('160k: передача через plan mode', /EnterPlanMode[^.]*ExitPlanMode/.test(second.text), true);
-  check('160k: вопросы — через меню', /AskUserQuestion/.test(second.text), true);
+  check('160k: процедуру скилла не пересказывает', /EnterPlanMode|ExitPlanMode|AskUserQuestion/.test(second.text), false);
   check('160k: блока в чат не просит', /чат/.test(second.text), false);
   check('160k: про /clear не просит', /\/clear/.test(second.text), false);
-  check('160k: назван resume с id сессии', /--resume s-esc/.test(second.text), true);
   check('hand второй раз молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
 
   const third = contextNotice({ transcript_path: hard, session_id: 's-esc' });
@@ -233,7 +237,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   work('s-step-soft');
   const n = contextNotice({ transcript_path: file, session_id: 's-step-soft' }, { phase: 'step' });
   check('95k посреди хода: soft', n.stage, 'soft');
-  check('95k посреди хода: ответ не обрывать', /не обрывай/.test(n.text), true);
+  check('95k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
   check('95k посреди хода: про handoff пока не просит', /handoff/.test(n.text), false);
 }
 
@@ -245,15 +249,12 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const input = { transcript_path: file, session_id: 's-step' };
   const n = contextNotice(input, { phase: 'step' });
   check('160k посреди хода: hand', n.stage, 'hand');
-  check('160k посреди хода: ответ не обрывать', /не обрывай/.test(n.text), true);
-  check('160k посреди хода: коммит сам не навязывает', /коммитом и пушем/.test(n.text), false);
-  check('160k посреди хода: коммит — вопрос пользователю',
-    /AskUserQuestion[^.]*закоммитить и запушить шаг или передать/.test(n.text), true);
+  check('160k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
+  check('160k посреди хода: коммит сам не навязывает', /коммит/.test(n.text), false);
   check('160k посреди хода: назван скилл handoff', /handoff/.test(n.text), true);
-  check('160k посреди хода: следующий шаг — новой сессии',
-    /Следующий шаг здесь не начинай/.test(n.text), true);
+  check('160k посреди хода: следующий шаг — новой сессии', /следующий не начинай/.test(n.text), true);
   check('160k посреди хода: ход кончается передачей, даже без следующего шага',
-    /закончи ход не итогом, а передачей[^.]*следующего шага нет или правки откатаны/.test(n.text), true);
+    /закончи ход передачей[^.]*шагов не осталось/.test(n.text), true);
   check('тот же порог посреди хода второй раз молчит',
     contextNotice(input, { phase: 'step' }), null);
   check('и на следующем промпте не повторяется', contextNotice(input), null);
@@ -306,25 +307,21 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const sid = 's-idle';
 
   const first = contextNotice({ transcript_path: soft, session_id: sid }, { phase: 'step' });
-  check('без правок: шаг бросать не велят', /шаг не бросай/.test(first.text), true);
+  check('без правок: работу бросать не велят', /Работу продолжай/.test(first.text), true);
   check('без правок: про handoff не просят', /handoff/.test(first.text), false);
-  check('без правок: сказано сузить чтение', /Сузь чтение/.test(first.text), true);
+  check('без правок: сказано сузить чтение', /символом или диапазоном/.test(first.text), true);
 
   const second = contextNotice({ transcript_path: hand, session_id: sid }, { phase: 'step' });
-  check('без правок на 160k: коммит остаётся для сессии, ведущей к правке',
-    /закрой его коммитом/.test(second.text), true);
+  check('без правок на 160k: коммит не просят', /коммит/.test(second.text), false);
   check('без правок на 160k: вывод выдаётся, а не обрывается',
-    /дочитай только то, без чего вывода нет, и выдай его/.test(second.text), true);
+    /Дочитай только необходимое и выдай вывод/.test(second.text), true);
   check('без правок на 160k: перенос предлагают вопросом, рекомендуемым первым',
-    /закончи вопросом через AskUserQuestion: «Перенести в новую сессию» первым/.test(second.text), true);
-  check('без правок на 160k: перенос — из выводов по handoff',
-    /Выбран перенос — передача по скиллу `handoff` из выводов/.test(second.text), true);
-  check('без правок на 160k: прочитанное в блок не идёт',
-    /Прочитанное в блоке не перечисляй/.test(second.text), true);
+    /вопросом AskUserQuestion: «Перенести в новую сессию» первым/.test(second.text), true);
+  check('без правок на 160k: перенос — по handoff', /Перенос — по скиллу `handoff`/.test(second.text), true);
 
   const third = contextNotice({ transcript_path: hard, session_id: sid }, { phase: 'step' });
   check('без правок на 240k: разрешено сказать пользователю',
-    /скажи об этом пользователю/.test(third.text), true);
+    /скажи пользователю, что задачу надо сузить/.test(third.text), true);
   check('без правок на 240k: блок из выводов тоже просят', /handoff/.test(third.text), true);
 
   // появилась правка — и требование меняется на передачу
@@ -341,13 +338,13 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const hand = transcript('idle-then-work', [assistant(160_000)]);
   const input = { transcript_path: hand, session_id: sid };
 
-  check('без правок на 160k: передачу не просят', /Правок в этой сессии/.test(contextNotice(input).text), true);
+  check('без правок на 160k: передачу не просят', /Правок нет/.test(contextNotice(input).text), true);
   check('без правок повтор молчит', contextNotice(input, { phase: 'step' }), null);
 
   work(sid);
   const after = contextNotice(input, { phase: 'step' });
   check('первая правка после HAND: тот же порог звучит снова', after?.stage, 'hand');
-  check('первая правка после HAND: просят передачу', /Следующий шаг здесь не начинай/.test(after?.text), true);
+  check('первая правка после HAND: просят передачу', /следующий не начинай/.test(after?.text), true);
   check('и дальше не повторяется', contextNotice(input, { phase: 'step' }), null);
   check('и на следующем промпте тоже', contextNotice(input), null);
 
@@ -359,8 +356,8 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     contextNotice({ transcript_path: soft, session_id: softSid }, { phase: 'step' }), null);
 }
 
-// --- ни один текст не велит скрывать что-то от пользователя и каждый называет
-// источник: иначе модель принимает замер за инъекцию и отказывается от передачи
+// --- ни один текст не велит скрывать что-то от пользователя, каждый называет
+// источник и остаётся командой: длинное обоснование модель принимает за инъекцию
 {
   const texts = [];
   for (const [i, tokens] of [95_000, 160_000, 240_000].entries()) {
@@ -374,7 +371,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     }
   }
   check('ни один текст не просит скрывать', texts.filter((t) => /не сообщай|указание тебе/.test(t)).length, 0);
-  check('каждый текст называет хук-источник', texts.every((t) => /хук context-meter/.test(t)), true);
+  check('каждый текст называет хук-источник', texts.every((t) => /^context-meter: /.test(t)), true);
+  check('каждый текст не длиннее 300 символов', texts.filter((t) => t.length > 300), []);
+  check('ни один текст не объясняет', texts.filter((t) => /потому что|иначе|прочла бы/.test(t)), []);
 }
 
 // --- отметка работы: чтение ею не считается, правка и коммит — считаются
@@ -388,12 +387,17 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     noteWork({ session_id: 's-work', tool_name: 'Bash', tool_input: { command: 'git status' } }), false);
   check('git commit считается',
     noteWork({ session_id: 's-work', tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }), true);
-  check('повторная отметка файл не трогает',
-    noteWork({ session_id: 's-work', tool_name: 'Edit', tool_input: {} }), false);
-  check('правка через mcp считается',
-    noteWork({ session_id: 's-mcp', tool_name: 'mcp__tokensave__tokensave_str_replace', tool_input: {} }), true);
+  check('повторная отметка файл не трогает', edit('s-work', path.join(REPO, 'a.ts')), false);
+  check('правка через mcp по пути от корня считается',
+    noteWork({ session_id: 's-mcp', cwd: REPO, tool_name: 'mcp__tokensave__tokensave_str_replace',
+      tool_input: { path: 'src/a.ts' } }), true);
   check('без id сессии отметки нет',
-    noteWork({ tool_name: 'Edit', tool_input: {} }), false);
+    noteWork({ cwd: REPO, tool_name: 'Edit', tool_input: { file_path: path.join(REPO, 'a.ts') } }), false);
+  check('скрипт в /tmp работой не считается', edit('s-tmp', '/tmp/x.mjs'), false);
+  check('запись в ~/.claude работой не считается',
+    edit('s-tmp', path.join(os.homedir(), '.claude', 'plans', 'p.md')), false);
+  check('правка вне репозитория работой не считается', edit('s-tmp', path.join(REPO, 'a.ts'), tmp), false);
+  check('правка файла репозитория считается', edit('s-tmp', path.join(REPO, 'src', 'a.ts')), true);
 }
 
 // --- посреди хода без id сессии дедупликации нет — молчим
