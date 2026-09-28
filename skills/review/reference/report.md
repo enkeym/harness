@@ -1,4 +1,6 @@
-# /review — finding template
+# /review — report and menu
+
+## Finding
 
 One block per finding, Critical and Important:
 
@@ -47,3 +49,37 @@ One block per finding, Critical and Important:
   `Как воспроизвести` only when the manual check fits one line.
 - Minor findings: one line each, no code blocks —
   `<path>:<line> — проблема — проверка — комментарий`.
+
+## Summary
+
+```
+Итог: approved | changes requested — Critical <n>, Important <n>, Minor <n>
+Проверено без замечаний: <категории>
+Не проверено: <что и почему — тесты не запускались, нужен контекст задачи>
+```
+
+Empty section = "нет". Nothing found → the summary block only, no menu.
+
+## Menu
+
+One `AskUserQuestion` / `question` call after the report, recommended first:
+
+```
+Что делаем с находками?
+- Только ревью, ничего не менять (Recommended)
+- Собрать комментарии одним блоком
+- Исправить выбранные
+- Исправить все
+```
+
+- Target is another ref: drop both fix options — the user checks it out.
+- Fix selected → a second question, `multiSelect`: one option per finding
+  when ≤4, otherwise severity groups (all Critical; Critical and Important),
+  single numbers through "Other".
+- Collect comments → every MR comment as `<path>:<line>` + its text with the
+  repro line, in one block, ready to paste one by one.
+- Chosen fixes: apply exactly the fix shown, nothing beyond it; never
+  `git add` — in the soft-reset flow the colleague's change is staged and the
+  fix stays unstaged, so VS Code shows them apart. Then `tsc`, linter without
+  fix flags and tests of the touched module with real output. No commit, no
+  push — the branch is a colleague's; `/commit` is the user's call.
