@@ -21,7 +21,7 @@ file, a path outside the index, a string `search` missed.
 | Who calls it, what breaks             | `callers`, `callees`, `impact`, `affected`                    |
 | Where a field is read or written      | `search` `literal: true` on `.field`                          |
 | Edit a symbol                         | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*` |
-| How/where/why with no name; docs, configs, migrations, CI | `rag_search` (`only_outside_tokensave: true` when the answer is not code) |
+| How/where/why with no name; docs, configs, yml, migrations, CI, infrastructure | `rag_search` (`only_outside_tokensave: true` when the answer is not code) |
 | Decision after approval               | `record_decision`: one line + `reason`, `files`, `tags`       |
 
 - Arguments from the schema, not memory. Pass `seen_node_ids` from one
@@ -37,7 +37,7 @@ file, a path outside the index, a string `search` missed.
 ## Empty or broken answer
 
 - Empty = wrong name guess, not missing code. Ladder: `rag_search` → grep →
-  `Read`. Don't repeat the identical call.
+  `tokensave_read` of the likely file. Don't repeat the identical call.
 - Error (not indexed, DB busy) → one line, then built-in tools. Graph
   genuinely silent: DB is `.tokensave/tokensave.db`, tables `nodes`, `edges`,
   `files`. Offer an issue at https://github.com/aovestdipaperino/tokensave —

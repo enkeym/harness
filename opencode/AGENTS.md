@@ -8,12 +8,14 @@ Here only what exists in OpenCode alone.
 - MCP tools carry the server prefix: `tokensave_tokensave_context`,
   `ragsave_rag_search`. Rules and skills name them short (`tokensave_context`,
   `rag_search`) — prepend the prefix.
-- Files: built-in `read`, `edit`, `write`; exact string outside the index:
+- Files: the **Tool choice** table in `core.md`, where `Read`/`Edit`/`Write`
+  are the built-in `read`/`edit`/`write`. Exact string outside the index:
   `grep` with `include`.
 - The guard plugin (`plugin/tokensave-guard.js`, logic in
-  `~/.ai-hooks/guard-core.mjs`) blocks reading or writing an existing file
-  through `bash` (`cat`, `sed -i`, `> file`, `node -e` with a path). Refused →
-  built-in `read` / `edit` / `write`.
+  `~/.ai-hooks/guard-core.mjs`) refuses `read` on a file in the tokensave
+  index and reading or writing an existing file through `bash` (`cat`,
+  `sed -i`, `> file`, `node -e` with a path). Refused → the tool the refusal
+  names.
 
 ## Agents
 

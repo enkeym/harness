@@ -35,18 +35,22 @@ A skill line naming another project's value is a defect: fix the skill.
 `git`, `npm`, `tsc`, `docker`, tests, linters. No file reads or writes through
 the shell: no `cat`/`head`/`sed -n`, `sed -i`, `> file`, `tee`, heredoc into a
 file, `node -e`/`python -c` — including new files and non-indexed configs.
+Allowed: `jq` over a `.json`/`.jsonl` outside the tokensave index (logs,
+reports); `>`/`>>` into `/tmp/` for command output.
 
 ## Tool choice
 
 In a project with `.tokensave/` the index answers first; built-in tools take
-what it cannot: a path to read in full, a file to create, a string it missed.
+what it cannot: a file outside the index, a file to create, a string it missed.
 
 | Question                                        | Tool                                                  |
 | ----------------------------------------------- | ----------------------------------------------------- |
 | Where a symbol or file is, who calls it, what breaks | tokensave (`search`, `files`, `callers`, `impact`) — not `find`/`grep` |
-| What a symbol does                              | `tokensave_body`/`signature`, not `Read` of the whole file |
-| Meaning, no name: how/where/why, docs, configs  | `rag_search`                                          |
-| A known path in full; a new file; not indexed   | `Read`, `Edit`, `Write`                               |
+| What a symbol does                              | `tokensave_body`/`signature`                          |
+| A file in the index, whole or a range           | `tokensave_read` (`mode: "lines"`, `lines: "A-B"`) — `Read` is refused |
+| An edit to a file in the index                  | `tokensave_str_replace`/`multi_str_replace` — built-in edit needs a built-in read first |
+| Meaning, no name: how/where/why; docs, configs, yml, CI, infrastructure | `rag_search`                  |
+| A file outside the index; a new file            | `Read`, `Edit`, `Write`                               |
 | Exact string after `search` `literal: true` answered empty | grep with a file glob                      |
 
 An empty answer means a wrong guess, not missing code — take the next row.
