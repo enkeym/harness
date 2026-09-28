@@ -13,13 +13,14 @@ handoff yet; `HAND` and `HARD` ask for one. OpenCode has no meter — only
 start a new session for the user; the only writes are the `task-brief` plan
 file and the plan file plan mode names.
 
-Mid-turn the answer is never cut in half: finish the step in hand, commit and
-push it, and only then hand off — the step not started goes first under
-`Дальше`. A session that has changed nothing gets no handoff at `SOFT`: it
+Mid-turn the answer is never cut in half: finish the step in hand, then end
+the turn with the handoff, not a summary — also when no next step remains or
+the edits were reverted; the step not started goes first under `Дальше`. A
+session that has changed nothing gets no handoff at `SOFT`: it
 would list what was read, the next session would read the same and hit the
 same threshold. From `HAND` such a session is usually an analysis, not a
-prelude to an edit — it delivers its conclusion first and hands off only
-when the request cannot finish; that handoff is built from conclusions (`Решения`,
+prelude to an edit — it delivers its conclusion first, then ends the turn with
+one question: move to a new session (recommended) or stay; a move is built from conclusions (`Решения`,
 `Открытые вопросы`, `Дальше`), with nothing under `Карта` beyond the files the
 next step needs. The hook says which case it is; follow its wording.
 
