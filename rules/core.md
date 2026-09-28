@@ -36,7 +36,7 @@ A skill line naming another project's value is a defect: fix the skill.
 the shell: no `cat`/`head`/`sed -n`, `sed -i`, `> file`, `tee`, heredoc into a
 file, `node -e`/`python -c` — including new files and non-indexed configs.
 Allowed: `jq` over a `.json`/`.jsonl` outside the tokensave index (logs,
-reports); `>`/`>>` into `/tmp/` for command output.
+reports); `>`/`>>` into `/tmp/` for command output, `cat`/`tail` of that file.
 
 ## Tool choice
 

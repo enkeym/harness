@@ -109,6 +109,12 @@ bash('/tmp/.. наружу → deny', 'deny', 'echo x > /tmp/../ts-guards-outsid
 const CLONE = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-clone-'));
 fs.mkdirSync(path.join(CLONE, '.git'));
 bash('перенаправление в git-клон внутри /tmp без индекса → deny', 'deny', 'npm test > src/a.ts', CLONE);
+fs.writeFileSync(SCRATCH, '');
+fs.writeFileSync(path.join(CLONE, 'a.ts'), '');
+bash('tail черновика в /tmp вне проекта → allow', 'allow', `tail -20 ${SCRATCH}`);
+bash('cat черновика и исходника → deny', 'deny', `cat ${SCRATCH} client/src/App.tsx`);
+bash('cat файла git-клона внутри /tmp → deny', 'deny', 'cat a.ts', CLONE);
+fs.rmSync(SCRATCH, { force: true });
 fs.rmSync(CLONE, { recursive: true, force: true });
 bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
 bash('tee в исходник → deny', 'deny', 'echo x | tee client/src/App.tsx');

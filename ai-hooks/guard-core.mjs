@@ -159,8 +159,10 @@ export function guardBash(command, cwd, labels) {
       const target = redirectTarget(seg, cwd);
       if (target) return editReason(target, fileTools(cwd, target, labels));
 
+      // Черновик в /tmp вне проекта читается так же, как пишется: `> /tmp/x`
+      // разрешён, значит и `tail /tmp/x`.
       if (READ_CMDS.has(cmd)) {
-        const hit = anyFile(seg, cwd);
+        const hit = [...pathCandidates(seg)].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
         if (hit) return readReason(hit, fileTools(cwd, hit, labels));
       }
 

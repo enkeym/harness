@@ -85,11 +85,11 @@ fired and what it wants instead.
 - `bash-router` denies reading or writing an existing file through the shell
   (`cat`, `head`, `sed -i`, `tee`, `> file`, `node -e`/`python -c` with a path,
   a heredoc into an interpreter) and names the tool that passes. Same rule for
-  `mcp__ide__executeCode`; `jq` over a `.json`/`.jsonl` outside the index and
-  `>`/`>>` into `/tmp/` outside a project pass. Output clipping is `output-clip`.
+  `mcp__ide__executeCode`; `jq` over a `.json`/`.jsonl` outside the index,
+  `>`/`>>` into `/tmp/` outside a project and `cat`/`tail` of such a file pass.
+  Output clipping is `output-clip`.
 - `node <file>` (`python`, `bun`, `deno` alike) with no `-e`/`-p`/`-c` and no
-  heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` and the
-  README's commands pass; the inline-code forms stay blocked.
+  heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` passes.
 - It splits commands like the security guard: `&`, `$(…)`, backticks,
   `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat`, and a heredoc body
   stays with its `node`/`python`. `grep`/`rg` and pipes reading stdin pass.
