@@ -334,6 +334,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 {
   check('Read работой не считается',
     noteWork({ session_id: 's-work', tool_name: 'Read', tool_input: { file_path: '/a' } }), false);
+  check('запись в память агента работой не считается',
+    noteWork({ session_id: 's-work', tool_name: 'Write',
+      tool_input: { file_path: '/home/u/.claude/projects/p/memory/base.md' } }), false);
   check('git status работой не считается',
     noteWork({ session_id: 's-work', tool_name: 'Bash', tool_input: { command: 'git status' } }), false);
   check('git commit считается',

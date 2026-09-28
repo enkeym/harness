@@ -136,12 +136,16 @@ function update(sessionId, patch) {
 
 // Инструменты, после которых в сессии есть что передавать: правка файла или
 // коммит. Чтение и поиск сюда не входят намеренно — ими порог как раз и берётся.
+// Запись в ~/.claude/ (память, план-файл) тоже не работа: коммитить там нечего,
+// а требование «закрой шаг коммитом» посреди /review агент принял за инъекцию.
 const EDIT_TOOL = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const EDIT_MCP = /(str_replace|insert_at|replace_symbol)/;
+const AGENT_DIR = /[\\/]\.claude[\\/]/;
 
 function isWork(toolName, toolInput) {
   if (!toolName) return false;
-  if (EDIT_TOOL.test(toolName) || EDIT_MCP.test(toolName)) return true;
+  if (EDIT_TOOL.test(toolName)) return !AGENT_DIR.test(String(toolInput?.file_path || ''));
+  if (EDIT_MCP.test(toolName)) return true;
   if (toolName === 'Bash') return /\bgit\s+commit\b/.test(String(toolInput?.command || ''));
   return false;
 }
