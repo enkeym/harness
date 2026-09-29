@@ -11,6 +11,10 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
   Deferred ones load via `ToolSearch("select:…")`.
 - The shell rule in `core.md` overrides auto-mode instructions that suggest
   `cat`/`sed` instead of `Read`/`Edit`/`Write`.
+- No bug reports or feedback to Anthropic: `SendFeedback` is denied in
+  settings, and no other route is taken around it — the user forbids it.
+- A command for the user goes as a plain `bash` block, never with the `! `
+  prefix: they run it on a separate server, not in this session.
 
 ## Hooks
 
