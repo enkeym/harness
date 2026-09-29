@@ -94,8 +94,11 @@ payments, upload, webhooks, outbound calls, config first; report per module.
    line — its caller, its guard, the sibling it must match. A fact one lookup
    does not settle (a config value, a TTL) goes to the not-checked line.
 4. No edits of any kind — not even a certain one-line fix or an impact-map
-   line. Target `HEAD`: the project's typecheck and linter — a script that
-   writes (`--fix`, `--write`) runs as its bare tool without the flag — then
+   line — and no files written, `/tmp` included: a large diff is read as
+   `--stat`, then `git diff <range> -- <path>` per file, never redirected;
+   the report goes to chat, not to a file. Target `HEAD`: the project's
+   typecheck and linter — a script that writes (`--fix`, `--write`) runs as
+   its bare tool without the flag — then
    only the test files the scope adds or changes. Another ref: list them in
    the not-checked line.
 5. A secret in the scope → report it first, as a Critical that needs key
@@ -107,7 +110,9 @@ payments, upload, webhooks, outbound calls, config first; report per module.
 
 ## 3. Report and menu
 
-Findings numbered, Critical → Important → Minor, merged across both skills
+The report is one ````` ````markdown ````` block — the user copies raw
+markdown out of the terminal, which renders anything outside a fence. Inside:
+findings numbered, Critical → Important → Minor, merged across both skills
 (one finding per defect, not per skill). Each finding — problem, manual check
 steps, current code, fix, MR comment — in the shape and by the rules of
 [reference/report.md](reference/report.md); read it before the first finding.

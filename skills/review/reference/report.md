@@ -1,5 +1,28 @@
 # /review — report and menu
 
+## Report
+
+The whole report — findings and summary — sits in one fence of four
+backticks, so the inner ` ``` ` blocks stay inside it; the menu comes after
+the fence. Nothing before or after it but the header line and the menu.
+
+~~~
+````markdown
+# Ревью: <режим из строки-заголовка>
+
+## Critical
+<блоки находок>
+## Important
+<блоки находок>
+## Minor
+<список>
+## Итог
+<сводка>
+````
+~~~
+
+A severity with no findings — its heading is dropped.
+
 ## Finding
 
 One block per finding, Critical and Important:
@@ -47,18 +70,19 @@ One block per finding, Critical and Important:
 - MR comment text: neutral, addressed to the change, not the person; no
   mention of AI, a model or a tool — it goes out under the user's name.
   `Как воспроизвести` only when the manual check fits one line.
-- Minor findings: one line each, no code blocks —
-  `<path>:<line> — проблема — проверка — комментарий`.
+- Minor findings: one list item each, no code blocks, the path in backticks —
+  `- <N>. <path>:<line> — проблема — проверка — комментарий`.
 
 ## Summary
 
-```
-Итог: approved | changes requested — Critical <n>, Important <n>, Minor <n>
-Проверено без замечаний: <категории>
-Не проверено: <что и почему — тесты не запускались, нужен контекст задачи>
-```
+~~~
+- **Итог:** approved | changes requested — Critical <n>, Important <n>, Minor <n>
+- **Проверено без замечаний:** <категории>
+- **Не проверено:** <что и почему — тесты не запускались, нужен контекст задачи>
+~~~
 
-Empty section = "нет". Nothing found → the summary block only, no menu.
+Empty section = "нет". Nothing found → the report fence holds the summary
+only, no menu.
 
 ## Menu
 
@@ -77,7 +101,7 @@ One `AskUserQuestion` / `question` call after the report, recommended first:
   when ≤4, otherwise severity groups (all Critical; Critical and Important),
   single numbers through "Other".
 - Collect comments → every MR comment as `<path>:<line>` + its text with the
-  repro line, in one block, ready to paste one by one.
+  repro line, in one ````` ````markdown ````` fence, ready to paste one by one.
 - Chosen fixes: apply exactly the fix shown, nothing beyond it; never
   `git add` — in the soft-reset flow the colleague's change is staged and the
   fix stays unstaged, so VS Code shows them apart. Then `tsc`, linter without
