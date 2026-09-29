@@ -110,12 +110,13 @@ payments, upload, webhooks, outbound calls, config first; report per module.
 
 ## 3. Report and menu
 
-The report is one ````` ````markdown ````` block — the user copies raw
-markdown out of the terminal, which renders anything outside a fence, and
-pastes it into GitLab or Telegram, so only markup both render. Inside:
-findings numbered, Critical → Important → Minor, merged across both skills
-(one finding per defect, not per skill). Each finding — problem, manual check
-steps, current code, fix, MR comment — in the shape and by the rules of
+The report goes to chat as plain markdown: findings numbered, Critical →
+Important → Minor, merged across both skills (one finding per defect, not per
+skill), each with problem, manual check steps, current code and fix; then the
+summary. After it, one ````` ````markdown ````` copy block with the MR
+comments only — the user copies raw markdown out of the terminal, which
+renders anything outside a fence, and pastes it into GitLab or Telegram, so
+only markup both render. Shapes and rules:
 [reference/report.md](reference/report.md); read it before the first finding.
-The same file holds the summary block and the closing menu: one
-`AskUserQuestion` after the report, none when nothing was found.
+The same file holds the closing menu: one `AskUserQuestion` after the copy
+block, none when nothing was found.
