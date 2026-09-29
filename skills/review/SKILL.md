@@ -32,6 +32,13 @@ missing ref → name it in one line and stop.
    `git diff HEAD` (staged and unstaged at once) plus every untracked file read
    whole; commits are not reviewed. This is the `git reset --soft <base>` flow:
    the whole branch sits staged on top of its base.
+   - A merge in progress (`git rev-parse -q --verify MERGE_HEAD` succeeds) →
+     `git diff HEAD` also carries everything the merged branch brings; skip
+     it, no menu. Scope: the ticket commits of step 2 on `HEAD` (no key → none),
+     plus the conflict resolution — files changed on both sides since
+     `git merge-base HEAD MERGE_HEAD`, each read as `git diff HEAD -- <path>`
+     and `git diff MERGE_HEAD -- <path>`. The resolution's own code is what
+     matches neither side: a new line, or one side's change dropped.
 2. **Ticket commits.** Clean tree → the ticket key: the branch name first
    (`feature/ABC-123-login` → `ABC-123`; format from project memory, else
    `[A-Z][A-Z0-9]+-[0-9]+`), then the top commit's subject. Walk
@@ -66,8 +73,8 @@ missing ref → name it in one line and stop.
   the last N commits; a branch → the `<branch>` row. A merge inside → the
   per-commit rule of step 2.
 - Header line before the pass, so a wrong pick is caught at once: mode
-  (`незакоммиченные` / `коммиты <KEY>` / `последние <n>` / `от <base>` /
-  `аудит <area>`), files
+  (`незакоммиченные` / `мерж <sha>` / `коммиты <KEY>` / `последние <n>` /
+  `от <base>` / `аудит <area>`), files
   and `+/-` totals, the reviewed commits as `--oneline` or `коммиты не смотрел`.
 - Ref other than `HEAD`: read files as `git show <ref>:<path>`; callers from
   the tokensave graph of the working tree, said in one line. `git grep` only
