@@ -121,11 +121,18 @@ function anyFile(text, cwd) {
 // heredoc — не перенаправление. Вывод команды в /tmp вне проекта — черновик,
 // не правка. Проект — индекс tokensave или git вверх по дереву: клон
 // чужой ветки в /tmp черновиком не считается.
+// Строки в кавычках маскируются, а не вырезаются: `>` внутри них — не
+// перенаправление, но `> "file"` — цель. Вырезанная, она пропадала, и целью
+// становилось следующее слово: `> "/tmp/x.log" 2>&1` — «файл `2`».
 function redirectTarget(seg, cwd) {
-  const bare = seg.split('\n')[0].replace(/"[^"]*"|'[^']*'/g, '');
-  const m = bare.match(/(?:^|[^=\-<>])>>?\s*([\w@.\-/\\]+)/);
-  if (!m || m[1].startsWith('/dev/') || isScratch(cwd, m[1])) return null;
-  return m[1];
+  const quoted = [];
+  const bare = seg.split('\n')[0].replace(/"([^"]*)"|'([^']*)'/g, (_, d, s) => `\0${quoted.push(d ?? s) - 1}\0`);
+  const m = bare.match(/(?:^|[^=\-<>])>>?\s*(\0\d+\0|[\w@.\-/\\]+)/);
+  if (!m) return null;
+  // Цель в кавычках судим как без них: `> "$OUT"` вычисляется, как и `> $OUT`.
+  const target = m[1].startsWith('\0') ? quoted[Number(m[1].slice(1, -1))].match(/^[\w@.\-/\\]+/)?.[0] : m[1];
+  if (!target || target.startsWith('/dev/') || isScratch(cwd, target)) return null;
+  return target;
 }
 
 const SCRATCH_DIRS = [...new Set(['/tmp', os.tmpdir()])].map((d) => path.resolve(d) + path.sep);

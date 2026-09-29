@@ -121,6 +121,9 @@ bash('cat файла git-клона внутри /tmp → deny', 'deny', 'cat a.
 fs.rmSync(SCRATCH, { force: true });
 fs.rmSync(CLONE, { recursive: true, force: true });
 bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
+bash('путь в кавычках в /tmp и 2>&1 → allow', 'allow', 'node t.mjs > "/tmp/t-$f.log" 2>&1', '/tmp');
+bash('перенаправление в исходник в кавычках → deny', 'deny', 'echo x > "client/src/App.tsx"');
+bash('`>` внутри строки в кавычках → allow', 'allow', `echo "a > b" | wc -l`);
 bash('tee в исходник → deny', 'deny', 'echo x | tee client/src/App.tsx');
 bash('`=>` в строке — не перенаправление → allow', 'allow', `git log --format='%h => %s'`);
 
