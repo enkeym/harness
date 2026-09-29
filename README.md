@@ -16,7 +16,7 @@
 
 | Каталог | Куда раскатывается | Что это |
 | --- | --- | --- |
-| `rules/` | `~/.claude/rules/core.md`, `~/.config/opencode/rules/core.md` | `core.md` — общие правила обоих агентов: гейты, выбор инструментов, таблица скиллов |
+| `rules/` | `~/.claude/rules/{core,stormapi}.md`, `~/.config/opencode/rules/{core,stormapi}.md` | `core.md` — общие правила обоих агентов: гейты, выбор инструментов, таблица скиллов; `stormapi.md` — ветки и коммиты для всех репозиториев на `git.stormapi.su` |
 | `skills/` | `~/.claude/skills`, `~/.config/opencode/skills` | скиллы — одна папка на оба агента |
 | `claude/` | `~/.claude/{CLAUDE.md,commands,settings*.json}` | только Claude Code: `CLAUDE.md`, слэш-команды, настройки и хуки; инструмент `Agent` запрещён |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, shell-гард, фоновая синхронизация ragsave, statusline, тесты |
@@ -26,6 +26,7 @@
 | `mcp/` | `~/.claude.json` и `opencode/opencode.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов обоих агентов |
 | `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` из `~/.git-credentials`, без копии секрета) |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: identity, `credential.helper store`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
+| `harness.env.example` | в шаблоны `*.tmpl` через `bin/render.mjs` | машинно-зависимые значения по умолчанию: домашний каталог, путь к клону, git-identity, бинари; свои — в `harness.env` |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
 
 История `claude-config` и `ai-hooks` втянута через `git subtree`, так что
@@ -36,9 +37,42 @@
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness
 cd ~/harness
-./install.sh            # симлинки + MCP-серверы в Claude и OpenCode
+cp harness.env.example harness.env   # и поправить значения под машину
+./install.sh            # шаблоны + симлинки + MCP-серверы в Claude и OpenCode
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
+
+## Машинно-зависимые значения
+
+Файлы, где зашиты путь домашнего каталога, почта или путь к бинарю, лежат в
+репозитории шаблонами `*.tmpl` с `{{HARNESS_…}}` на месте значений:
+`claude/settings.json`, `claude/commands/ask*.md`, скиллы `doctor`,
+`impact-map`, `optimize`, `usage`, `git/gitconfig`, `opencode/opencode.json`,
+`opencode/plugin/tokensave-guard.js`, `shell/bashrc`, `shell/bash_env`.
+`./install.sh` рендерит их в файлы рядом (без `.tmpl`, в `.gitignore`), и уже на
+них ведут симлинки.
+
+Значения — по приоритету: переменная окружения → `harness.env` (локальный, в
+`.gitignore`) → `harness.env.example` (по умолчанию, в репозитории). В значении
+можно сослаться на другую переменную: `HARNESS_DIR=${HARNESS_USER_HOME}/harness`.
+Переопределять достаточно только то, что отличается.
+
+| Переменная | Где используется |
+| --- | --- |
+| `HARNESS_USER_HOME` | пути к хукам в `settings.json`, `opencode.json`, командах и скиллах; `--check` сверяет его с `$HOME` |
+| `HARNESS_DIR` | правило `Edit` в `settings.json`, `git -C` в скилле `doctor` |
+| `HARNESS_TOKENSAVE_BIN` | хуки tokensave в `settings.json`, `ai-hooks/bin/mcp-serve.sh` |
+| `HARNESS_GH_BIN` | credential helper GitHub в `~/.gitconfig` |
+| `HARNESS_PLAYWRIGHT_MCP_BIN` | MCP playwright в `opencode.json` (при раскатке `mcp-sync` всё равно ставит найденный в PATH) |
+| `HARNESS_PNPM_HOME` | `PNPM_HOME` в `~/.bashrc` |
+| `HARNESS_GIT_NAME`, `HARNESS_GIT_EMAIL` | identity в `~/.gitconfig` |
+| `HARNESS_GITLAB_HOST` | хост, для которого `~/.bash_env` берёт `GITLAB_TOKEN` из `~/.git-credentials` |
+| `HARNESS_SKIP_LINKS` | цели `install.sh` (пути от `$HOME` через пробел), которые машина держит своими: не симлинкуются и не проверяются |
+
+Правится шаблон, а не отрендеренный файл. Отдельно рендер: `node bin/render.mjs`
+(`--check` — только отчёт). Файл, который отличается от шаблона (Claude Code
+переписывает `settings.json` через `/config`), при рендере уезжает в
+`<имя>.bak-<дата>`.
 
 MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), подробности — в
 [`mcp/servers.md`](mcp/servers.md).
@@ -69,7 +103,9 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 не на месте, читать ему нечего кроме этого файла. Поэтому порядок ниже —
 самодостаточный, выполнять сверху вниз.
 
-1. `./install.sh` — симлинки и MCP-серверы. Отчёт покажет, что встало, что
+0. `harness.env` — скопировать из `harness.env.example`, поправить
+   домашний каталог, путь к клону, git-identity.
+1. `./install.sh` — шаблоны, симлинки и MCP-серверы. Отчёт покажет, что встало, что
    уехало в бэкап.
 2. `./install.sh --venv` — venv для ragsave. Долго, качает пакеты.
 3. `claude mcp list` — все три сервера из `mcp/servers.json` должны быть
@@ -89,11 +125,11 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
   котором эта строка уже отработала, передаст его в Bash-тул агента. Claude
   Code, запущенный из старого терминала, `GITLAB_TOKEN` не увидит.
 
-**Домашний каталог обязан совпадать.** Пути к хукам в `settings.json` и правила
-`permissions.allow` абсолютные и буквальные, `$HOME` в них не раскрывается. При
-другом имени пользователя хуки не запустятся, и отказа не будет — команда просто
-не найдётся. `./install.sh --check` проверяет это первым делом и печатает готовую
-команду замены.
+**Домашний каталог обязан совпадать с `HARNESS_USER_HOME`.** Пути к хукам в
+`settings.json` и правила `permissions.allow` абсолютные и буквальные, `$HOME` в
+них не раскрывается. При расхождении хуки не запустятся, и отказа не будет —
+команда просто не найдётся. `./install.sh --check` проверяет это и подсказывает
+строку для `harness.env`.
 
 Установка раскладывает **симлинки**, а не копии: правка в `~/.claude/skills`
 сразу видна `git status` в этом репозитории, и нет отдельного шага
@@ -129,6 +165,9 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
 
 ## Тесты
+
+Тесты читают отрендеренные файлы (`opencode.json`, `SKILL.md`) — после
+клона сначала `./install.sh` или `node bin/render.mjs`.
 
 ```bash
 node ai-hooks/test/test-guards.mjs

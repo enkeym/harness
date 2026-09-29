@@ -1,0 +1,20 @@
+[init]
+	defaultBranch = main
+[user]
+	name = {{HARNESS_GIT_NAME}}
+	email = {{HARNESS_GIT_EMAIL}}
+[core]
+	excludesfile = {{HARNESS_USER_HOME}}/.gitignore_global
+	hooksPath = {{HARNESS_USER_HOME}}/.config/git/hooks
+[credential]
+	helper = store
+[credential "https://github.com"]
+	helper =
+	helper = !{{HARNESS_GH_BIN}} auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !{{HARNESS_GH_BIN}} auth git-credential
+[pull]
+	rebase = true
+[push]
+	default = current

@@ -10,6 +10,10 @@ Source of the global agent setup. Layout, install and the test list:
   guard or router blocks this session too — keep the tests green between edits.
 - `claude/CLAUDE.md` is the global Claude-only rules file, not this project's.
   Where a rule goes: `skills/skill-authoring/reference/claude-md.md`.
+- Machine-specific files are templates: edit `*.tmpl`, never the rendered
+  file next to it (gitignored, overwritten by `node bin/render.mjs`). A new
+  machine-specific value gets a `{{HARNESS_…}}` placeholder and a default in
+  `harness.env.example`; local values live in `harness.env`.
 - Hook registration (`claude/settings.json`) and rules files load at session
   start. A new hook or event is checked by feeding its JSON to the script on
   stdin; the live check waits for the next session — say so, don't claim it.
@@ -36,5 +40,6 @@ Source of the global agent setup. Layout, install and the test list:
 - Base `main`, commit and push straight to it.
 - Header `type(scope): …` in English, scopes as in `git log`: `hooks`,
   `skills`, `rules`, `opencode`, `config`, `harness`.
-- `claude/settings.json` is rewritten by Claude Code itself (`/config`): a
-  diff there nobody asked for is left out of the commit.
+- `claude/settings.json` is rendered and rewritten by Claude Code itself
+  (`/config`): a change worth keeping is carried over into
+  `claude/settings.json.tmpl` by hand; `render.mjs --check` shows the drift.

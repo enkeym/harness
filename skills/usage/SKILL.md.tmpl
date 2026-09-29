@@ -2,7 +2,7 @@
 name: usage
 description: "Reports token spend, estimated cost, tools and subagents from the local ledger ~/.ai-hooks/logs/usage.jsonl (written by the Stop hook). User-invoked as /usage."
 disable-model-invocation: true
-allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*)
+allowed-tools: Bash(node {{HARNESS_USER_HOME}}/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*)
 argument-hint: "[--days N | --today | --project <name> | --sessions]"
 ---
 
@@ -21,7 +21,7 @@ tokensave cost 7d --by-model
    doesn't have:
 
 ```
-node /home/enkeym/.ai-hooks/bin/usage-report.mjs $ARGUMENTS
+node {{HARNESS_USER_HOME}}/.ai-hooks/bin/usage-report.mjs $ARGUMENTS
 ```
 
 Both costs are estimates, not the subscription bill, and they disagree: the

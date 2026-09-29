@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тесты `install.sh --check` — отчёта о симлинках харнеса без правок.
 // install.sh находит харнесс по своему пути, поэтому в песочнице собран
-// мини-харнесс: симлинк на настоящий install.sh, пустые источники из LINKS и
+// мини-харнесс: симлинк на настоящий install.sh, пустые источники из LINKS,
+// настоящий bin/render.mjs (шаблонов в песочнице нет, --root указывает на неё) и
 // fixtures/fake-indexer.mjs на месте bin/mcp-sync.mjs. HOME — та же песочница,
 // PATH — только нужные скрипту утилиты: настоящие claude, tokensave, opencode и
 // python3 не запускаются, а где они нужны, их заменяет тот же фейк.
@@ -16,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const INSTALL = path.join(path.dirname(ROOT), 'install.sh');
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-indexer.mjs');
+const RENDER = path.join(path.dirname(ROOT), 'bin', 'render.mjs');
 const LINKS = [...fs.readFileSync(INSTALL, 'utf8').matchAll(/^\s*"\$HOME\/([^|"]+)\|([^"]+)"$/gm)]
   .map(([, target, src]) => ({ target, src }));
 // mkdir/mv/ln/rm --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
@@ -54,16 +56,16 @@ const changes = (before, after) => [
   ...after.filter((x) => !before.includes(x)).map((x) => `+ ${x}`),
 ];
 
-function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
+function sandbox({ tools = TOOLS, fakes = [] } = {}) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'install-check-')));
   const harness = path.join(home, 'harness');
   for (const { src } of LINKS) {
     fs.mkdirSync(path.dirname(path.join(harness, src)), { recursive: true });
     fs.writeFileSync(path.join(harness, src), '');
   }
-  fs.writeFileSync(path.join(harness, 'claude', 'settings.json'), settings);
   fs.mkdirSync(path.join(harness, 'bin'), { recursive: true });
   fs.symlinkSync(FAKE, path.join(harness, 'bin', 'mcp-sync.mjs'));
+  fs.symlinkSync(RENDER, path.join(harness, 'bin', 'render.mjs'));
   fs.symlinkSync(INSTALL, path.join(harness, 'install.sh'));
 
   const bin = path.join(home, 'path');
@@ -100,7 +102,8 @@ check('LINKS разобран из install.sh', LINKS.length > 20 && LINKS.some(
   check('всё на месте — код 0', res.status, 0);
   check('всё на месте — итог', res.out.includes(summary(LINKS.length, 0, 0)), true);
   check('mcp-sync зовётся с --check', res.calls, [['--check']]);
-  check('settings.json без зашитого /home — проверка домашнего каталога пропущена', res.out.includes('домашний каталог'), false);
+  check('HARNESS_USER_HOME не задан — проверка домашнего каталога пропущена', res.out.includes('домашний каталог'), false);
+  check('шаблонов нет — рендер без замечаний', res.out.includes('Шаблоны'), true);
 }
 
 {
@@ -144,15 +147,38 @@ check('LINKS разобран из install.sh', LINKS.length > 20 && LINKS.some(
 {
   const sb = sandbox({ tools: TOOLS.filter((t) => t !== 'node') });
   const res = sb.run();
-  check('node нет — MCP не сверен, +1 к вниманию', [res.status, res.out.includes('node не найден — MCP не сверить'), res.out.includes(summary(LINKS.length, 1, 0))], [1, true, true]);
+  check('node нет — шаблоны и MCP не сверены, +2 к вниманию',
+    [res.status, res.out.includes('node не найден — шаблоны не отрендерить'), res.out.includes('node не найден — MCP не сверить'), res.out.includes(summary(LINKS.length, 2, 0))],
+    [1, true, true, true]);
 }
 
 {
-  const sb = sandbox({ settings: '{"hooks":"/home/someone/.ai-hooks/claude/x.mjs"}' });
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.harness, 'harness.env.example'), 'HARNESS_USER_HOME=/home/someone\n');
   const res = sb.run();
-  check('зашитый домашний каталог не совпадает — код 1', res.status, 1);
-  check('зашитый домашний каталог не совпадает — названы оба', res.out.includes(`в конфигах /home/someone, здесь ${sb.home}`), true);
-  check('зашитый домашний каталог не совпадает — +1 к вниманию', res.out.includes(summary(LINKS.length, 1, 0)), true);
+  check('HARNESS_USER_HOME не совпадает — код 1', res.status, 1);
+  check('HARNESS_USER_HOME не совпадает — названы оба', res.out.includes(`HARNESS_USER_HOME=/home/someone, здесь ${sb.home}`), true);
+  check('HARNESS_USER_HOME не совпадает — подсказка на harness.env', res.out.includes(`HARNESS_USER_HOME=${sb.home}`), true);
+  check('HARNESS_USER_HOME не совпадает — +1 к вниманию', res.out.includes(summary(LINKS.length, 1, 0)), true);
+}
+
+{
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.harness, 'harness.env.example'), 'HARNESS_USER_HOME=/home/someone\n');
+  fs.writeFileSync(path.join(sb.harness, 'harness.env'), `HARNESS_USER_HOME=${sb.home}\n`);
+  const res = sb.run();
+  check('harness.env важнее значения по умолчанию — дом совпадает', [res.status, res.out.includes('домашний каталог совпадает')], [0, true]);
+}
+
+{
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.harness, 'x.conf.tmpl'), 'home={{HARNESS_USER_HOME}}\n');
+  fs.writeFileSync(path.join(sb.harness, 'harness.env.example'), `HARNESS_USER_HOME=${sb.home}\n`);
+  const before = sb.snap();
+  const res = sb.run();
+  check('шаблон не отрендерен — --check называет и не рендерит',
+    [res.status, res.out.includes('x.conf — не отрендерен'), fs.existsSync(path.join(sb.harness, 'x.conf'))], [1, true, false]);
+  check('шаблон не отрендерен — --check ничего не меняет', changes(before, sb.snap()), []);
 }
 
 {

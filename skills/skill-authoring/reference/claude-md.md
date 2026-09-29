@@ -1,10 +1,11 @@
 # Always-loaded rules
 
-Three files, no frontmatter, loaded in full at session start:
+Four files, no frontmatter, loaded in full at session start:
 
 | File | Loaded by | Holds |
 | --- | --- | --- |
 | `rules/core.md` | Claude Code (`~/.claude/rules/`), OpenCode (`instructions`) | every gate and routing rule both agents need, the **Skills** table |
+| `rules/stormapi.md` | Claude Code (`~/.claude/rules/`), OpenCode (`instructions`) | branch and commit facts shared by every `git.stormapi.su` repository, instead of a copy in each project's `CLAUDE.md` |
 | `claude/CLAUDE.md` | Claude Code | Claude-only: tool names, hooks, `Agent` deny, user-invoked commands |
 | `opencode/AGENTS.md` | OpenCode | OpenCode-only: MCP prefix, guard plugin, agents, denied skills |
 

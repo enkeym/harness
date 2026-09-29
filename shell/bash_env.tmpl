@@ -7,4 +7,6 @@
 # запрещено (security-guard: содержимое файла осталось бы в транскрипте) — он
 # пользуется переменной, не заглядывая внутрь. Файла или строки для хоста нет —
 # переменная выйдет пустой, и агент просто отдаст описание в чат.
-export GITLAB_TOKEN=$(sed -n 's|https://[^:]*:\([^@]*\)@git\.stormapi\.su.*|\1|p' ~/.git-credentials 2>/dev/null | head -1)
+__gitlab_host='{{HARNESS_GITLAB_HOST}}'
+export GITLAB_TOKEN=$(sed -n "s|https://[^:]*:\([^@]*\)@${__gitlab_host//./\\.}.*|\1|p" ~/.git-credentials 2>/dev/null | head -1)
+unset __gitlab_host

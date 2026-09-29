@@ -122,7 +122,7 @@ case ":$PATH:" in
 esac
 
 # pnpm
-export PNPM_HOME="/home/enkeym/.local/share/pnpm"
+export PNPM_HOME="{{HARNESS_PNPM_HOME}}"
 case ":$PATH:" in
   *":$PNPM_HOME/bin:"*) ;;
   *) export PATH="$PNPM_HOME/bin:$PATH" ;;

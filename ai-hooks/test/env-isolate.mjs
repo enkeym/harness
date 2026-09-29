@@ -17,5 +17,9 @@ process.env.AI_HOOKS_STATE_DIR = path.join(dir, 'state');
 // Сессия живого Claude Code, из которого запущен тест: иначе ask-mode.mjs
 // в тестах писал бы режим под её session_id, а не под ключ теста.
 delete process.env.CLAUDE_CODE_SESSION_ID;
+// Значения из harness.env, которые settings.json отдаёт сессии через `env`:
+// тесты рассчитаны на значения по умолчанию, а не на пути этой машины.
+delete process.env.HARNESS_USER_HOME;
+delete process.env.HARNESS_TOKENSAVE_BIN;
 
 export const ISOLATED_HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG;

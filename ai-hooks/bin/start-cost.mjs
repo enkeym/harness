@@ -19,6 +19,9 @@ import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 
 const ROOT = join(homedir(), '.claude', 'projects');
+// Каталог проекта в ~/.claude/projects — путь с / и . в виде -: префикс
+// домашнего каталога срезается, чтобы в таблице осталось имя проекта.
+const HOME_PREFIX = (process.env.HARNESS_USER_HOME || '/home/enkeym').replace(/[/.]/g, '-');
 const MIN_SIZE = Number(process.argv[2]) || 50_000;
 
 const tok = (s) => {
@@ -77,7 +80,7 @@ for (const proj of readdirSync(ROOT)) {
     const file = join(dir, f);
     if (statSync(file).size < MIN_SIZE) continue;
     const r = layers(file);
-    if (r) rows.push({ proj: proj.replace('-home-enkeym', '') || '/', ...r });
+    if (r) rows.push({ proj: proj.replace(HOME_PREFIX, '') || '/', ...r });
   }
 }
 rows.sort((a, b) => (a.proj + a.file).localeCompare(b.proj + b.file));

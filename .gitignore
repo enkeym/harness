@@ -25,3 +25,19 @@ skills/synced/
 # и скилле tokensave-routing, в постоянный контекст они не возвращаются
 claude/rules/tokensave.md
 opencode/tokensave.md
+
+# Локальные значения для шаблонов и отрендеренные из *.tmpl файлы: в них
+# личные пути и почта. Правится шаблон, значения — в harness.env.
+harness.env
+claude/settings.json
+claude/commands/ask.md
+claude/commands/ask-off.md
+skills/optimize/SKILL.md
+skills/doctor/SKILL.md
+skills/impact-map/SKILL.md
+skills/usage/SKILL.md
+git/gitconfig
+opencode/opencode.json
+opencode/plugin/tokensave-guard.js
+shell/bashrc
+shell/bash_env

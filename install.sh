@@ -5,9 +5,13 @@
 # Симлинки, а не копии: правка в рабочем каталоге сразу видна git'у, и не нужен
 # отдельный шаг «синхронизировать обратно» — именно он и разъезжается.
 #
-#   ./install.sh          создать/починить симлинки
+#   ./install.sh          отрендерить шаблоны, создать/починить симлинки
 #   ./install.sh --check  только отчёт, ничего не менять
 #   ./install.sh --venv   собрать venv для ragsave (~250 МБ) и поставить зависимости
+#
+# Машинно-зависимые файлы (settings.json, gitconfig, bashrc…) лежат в репозитории
+# шаблонами *.tmpl; значения — harness.env.example, свои — harness.env
+# (см. bin/render.mjs). Рендер идёт до симлинков: они ведут на готовые файлы.
 #
 # Идемпотентно: повторный запуск ничего не ломает. Реальный файл на месте
 # симлинка не удаляется, а уезжает в <имя>.bak-<дата>.
@@ -30,6 +34,7 @@ LINKS=(
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md"
   "$HOME/.claude/skills|skills"
   "$HOME/.claude/rules/core.md|rules/core.md"
+  "$HOME/.claude/rules/stormapi.md|rules/stormapi.md"
   "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.claude/settings.local.json|claude/settings.local.json"
@@ -43,6 +48,7 @@ LINKS=(
   "$HOME/.config/opencode/command|opencode/command"
   "$HOME/.config/opencode/skills|skills"
   "$HOME/.config/opencode/rules/core.md|rules/core.md"
+  "$HOME/.config/opencode/rules/stormapi.md|rules/stormapi.md"
   "$HOME/.config/opencode/plugin|opencode/plugin"
   "$HOME/.config/opencode/themes|opencode/themes"
   "$HOME/.config/opencode/opencode.json|opencode/opencode.json"
@@ -54,8 +60,24 @@ LINKS=(
   "$HOME/.tokensave/config.toml|tokensave/config.toml"
 )
 
+# Цели, которые эта машина держит своими (HARNESS_SKIP_LINKS в harness.env,
+# пути от $HOME через пробел): не проверяются и не трогаются.
+SKIP_LINKS=""
+command -v node >/dev/null && \
+  SKIP_LINKS="$(node "$HARNESS/bin/render.mjs" --root "$HARNESS" --get HARNESS_SKIP_LINKS 2>/dev/null)" || true
+
+skipped() {
+  local rel="${1#"$HOME"/}" s
+  for s in $SKIP_LINKS; do [ "$s" = "$rel" ] && return 0; done
+  return 1
+}
+
 check_one() {
   local target="$1" src="$HARNESS/$2"
+
+  if skipped "$target"; then
+    good "$target — пропущен (HARNESS_SKIP_LINKS)"; return
+  fi
 
   if [ ! -e "$src" ]; then
     bad "$target — нет источника $2 в репозитории"
@@ -81,6 +103,10 @@ check_one() {
 
 link_one() {
   local target="$1" src="$HARNESS/$2"
+
+  if skipped "$target"; then
+    good "$target — пропущен (HARNESS_SKIP_LINKS)"; return
+  fi
 
   if [ ! -e "$src" ]; then
     bad "$target — нет источника $2 в репозитории"
@@ -124,23 +150,39 @@ build_venv() {
   say "при первом запуске в $home/models."
 }
 
+# Шаблоны *.tmpl → рабочие файлы. Без node рендерить нечем: симлинки на
+# неотрендеренные файлы повиснут, это и будет видно в отчёте.
+render() {
+  say
+  say "Шаблоны (значения: harness.env поверх harness.env.example):"
+  if ! command -v node >/dev/null; then
+    bad "node не найден — шаблоны не отрендерить"; drift=$((drift + 1)); return
+  fi
+  if [ "${1:-}" = "--check" ]; then
+    node "$HARNESS/bin/render.mjs" --root "$HARNESS" --check || drift=$((drift + 1))
+  else
+    node "$HARNESS/bin/render.mjs" --root "$HARNESS" || missing=$((missing + 1))
+  fi
+}
+
 # Пути к хукам в settings.json и opencode.json записаны абсолютными: правила
 # permissions.allow сопоставляются буквально и $HOME в них не раскрывается.
-# Значит домашний каталог на новой машине обязан совпадать, иначе хуки просто
-# не запустятся, а отказов не будет — Claude Code молча пропустит несуществующую
-# команду. Ловим это здесь, а не через неделю по странному поведению.
+# Они рендерятся из HARNESS_USER_HOME, и если он не совпадает с $HOME, хуки
+# просто не запустятся, а отказов не будет — Claude Code молча пропустит
+# несуществующую команду. Ловим это здесь, а не через неделю по странному поведению.
 home_check() {
   local baked
-  # Путей нет — grep выходит с 1, и без `|| true` pipefail с set -e обрывали весь скрипт.
-  baked="$(grep -o '/home/[a-z_][a-z0-9_-]*/\.ai-hooks' "$HARNESS/claude/settings.json" | head -1 | sed 's#/\.ai-hooks##')" || true
+  command -v node >/dev/null || return 0
+  baked="$(node "$HARNESS/bin/render.mjs" --root "$HARNESS" --get HARNESS_USER_HOME 2>/dev/null)" || true
   [ -z "$baked" ] && return 0
   if [ "$baked" = "$HOME" ]; then
-    good "домашний каталог совпадает с зашитым в конфигах ($HOME)"
+    good "домашний каталог совпадает с HARNESS_USER_HOME ($HOME)"
     return 0
   fi
-  bad "домашний каталог не совпадает: в конфигах $baked, здесь $HOME"
-  warn "хуки не запустятся. Заменить пути во всём репозитории:"
-  warn "  grep -rl '$baked' --exclude-dir=.git . | xargs sed -i 's#$baked#$HOME#g'"
+  bad "домашний каталог не совпадает: HARNESS_USER_HOME=$baked, здесь $HOME"
+  warn "хуки не запустятся. Задать в $HARNESS/harness.env:"
+  warn "  HARNESS_USER_HOME=$HOME"
+  warn "и повторить ./install.sh"
   drift=$((drift + 1))
 }
 
@@ -187,6 +229,8 @@ externals() {
 
 case "$MODE" in
   --check)
+    render --check
+    say
     say "Проверка симлинков харнеса ($HARNESS):"
     for pair in "${LINKS[@]}"; do check_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync --check
@@ -199,6 +243,8 @@ case "$MODE" in
     build_venv
     ;;
   install)
+    render
+    say
     say "Раскатка харнеса из $HARNESS:"
     for pair in "${LINKS[@]}"; do link_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync
@@ -206,7 +252,8 @@ case "$MODE" in
     say
     say "на месте: $ok, создано/починено: $fixed, нет источника: $missing"
     say
-    say "Дальше: ./install.sh --venv. MCP-серверы правятся в mcp/servers.json."
+    say "Дальше: ./install.sh --venv. MCP-серверы правятся в mcp/servers.json,"
+    say "машинные значения — в harness.env (образец: harness.env.example)."
     ;;
   *)
     say "Использование: ./install.sh [--check|--venv]"

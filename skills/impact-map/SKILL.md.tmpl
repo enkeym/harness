@@ -2,7 +2,7 @@
 name: impact-map
 description: "Creates the first implicit-links map in a project indexed by tokensave or ragsave — picks docs/links/ or .claude/links/ by repository authorship, writes the INDEX.md skeleton, runs seed-impact-map.mjs in the background for the deterministic candidate list (events, cache and storage keys, feature flags, cron and webhook entry points, migration folders) plus rag_search for cross-boundary contracts, writes one file per domain with `paths:` frontmatter, and validates every path:symbol and glob with check-impact-map.mjs. A project that already has a map only gets the checker run, or with --reseed a printed list of candidates the map lacks; a project with neither .tokensave/ nor .ragsave/rag.db gets no map. User-invoked as /impact-map."
 disable-model-invocation: true
-allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/init-impact-map.mjs:*), Bash(node /home/enkeym/.ai-hooks/bin/seed-impact-map.mjs:*), Bash(node /home/enkeym/.ai-hooks/bin/check-impact-map.mjs:*), Read, Write, mcp__tokensave__tokensave_search, mcp__ragsave__rag_search
+allowed-tools: Bash(node {{HARNESS_USER_HOME}}/.ai-hooks/bin/init-impact-map.mjs:*), Bash(node {{HARNESS_USER_HOME}}/.ai-hooks/bin/seed-impact-map.mjs:*), Bash(node {{HARNESS_USER_HOME}}/.ai-hooks/bin/check-impact-map.mjs:*), Read, Write, mcp__tokensave__tokensave_search, mcp__ragsave__rag_search
 argument-hint: "[project path] [--reseed]"
 ---
 

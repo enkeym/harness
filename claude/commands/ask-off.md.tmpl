@@ -1,9 +1,9 @@
 ---
 description: Выключить ask mode на эту сессию — вернуть правки файлов
-allowed-tools: Bash(node /home/enkeym/.ai-hooks/bin/ask-mode.mjs:*)
+allowed-tools: Bash(node {{HARNESS_USER_HOME}}/.ai-hooks/bin/ask-mode.mjs:*)
 ---
 
-!`node /home/enkeym/.ai-hooks/bin/ask-mode.mjs off`
+!`node {{HARNESS_USER_HOME}}/.ai-hooks/bin/ask-mode.mjs off`
 
 Ask mode выключен для этой сессии — правки снова разрешены.
 Новая сессия стартует в режиме по умолчанию (`ask-mode.mjs default`); включить

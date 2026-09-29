@@ -38,7 +38,7 @@ case "$kind" in
       exit 1
     }
     cd "$root" || exit 1
-    exec "${AI_HOOKS_TOKENSAVE_CMD:-/usr/local/bin/tokensave}" serve -p "$root"  # переменная — подмена в тестах
+    exec "${AI_HOOKS_TOKENSAVE_CMD:-${HARNESS_TOKENSAVE_BIN:-/usr/local/bin/tokensave}}" serve -p "$root"  # AI_HOOKS_* — подмена в тестах, HARNESS_* — из settings.json (harness.env)
     ;;
   ragsave)
     root="$(find_root .ragsave/rag.db)" || {
