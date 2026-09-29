@@ -8,27 +8,41 @@ the fence. Nothing before or after it but the header line and the menu.
 
 ~~~
 ````markdown
-# Ревью: <режим из строки-заголовка>
+**Ревью: <режим из строки-заголовка>**
 
-## Critical
+🔴 **Critical**
+
 <блоки находок>
-## Important
+
+🟠 **Important**
+
 <блоки находок>
-## Minor
+
+🟡 **Minor**
+
 <список>
-## Итог
+
+**Итог**
+
 <сводка>
 ````
 ~~~
 
-A severity with no findings — its heading is dropped.
+A severity with no findings — its title line is dropped.
+
+Markup inside the fence is limited to what both Telegram and GitLab render —
+the user pastes the same text into either: `**bold**`, inline code, ` ``` `
+fences with a language, plain `-` and `1.` lists, emoji. No `#` headings,
+`>` quotes, `---` rules, tables, markdown links, `*`/`_` italics —
+Telegram shows them as raw characters. Identifiers, paths and anything with
+`_` or `*` always in backticks: bare `__init__` turns italic in Telegram.
 
 ## Finding
 
 One block per finding, Critical and Important:
 
 ~~~
-### <N>. <Critical | Important | Minor> — <суть в 3–6 словах>
+**<N>. <суть в 3–6 словах>**
 `<path>:<line>`
 
 **Проблема.** <что не так и почему: вход или состояние → что сломается, кого
@@ -50,11 +64,11 @@ One block per finding, Critical and Important:
 ```
 
 **Комментарий в MR:**
-> <1–3 предложения: проблема и последствие, без оценок автора>
-> Как воспроизвести: <шаги одной строкой>
-> ```suggestion:-<строк выше>+<строк ниже>
-> <готовая замена>
-> ```
+<1–3 предложения: проблема и последствие, без оценок автора>
+Как воспроизвести: <шаги одной строкой>
+```suggestion:-<строк выше>+<строк ниже>
+<готовая замена>
+```
 ~~~
 
 - Manual check: steps the user runs as written on a local or dev stand, never
@@ -69,7 +83,9 @@ One block per finding, Critical and Important:
   remote → plain ` ```suggestion `. Otherwise a plain code block.
 - MR comment text: neutral, addressed to the change, not the person; no
   mention of AI, a model or a tool — it goes out under the user's name.
-  `Как воспроизвести` only when the manual check fits one line.
+  `Как воспроизвести` only when the manual check fits one line. Plain lines,
+  no `>` prefix — copied into GitLab as is, from the line after the label to
+  the end of the finding.
 - Minor findings: one list item each, no code blocks, the path in backticks —
   `- <N>. <path>:<line> — проблема — проверка — комментарий`.
 

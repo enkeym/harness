@@ -111,7 +111,8 @@ payments, upload, webhooks, outbound calls, config first; report per module.
 ## 3. Report and menu
 
 The report is one ````` ````markdown ````` block — the user copies raw
-markdown out of the terminal, which renders anything outside a fence. Inside:
+markdown out of the terminal, which renders anything outside a fence, and
+pastes it into GitLab or Telegram, so only markup both render. Inside:
 findings numbered, Critical → Important → Minor, merged across both skills
 (one finding per defect, not per skill). Each finding — problem, manual check
 steps, current code, fix, MR comment — in the shape and by the rules of
