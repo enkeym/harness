@@ -7,6 +7,9 @@ a project's own `CLAUDE.md` still wins where it says otherwise.
 ## Branches
 
 - Ticket: `STR-XXX`, from the branch name or the user; never invented.
+- A change outside the current branch's ticket never goes into that branch,
+  not even as a one-liner — the branch name is not its ticket. Ask the user for
+  the ticket, then cut its own branch from `dev`.
 - A task branch is `feature/STR-XXX`, always cut from a fresh `dev`, never from
   the current or another feature branch — its commits would land in the MR:
 
