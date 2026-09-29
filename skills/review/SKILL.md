@@ -113,10 +113,10 @@ payments, upload, webhooks, outbound calls, config first; report per module.
 The report goes to chat as plain markdown: findings numbered, Critical →
 Important → Minor, merged across both skills (one finding per defect, not per
 skill), each with problem, manual check steps, current code and fix; then the
-summary. After it, one ````` ````markdown ````` copy block with the MR
-comments only — the user copies raw markdown out of the terminal, which
-renders anything outside a fence, and pastes it into GitLab or Telegram, so
-only markup both render. Shapes and rules:
+summary. After it, the MR comments only, one ````` ````markdown ````` copy
+block per comment — the user copies raw markdown out of the terminal, which
+renders anything outside a fence, and pastes each into its GitLab line or
+Telegram, so only markup both render. Shapes and rules:
 [reference/report.md](reference/report.md); read it before the first finding.
 The same file holds the closing menu: one `AskUserQuestion` after the copy
-block, none when nothing was found.
+blocks, none when nothing was found.

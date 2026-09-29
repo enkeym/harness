@@ -3,8 +3,8 @@
 ## Report
 
 Three parts in this order, nothing before, between or after them: the report
-in plain chat markdown — for reading, the terminal renders it; the copy block;
-the menu. No preamble on what was run — that goes to the summary.
+in plain chat markdown — for reading, the terminal renders it; the copy
+blocks; the menu. No preamble on what was run — that goes to the summary.
 
 ~~~
 **Ревью: <режим из строки-заголовка>**
@@ -28,39 +28,41 @@ the menu. No preamble on what was run — that goes to the summary.
 
 A severity with no findings — its title line is dropped.
 
-## Copy block
+## Copy blocks
 
 The MR comments and nothing else — no header, severity titles, verdict,
-checked or not-checked lines: the user pastes it into Telegram whole and into
-GitLab comment by comment. One fence of four backticks, so the inner
-` ``` ` blocks stay inside it; every finding, Minor included, in number order:
+checked or not-checked lines. One fence per comment, so each is copied whole
+into its GitLab line or a Telegram message; every finding, Minor included, in
+number order. The anchor line sits above the fence, never inside it; four
+backticks keep the inner ` ``` ` blocks inside:
 
 ~~~
+**<N>.** `<path>:<line>`
 ````markdown
-<N>. `<path>:<line>`
 <1–3 предложения: проблема и последствие, без оценок автора>
 Как воспроизвести: <шаги одной строкой>
 ```suggestion:-<строк выше>+<строк ниже>
 <готовая замена>
 ```
+````
 
-<N>. `<path>:<line>`
+**<N>.** `<path>:<line>`
+````markdown
 <…>
 ````
 ~~~
 
-- The `<N>. <path>:<line>` line is the anchor: the GitLab comment is the
-  text from the line after it to the next anchor. Plain lines, no `>` prefix.
+- Plain lines inside, no `>` prefix; the fence holds exactly the comment text.
 - Text: neutral, addressed to the change, not the person; no mention of AI, a
   model or a tool — it goes out under the user's name. `Как воспроизвести`
   only when the manual check fits one line.
 - `suggestion` only when the replacement sits on lines of the diff; GitHub
   remote → plain ` ```suggestion `. Otherwise a plain code block; a fix
   spanning several files or a design choice → no code block.
-- Markup only what both Telegram and GitLab render: `**bold**`, inline code,
-  ` ``` ` fences with a language, plain `-` and `1.` lists, emoji. No `#`
-  headings, `>` quotes, `---` rules, tables, markdown links, `*`/`_` italics —
-  Telegram shows them as raw characters. Identifiers, paths and anything with
+- Markup inside a fence only what both Telegram and GitLab render:
+  `**bold**`, inline code, ` ``` ` fences with a language, plain `-` and `1.`
+  lists, emoji. No `#` headings, `>` quotes, `---` rules, tables, markdown
+  links, `*`/`_` italics — Telegram shows them as raw characters. Identifiers, paths and anything with
   `_` or `*` always in backticks: bare `__init__` turns italic in Telegram.
 
 ## Finding
@@ -97,7 +99,7 @@ One block per finding, Critical and Important:
   expected output. "Убедитесь, что …" without the how is not a step.
 - The fix covers every line it changes; a fix spanning several files or a
   design choice → code of the key part plus one line on the rest.
-- The MR comment is not repeated here — it lives in the copy block only.
+- The MR comment is not repeated here — it lives in the copy blocks only.
 - Minor findings: one list item each, no code blocks, the path in backticks —
   `- <N>. <path>:<line> — проблема — проверка`.
 
@@ -109,12 +111,12 @@ One block per finding, Critical and Important:
 - **Не проверено:** <что и почему — тесты не запускались, нужен контекст задачи>
 ~~~
 
-Empty section = "нет". Nothing found → the summary only, no copy block, no
-menu.
+Empty section = "нет". Nothing found → the summary only, no copy blocks,
+no menu.
 
 ## Menu
 
-One `AskUserQuestion` / `question` call after the copy block, recommended first:
+One `AskUserQuestion` / `question` call after the copy blocks, recommended first:
 
 ```
 Что делаем с находками?
