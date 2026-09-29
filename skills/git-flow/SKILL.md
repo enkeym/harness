@@ -115,9 +115,17 @@ Print the block ready to paste, no commentary around it. Jira has no API here.
 
 ### Opening the MR in GitLab
 
-Only when step 1 allows delivery. Token: `$GITLAB_TOKEN` only. Never print
-it, never read `~/.git-credentials`. Not set → say so in one line, print the
-block, stop.
+Only when step 1 allows delivery. `glab` first — its token sits in the OS
+keyring, so an unset `$GITLAB_TOKEN` is no reason to stop:
+
+1. `glab auth status --hostname <host>` ok → `glab mr list --source-branch
+   <branch>`; open MR → `glab mr update <iid> --description …`; none →
+   `glab mr create --source-branch <branch> --target-branch <base> --title …
+   --description … --yes`.
+2. `glab` missing or not logged in to `<host>` → the API below with
+   `$GITLAB_TOKEN`. Never print a token, never read `~/.git-credentials` or
+   the `glab` config. Neither available → say so in one line, print the
+   block, stop.
 
 Host and project from `git remote get-url origin`: `https://<host>/<group>/<repo>.git`
 → API host `<host>`, project id `<group>%2F<repo>` (SSH form `git@<host>:<group>/<repo>.git`
