@@ -284,9 +284,26 @@ const GREP_ARG_SHORT = 'efmABCdD';
 const FILE_OPERAND_RE = /(^|\/)[^/.][^/]*\.[^/]+$/;
 const REDIRECT_RE = /^\d*[<>]/;
 
+// Имена, на которых пробуем шаблон `--include`: `--include=*` и `--include=.env*`
+// пускают grep в `.env` так же, как отсутствие шаблона.
+const ENV_SAMPLES = ['.env', '.env.local', '.env.production', '.envrc'];
+
+function includeHitsEnv(glob) {
+  const g = glob.replace(/^(['"])(.*)\1$/, '$2');
+  // fnmatch по имени файла: `*` берёт и ведущую точку, классы `[…]` — как есть.
+  const src = g.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+  try {
+    const re = new RegExp(`^${src}$`);
+    return ENV_SAMPLES.some((s) => re.test(s));
+  } catch {
+    return true;
+  }
+}
+
 function grepWithoutInclude(toks) {
   const args = toks.slice(commandIndex(toks) + 1);
   let recursive = false;
+  const includes = [];
   // Шаблон задан через -e/-f — тогда первый операнд уже путь, а не шаблон.
   let patternOpt = false;
   const operands = [];
@@ -296,7 +313,14 @@ function grepWithoutInclude(toks) {
       operands.push(...args.slice(i + 1));
       break;
     }
-    if (t === '--include' || t.startsWith('--include=')) return false;
+    if (t === '--include') {
+      includes.push(args[++i] ?? '');
+      continue;
+    }
+    if (t.startsWith('--include=')) {
+      includes.push(t.slice('--include='.length));
+      continue;
+    }
     if (t === '--recursive' || t === '--dereference-recursive') recursive = true;
     else if (/^--(regexp|file)=/.test(t)) patternOpt = true;
     else if (t === '--regexp' || t === '--file') {
@@ -317,6 +341,7 @@ function grepWithoutInclude(toks) {
     } else if (!t.startsWith('--')) operands.push(t);
   }
   if (!recursive) return false;
+  if (includes.length) return includes.some(includeHitsEnv);
   const paths = patternOpt ? operands : operands.slice(1);
   return !(paths.length && paths.every((p) => FILE_OPERAND_RE.test(p)));
 }
@@ -491,7 +516,7 @@ export function guardBashSecurity(command, depth = 0) {
     if (GREP_CMDS.has(cmd) && grepWithoutInclude(toks)) {
       return {
         level: DENY,
-        reason: 'рекурсивный grep без `--include` читает и `.env` в дереве. ' +
+        reason: 'рекурсивный grep без `--include` на расширения кода читает и `.env` в дереве. ' +
           'Символ в индексированном проекте ищет `tokensave_search`; доки, конфиги, yml, ' +
           'инфраструктуру — `rag_search`; вне индексов укажи файлы: `--include=*.ts` (можно несколько).',
       };

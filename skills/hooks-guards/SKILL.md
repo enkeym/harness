@@ -15,7 +15,7 @@ fired and what it wants instead.
   `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
   `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, a `Grep` glob (`.env*`), a symlink to
   one, the browser (`file://`, `browser_file_upload`), a recursive `grep` without
-  `--include` over a directory (files like `*.mjs` pass) — it reads `.env`; in an indexed project
+  `--include`, or with one `.env` matches (`*`, `.*`), over a directory (files like `*.mjs` pass) — it reads `.env`; in an indexed project
   look the symbol up with `tokensave_search`, docs, configs and yml with `rag_search`,
   elsewhere add `--include=*.ts`. Take a
   variable's shape from `.env.example`, its value from the user.
