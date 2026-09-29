@@ -10,7 +10,7 @@ argument-hint: "[branch | !MR-iid | path | audit <area>] [focus, in your own wor
 
 Report first, edit never — until the user picks fixes in the closing menu.
 The checks are `review-standards` and `review-security`; this skill replaces
-their step 1 (scope), step 6 (triage with edits) and their Output sections.
+their step 1 (scope), their triage step (edits) and their Output sections.
 
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —

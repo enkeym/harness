@@ -31,7 +31,7 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 5. High stakes (auth, sessions, payments, secrets/config, upload, outbound
    HTTP, docker, CI) → read the whole handler/module, every caller, and write
    the attack scenario tried per item before calling it clean.
-6. Critical blocks the commit. Triage as in `review-standards` step 6:
+6. Critical blocks the commit. Triage as in `review-standards` step 7:
    certain fix inside the diff → applied; a fix with a choice, a behaviour
    change or outside the diff → `AskUserQuestion`. Info: one line.
 

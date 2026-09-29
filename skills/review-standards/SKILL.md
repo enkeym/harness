@@ -13,11 +13,32 @@ are run, not re-done by hand; a finding is what they cannot see.
 1. Read the whole diff before judging a line. Uncommitted: `git diff HEAD` +
    `git status --short`. Branch: `git diff <base>...HEAD`.
 2. Verify by search, never by eye: a literal → search the value in the project;
-   a new type → search its fields; a new helper, hook or component → the reuse
-   order of `code-rules.md` (project, installed packages, then a library
-   proposal); a new dependency → was an installed one enough.
-   Tests in the diff: do they assert behaviour or the mock? Run when in doubt.
-3. Impact pass on **every** symbol whose behaviour the diff changes, not only
+   a new type → search its fields; a new dependency → was an installed one
+   enough. Tests in the diff: do they assert behaviour or the mock? Run when
+   in doubt.
+3. Reuse pass on every added block, not only on new symbols — a hand-rolled
+   loop inside an old function duplicates as much as a new helper does:
+   - Name what the block does as a verb phrase ("format a price", "fetch a
+     list with paging", "confirm before delete") and run the reuse order of
+     `code-rules.md` on it: `tokensave_search` by the verb, `tokensave_similar`
+     on each new symbol, `rag_search` by the phrase, then the installed
+     `dependencies`.
+   - Find the nearest analogue — a sibling module, page or service doing the
+     same job — and compare its building blocks with the diff's: the diff uses
+     the same components, hooks, helpers and library calls, not its own.
+   - Hand-rolled where the project already has a tool: `fetch` + `useState`/
+     `useEffect` beside a query client; raw `<button>`/`<input>`/modal/table
+     markup beside a UI kit or shared component; manual date, number or
+     currency formatting, deep clone, debounce, class-name joining; `if`-chain
+     validation beside `zod`/`class-validator`; per-handler `try/catch`
+     mapping beside an exception filter or error boundary; paging, sorting or
+     query-string parsing beside a shared helper.
+   - The diff copying itself: two added blocks differing only in values → one
+     function or a parameterised component.
+   - Hit is an exact fit → replace it in the diff. Hit needs a new parameter
+     or lives outside the diff, or the fix is a new library → a doubtful
+     finding for step 7.
+4. Impact pass on **every** symbol whose behaviour the diff changes, not only
    on changed signatures — a caller compiles fine against a function that now
    returns filtered data. `tokensave_impact` / `callers` / literal `search`, plus
    the project's [../shared/impact-map.md](../shared/impact-map.md) for links
@@ -25,12 +46,12 @@ are run, not re-done by hand; a finding is what they cannot see.
    saying why), fixed in this diff, or covered by a test that fails on the old
    behaviour. A link the map lacks → add its line in this commit. No graph
    (`.tokensave/` missing or stale) → grep the symbol name, say so in one line.
-4. Regression pass: `git log -L <start>,<end>:<file>` (or `tokensave_blame`)
+5. Regression pass: `git log -L <start>,<end>:<file>` (or `tokensave_blame`)
    on each removed or rewritten hunk. A line an earlier fix commit added, now
    gone or reverted → the old bug is back unless the diff replaces the guard.
-5. Depth pass: the *Correctness and design* section below on every changed
+6. Depth pass: the *Correctness and design* section below on every changed
    symbol and the code it now depends on.
-6. Triage every finding:
+7. Triage every finding:
    - Certain, one obvious fix, inside the diff, no change to a public contract
      → fix it, one line in chat.
    - Doubtful — several valid fixes, a behaviour or API change, a new
@@ -38,7 +59,7 @@ are run, not re-done by hand; a finding is what they cannot see.
      `AskUserQuestion`, one question per finding (≤4 per call), options are
      concrete fixes with the recommended first, plus leaving it as is.
    - Nothing found → no edit, one line saying the diff is clean.
-7. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
+8. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
    output. Red = no commit.
 
 ## Checklist
@@ -70,7 +91,7 @@ structural rules and:
 
 **Not a finding:** formatting, import order, anything the project's linter or
 formatter own;
-taste without consequence; refactor beyond the task (offered in step 6, never
+taste without consequence; refactor beyond the task (offered in step 7, never
 applied unasked);
 "could be more generic" with no need yet.
 
@@ -86,7 +107,8 @@ Spec: ✅ | ❌ — <what is missing / extra>
 Quality: approved | changes requested
 
 Critical:  <breaks behaviour, data or a caller — path:line — why — fix>
-Important: <edge-case bug, broken caller, a test that tests nothing>
+Important: <edge-case bug, broken caller, a test that tests nothing,
+            a re-implementation of existing code — path:line — reuse <symbol/package>>
 Minor:     <one line each>
 ⚠️ Cannot verify from diff: <requirement — where to look>
 ```
