@@ -11,8 +11,13 @@ are run, not re-done by hand; a finding is what they cannot see.
 ## Procedure
 
 1. Read the whole diff before judging a line. Uncommitted: `git diff HEAD` +
-   `git status --short`. Branch: `git diff <base>...HEAD`.
-2. Verify by search, never by eye: a literal → search the value in the project;
+   `git status --short`, and every untracked file read whole — `git diff`
+   does not show it. Branch: `git diff <base>...HEAD`.
+2. Name the task (the user's request, the ticket, the commit subjects) and
+   hold the diff against it: a requirement missing, a change nobody asked
+   for. Load the stack skill of every touched area (`rules/core.md` Skills
+   table) — its structural rules are part of the checklist.
+   Verify by search, never by eye: a literal → search the value in the project;
    a new type → search its fields; a new dependency → was an installed one
    enough. Tests in the diff: do they assert behaviour or the mock? Run when
    in doubt.
@@ -59,6 +64,7 @@ are run, not re-done by hand; a finding is what they cannot see.
      `AskUserQuestion`, one question per finding (≤4 per call), options are
      concrete fixes with the recommended first, plus leaving it as is.
    - Nothing found → no edit, one line saying the diff is clean.
+   - Lines changed by a fix go through steps 3–4 again before step 8.
 8. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
    output. Red = no commit.
 
@@ -84,6 +90,12 @@ structural rules and:
   loop, independent awaits in sequence, the same work repeated per call or
   render, an unbounded set loaded or rendered whole. Micro-gains are not
   findings.
+
+**Tests and docs**
+- Changed behaviour with no test that fails on the old code → Important;
+  how to write it: `test-conventions`.
+- A changed command, env variable, endpoint, config key or hook behaviour →
+  the README, `.env.example` or doc describing it changes in the same diff.
 
 **Leftovers**
 - No `console.log`, debug flags, commented code, ownerless `TODO`, unused

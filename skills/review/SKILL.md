@@ -86,8 +86,9 @@ payments, upload, webhooks, outbound calls, config first; report per module.
 1. Load `review-standards`, `review-security`, the stack skill for every
    touched area (`rules/core.md` Skills table), `test-conventions` when the
    scope has tests.
-2. Run both procedures through their checklists, steps 2–5: verification,
-   impact, regression, depth, secrets, missing controls. Every finding
+2. Run both procedures through their checklists, every step between scope
+   and triage: verification, reuse, impact, regression, depth, secrets,
+   missing controls. Every finding
    verified by search or by reading the caller — a guess is not reported.
 3. Code outside the scope is read only to settle a suspicion about a changed
    line — its caller, its guard, the sibling it must match. A fact one lookup
