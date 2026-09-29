@@ -140,6 +140,10 @@ check('grep -rn: файл и каталог', bash('grep -rn foo src/app.ts src'
 check('grep -r -e по каталогу', bash('grep -r -e foo .'), 'deny');
 check('grep -rn по переменной', bash('grep -rn foo "$dir"'), 'deny');
 check('grep -rn по .env как файлу', bash('grep -rn KEY .env'), 'deny');
+check('флаг -r из <(…) не делает grep рекурсивным',
+  bash("jq -c . /tmp/s.jsonl | grep -F -f <(jq -r '.id' /tmp/tu.txt)"), 'allow');
+check('grep -rn по каталогу из $(…)', bash('grep -rn foo $(ls -d src)'), 'deny');
+check('.env внутри <(…) у grep -f', bash('grep -F -f <(cat .env) src/app.ts'), 'deny');
 
 // --- вывод окружения: секрет приходит не из файла
 check('printenv', bash('printenv'), 'ask');

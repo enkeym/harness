@@ -139,8 +139,24 @@ export function segments(command, { keepHeredoc = false } = {}) {
   return out;
 }
 
+// Подстановка `$(…)`, `<(…)`, `>(…)` — одно слово, как и в shell: её тело
+// разбирает segments отдельным сегментом, а здесь флаги из него не должны
+// достаться внешней команде (`grep -f <(jq -r …)` — это не `grep -r`).
+// Скобки считаются только вне кавычек: `$(echo ")")` закрыта один раз.
 export function tokenize(seg) {
-  return [...String(seg).matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+  const out = [];
+  let depth = 0;
+  for (const m of String(seg).matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) {
+    const t = m[1] ?? m[2] ?? m[3];
+    const bare = m[3] ?? '';
+    const inside = depth > 0;
+    if (inside) out[out.length - 1] += ' ' + t;
+    else out.push(t);
+    if (inside || /[$<>]\(/.test(bare)) {
+      depth = Math.max(0, depth + (bare.match(/\(/g) || []).length - (bare.match(/\)/g) || []).length);
+    }
+  }
+  return out;
 }
 
 // Слова shell, после которых идёт команда: `then cat .env`, `do cat .env`,
