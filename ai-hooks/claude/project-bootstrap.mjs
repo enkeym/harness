@@ -48,7 +48,7 @@ function remoteUrl(root) {
 
 const exists = (...p) => fs.existsSync(path.join(...p));
 
-const ENV_EXAMPLE = /^\.env.*\.example$/;
+const ENV_EXAMPLE = /^\.(env.*\.example|example\.env.*)$/;
 const ENV_FILE = /^\.env(\..+)?$/;
 
 // Не workspaces: каталоги с собственным package.json держат свои .env.

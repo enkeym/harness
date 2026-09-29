@@ -60,8 +60,8 @@ fs.writeFileSync(path.join(pkg, 'package.json'), '{}');
 fs.writeFileSync(path.join(pkg, '.env'), 'A=1\n');
 check('.env в подпакете без примера — пропуск', /server/.test(run(repo) || ''));
 
-fs.writeFileSync(path.join(pkg, '.env.example'), 'A=\n');
-check('всё на месте: хук молчит', run(repo) === null);
+fs.writeFileSync(path.join(pkg, '.example.env'), 'A=\n');
+check('пример .example.env засчитан: хук молчит', run(repo) === null);
 
 // Осознанный отказ: удалённый CLAUDE.md не должен напоминать о себе вечно.
 fs.rmSync(path.join(repo, 'CLAUDE.md'));
