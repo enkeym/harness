@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { segments, tokenize, commandName } from './shell-core.mjs';
+import { segments, tokenize, commandName, quoteEnd } from './shell-core.mjs';
 import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -126,7 +126,15 @@ function anyFile(text, cwd) {
 // становилось следующее слово: `> "/tmp/x.log" 2>&1` — «файл `2`».
 function redirectTarget(seg, cwd) {
   const quoted = [];
-  const bare = seg.split('\n')[0].replace(/"([^"]*)"|'([^']*)'/g, (_, d, s) => `\0${quoted.push(d ?? s) - 1}\0`);
+  const line = seg.split('\n')[0];
+  let bare = '';
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\\') { bare += line.slice(i, i + 2); i++; continue; }
+    if (line[i] !== '"' && line[i] !== "'") { bare += line[i]; continue; }
+    const end = quoteEnd(line, i);
+    bare += `\0${quoted.push(line.slice(i + 1, end)) - 1}\0`;
+    i = end;
+  }
   const m = bare.match(/(?:^|[^=\-<>])>>?\s*(\0\d+\0|[\w@.\-/\\]+)/);
   if (!m) return null;
   // Цель в кавычках судим как без них: `> "$OUT"` вычисляется, как и `> $OUT`.

@@ -124,6 +124,11 @@ bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
 bash('путь в кавычках в /tmp и 2>&1 → allow', 'allow', 'node t.mjs > "/tmp/t-$f.log" 2>&1', '/tmp');
 bash('перенаправление в исходник в кавычках → deny', 'deny', 'echo x > "client/src/App.tsx"');
 bash('`>` внутри строки в кавычках → allow', 'allow', `echo "a > b" | wc -l`);
+bash('`"` в кавычках подстановки внутри "…" не закрывает строку → allow', 'allow',
+  `echo "$(jq -r 'select(.a=="<x>/src</x>")' f)"`);
+bash('перенаправление после такой строки → deny', 'deny',
+  `echo "$(jq -r '.a=="b"' f)" > client/src/App.tsx`);
+bash('экранированная `\\"` строку не открывает → deny', 'deny', 'echo \\"a > client/src/App.tsx');
 bash('tee в исходник → deny', 'deny', 'echo x | tee client/src/App.tsx');
 bash('`=>` в строке — не перенаправление → allow', 'allow', `git log --format='%h => %s'`);
 

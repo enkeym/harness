@@ -139,6 +139,33 @@ export function segments(command, { keepHeredoc = false } = {}) {
   return out;
 }
 
+// Конец строки в кавычках с позиции открывающей кавычки. Внутри двойных `$(…)` —
+// своя команда со своими кавычками: в `"$(jq '.a=="b"' f)"` строку закрывает
+// только последняя `"`. Незакрытая строка тянется до конца текста.
+export function quoteEnd(text, open) {
+  const q = text[open];
+  for (let j = open + 1; j < text.length; j++) {
+    if (q === "'") { if (text[j] === "'") return j; continue; }
+    if (text[j] === '\\') { j++; continue; }
+    if (text[j] === '$' && text[j + 1] === '(') { j = parenEnd(text, j + 1); continue; }
+    if (text[j] === '"') return j;
+  }
+  return text.length;
+}
+
+// Закрывающая скобка подстановки с позиции открывающей; скобки в кавычках не
+// считаются.
+function parenEnd(text, open) {
+  let depth = 0;
+  for (let j = open; j < text.length; j++) {
+    const c = text[j];
+    if (c === "'" || c === '"') j = quoteEnd(text, j);
+    else if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return j;
+  }
+  return text.length;
+}
+
 // Подстановка `$(…)`, `<(…)`, `>(…)` — одно слово, как и в shell: её тело
 // разбирает segments отдельным сегментом, а здесь флаги из него не должны
 // достаться внешней команде (`grep -f <(jq -r …)` — это не `grep -r`).
