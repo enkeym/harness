@@ -139,7 +139,7 @@ function grep(query) {
 }
 
 function searchOnce(query, scope) {
-  const args = { query, literal: true, limit: LIMIT, path_exclude: PATH_EXCLUDE };
+  const args = { query, literal: true, format: 'json', limit: LIMIT, path_exclude: PATH_EXCLUDE };
   if (scope) args.path_include = [scope];
   let raw;
   try {
