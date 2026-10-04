@@ -1,7 +1,7 @@
 # Project facts — resolved, never assumed
 
-Read by `git-flow`, `test-coverage`, `test-conventions` and `test-browser` before the first
-step that needs a fact below. Order of authority is in `rules/core.md`
+Read by `git-flow`, `review-standards`, `test-coverage`, `test-conventions` and
+`test-browser` before the first step that needs a fact below. Order of authority is in `rules/core.md`
 (*Project facts outrank skills*): memory and the project's rules file first,
 then the repository, then a skill default. Resolve once per session; state
 each fact used in one line (`База: dev (форк 1 коммит назад)`) so a wrong one
@@ -22,6 +22,7 @@ is caught before it is acted on.
 | Browser QA allowed | Memory/rules file; silent → only on `/test-browser` |
 | Test runner, scripts | `package.json` of the touched package (`scripts`, `devDependencies`): `jest` / `vitest` / `@playwright/test` |
 | Playwright setup | The package's `playwright.config.*`: `testDir`, `webServer`, `workers`, projects |
+| Style file | Memory; the `CLAUDE.md`/`AGENTS.md` of the repo and the touched package, plus every file they import (`@path`) or name as rules; `.claude/rules/`, `rules/`, `.cursor/rules/`, `.cursorrules`, `CONTRIBUTING.md`; `docs/` on style, conventions or architecture (`fsd.md`). All that apply, not the first hit |
 | Language of MR/Jira text | Memory/rules file; silent → the language of recent MR titles, else Russian |
 
 ## Base branch

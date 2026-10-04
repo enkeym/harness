@@ -42,7 +42,7 @@ are run, not re-done by hand; a finding is what they cannot see.
      function or a parameterised component.
    - Hit is an exact fit → replace it in the diff. Hit needs a new parameter
      or lives outside the diff, or the fix is a new library → a doubtful
-     finding for step 7.
+     finding for step 8.
 4. Impact pass on **every** symbol whose behaviour the diff changes, not only
    on changed signatures — a caller compiles fine against a function that now
    returns filtered data. `tokensave_impact` / `callers` / literal `search`, plus
@@ -56,7 +56,12 @@ are run, not re-done by hand; a finding is what they cannot see.
    gone or reverted → the old bug is back unless the diff replaces the guard.
 6. Depth pass: the *Correctness and design* section below on every changed
    symbol and the code it now depends on.
-7. Triage every finding:
+7. Project style pass, after every check above: resolve the style file (*Style
+   file* row of [../shared/project-facts.md](../shared/project-facts.md)), read
+   it whole and hold the diff against each of its rules in turn. It outranks
+   `code-rules.md`; a rule its linter does not enforce is a finding even on
+   formatting or imports. No style file → one line saying so.
+8. Triage every finding:
    - Certain, one obvious fix, inside the diff, no change to a public contract
      → fix it, one line in chat.
    - Doubtful — several valid fixes, a behaviour or API change, a new
@@ -64,8 +69,8 @@ are run, not re-done by hand; a finding is what they cannot see.
      `AskUserQuestion`, one question per finding (≤4 per call), options are
      concrete fixes with the recommended first, plus leaving it as is.
    - Nothing found → no edit, one line saying the diff is clean.
-   - Lines changed by a fix go through steps 3–4 again before step 8.
-8. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
+   - Lines changed by a fix go through steps 3–4 and 7 again before step 9.
+9. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
    output. Red = no commit.
 
 ## Checklist
@@ -102,8 +107,8 @@ structural rules and:
   imports/exports/params, files outside the task, unrequested lockfile/config edits.
 
 **Not a finding:** formatting, import order, anything the project's linter or
-formatter own;
-taste without consequence; refactor beyond the task (offered in step 7, never
+formatter own, unless the style file states it;
+taste without consequence; refactor beyond the task (offered in step 8, never
 applied unasked);
 "could be more generic" with no need yet.
 
