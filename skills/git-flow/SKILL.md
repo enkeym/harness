@@ -19,6 +19,8 @@ ticket, commit style, remote and project restrictions come from
 - Branch name = the user's existing prefix + ticket (`<prefix>/<TICKET>`); no
   ticket → `<prefix>/<slug>`. Branch off the resolved base. No worktrees.
 - Never commit red tests, files outside the task, or secrets.
+- Before every commit: [../shared/review-pass.md](../shared/review-pass.md) on
+  that commit's diff, findings fixed by `review-standards` step 8.
 - Message style = the user's own recent commits, not the loudest style in the
   repo: same form, same language, same scope names.
   - Header: one line, ~72 chars.
