@@ -1,9 +1,9 @@
 ---
 name: review
-description: "Reviews a colleague's change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks — with review-standards and review-security findings, manual check steps and ready GitLab comments in chat, then an offer to apply selected fixes. User-invoked as /review."
+description: "Reviews a colleague's change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings, manual check steps and ready comments in chat or as MR draft notes, then an offer to apply selected fixes. User-invoked as /review."
 disable-model-invocation: true
-allowed-tools: Bash(git status:*), Bash(git branch --show-current), Bash(git for-each-ref:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git remote get-url:*), Read
-argument-hint: "[branch | !MR-iid | path | audit <area>] [focus, in your own words]"
+allowed-tools: Bash(git status:*), Bash(git branch --show-current), Bash(git for-each-ref:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git remote get-url:*), Bash(git fetch:*), Bash(curl:*), Bash(jq:*), Read
+argument-hint: "[branch | !MR-iid | mr | path | audit <area>] [focus, in your own words]"
 ---
 
 # /review
@@ -14,8 +14,8 @@ their step 1 (scope), their triage step (edits) and their Output sections.
 
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —
-the user fetches before calling /review; no diff against `main`, `dev` or any
-other branch unless picked in a scope menu. No checkout, stash or switch. A
+the user fetches before calling /review, the MR mode (1.2) aside; no diff
+against `main`, `dev` or any other branch unless picked in a scope menu. No checkout, stash or switch. A
 missing ref → name it in one line and stop.
 
 ## 1. Scope
@@ -24,8 +24,9 @@ missing ref → name it in one line and stop.
 |---|---|
 | empty | steps 1–4 on `HEAD` |
 | a path | steps 1–4, limited to that path |
-| `<branch>`, the checked-out one too | steps 2–4 on local `<branch>`, else `origin/<branch>`; both exist and differ → the one containing the other, diverged → ask |
-| `!<iid>` or an MR URL | ask for its source branch, then the row above |
+| `<branch>`, the checked-out one too | steps 2–4 on local `<branch>`, else `origin/<branch>`; both exist and differ → the one containing the other, diverged → ask; not checked out and with an open MR → 1.2 |
+| `mr` | pick among the open MRs — section 1.2 |
+| `!<iid>` or an MR URL | that MR — section 1.2 |
 | `audit <area>` | the area's current code — section 1.1 |
 
 1. **Uncommitted.** `git status --short` not empty → the scope is
@@ -54,17 +55,18 @@ missing ref → name it in one line and stop.
    base from project memory: commits of many tasks sit there, so one
    `AskUserQuestion` before the pass. Key found → `Коммиты <KEY> (<n>:
    <oldest>..<newest>)` (Recommended), `Последний коммит <sha> <subject>`,
-   `Аудит модуля`. No key → the menu of step 4.
+   `Аудит`, `Открытые MR (<n>)`. No key → the menu of step 4.
 4. **Nothing** — clean tree, no commit with the key → one `AskUserQuestion`:
 
 ```
 <Ключа задачи нет>. До какого коммита смотреть? В «Other» — sha, число коммитов или ветка.
 - Последний коммит <sha> <subject> (Recommended)
 - Коммиты от <base> (<n>)
-- Аудит модуля
-- Аудит приложения целиком
+- Аудит
+- Открытые MR (<n>)
 ```
 
+- `Открытые MR` only when the list call of 1.2 answered, with `<n>` ≥ 1.
 - `Коммиты от <base>` only off a base branch and with `<n>` ≥ 1 — then it
   goes first as Recommended: `<base>` through
   [../shared/project-facts.md](../shared/project-facts.md) over local refs,
@@ -83,10 +85,19 @@ missing ref → name it in one line and stop.
 
 ### 1.1 Audit
 
-The area's files at `HEAD`, no diff; `Аудит модуля` → a second question with
-the repo's top-level areas. `review-security` in full, step 5 on every entry
-point; the `review-standards` checklist, no regression pass. Whole app → auth,
+The area's files at `HEAD`, no diff; `Аудит` → a second question: three of
+the repo's top-level areas and `Всё приложение`, the rest through «Other».
+`review-security` in full, step 5 on every entry point; the `review-standards` checklist, no regression pass. Whole app → auth,
 payments, upload, webhooks, outbound calls, config first; report per module.
+
+### 1.2 Open MRs
+
+List, pick, scope and drafts through the GitLab API:
+[reference/gitlab.md](reference/gitlab.md), read before the first call. The
+scope is the MR's diff after `git fetch` — the only fetch /review runs; no
+checkout, no typecheck or tests, they go to the not-checked line. Several MRs
+run one by one: report → drafts → next; more than 3 → one line that the
+context may run out before the last.
 
 ## 2. Pass
 
@@ -111,5 +122,6 @@ block per comment — the user copies raw markdown out of the terminal, which
 renders anything outside a fence, and pastes each into its GitLab line or
 Telegram, so only markup both render. Shapes and rules:
 [reference/report.md](reference/report.md); read it before the first finding.
+MR mode (1.2): the report, then draft notes instead of copy blocks, no menu.
 The same file holds the closing menu: one `AskUserQuestion` after the copy
 blocks, none when nothing was found.

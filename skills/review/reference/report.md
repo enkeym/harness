@@ -112,7 +112,7 @@ One block per finding, Critical and Important:
 ~~~
 
 Empty section = "нет". Nothing found → the summary only, no copy blocks,
-no menu.
+no menu, no drafts.
 
 ## Menu
 
@@ -126,6 +126,9 @@ One `AskUserQuestion` / `question` call after the copy blocks, recommended first
 ```
 
 - Target is another ref: drop both fix options — the user checks it out.
+- The current branch has an open MR whose head is the reviewed code →
+  `Отправить черновиками в MR !<iid>` last; picked → *Drafts* of
+  [gitlab.md](gitlab.md). MR mode (1.2) has no menu at all.
 - Fix selected → a second question, `multiSelect`: one option per finding
   when ≤4, otherwise severity groups (all Critical; Critical and Important),
   single numbers through "Other".
