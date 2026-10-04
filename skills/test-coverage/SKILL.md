@@ -35,7 +35,9 @@ write. Base branch and test runner: resolve by
    a hook result, a DTO rule, a migration, a query with new filters. Changed
    behaviour, not just a changed signature → `tokensave_callers` plus the
    project's [../shared/impact-map.md](../shared/impact-map.md): a caller or an
-   implicit consumer whose behaviour changed is in the inventory too.
+   implicit consumer whose behaviour changed is in the inventory too. A caller
+   the diff only adapted to a new signature is not — the changed function's
+   own rows cover it.
 2. **Case matrix** per behaviour — only the rows that apply:
    | Row | Covers |
    | --- | --- |
@@ -71,8 +73,8 @@ write. Base branch and test runner: resolve by
 - Types, interfaces, re-exports, constants, config, generated code, styles.
 - Library behaviour: `class-validator` rejecting an email, router matching.
 - Private helpers already exercised through a tested public path.
-- Code the diff only moved or renamed with no behaviour change (existing specs
-  still pass = covered).
+- Code the diff only moved, renamed or adapted to a new signature with no
+  behaviour change (existing specs still pass = covered).
 
 ## Production code
 

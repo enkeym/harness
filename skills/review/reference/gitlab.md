@@ -3,7 +3,8 @@
 GitLab API for the MR mode: list, pick, scope, drafts. Token `$GITLAB_TOKEN`
 only, as `-H "PRIVATE-TOKEN: $GITLAB_TOKEN"` — never printed, never
 `~/.git-credentials`. Host and project from `git remote get-url origin`, the
-parse of `git-flow` (*Opening the MR in GitLab*): `<host>`, project id
+parse of [../../git-flow/reference/mr.md](../../git-flow/reference/mr.md)
+(*Opening the MR in GitLab*): `<host>`, project id
 `<group>%2F<repo>`, every `/` of the path encoded. `<api>` below =
 `https://<host>/api/v4/projects/<id>`, written out in full.
 
