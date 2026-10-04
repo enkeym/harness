@@ -47,19 +47,22 @@ Merges, force pushes, protected branches: confirm first.
    whole result.
 2. Tests: `test-coverage` on `<base>...HEAD`, report first. Red suite → stop,
    no MR text until the user decides.
-3. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
+3. Review: [../shared/review-pass.md](../shared/review-pass.md) on
+   `<base>...HEAD` — the whole branch, links between commits included.
+   Critical or Important → report, stop until the user decides.
+4. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
    `git diff <base>...HEAD --stat`. Whole branch, nothing outside it.
-4. Group commits into **entities** — things the user sees: a page, a panel, a
+5. Group commits into **entities** — things the user sees: a page, a panel, a
    dialog, a profile section. Not modules, not files.
-5. For each entity, find the exact UI location and role: read the diff of the
+6. For each entity, find the exact UI location and role: read the diff of the
    commits (`git show <h> --stat`, then the component) and `rag_search` for the
    button/section labels. A description without a location is not done.
-6. Draft in the format below. Project memory or rules file has a sample →
+7. Draft in the format below. Project memory or rules file has a sample →
    match its vocabulary for entities and places.
-7. Coverage check — walk the commit list once more: every commit maps to an
+8. Coverage check — walk the commit list once more: every commit maps to an
    entity sentence, or is deliberately folded into the closing "Внутренние
    изменения" line. An unmapped commit → add it. Do this before printing.
-8. Word check: no code identifiers (camelCase, snake_case, file paths, HTTP
+9. Word check: no code identifiers (camelCase, snake_case, file paths, HTTP
    verbs, endpoints, tables, migrations, library names), no banned phrases.
 
 ### Format
