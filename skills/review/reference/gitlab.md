@@ -22,10 +22,12 @@ curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "<api>/merge_request
   | jq -r '.[] | [.iid, .title, .source_branch, .target_branch, .author.username, .draft] | @tsv'
 ```
 
+- Drop the MRs whose author is the `/user` name before counting or listing:
+  the user's own branch gets the fix menu through the `<branch>` row, never
+  drafts. `!<iid>` of such an MR → its source branch through that row.
 - Option label `!<iid> <title, ≤40 chars>`; description
-  `<source> → <target>, <author>`, plus `черновик` when `draft`, `мой` when the
-  author is the `/user` name.
-- None open → `Открытых MR нет`, stop.
+  `<source> → <target>, <author>`, plus `черновик` when `draft`.
+- None left → `Открытых MR коллег нет`, stop.
 - ≤3 → one `AskUserQuestion`, `multiSelect`: `Все (<n>)`, then the MRs.
 - More → the numbered list in chat, then one call: the first question
   `Все (<n>)` + 3 MRs, the next ones 4 MRs each, ≤4 questions (15 MRs); no

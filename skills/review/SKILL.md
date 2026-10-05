@@ -24,7 +24,7 @@ missing ref → name it in one line and stop.
 |---|---|
 | empty | steps 1–4 on `HEAD` |
 | a path | steps 1–4, limited to that path |
-| `<branch>`, the checked-out one too | steps 2–4 on local `<branch>`, else `origin/<branch>`; both exist and differ → the one containing the other, diverged → ask; not checked out and with an open MR → 1.2 |
+| `<branch>`, the checked-out one too | steps 2–4 on local `<branch>`, else `origin/<branch>`; both exist and differ → the one containing the other, diverged → ask; not checked out and with a colleague's open MR → 1.2 |
 | `mr` | pick among the open MRs — section 1.2 |
 | `!<iid>` or an MR URL | that MR — section 1.2 |
 | `audit <area>` | the area's current code — section 1.1 |
@@ -92,7 +92,7 @@ payments, upload, webhooks, outbound calls, config first; report per module.
 
 ### 1.2 Open MRs
 
-List, pick, scope and drafts through the GitLab API:
+Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 [reference/gitlab.md](reference/gitlab.md), read before the first call. The
 scope is the MR's diff after `git fetch` — the only fetch /review runs; no
 checkout, no typecheck or tests, they go to the not-checked line. Several MRs
