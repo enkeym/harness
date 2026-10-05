@@ -72,13 +72,12 @@ fired and what it wants instead.
 
 ## question-guard
 
-- Stop hook: a reply whose last prose line ends with `?`, or whose tail is a
-  list of options after a question, does not end the turn — the block reason
-  says to ask through `AskUserQuestion` (rule in `core.md`, Working style).
-- Ask the same question through the menu, recommended option first; a
-  rhetorical question → rewrite the ending without it.
-- Not judged: `?` in code or a `>` quote, a turn that already called
-  `AskUserQuestion`/`ExitPlanMode`, the turn's second Stop — one block per turn.
+- Stop hook: a last paragraph that asks the user — `?`, a wait for a decision
+  ("Как скажете «ок»", "Дайте знать", "Let me know"), options ("Варианты:",
+  "Можно A или B") — does not end the turn; the reason quotes the line.
+- Ask it through `AskUserQuestion`, recommended option first; rhetorical →
+  rewrite the ending. Not judged: code, `>` quote, `#` heading, a quoted
+  phrase, a turn with `AskUserQuestion`/`ExitPlanMode`, the second Stop.
 
 ## Shell guard
 

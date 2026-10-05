@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Тесты question-guard: ответ, который кончается вопросом пользователю текстом,
-// блокирует Stop; вопрос через меню, код, цитата, повторный Stop — нет.
+// Тесты question-guard: ответ, который кончается вопросом или ожиданием
+// решения пользователя текстом, блокирует Stop; вопрос через меню, код, цитата,
+// заголовок, условие без просьбы решения, повторный Stop — нет.
 // Хук гоняется настоящим процессом на временном транскрипте.
 
 import { ISOLATED_HOOKS_LOG } from './env-isolate.mjs';
@@ -45,12 +46,53 @@ const blocked = (out) => out?.decision === 'block' && typeof out.reason === 'str
   check('block в журнале', log.includes('"hook":"question-guard"') && log.includes('"decision":"block"'), log);
 }
 
-// Разметка после `?` не прячет вопрос.
-check('вопрос жирным — block', blocked(run([prompt('x'), say('Итог.\n\n**Какой вариант берём?**')])));
+// Разметка, знаки и эмодзи после `?` не прячут вопрос.
+for (const tail of ['**Какой вариант берём?**', '(коммитить?)', '«Пушить?»', 'Пушить? 🙂', 'Пушить?  \n\n']) {
+  check(`хвост ${JSON.stringify(tail)} — block`, blocked(run([prompt('x'), say(`Итог.\n\n${tail}`)])));
+}
+
+// Вопрос в последнем абзаце, после него пояснение; вопрос последним пунктом списка.
+check('вопрос и пояснение в последнем абзаце — block', blocked(run([prompt('x'),
+  say('Сделал.\n\nКоммитить сейчас?\nТесты зелёные, дерево чистое.')])));
+check('вопрос последним пунктом — block', blocked(run([prompt('x'),
+  say('Итог:\n\n- хук поправлен\n- пушить?')])));
 
 // Варианты списком после вопроса.
 check('список вариантов после вопроса — block', blocked(run([prompt('x'),
   say('Есть два пути. Какой выбрать?\n\n1. Блокировать ход\n2. Только подсказка')])));
+
+// Варианты без `?`.
+check('«Варианты:» и список — block', blocked(run([prompt('x'),
+  say('Разобрался.\n\nВарианты:\n\n1) блокировать\n2) подсказка')])));
+check('«Варианты: 1) … 2) …» строкой — block', blocked(run([prompt('x'),
+  say('Разобрался.\n\nВарианты: 1) блокировать 2) подсказка.')])));
+check('«Можно A или B» — block', blocked(run([prompt('x'),
+  say('Тест падает из-за кэша.\n\nМожно сбрасывать кэш или убрать его совсем.')])));
+check('«Можно было A или B» — пропуск', run([prompt('x'),
+  say('Можно было сбрасывать кэш или убрать его, убрал.')]) === null);
+
+// Ожидание решения в форме утверждения — случай, ради которого AWAIT_RE.
+for (const tail of [
+  'Как скажете „ок“ по каждой, прогоню ревью и закоммичу.',
+  'Жду вашего «ок».',
+  'Напишите, когда проверите.',
+  'Дайте знать, если нужен другой текст.',
+  'Подтвердите, и я запушу.',
+  'Если согласны — сделаю так же в остальных хуках.',
+  'Могу также покрыть тестами адаптер, если хотите.',
+  'Если нужно — могу разнести на два коммита.',
+  'Let me know if the wording works.',
+  'Should I push it now.',
+  'Want me to add the adapter test as well.',
+]) {
+  check(`ожидание «${tail}» — block`, blocked(run([prompt('x'), say(`Сделал, тесты зелёные.\n\n${tail}`)])));
+}
+
+// Причина цитирует строку, на которой хук сработал.
+{
+  const out = run([prompt('x'), say('Готово.\n\nЖду вашего ок — закоммичу.')]);
+  check('причина цитирует строку', blocked(out) && out.reason.includes('«Жду вашего ок — закоммичу.»'), JSON.stringify(out));
+}
 
 // Повторный Stop — модель уже получила причину.
 check('stop_hook_active — пропуск',
@@ -61,6 +103,14 @@ check('вопрос в ```-блоке — пропуск',
   run([prompt('x'), say('Регэксп готов:\n\n```js\nconst re = /a?/;\nconst ok = x ?\n```')]) === null);
 check('вопрос в `инлайн-коде` — пропуск', run([prompt('x'), say('Добавил `a?.b ?? c?`')]) === null);
 check('вопрос в цитате — пропуск', run([prompt('x'), say('Пользователь спросил:\n\n> а тесты зелёные?')]) === null);
+check('тип `foo?: string` — пропуск', run([prompt('x'), say('Поле стало необязательным: `foo?: string`')]) === null);
+check('URL с параметрами в конце — пропуск', run([prompt('x'), say('Деплой тут: https://x/y?z=1')]) === null);
+check('заголовок-вопрос — пропуск', run([prompt('x'),
+  say('## Что сломалось?\nКэш не сбрасывался.\n\n## Итог\nПочинил, тесты зелёные.')]) === null);
+check('условие без просьбы решения — пропуск', run([prompt('x'),
+  say('Текст ошибки обновлён.\n\nЕсли бэкенд ответит иначе, поправим текст.')]) === null);
+check('фраза ожидания в кавычках — пропуск', run([prompt('x'),
+  say('Хук теперь ловит «Дайте знать» и «Жду вашего ок».')]) === null);
 
 // Вопрос уже задан меню в этом ходе.
 check('ход с AskUserQuestion — пропуск', run([prompt('x'), call('AskUserQuestion'), result('AskUserQuestion'),
@@ -74,12 +124,25 @@ check('AskUserQuestion в прошлом ходе — block', blocked(run([promp
 
 // Обычный ответ, список без вопроса, вопрос в середине.
 check('обычный ответ — пропуск', run([prompt('x'), say('Готово: тесты зелёные, коммит запушен.')]) === null);
+check('«Готово.» — пропуск', run([prompt('x'), say('Готово.')]) === null);
+check('только вызовы инструментов — пропуск', run([prompt('x'), call('Bash'), result('Bash')]) === null);
 check('список без вопроса — пропуск', run([prompt('x'), say('Сделано:\n\n- хук\n- тест')]) === null);
 check('вопрос в середине — пропуск', run([prompt('x'), say('Почему падало? Кэш не сбрасывался.\n\nПочинил.')]) === null);
 
 // last_assistant_message свежее транскрипта.
 check('last_assistant_message — block',
   blocked(run([prompt('x'), say('Готово.')], { last_assistant_message: 'Готово. Пушить?' })));
+
+// Битые строки транскрипта пропускаются, пустой транскрипт — тишина.
+{
+  const transcript = path.join(DIR, 'broken.jsonl');
+  fs.writeFileSync(transcript, `{битая\n${JSON.stringify(prompt('x'))}\n${JSON.stringify(say('Готово.'))}\n{обреза`);
+  const r = spawnSync('node', [HOOK], { input: JSON.stringify({ transcript_path: transcript }), encoding: 'utf8' });
+  check('битые строки — пропуск', r.status === 0 && r.stdout === '', r.stderr || r.stdout);
+  fs.writeFileSync(transcript, '');
+  const e = spawnSync('node', [HOOK], { input: JSON.stringify({ transcript_path: transcript }), encoding: 'utf8' });
+  check('пустой транскрипт — пропуск', e.status === 0 && e.stdout === '', e.stderr || e.stdout);
+}
 
 // Нет транскрипта — тишина, не падение.
 {
