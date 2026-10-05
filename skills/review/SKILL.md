@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Reviews a change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings, manual check steps, then on the user's own branch an offer to fix, on a colleague's MR draft notes (chat only when sending fails). User-invoked as /review."
+description: "Reviews a change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings and manual check steps, then an offer to fix on the user's own branch or MR draft notes on a colleague's. User-invoked as /review."
 disable-model-invocation: true
 allowed-tools: Bash(git status:*), Bash(git branch --show-current), Bash(git for-each-ref:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git config user.email), Bash(git remote get-url:*), Bash(git fetch:*), Bash(curl:*), Bash(jq:*), Read
 argument-hint: "[branch | !MR-iid | mr | path | audit <area>] [focus, in your own words]"

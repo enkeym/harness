@@ -46,7 +46,8 @@ curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "<api>/merge_request
 
 ## Drafts
 
-All drafts of one MR in one Bash call — one confirmation per MR. One `curl`
+All drafts of one MR in one Bash call, no question in chat first —
+security-guard's confirmation is the only one. One `curl`
 per finding, Minor included, in number order; body = the MR comment of
 [report.md](report.md) under its rules, through a quoted heredoc into stdin:
 
@@ -71,8 +72,7 @@ NOTE_<N>
 - `400` on a positioned note → one more call for those notes, without
   position, first line `` `<path>:<line>` ``.
 - Any other code (`401`, `403`, `000` …) → that note's MR comment in chat
-  ([report.md](report.md)) with its code; drafts are sent without asking
-  first — the curl call is the confirmation.
+  ([report.md](report.md)) with its code.
 - Done → `MR !<iid>: <n> черновиков → <web_url> — проверь и нажми «Submit review»`.
   Drafts stay visible only to the user until that submit.
 
@@ -81,5 +81,4 @@ NOTE_<N>
 `curl … "<api>/merge_requests?source_branch=<branch>&state=opened"`. Drafts
 go there only when the reviewed code is its `diff_refs.head_sha`: the reviewed
 ref is that sha, or in the uncommitted scope `git diff --quiet <head_sha>`
-succeeds. Otherwise the lines would not match what the MR shows → the MR
-comments in chat.
+succeeds. Otherwise the lines would not match what the MR shows — no drafts.

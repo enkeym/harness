@@ -1,5 +1,7 @@
 # /review — report and menu
 
+Contents: Report · MR comments · Finding · Summary · Menu.
+
 ## Report
 
 Two parts, nothing before, between or after them: the report in plain chat
@@ -140,8 +142,9 @@ A colleague's:
 - Target is another ref: no fix options, so no menu — a colleague's branch
   goes straight to Only review.
 - Only review → *Drafts* of [gitlab.md](gitlab.md) into the MR of
-  *Current branch with an open MR*; no such MR or a failed call → the MR
-  comments in chat with one line why. MR mode (1.2) has no menu at all.
+  *Current branch with an open MR*; no MR fits → the MR comments in chat,
+  one line why. MR mode (1.2) has no menu at all.
+- Не исправлять → one line, no recap of the report.
 - Fix selected → a second question, `multiSelect`: one option per finding
   when ≤4, otherwise severity groups (all Critical; Critical and Important),
   single numbers through "Other".
