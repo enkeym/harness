@@ -84,6 +84,7 @@ next step needs. The hook says which case it is; follow its wording.
 
 ## Открытые вопросы
 Только то, что пользователь отложил в меню вопросов, — с его словами.
+Когда и чем спросить: «после шага N — через меню».
 ```
 
 ## Never include
@@ -120,3 +121,8 @@ replaced:
   then say which line and why.
 - A blocked or contradicted line in `Проверено` is a finding: report it in one
   line instead of quietly redoing the whole check.
+- A pending user decision in the snapshot ("ждёт проверки пользователем",
+  "ждать «ок»") is asked through the question tool when its step is
+  reached, never written as a closing line of text. "Повторно не спрашивать"
+  means don't re-ask what the user already answered; it never cancels the menu
+  for a decision still open.
