@@ -183,7 +183,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const second = contextNotice({ transcript_path: hand, session_id: 's-esc' });
   check('рост до 160k: звучит hand', second.stage, 'hand');
   check('160k: назван скилл handoff', /handoff/.test(second.text), true);
-  check('160k: процедуру скилла не пересказывает', /EnterPlanMode|ExitPlanMode|AskUserQuestion/.test(second.text), false);
+  check('160k: процедуру скилла не пересказывает', /EnterPlanMode|ExitPlanMode/.test(second.text), false);
   check('160k: блока в чат не просит', /чат/.test(second.text), false);
   check('160k: про /clear не просит', /\/clear/.test(second.text), false);
   check('hand второй раз молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
@@ -253,8 +253,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('160k посреди хода: коммит сам не навязывает', /коммит/.test(n.text), false);
   check('160k посреди хода: назван скилл handoff', /handoff/.test(n.text), true);
   check('160k посреди хода: следующий шаг — новой сессии', /следующий не начинай/.test(n.text), true);
-  check('160k посреди хода: ход кончается передачей, даже без следующего шага',
-    /закончи ход передачей[^.]*шагов не осталось/.test(n.text), true);
+  check('160k посреди хода: перенос предлагается вопросом, не запускается сам',
+    /Ход закончи вопросом AskUserQuestion: «Перенести в новую сессию» первым, «Продолжить здесь»/
+      .test(n.text), true);
   check('тот же порог посреди хода второй раз молчит',
     contextNotice(input, { phase: 'step' }), null);
   check('и на следующем промпте не повторяется', contextNotice(input), null);

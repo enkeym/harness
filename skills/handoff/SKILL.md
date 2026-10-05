@@ -14,9 +14,9 @@ start a new session for the user; the only writes are the `task-brief` plan
 file and the plan file plan mode names.
 
 Mid-turn the answer is never cut in half: finish the step in hand, then end
-the turn with the handoff, not a summary — also when no next step remains or
-the edits were reverted; the step not started goes first under `Дальше`. A
-session that has changed nothing gets no handoff at `SOFT`: it
+the turn with one question: move to a new session (recommended) or stay. Run
+the handoff only on "move" — the user decides, not the meter; the step not
+started goes first under `Дальше`. A session that has changed nothing gets no handoff at `SOFT`: it
 would list what was read, the next session would read the same and hit the
 same threshold. From `HAND` such a session is usually an analysis, not a
 prelude to an edit — it delivers its conclusion first, then ends the turn with
