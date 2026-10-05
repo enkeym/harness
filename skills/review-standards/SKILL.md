@@ -63,3 +63,17 @@ Minor:     <one line each>
 ```
 
 Empty section = "нет". Never "в целом хорошо" instead of a verdict.
+
+## Comments posted to an MR
+
+A colleague reads them, not a model.
+
+- First person, plain spoken Russian: "Я бы вынес проверку MX до транзакции —
+  иначе она держит соединение, пока ждёт DNS". No bureaucratic phrasing
+  ("рассогласование", "осуществляется", "в целях"), no telegraphic fragments
+  joined by dashes and semicolons.
+- One problem per comment: what breaks, a concrete example, what I suggest.
+  Two or three short sentences.
+- Cite only what the author can open: code in the MR, the repository, docs on
+  the server. Never a local file of mine (`CLAUDE.md`, memory, a skill).
+- Leave the review unsubmitted unless the user says to send it.
