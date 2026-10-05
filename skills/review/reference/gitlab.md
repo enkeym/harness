@@ -70,8 +70,9 @@ NOTE_<N>
   line `` `<path>:<line>` ``.
 - `400` on a positioned note → one more call for those notes, without
   position, first line `` `<path>:<line>` ``.
-- `401`, `403`, `000` or any other error → stop; the unsent notes as MR
-  comments in chat ([report.md](report.md)), one line with the code.
+- Any other code (`401`, `403`, `000` …) → that note's MR comment in chat
+  ([report.md](report.md)) with its code; drafts are sent without asking
+  first — the curl call is the confirmation.
 - Done → `MR !<iid>: <n> черновиков → <web_url> — проверь и нажми «Submit review»`.
   Drafts stay visible only to the user until that submit.
 

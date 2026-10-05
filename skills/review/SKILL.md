@@ -120,7 +120,8 @@ skill), each with problem, manual check steps, current code and fix; then the
 summary and the closing menu. Shapes, MR comments and menu:
 [reference/report.md](reference/report.md); read it before the first finding.
 
-The branch is the user's when the author of the reviewed commits is
-`git config user.email` — uncommitted scope: the author of `@{u}`, no
-upstream → the user's; audit → the user's. Anything else is a colleague's.
+The branch is the user's when every reviewed commit is authored by
+`git config user.email`. Uncommitted scope: the commits of
+`git log HEAD..@{u}` — what a soft reset took off; none, or no upstream →
+the user's. Audit → the user's. Anything else is a colleague's.
 MR mode (1.2): the report, then draft notes, no menu.

@@ -109,6 +109,7 @@ One block per finding, Critical and Important:
 ~~~
 - **Итог:** approved | changes requested — Critical <n>, Important <n>, Minor <n>
 - **Проверено без замечаний:** <категории>
+- **Стиль проекта:** <файл стиля> | файла стиля нет
 - **Не проверено:** <что и почему — тесты не запускались, нужен контекст задачи>
 ~~~
 
