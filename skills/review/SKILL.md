@@ -1,8 +1,8 @@
 ---
 name: review
-description: "Reviews a colleague's change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings, manual check steps and ready comments in chat or as MR draft notes, then an offer to apply selected fixes. User-invoked as /review."
+description: "Reviews a change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings, manual check steps, then on the user's own branch an offer to fix, on a colleague's MR draft notes (chat only when sending fails). User-invoked as /review."
 disable-model-invocation: true
-allowed-tools: Bash(git status:*), Bash(git branch --show-current), Bash(git for-each-ref:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git remote get-url:*), Bash(git fetch:*), Bash(curl:*), Bash(jq:*), Read
+allowed-tools: Bash(git status:*), Bash(git branch --show-current), Bash(git for-each-ref:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git config user.email), Bash(git remote get-url:*), Bash(git fetch:*), Bash(curl:*), Bash(jq:*), Read
 argument-hint: "[branch | !MR-iid | mr | path | audit <area>] [focus, in your own words]"
 ---
 
@@ -117,11 +117,10 @@ them in the not-checked line.
 The report goes to chat as plain markdown: findings numbered, Critical →
 Important → Minor, merged across both skills (one finding per defect, not per
 skill), each with problem, manual check steps, current code and fix; then the
-summary. After it, the MR comments only, one ````` ````markdown ````` copy
-block per comment — the user copies raw markdown out of the terminal, which
-renders anything outside a fence, and pastes each into its GitLab line or
-Telegram, so only markup both render. Shapes and rules:
+summary and the closing menu. Shapes, MR comments and menu:
 [reference/report.md](reference/report.md); read it before the first finding.
-MR mode (1.2): the report, then draft notes instead of copy blocks, no menu.
-The same file holds the closing menu: one `AskUserQuestion` after the copy
-blocks, none when nothing was found.
+
+The branch is the user's when the author of the reviewed commits is
+`git config user.email` — uncommitted scope: the author of `@{u}`, no
+upstream → the user's; audit → the user's. Anything else is a colleague's.
+MR mode (1.2): the report, then draft notes, no menu.

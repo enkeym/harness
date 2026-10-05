@@ -2,9 +2,9 @@
 
 ## Report
 
-Three parts in this order, nothing before, between or after them: the report
-in plain chat markdown — for reading, the terminal renders it; the copy
-blocks; the menu. No preamble on what was run — that goes to the summary.
+Two parts, nothing before, between or after them: the report in plain chat
+markdown — for reading, the terminal renders it; the menu. No preamble on
+what was run — that goes to the summary.
 
 ~~~
 **Ревью: <режим из строки-заголовка>**
@@ -28,13 +28,14 @@ blocks; the menu. No preamble on what was run — that goes to the summary.
 
 A severity with no findings — its title line is dropped.
 
-## Copy blocks
+## MR comments
 
-The MR comments and nothing else — no header, severity titles, verdict,
-checked or not-checked lines. One fence per comment, so each is copied whole
-into its GitLab line or a Telegram message; every finding, Minor included, in
-number order. The anchor line sits above the fence, never inside it; four
-backticks keep the inner ` ``` ` blocks inside:
+One per finding, Minor included, in number order — the body of a draft note
+(*Drafts* of [gitlab.md](gitlab.md)). In chat only when the drafts cannot be
+sent: the comments and nothing else — no header, severity titles, verdict,
+checked or not-checked lines — one fence per comment, so each is copied whole
+into its GitLab line or a Telegram message. The anchor line sits above the
+fence, never inside it; four backticks keep the inner ` ``` ` blocks inside:
 
 ~~~
 **<N>.** `<path>:<line>`
@@ -99,7 +100,7 @@ One block per finding, Critical and Important:
   expected output. "Убедитесь, что …" without the how is not a step.
 - The fix covers every line it changes; a fix spanning several files or a
   design choice → code of the key part plus one line on the rest.
-- The MR comment is not repeated here — it lives in the copy blocks only.
+- The MR comment is not repeated here.
 - Minor findings: one list item each, no code blocks, the path in backticks —
   `- <N>. <path>:<line> — проблема — проверка`.
 
@@ -111,31 +112,40 @@ One block per finding, Critical and Important:
 - **Не проверено:** <что и почему — тесты не запускались, нужен контекст задачи>
 ~~~
 
-Empty section = "нет". Nothing found → the summary only, no copy blocks,
-no menu, no drafts.
+Empty section = "нет". Nothing found → the summary only, no menu, no drafts.
 
 ## Menu
 
-One `AskUserQuestion` / `question` call after the copy blocks, recommended first:
+One `AskUserQuestion` / `question` call after the summary, recommended first.
+
+The user's branch:
+
+```
+Исправить находки?
+- Исправить все (Recommended)
+- Исправить выбранные
+- Не исправлять
+```
+
+A colleague's:
 
 ```
 Что делаем с находками?
-- Только ревью, ничего не менять (Recommended)
+- Только ревью — черновики в MR (Recommended)
 - Исправить выбранные
 - Исправить все
 ```
 
-- Target is another ref: drop both fix options — the user checks it out.
-- The current branch has an open MR whose head is the reviewed code →
-  `Отправить черновиками в MR !<iid>` last; picked → *Drafts* of
-  [gitlab.md](gitlab.md). MR mode (1.2) has no menu at all.
+- Target is another ref: no fix options, so no menu — a colleague's branch
+  goes straight to Only review.
+- Only review → *Drafts* of [gitlab.md](gitlab.md) into the MR of
+  *Current branch with an open MR*; no such MR or a failed call → the MR
+  comments in chat with one line why. MR mode (1.2) has no menu at all.
 - Fix selected → a second question, `multiSelect`: one option per finding
   when ≤4, otherwise severity groups (all Critical; Critical and Important),
   single numbers through "Other".
-- Only review → one line, no recap of the report or the not-checked list —
-  both are already above.
 - Chosen fixes: apply exactly the fix shown, nothing beyond it; never
   `git add` — in the soft-reset flow the colleague's change is staged and the
   fix stays unstaged, so VS Code shows them apart. Then `tsc`, linter without
   fix flags and tests of the touched module with real output. No commit, no
-  push — the branch is a colleague's; `/commit` is the user's call.
+  push — `/commit` is the user's call.
