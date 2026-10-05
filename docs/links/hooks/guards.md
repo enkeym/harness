@@ -65,7 +65,9 @@ paths:
   перестаёт вызываться; проверка только со следующей сессии.
 - Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
   на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`
-  включена только в `ai-hooks/guard-core.mjs:guardBash`: сняли — `node <<EOF`
-  с путём в теле проходит мимо; включили в security-core — тело
+  включена в `ai-hooks/guard-core.mjs:guardBash` и
+  `ai-hooks/skill-core.mjs:commitMessageProblem`: сняли — `node <<EOF` с путём
+  в теле проходит мимо, а сообщение `git commit -F - <<EOF` без пустой строки
+  после заголовка не проверяется; включили в security-core — тело
   `cat > README.md <<EOF` читается как аргументы cat и даёт ложный запрет, а
   команды в теле `bash <<EOF` пропадают.

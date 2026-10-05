@@ -23,7 +23,7 @@ const env = {
 };
 delete env.AI_HOOKS_SKILL_GATE_OFF;
 
-const { isGitCommit, isInstructionFile, skillName, missingSkills } = await import('../skill-core.mjs');
+const { isGitCommit, isInstructionFile, skillName, missingSkills, commitMessageProblem } = await import('../skill-core.mjs');
 
 let failed = 0;
 function check(name, got, want) {
@@ -87,6 +87,19 @@ check('commit: --config-env со значением', isGitCommit('git --config-
 check('commit: sudo -u git — git как значение опции', isGitCommit('sudo -u git git commit -m x'), true);
 check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep commit'), false);
 
+  const bad = (c) => commitMessageProblem(c) !== null;
+  check('сообщение: heredoc без пустой строки', bad("git add -A && git commit -F - <<'EOF'\n[T-1] - Заголовок\n- пункт\nEOF\ngit push"), true);
+  check('сообщение: heredoc с пустой строкой', bad("git commit -F - <<'EOF'\n[T-1] - Заголовок\n\n- пункт\nEOF"), false);
+  check('сообщение: heredoc из одной строки', bad("git commit -F - <<'EOF'\nfix: x\nEOF"), false);
+  check('сообщение: amend, вывод в файл, --file=-', bad("git commit --amend --file=- >/tmp/o 2>&1 <<EOF\nfix: x\nbody\nEOF"), true);
+  check('сообщение: -m $(cat <<EOF) без пустой строки', bad("git commit -m \"$(cat <<'EOF'\nfix: x\n- body\nEOF\n)\""), true);
+  check('сообщение: -m $(cat <<EOF) с пустой строкой', bad("git commit -m \"$(cat <<'EOF'\nfix: x\n\n- body\nEOF\n)\""), false);
+  check('сообщение: -m с переводом строки', bad('git commit -m "fix: x\n- body"'), true);
+  check('сообщение: несколько -m — git сам ставит пустую строку', bad('git commit -m "fix: x" -m "- body"'), false);
+  check('сообщение: однострочный -m', bad('git commit -q -m "fix: x"'), false);
+  check('сообщение: не коммит', bad("cat <<'EOF'\na\nb\nEOF"), false);
+  check('сообщение: причина цитирует заголовок', commitMessageProblem("git commit -F - <<'EOF'\nfix: x\nbody\nEOF")?.includes('«fix: x»'), true);
+
   check('имя: plugin:skill', skillName('plugin:skill-authoring'), 'skill-authoring');
   check('имя: scoped', skillName('apps/web:deploy'), 'deploy');
 }
@@ -139,6 +152,8 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   check('два из трёх → deny, не хватает git-flow', decision(r2) === 'deny' && r2.includes('git-flow') && !r2.includes('review-standards'), true);
   loadViaTool('sid-g', 'git-flow');
   check('все три → allow', gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -')), 'allow');
+  const r3 = gate('sid-g', 'Bash', bash("git commit -F - <<'EOF'\nfix: x\n- body\nEOF"));
+  check('все три, заголовок без пустой строки → deny', decision(r3) === 'deny' && r3.includes('пустой строки'), true);
 }
 
 // --- выключатели и fail-open ---

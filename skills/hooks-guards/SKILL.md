@@ -49,7 +49,8 @@ fired and what it wants instead.
 
 - Denies an edit of a SKILL.md, `skills/*/reference/*.md`, `commands/*.md` or
   any `CLAUDE.md` until `skill-authoring` is loaded in this session, and a
-  `git commit` until `review-standards`, `review-security` and `git-flow` are.
+  `git commit` until `review-standards`, `review-security` and `git-flow` are,
+  or while its message has a non-empty line 2 — empty it and repeat, no amend.
 - The refusal names the missing skill: load it with `Skill(<name>)`, do what
   it says (the review skills mean running the checklist on the diff, not just
   loading), then repeat the call. Loaded-state is per session — after `/clear`

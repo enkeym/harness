@@ -78,6 +78,55 @@ export function isGitCommit(command) {
   }
 }
 
+// Сообщение коммита без пустой строки после заголовка: git склеивает заголовок
+// с пунктами в одну строку `%s`. Замечено уже после push, такое чинят amend и
+// force push — дважды переписанная ветка вместо одного коммита. Поэтому сообщение
+// проверяется до коммита. Источники: `-F -` с heredoc, первый `-m`, в том числе
+// `-m "$(cat <<'EOF' … EOF)"`. `printf … | git commit -F -` не разбирается.
+const HEREDOC_RE = /<<-?\s*(?:'(\w+)'|"(\w+)"|\\?(\w+))/;
+const CAT_HEREDOC_RE = /^\$\(\s*cat\s+<<-?\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\s*\1\s*\)$/;
+
+function commitMessage(text) {
+  const [head, ...body] = text.split('\n');
+  const toks = tokenize(head);
+  const from = gitSubcommandAt(toks) + 1;
+  const stdin = toks.slice(from).some((t, k, a) =>
+    t === '-F-' || t === '--file=-' || ((t === '-F' || t === '--file') && a[k + 1] === '-'));
+  const doc = head.match(HEREDOC_RE);
+  if (stdin && doc) {
+    const term = doc[1] ?? doc[2] ?? doc[3];
+    if (body.length && body[body.length - 1].trim() === term) body.pop();
+    return body.join('\n');
+  }
+  const all = tokenize(text);
+  const k = all.findIndex((t, j) => j >= from && (t === '-m' || t === '--message'));
+  const raw = k === -1
+    ? all.find((t, j) => j >= from && /^(-m|--message=)./.test(t))?.replace(/^(-m|--message=)/, '')
+    : all[k + 1];
+  if (raw == null) return null;
+  return raw.match(CAT_HEREDOC_RE)?.[2] ?? raw;
+}
+
+// Текст запрета либо null.
+export function commitMessageProblem(command) {
+  if (!command) return null;
+  try {
+    for (const { text } of segments(command, { keepHeredoc: true })) {
+      if (!isGitCommit(text.split('\n')[0])) continue;
+      const msg = commitMessage(text);
+      if (msg == null) continue;
+      const lines = msg.replace(/^\s*\n/, '').split('\n');
+      if (lines.length > 1 && lines[1].trim() !== '') {
+        return (
+          `В сообщении коммита нет пустой строки после заголовка «${lines[0].trim().slice(0, 80)}»: ` +
+          'git склеит заголовок с телом в одну строку. Вставь пустую строку второй строкой и повтори git commit.'
+        );
+      }
+    }
+  } catch { /* разбор не должен мешать коммиту */ }
+  return null;
+}
+
 // Выключатели: переменная — для тестов чужих хуков; файл — «отключить, не
 // трогая конфиг».
 export function gateEnabled() {
