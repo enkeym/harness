@@ -77,3 +77,7 @@ A colleague reads them, not a model.
 - Cite only what the author can open: code in the MR, the repository, docs on
   the server. Never a local file of mine (`CLAUDE.md`, memory, a skill).
 - Leave the review unsubmitted unless the user says to send it.
+- Post through the API as general draft notes only: `path:line`, the quoted
+  code, then the comment. No `position` — line-anchored drafts made via the
+  API broke GitLab's diff view (files rendered as "Download"), and a `PUT` on
+  a draft wipes its position.
