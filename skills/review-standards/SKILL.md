@@ -28,9 +28,14 @@ are run, not re-done by hand; a finding is what they cannot see.
    saying why), fixed in this diff, or covered by a test that fails on the old
    behaviour. A link the map lacks → add its line in this commit. No graph
    (`.tokensave/` missing or stale) → grep the symbol name, say so in one line.
-4. Fix inside the diff silently (one line in chat per fix). Pre-existing
+4. Trace every candidate bug through the code from the user's action to the
+   failure — how the app actually logs out, reloads, calls the endpoint, what
+   the client really sends. Confirmed → a finding; not traceable from the repo
+   → a question to the author under ⚠️; refuted → dropped. Wrong code is not a
+   bug until its trigger is reachable.
+5. Fix inside the diff silently (one line in chat per fix). Pre-existing
    problems the diff touches → one line under *Minor*, never a widening refactor.
-5. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
+6. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
    output. Red = no commit.
 
 ## Checklist
@@ -69,6 +74,9 @@ Read: <N>/<N> files; machines: <tsc, lint, tests — result or why not run>
 
 Empty section = "нет". Never "в целом хорошо" instead of a verdict. `Read`
 below N/N → no verdict and no offer to publish; finish reading first.
+Severity follows the traced impact, not the section count — a small diff with
+one real bug gets one line, not a filled template. The verdict stands when the
+user asks back; it changes only on a new fact, named in the reply.
 
 ## Comments posted to an MR
 
