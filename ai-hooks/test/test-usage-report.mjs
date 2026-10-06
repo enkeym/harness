@@ -27,7 +27,8 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), 'usage-report-'));
 const logDir = path.join(home, '.ai-hooks', 'logs');
 const env = { ...process.env, HOME: home };
 
-const report = (...args) => spawnSync('node', [REPORT, ...args], { encoding: 'utf8', env }).stdout;
+const run = (...args) => spawnSync('node', [REPORT, ...args], { encoding: 'utf8', env });
+const report = (...args) => run(...args).stdout;
 
 const DAY = 24 * 3600 * 1000;
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
@@ -46,6 +47,16 @@ function session(extra) {
 }
 
 const model = (extra) => ({ input: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0, output: 0, cost: 0, ...extra });
+
+// --- аргументы: неверный — использование и код 1, а не отчёт за другой период ---
+{
+  const help = run('--help');
+  check('--help — использование, код 0', [help.status, help.stdout.startsWith('Запуск:')], [0, true]);
+  for (const args of [['--weeks', '2'], ['--days', 'abc'], ['--days', '0'], ['--days'], ['30']]) {
+    const r = run(...args);
+    check(`${args.join(' ')} — использование в stderr, код 1`, [r.status, r.stdout, r.stderr.startsWith('Запуск:')], [1, '', true]);
+  }
+}
 
 // --- файла ещё нет ---
 check('без usage.jsonl — «Нет данных»', report().startsWith('Нет данных:'), true);

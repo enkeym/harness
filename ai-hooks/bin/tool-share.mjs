@@ -14,8 +14,8 @@
 // Стоимость — Σ(input + cache_read + cache_creation) по всем ответам ассистента:
 // столько токенов контекста прочитала модель за сессию; out — Σ output.
 //
-// Запуск: node ~/.ai-hooks/bin/tool-share.mjs [ISO-граница] [минимальный размер, байт]
-// Граница по умолчанию — a0ec8f2 (снятие принуждения к tokensave, 22.09.2026).
+// Запуск — USAGE ниже. Граница по умолчанию — a0ec8f2 (снятие принуждения к
+// tokensave, 22.09.2026).
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
@@ -24,8 +24,27 @@ import { homedir } from 'node:os';
 const ROOT = join(homedir(), '.claude', 'projects');
 // Каталог проекта — его путь, где всё кроме [a-zA-Z0-9] заменено на '-'.
 const HOME_DIR = homedir().replace(/[^a-zA-Z0-9]/g, '-');
-const CUTOFF = process.argv[2] || '2026-09-22T08:54:12Z';
-const MIN_SIZE = Number(process.argv[3]) || 50_000;
+const DEFAULT_CUTOFF = '2026-09-22T08:54:12Z';
+const DEFAULT_MIN_SIZE = 50_000;
+const USAGE = `Запуск: node ~/.ai-hooks/bin/tool-share.mjs [ISO-граница] [минимальный размер, байт]
+  ISO-граница — UTC: 2026-09-22 или 2026-09-22T08:54:12Z; по умолчанию ${DEFAULT_CUTOFF}
+  размер — целое число байт; по умолчанию ${DEFAULT_MIN_SIZE}
+`;
+// Граница сравнивается с timestamp записей как строка: не-дата или часовой пояс не Z
+// молча уводят сессии не в тот период.
+const CUTOFF_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z)?$/;
+
+function usage(code) {
+  (code ? process.stderr : process.stdout).write(USAGE);
+  process.exit(code);
+}
+
+const [cutoffArg, sizeArg] = process.argv.slice(2);
+if (cutoffArg === '--help' || cutoffArg === '-h') usage(0);
+const CUTOFF = cutoffArg ?? DEFAULT_CUTOFF;
+if (!CUTOFF_RE.test(CUTOFF) || Number.isNaN(Date.parse(CUTOFF))) usage(1);
+if (sizeArg !== undefined && !/^\d+$/.test(sizeArg)) usage(1);
+const MIN_SIZE = sizeArg === undefined ? DEFAULT_MIN_SIZE : Number(sizeArg);
 
 const GROUPS = ['ts', 'rag', 'read', 'grep', 'bash', 'edit'];
 const SEARCH_RE = /(^|[\s|;&(])(grep|rg|ag|find)(\s|$)/;

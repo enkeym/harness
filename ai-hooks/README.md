@@ -96,8 +96,9 @@ test/test-context-meter.mjs     # цифра из последнего хода,
 test/test-question-guard.mjs    # вопрос, ожидание решения, варианты → block; код, цитата, заголовок, меню в ходе, stop_hook_active → пропуск
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
-test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам, источники, --sessions
-test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент мимо, порог размера, rest
+test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам, источники, --sessions, неверные аргументы
+test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент мимо, порог размера, rest, неверный аргумент
+test/test-tool-share.mjs        # доля инструментов: граница делит сессии, неверная граница или размер — использование
 test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, блок mcp в opencode.json, перерегистрация в Claude
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, занятый замок не трогает sync.log, выбор каталога и бинаря, тихие выходы
@@ -699,6 +700,7 @@ node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-usage-report.mjs
 node ~/.ai-hooks/test/test-start-cost.mjs
+node ~/.ai-hooks/test/test-tool-share.mjs
 node ~/.ai-hooks/test/test-mcp-sync.mjs
 node ~/.ai-hooks/test/test-log-error.mjs
 node ~/.ai-hooks/test/test-ragsave-sync.mjs

@@ -1,18 +1,36 @@
 #!/usr/bin/env node
 // Отчёт по logs/usage.jsonl: токены, стоимость, инструменты, субагенты.
-//
-//   usage-report.mjs            — последние 7 дней
-//   usage-report.mjs --days 30  — последние N дней
-//   usage-report.mjs --today
-//   usage-report.mjs --project vpn-new   — фильтр по подстроке пути проекта
-//   usage-report.mjs --sessions          — построчно по сессиям
+// Запуск — USAGE ниже.
 
 import fs from 'node:fs';
 import { USAGE_FILE } from '../claude/usage-log.mjs';
 
+const USAGE = `Запуск: node ~/.ai-hooks/bin/usage-report.mjs [--days N | --today] [--project <подстрока>] [--sessions]
+  --days N     — последние N дней (целое > 0), по умолчанию 7
+  --today      — только сегодня
+  --project    — фильтр по подстроке пути проекта
+  --sessions   — построчно по сессиям
+`;
+const SWITCHES = new Set(['--today', '--sessions']);
+const OPTIONS = new Set(['--days', '--project']);
+
+function usage(code) {
+  (code ? process.stderr : process.stdout).write(USAGE);
+  process.exit(code);
+}
+
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const value = (name, def) => { const i = args.indexOf(name); return i !== -1 ? args[i + 1] : def; };
+
+// Неизвестный флаг или --days без числа молча давали отчёт не за тот период.
+if (flag('--help') || flag('-h')) usage(0);
+for (let i = 0; i < args.length; i += 1) {
+  if (SWITCHES.has(args[i])) continue;
+  if (OPTIONS.has(args[i]) && args[i + 1] !== undefined) { i += 1; continue; }
+  usage(1);
+}
+if (flag('--days') && !/^[1-9]\d*$/.test(value('--days'))) usage(1);
 
 const days = flag('--today') ? 1 : Number(value('--days', 7));
 const projectFilter = value('--project', '');

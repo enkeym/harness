@@ -12,7 +12,7 @@
 // Оценка токенов — эвристика: кириллица ≈2.2 символа на токен, остальное ≈4;
 // на 35 сессиях сходится с usage в пределах 1–3k.
 //
-// Запуск: node ~/.ai-hooks/bin/start-cost.mjs [минимальный размер файла, байт]
+// Запуск — USAGE ниже.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
@@ -21,7 +21,20 @@ import { homedir } from 'node:os';
 const ROOT = join(homedir(), '.claude', 'projects');
 // Каталог проекта — его путь, где всё кроме [a-zA-Z0-9] заменено на '-'.
 const HOME_DIR = homedir().replace(/[^a-zA-Z0-9]/g, '-');
-const MIN_SIZE = Number(process.argv[2]) || 50_000;
+const DEFAULT_MIN_SIZE = 50_000;
+const USAGE = `Запуск: node ~/.ai-hooks/bin/start-cost.mjs [минимальный размер файла, байт]
+  размер — целое число байт; по умолчанию ${DEFAULT_MIN_SIZE}
+`;
+
+function usage(code) {
+  (code ? process.stderr : process.stdout).write(USAGE);
+  process.exit(code);
+}
+
+const sizeArg = process.argv[2];
+if (sizeArg === '--help' || sizeArg === '-h') usage(0);
+if (sizeArg !== undefined && !/^\d+$/.test(sizeArg)) usage(1);
+const MIN_SIZE = sizeArg === undefined ? DEFAULT_MIN_SIZE : Number(sizeArg);
 
 const tok = (s) => {
   if (!s) return 0;

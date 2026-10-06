@@ -67,6 +67,17 @@ function table(...args) {
   return rows.map((r) => Object.fromEntries(head.map((h, i) => [h, r[i]])));
 }
 
+// --- аргументы: неверный — использование и код 1, а не порог по умолчанию ---
+{
+  const run = (...args) => spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, HOME: home } });
+  const help = run('--help');
+  check('--help — использование, код 0', [help.status, help.stdout.startsWith('Запуск:')], [0, true]);
+  for (const arg of ['abc', '-5', '1e3']) {
+    const r = run(arg);
+    check(`${arg} — использование в stderr, код 1`, [r.status, r.stdout, r.stderr.startsWith('Запуск:')], [1, '', true]);
+  }
+}
+
 // --- порог размера ---
 check('по умолчанию маленькие файлы пропущены', table().length, 0);
 
