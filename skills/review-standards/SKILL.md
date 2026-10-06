@@ -10,8 +10,11 @@ are run, not re-done by hand; a finding is what they cannot see.
 
 ## Procedure
 
-1. Read the whole diff before judging a line. Uncommitted: `git diff HEAD` +
-   `git status --short`. Branch: `git diff <base>...HEAD`.
+1. Read the whole diff before judging a line — every file in `--stat`,
+   client, tests and generated specs (`swagger.json`) included; a large diff
+   is read in chunks, never sampled, and a context warning does not shorten
+   it. Uncommitted: `git diff HEAD` + `git status --short`. Branch:
+   `git diff <base>...HEAD`.
 2. Verify by search, never by eye: a literal → search the value in the project;
    a new type → search its fields; a new helper, hook or component → the reuse
    order of `code-rules.md` (project, installed packages, then a library
@@ -34,7 +37,8 @@ are run, not re-done by hand; a finding is what they cannot see.
 
 Every section of [../shared/code-rules.md](../shared/code-rules.md) — read it
 now unless it is already in this session's context — plus the stack skill's
-structural rules and:
+structural rules, every item of the project's own review section in its
+`CLAUDE.md` / `AGENTS.md` (each closed as checked or a finding), and:
 
 **Leftovers**
 - No `console.log`, debug flags, commented code, ownerless `TODO`, unused
@@ -60,9 +64,11 @@ Critical:  <breaks behaviour, data or a caller — path:line — why — fix>
 Important: <edge-case bug, broken caller, a test that tests nothing>
 Minor:     <one line each>
 ⚠️ Cannot verify from diff: <requirement — where to look>
+Read: <N>/<N> files; machines: <tsc, lint, tests — result or why not run>
 ```
 
-Empty section = "нет". Never "в целом хорошо" instead of a verdict.
+Empty section = "нет". Never "в целом хорошо" instead of a verdict. `Read`
+below N/N → no verdict and no offer to publish; finish reading first.
 
 ## Comments posted to an MR
 
