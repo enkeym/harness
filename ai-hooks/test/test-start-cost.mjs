@@ -89,7 +89,7 @@ check('без ответа ассистента и не .jsonl — строк н
 const [demo, root] = rows;
 
 // --- проект ---
-check('каталог без префикса HOME — /', root.proj, '/');
+check('сам каталог HOME — ~', root.proj, '~');
 check('префикс каталога HOME срезан', demo.proj, '-demo');
 
 // --- слои ---

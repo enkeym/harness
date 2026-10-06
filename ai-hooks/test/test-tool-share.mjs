@@ -2,7 +2,7 @@
 // Тесты доли инструментов (bin/tool-share.mjs): граница делит сессии на «до» и
 // «после»; неверная граница или размер — использование и код 1, а не молча
 // весь отчёт по одну сторону границы; запись <synthetic> (без вызова API) не
-// ответ — не в turns и не в модель.
+// ответ — не в turns и не в модель; сессии из самого HOME подписаны ~.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -23,8 +23,10 @@ function check(name, got, want) {
 
 // Транскрипты лежат под HOME/.claude/projects — скрипт видит только песочницу.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-share-'));
-const projDir = path.join(home, '.claude', 'projects', `${home.replace(/[^a-zA-Z0-9]/g, '-')}-demo`);
+const homeDir = path.join(home, '.claude', 'projects', home.replace(/[^a-zA-Z0-9]/g, '-'));
+const projDir = `${homeDir}-demo`;
 fs.mkdirSync(projDir, { recursive: true });
+fs.mkdirSync(homeDir, { recursive: true });
 
 const assistant = (timestamp) => ({
   type: 'assistant', timestamp,
@@ -34,9 +36,10 @@ const synthetic = (timestamp) => ({
   type: 'assistant', timestamp,
   message: { model: '<synthetic>', usage: { input_tokens: 0 }, content: [{ type: 'text', text: 'No response requested.' }] },
 });
-const write = (name, recs) => fs.writeFileSync(path.join(projDir, name), `${recs.map((r) => JSON.stringify(r)).join('\n')}\n`);
-write('aaaaaaaa-1.jsonl', [synthetic('2026-09-01T09:59:00.000Z'), assistant('2026-09-01T10:00:00.000Z')]);
-write('bbbbbbbb-2.jsonl', [assistant('2026-09-30T10:00:00.000Z')]);
+const write = (dir, name, recs) => fs.writeFileSync(path.join(dir, name), `${recs.map((r) => JSON.stringify(r)).join('\n')}\n`);
+write(projDir, 'aaaaaaaa-1.jsonl', [synthetic('2026-09-01T09:59:00.000Z'), assistant('2026-09-01T10:00:00.000Z')]);
+write(projDir, 'bbbbbbbb-2.jsonl', [assistant('2026-09-30T10:00:00.000Z')]);
+write(homeDir, 'cccccccc-3.jsonl', [assistant('2026-09-30T11:00:00.000Z')]);
 
 const run = (...args) => spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, HOME: home } });
 // Строки итога «всего до» / «всего после» → число сессий в каждой.
@@ -55,9 +58,12 @@ const rows = (out) => {
   check('<synthetic> не в turns и не в модели', [first.file, first.turns, first.model], ['aaaaaaaa', '1', 'opus-5']);
 }
 
+// --- проект ---
+check('сам каталог HOME — ~, префикс HOME срезан', rows(run('2026-09-15', '0').stdout).map((r) => r.proj), ['-demo', '-demo', '~']);
+
 // --- граница ---
-check('граница делит сессии', totals(run('2026-09-15', '0').stdout), { 'всего до': '1 сессий', 'всего после': '1 сессий' });
-check('граница со временем в Z', totals(run('2026-09-30T12:00:00Z', '0').stdout), { 'всего до': '2 сессий' });
+check('граница делит сессии', totals(run('2026-09-15', '0').stdout), { 'всего до': '1 сессий', 'всего после': '2 сессий' });
+check('граница со временем в Z', totals(run('2026-09-30T12:00:00Z', '0').stdout), { 'всего до': '3 сессий' });
 
 // --- аргументы ---
 const help = run('--help');

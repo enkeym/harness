@@ -93,7 +93,7 @@ for (const proj of readdirSync(ROOT)) {
     const file = join(dir, f);
     if (statSync(file).size < MIN_SIZE) continue;
     const r = layers(file);
-    if (r) rows.push({ proj: proj.replace(HOME_DIR, '') || '/', ...r });
+    if (r) rows.push({ proj: proj.replace(HOME_DIR, '') || '~', ...r });
   }
 }
 rows.sort((a, b) => (a.proj + a.file).localeCompare(b.proj + b.file));
