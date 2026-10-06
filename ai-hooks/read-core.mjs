@@ -14,6 +14,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 const LINES_RE = /^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/;
+const HEADER_RE = /^([a-z_]+):\s*(.*)$/;
+
+// format: json — объект; format: text (по умолчанию) — строки `ключ: значение`,
+// пустая строка, тело. У заглушки тела нет.
+const isJson = (text) => text.trimStart().startsWith('{');
 
 // Корень, от которого tokensave считает относительные пути, — тот же, что
 // выбирает bin/mcp-serve.sh:find_root: ближайший вверх каталог с
@@ -30,15 +35,26 @@ function indexRoot(start) {
   return null;
 }
 
-// Заглушка из текста ответа: JSON с unchanged === true. Иначе null.
+// Заглушка из текста ответа: JSON с unchanged === true или текстовый
+// заголовок со строкой `unchanged: true`. Иначе null.
 function parseStub(text) {
-  if (typeof text !== 'string' || !text.includes('"unchanged"')) return null;
-  try {
-    const obj = JSON.parse(text);
-    return obj && obj.unchanged === true ? obj : null;
-  } catch {
-    return null;
+  if (typeof text !== 'string' || !text.includes('unchanged')) return null;
+  if (isJson(text)) {
+    try {
+      const obj = JSON.parse(text);
+      return obj && obj.unchanged === true ? obj : null;
+    } catch {
+      return null;
+    }
   }
+  const fields = {};
+  for (const line of text.split('\n')) {
+    if (!line.trim()) break; // дальше тело — значит, ответ не заглушка
+    const m = HEADER_RE.exec(line);
+    if (!m) return null;
+    fields[m[1]] = m[2].trim();
+  }
+  return fields.unchanged === 'true' ? fields : null;
 }
 
 // Диапазон 'A-B' или 'A', 1-based, включительно — как у tokensave_read.
@@ -69,9 +85,14 @@ function stubBody(stub, toolInput, start) {
   return mode === 'full' ? text : sliceLines(text, ti.lines);
 }
 
-// Текст заглушки без `unchanged` и с `body`. Правим строку, а не пересобираем
-// объект: mtime_ns больше 2^53, и JSON.parse → stringify портит его младшие цифры.
+// Текст заглушки без `unchanged` и с телом — в формате самой заглушки. JSON правим
+// строкой, а не пересобираем объект: mtime_ns больше 2^53, и JSON.parse → stringify
+// портит его младшие цифры.
 function withBody(text, body) {
+  if (!isJson(text)) {
+    const header = text.split('\n').filter((line) => line.trim() && !line.startsWith('unchanged:'));
+    return `${header.join('\n')}\n\n${body}`;
+  }
   const out = text
     .replace(/"unchanged"\s*:\s*true\s*,\s*|,\s*"unchanged"\s*:\s*true/, '')
     .replace(/\s*\}\s*$/, () => `,\n  "body": ${JSON.stringify(body)}\n}`); // функция: `$&` в теле — не шаблон

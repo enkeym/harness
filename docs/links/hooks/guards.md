@@ -50,7 +50,8 @@ paths:
   переименовала переменную или `tokensave install` сузил matcher — обход снова
   открыт, тесты `test-guards.mjs` этого не увидят: они бьют по нашему гарду.
 - Заглушка `tokensave_read` (`unchanged: true`, поля `file`/`mode`/`mtime_ns`, блоки
-  `[{type:'text'}]`) — `ai-hooks/read-core.mjs:parseStub`/`refillResponse` ↔ формат
+  `[{type:'text'}]`; JSON или заголовок `ключ: значение` в `format: text`, который
+  tokensave отдаёт по умолчанию) — `ai-hooks/read-core.mjs:parseStub`/`withBody`/`refillResponse` ↔ формат
   ответа tokensave, тест `ai-hooks/test/test-read-refill.mjs`. Сменился формат при
   обновлении tokensave — хук молча перестаёт подменять, агент снова видит пустые
   чтения. Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в

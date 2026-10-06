@@ -40,6 +40,11 @@ function stub(file, mode = 'full') {
     .replace('"mtime_ns": 0', `"mtime_ns": ${MTIME}`);
 }
 
+// Заглушка в format: text — по умолчанию у tokensave_read: заголовок `ключ: значение`, тела нет.
+function textStub(file, mode = 'full') {
+  return `file: ${file}\nunchanged: true\nmode: ${mode}\ndigest: d\ntoken_count: 9\n`;
+}
+
 // Ответ MCP так, как его видит хук: массив блоков, второй — строка метрик.
 function blocks(text) {
   return [{ type: 'text', text }, { type: 'text', text: 'tokensave_metrics: before=1 after=1 saved=0' }];
@@ -85,6 +90,24 @@ const dir = project({ 'src/a.ts': SOURCE });
   check('lines 4', single && bodyOf(single).body === 'line4', JSON.stringify(single));
   const broken = run(dir, { file: 'src/a.ts', mode: 'lines', lines: '3-1' }, blocks(stub('src/a.ts', 'lines')));
   check('lines 3-1 — молчит', broken === null, JSON.stringify(broken));
+}
+
+// format: text — заголовок без unchanged, пустая строка, тело; как у свежего ответа.
+{
+  const full = run(dir, { file: 'src/a.ts' }, blocks(textStub('src/a.ts')));
+  check('text full: заголовок и тело файла',
+    full?.updatedToolOutput[0].text === `file: src/a.ts\nmode: full\ndigest: d\ntoken_count: 9\n\n${SOURCE}`,
+    JSON.stringify(full));
+  check('text full: блок метрик не тронут', full?.updatedToolOutput[1]?.text.startsWith('tokensave_metrics:'));
+  const lines = run(dir, { file: 'src/a.ts', mode: 'lines', lines: '2-3' }, blocks(textStub('src/a.ts', 'lines')));
+  check('text lines 2-3',
+    lines?.updatedToolOutput[0].text.endsWith(`token_count: 9\n\n${SOURCE.split('\n').slice(1, 3).join('\n')}`),
+    JSON.stringify(lines));
+  check('text map — молчит',
+    run(dir, { file: 'src/a.ts', mode: 'map' }, blocks(textStub('src/a.ts', 'map'))) === null);
+  const fresh = `file: src/a.ts\nmode: full\ndigest: d\ntoken_count: 9\n\nunchanged: true\n`;
+  check('text: обычный ответ со строкой unchanged в теле — молчит',
+    run(dir, { file: 'src/a.ts' }, blocks(fresh)) === null);
 }
 
 // unchanged последним полем — запятая перед ним тоже уходит.

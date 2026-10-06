@@ -490,7 +490,8 @@ tokensave) в корне такого репозитория. Файл пров�
 иначе ошибка tokensave превращается в цикл одинаковых отказов. На
 `PostToolUse(mcp__tokensave__tokensave_read)` — `read-refill.mjs`: заглушку
 `unchanged: true` из межсессионного кэша tokensave подменяет текстом с диска
-(`read-core.mjs`). Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
+(`read-core.mjs`) — и в JSON, и в `format: text`, формате tokensave по
+умолчанию. Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
