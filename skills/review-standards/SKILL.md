@@ -88,6 +88,11 @@ A colleague reads them, not a model.
   joined by dashes and semicolons.
 - One problem per comment: what breaks, a concrete example, what I suggest.
   Two or three short sentences.
+- A comment about code is a diff note on its line, never a general MR note:
+  `glab api -X POST …/merge_requests/<iid>/discussions --input <file>.json`
+  with `position` (`position_type: text`, the MR's `diff_refs` shas, `new_path`,
+  `new_line` checked against `git show <head>:<path>`). Expect `type: DiffNote`
+  in the reply. A general note only for the MR as a whole.
 - Cite only what the author can open: code in the MR, the repository, docs on
   the server. Never a local file of mine (`CLAUDE.md`, memory, a skill).
 - Leave the review unsubmitted unless the user says to send it.
