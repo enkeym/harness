@@ -2,8 +2,9 @@
 // Тесты стартовой цены сессий (bin/start-cost.mjs): слои считаются по
 // attachment-записям до первого ответа основной нити, кириллица и латиница
 // оцениваются по своим коэффициентам, промпт без служебных записей; Σreal — из
-// usage первого ответа, rest — остаток; маленькие файлы и сессии без ответа в
-// таблицу не попадают.
+// usage первого настоящего ответа (запись <synthetic> — без вызова API — не
+// в счёт), rest — остаток; маленькие файлы и сессии без ответа в таблицу не
+// попадают.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -37,9 +38,9 @@ function transcript(proj, name, recs) {
 // Длины кратны делителям: 'x'.repeat(4n) — n токенов, кириллица 'я'.repeat(22) — 10.
 const lat = (tokens) => 'x'.repeat(tokens * 4);
 const att = (attachment) => ({ type: 'attachment', attachment });
-const assistant = (read, create, extra = {}) => ({
+const assistant = (read, create, extra = {}, model = 'claude-opus-5') => ({
   type: 'assistant', ...extra,
-  message: { model: 'claude-opus-5', usage: { cache_read_input_tokens: read, cache_creation_input_tokens: create } },
+  message: { model, usage: { cache_read_input_tokens: read, cache_creation_input_tokens: create } },
 });
 
 transcript(`${homeDir}-demo`, 'aaaaaaaa-1.jsonl', [
@@ -54,6 +55,7 @@ transcript(`${homeDir}-demo`, 'aaaaaaaa-1.jsonl', [
   { type: 'user', isMeta: true, message: { content: lat(1000) } },
   { type: 'user', message: { content: `<command-name>/clear</command-name>${lat(1000)}` } },
   assistant(1, 1, { isSidechain: true }),
+  assistant(0, 0, {}, '<synthetic>'),
   assistant(300, 50),
   att({ type: 'skill_listing', content: lat(9999) }),
 ]);
@@ -99,7 +101,7 @@ check('файлы инструкций с их весом', demo.instrFiles, 'CL
 check('после первого ответа слои не читаются', demo.skills, '20');
 
 // --- итоги ---
-check('Σreal — из основной нити, не субагента', [demo.read, demo.create, demo['Σreal']], ['300', '50', '350']);
+check('Σreal — из основной нити, не субагента и не <synthetic>', [demo.read, demo.create, demo['Σreal']], ['300', '50', '350']);
 check('Σest и rest', [demo['Σest'], demo.rest], ['175', '175']);
 
 fs.rmSync(home, { recursive: true, force: true });

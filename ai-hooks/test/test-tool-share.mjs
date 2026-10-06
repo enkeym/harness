@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тесты доли инструментов (bin/tool-share.mjs): граница делит сессии на «до» и
 // «после»; неверная граница или размер — использование и код 1, а не молча
-// весь отчёт по одну сторону границы.
+// весь отчёт по одну сторону границы; запись <synthetic> (без вызова API) не
+// ответ — не в turns и не в модель.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -29,14 +30,30 @@ const assistant = (timestamp) => ({
   type: 'assistant', timestamp,
   message: { model: 'claude-opus-5', usage: { input_tokens: 1000 }, content: [{ type: 'tool_use', name: 'Read', input: {} }] },
 });
-for (const [name, ts] of [['aaaaaaaa-1.jsonl', '2026-09-01T10:00:00.000Z'], ['bbbbbbbb-2.jsonl', '2026-09-30T10:00:00.000Z']]) {
-  fs.writeFileSync(path.join(projDir, name), `${JSON.stringify(assistant(ts))}\n`);
-}
+const synthetic = (timestamp) => ({
+  type: 'assistant', timestamp,
+  message: { model: '<synthetic>', usage: { input_tokens: 0 }, content: [{ type: 'text', text: 'No response requested.' }] },
+});
+const write = (name, recs) => fs.writeFileSync(path.join(projDir, name), `${recs.map((r) => JSON.stringify(r)).join('\n')}\n`);
+write('aaaaaaaa-1.jsonl', [synthetic('2026-09-01T09:59:00.000Z'), assistant('2026-09-01T10:00:00.000Z')]);
+write('bbbbbbbb-2.jsonl', [assistant('2026-09-30T10:00:00.000Z')]);
 
 const run = (...args) => spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, HOME: home } });
 // Строки итога «всего до» / «всего после» → число сессий в каждой.
 const totals = (out) => Object.fromEntries(out.split('\n').filter((l) => l.startsWith('всего '))
   .map((l) => l.split('\t')).map(([label, n]) => [label, n]));
+
+// Строки сессий: шапка до пустой строки → объекты по колонкам.
+const rows = (out) => {
+  const [head, ...lines] = out.split('\n\n')[0].trim().split('\n').map((l) => l.split('\t'));
+  return lines.map((r) => Object.fromEntries(head.map((h, i) => [h, r[i]])));
+};
+
+// --- <synthetic> ---
+{
+  const [first] = rows(run('2026-09-15', '0').stdout);
+  check('<synthetic> не в turns и не в модели', [first.file, first.turns, first.model], ['aaaaaaaa', '1', 'opus-5']);
+}
 
 // --- граница ---
 check('граница делит сессии', totals(run('2026-09-15', '0').stdout), { 'всего до': '1 сессий', 'всего после': '1 сессий' });

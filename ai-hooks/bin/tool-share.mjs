@@ -13,6 +13,8 @@
 // deny — ответы «hook error» на вызовы инструментов (запреты и повторы).
 // Стоимость — Σ(input + cache_read + cache_creation) по всем ответам ассистента:
 // столько токенов контекста прочитала модель за сессию; out — Σ output.
+// Запись с моделью <synthetic> — без вызова API (ошибка /login, «No response
+// requested») — не ответ: не в turns и не в модель.
 //
 // Запуск — USAGE ниже. Граница по умолчанию — a0ec8f2 (снятие принуждения к
 // tokensave, 22.09.2026).
@@ -74,6 +76,7 @@ function session(file) {
     const content = rec.message?.content;
     if (!Array.isArray(content)) continue;
     if (rec.type === 'assistant') {
+      if (rec.message.model === '<synthetic>') continue;
       const u = rec.message.usage;
       if (u) {
         r.turns += 1;

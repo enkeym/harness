@@ -6,8 +6,9 @@
 // prompt_snapshot (системный промпт), skill_listing, instructions (CLAUDE.md,
 // core.md, память), deferred_tools_delta (имена отложенных инструментов),
 // mcp_instructions_delta, session_context. Схем инструментов там нет — они
-// видны только как остаток: Σreal (cache_read + cache_creation первой записи
-// ассистента) минус Σest.
+// видны только как остаток: Σreal (cache_read + cache_creation первого настоящего
+// ответа ассистента) минус Σest. Запись с моделью <synthetic> — без вызова
+// API (ошибка /login, «No response requested»), usage в ней нулевой — пропускается.
 //
 // Оценка токенов — эвристика: кириллица ≈2.2 символа на токен, остальное ≈4;
 // на 35 сессиях сходится с usage в пределах 1–3k.
@@ -55,7 +56,7 @@ function layers(file) {
     if (rec.version) r.version = rec.version;
     if (rec.type === 'assistant') {
       const u = rec.message?.usage;
-      if (!u) continue;
+      if (!u || rec.message.model === '<synthetic>') continue;
       r.model = (rec.message.model ?? '').replace('claude-', '');
       r.read = u.cache_read_input_tokens ?? 0;
       r.create = u.cache_creation_input_tokens ?? 0;
