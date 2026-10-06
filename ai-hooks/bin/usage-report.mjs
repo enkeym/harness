@@ -4,11 +4,12 @@
 
 import fs from 'node:fs';
 import { USAGE_FILE } from '../claude/usage-log.mjs';
+import { repoRoot } from '../state-core.mjs';
 
 const USAGE = `Запуск: node ~/.ai-hooks/bin/usage-report.mjs [--days N | --today] [--project <подстрока>] [--sessions]
   --days N     — последние N дней (целое > 0), по умолчанию 7
   --today      — только сегодня
-  --project    — фильтр по подстроке пути проекта
+  --project    — фильтр по подстроке пути проекта (каталога сессии)
   --sessions   — построчно по сессиям
 `;
 const SWITCHES = new Set(['--today', '--sessions']);
@@ -57,6 +58,13 @@ if (records.length === 0) {
 const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n));
 const usd = (n) => `$${n.toFixed(2)}`;
 const proj = (p) => String(p).replace(process.env.HOME || '', '~');
+// Подкаталоги одного репозитория — один проект. Вне git или каталога уже нет —
+// путь как есть; корень ищется один раз на путь.
+const roots = new Map();
+const projectRoot = (p) => {
+  if (!roots.has(p)) roots.set(p, (p && repoRoot(String(p))) || p);
+  return roots.get(p);
+};
 const pad = (s, w) => String(s).padEnd(w);
 const rpad = (s, w) => String(s).padStart(w);
 
@@ -71,7 +79,8 @@ let subagents = 0;
 for (const r of records) {
   total += r.cost || 0;
   subagents += r.subagents || 0;
-  const p = byProject[proj(r.project)] || (byProject[proj(r.project)] = { sessions: 0, cost: 0 });
+  const key = proj(projectRoot(r.project));
+  const p = byProject[key] || (byProject[key] = { sessions: 0, cost: 0 });
   p.sessions += 1;
   p.cost += r.cost || 0;
   for (const [model, m] of Object.entries(r.models || {})) {
