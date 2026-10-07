@@ -109,13 +109,17 @@ One block per finding, Critical and Important:
 ## Summary
 
 ~~~
-- **Итог:** approved | changes requested — Critical <n>, Important <n>, Minor <n>
+- **Итог:** approved | changes requested | не досмотрено — Critical <n>, Important <n>, Minor <n>
 - **Проверено без замечаний:** <категории>
 - **Стиль проекта:** <файл стиля> | файла стиля нет
+- **Покрытие:** прочитано <n> из <m> файлов описи | не читал: <файлы>
+- **Комментарии в MR:** <n> открытых, не повторял; исправлены: <id> | не исправлены: <id> | MR нет
 - **Не проверено:** <что и почему — тесты не запускались, нужен контекст задачи>
 ~~~
 
 Empty section = "нет". Nothing found → the summary only, no menu, no drafts.
+An unread file on the coverage line → `changes requested` or `не досмотрено`,
+never `approved`.
 
 ## Menu
 

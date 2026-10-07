@@ -86,6 +86,19 @@ NOTE_<N>
   one, then `GET …/merge_requests/<iid>/discussions` — a `204` does not prove
   the note exists; a missing one → its MR comment in chat.
 
+## Existing comments
+
+```bash
+curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "<api>/merge_requests/<iid>/discussions?per_page=100" \
+  | jq -r '.[] | .notes[0] | select(.system == false) | [.id, .author.username, .resolvable and (.resolved | not), (.position.new_path // "-"), (.position.new_line // .position.old_line // "-"), (.body | gsub("\n"; " ") | .[0:160])] | @tsv'
+```
+
+- A finding an open comment already names → no new finding, no draft; the
+  summary counts it.
+- An open comment whose line the reviewed code changed since → checked:
+  fixed or still there, one line each in the summary.
+- Nothing open, or the call fails → one line, the pass goes on.
+
 ## Current branch with an open MR
 
 `curl … "<api>/merge_requests?source_branch=<branch>&state=opened"`. Drafts

@@ -96,13 +96,20 @@ Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 [reference/gitlab.md](reference/gitlab.md), read before the first call. The
 scope is the MR's diff after `git fetch` — the only fetch /review runs; no
 checkout, no typecheck or tests, they go to the not-checked line. Several MRs
-run one by one: report → drafts → next; more than 3 → one line that the
-context may run out before the last.
+run one by one: report → drafts → next; after a large one (section 2) the
+rest go to a fresh session through `handoff`.
 
 ## 2. Pass
 
 [../shared/review-pass.md](../shared/review-pass.md) in full — the same pass a
 commit runs; a fact it leaves open goes to the not-checked line.
+
+- Inventory first: `git diff --stat <range>` minus review-pass step 5 files,
+  `*.scss`, `*.css`, `*.svg`. Each file is read in its diff before the report;
+  an unread one goes to the coverage line. Past ~1500 changed lines it is
+  large: one per session, `handoff` carries the unread files.
+- A colleague's branch or MR with an open MR: its comments before the pass —
+  *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
 
 No edits of any kind — not even a certain one-line fix or an impact-map line —
 and no files written, `/tmp` included: a large diff is read as `--stat`, then

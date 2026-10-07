@@ -25,7 +25,10 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
    handler, webhook, job, upload, bot or CLI command — list what it needs:
    authentication, ownership, input validation, size and rate limits,
    idempotency, response mapping. Find each in code or in a guard it passes
-   through; an absent control is a finding, as much as a wrong one.
+   through; an absent control is a finding, as much as a wrong one. A changed
+   query, `select`, response DTO or mapper counts too: walk `tokensave_callers`
+   up to every entry point that returns it, unchanged ones included — a field
+   added below an old route reaches whoever its guard lets in.
 4. Checklist for the categories the diff touches; walk callers of touched
    symbols (`tokensave_callers`) — the vulnerable path is often the caller.
 5. High stakes (auth, sessions, payments, secrets/config, upload, outbound
