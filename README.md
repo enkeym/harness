@@ -40,6 +40,14 @@ cd ~/harness
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
 
+Playwright MCP репозиторий только регистрирует; пакет и браузер ставятся до
+`./install.sh` (иначе сервер пропущен), той же node из nvm, что в PATH агентов:
+
+```bash
+npm i -g @playwright/mcp
+node "$(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js" install chromium
+```
+
 В репозитории нет ни имени пользователя, ни путей этой машины: конфиги
 ссылаются на `$HOME`, `~` или `{env:HOME}` (OpenCode). Значения машины —
 в двух файлах вне git, `install.sh` создаёт их из `local/*.example`, только если

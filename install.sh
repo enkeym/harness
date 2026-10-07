@@ -252,6 +252,16 @@ externals() {
       && good "модель @commit $commit_model доступна" \
       || warn "$commit_model недоступна — opencode auth login ($commit_provider) или сменить model в opencode/agent/commit.md"
   fi
+  # Playwright MCP: пакет и браузер ставятся руками. Ревизию chromium называет
+  # playwright внутри @playwright/mcp — у `npx playwright` она может быть другой.
+  if command -v playwright-mcp >/dev/null; then
+    good "playwright-mcp: $(command -v playwright-mcp)"
+    pw_cli="$(npm root -g 2>/dev/null)/@playwright/mcp/node_modules/playwright/cli.js"
+    pw_dir=$(node "$pw_cli" install --dry-run chromium 2>/dev/null | awk '/Install location/{print $3; exit}' || true)
+    [ -n "$pw_dir" ] && [ -d "$pw_dir" ] && good "chromium для Playwright MCP: $pw_dir" || warn "chromium для Playwright MCP не скачан — node $pw_cli install chromium"
+  else
+    bad "playwright-mcp — не найден, MCP playwright пропущен: npm i -g @playwright/mcp"
+  fi
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$RAG_HOME/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
   # gitconfig ссылается на глобальные git-хуки tokensave (chain-repo-hook +

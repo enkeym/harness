@@ -40,6 +40,10 @@ paths:
   Claude найденный путь, OpenCode — голое имя (его PATH тоже должен видеть
   nvm). Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —
   путь у Claude устарел до следующего `./install.sh`.
+- `install.sh:externals` ↔ раскладка пакета `@playwright/mcp`: chromium
+  сверяется через `node_modules/playwright/cli.js install --dry-run` внутри
+  глобального пакета (ревизия та, что ждёт MCP). Пакет сменит раскладку —
+  проверка выдаст ложное «не скачан»; та же команда — в README.
 - `mcp/servers.json` → `ai-hooks/bin/mcp-serve.sh` (аргумент — имя сервера);
   раскладывает по агентам `bin/mcp-sync.mjs`. Новый сервер в JSON без ветки
   `case "$kind"` в `mcp-serve.sh` не стартует.
