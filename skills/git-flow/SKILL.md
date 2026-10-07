@@ -26,9 +26,17 @@ ticket, commit style, remote and project restrictions come from
   - Header: one line, ~72 chars.
   - Body only for multi-area changes: 2–5 bullets, what and why, in the
     language the user's bodies use.
-  - Multi-line messages via `git commit -F -`, never chained `-m`; line 2 of
-    the message is empty — without it git joins header and body into one
-    subject, and skill-gate refuses the commit.
+  - Multi-line messages via `git commit -F -`, never chained `-m`. Line 2
+    is empty — without it git joins header and body into one subject, and
+    skill-gate refuses the whole command, `git add` included. Copy this shape:
+
+    ```
+    git commit -F - <<'EOF'
+    <header>
+
+    - <bullet>
+    EOF
+    ```
 - Committing named paths only (`git add <paths> && git commit`) →
   `git diff --cached --name-only` first: whatever an earlier step staged goes
   into the commit too.
