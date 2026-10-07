@@ -67,16 +67,24 @@ curl -sS -o /dev/null -w '<N> %{http_code}\n' -H "PRIVATE-TOKEN: $GITLAB_TOKEN" 
 NOTE_<N>
 ```
 
-- Added line → `new_line`; removed line → `old_line`; unchanged line inside
-  a hunk → both.
-- A line outside the diff's hunks → no `position[...]` fields, the note's first
-  line `` `<path>:<line>` ``.
+- Position only on an added line: `new_line` from a `+` row of
+  `git diff -U0 <base_sha> <head_sha> -- <path>`, never counted by eye; no
+  `old_line`. A removed line, a context line or one outside the hunks → no
+  `position[...]` fields, the note's first line `` `<path>:<line>` `` —
+  GitLab stores such a position as a draft, then «Submit review» can fail on
+  it with 500.
 - `400` on a positioned note → one more call for those notes, without
   position, first line `` `<path>:<line>` ``.
 - Any other code (`401`, `403`, `000` …) → that note's MR comment in chat
   ([report.md](report.md)) with its code.
-- Done → `MR !<iid>: <n> черновиков → <web_url> — проверь и нажми «Submit review»`.
+- After the call, `GET <api>/merge_requests/<iid>/draft_notes`: the count of
+  this run's drafts matches the `201` lines, or the missing ones go to chat.
+- Done → `MR !<iid>: <n> черновиков → <web_url> — проверь и нажми «Submit review»; если упадёт — не жми повторно, скажи мне`.
   Drafts stay visible only to the user until that submit.
+- Submit failed → no retry and no `bulk_publish`: each attempt publishes the
+  good drafts again before failing. `PUT …/draft_notes/<id>/publish` one by
+  one, then `GET …/merge_requests/<iid>/discussions` — a `204` does not prove
+  the note exists; a missing one → its MR comment in chat.
 
 ## Current branch with an open MR
 
