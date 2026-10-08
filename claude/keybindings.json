@@ -5,8 +5,7 @@
     {
       "context": "Global",
       "bindings": {
-        "ctrl+z": null,
-        "ctrl+с": "app:interrupt"
+        "ctrl+z": null
       }
     },
     {

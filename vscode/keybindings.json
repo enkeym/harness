@@ -1033,7 +1033,7 @@
     "key": "ctrl+shift+x",
     "command": "workbench.action.terminal.clear"
   },
-  // Кастомные клавиши
+  { "key": "ctrl+с", "command": "workbench.action.terminal.sendSequence", "args": { "text": "\u0003" }, "when": "terminalFocus" }, // Ctrl+С на русской раскладке: терминал не шлёт ETX. Далее кастомные клавиши
   {
     "key": "ctrl+l",
     "command": "runCommands",
