@@ -7,6 +7,28 @@
       "bindings": {
         "ctrl+z": null
       }
+    },
+    {
+      "context": "Chat",
+      "bindings": {
+        "meta+з": "chat:modelPicker",
+        "meta+щ": "chat:fastMode",
+        "meta+е": "chat:thinkingToggle",
+        "meta+ц": "chat:workflowKeywordToggle",
+        "alt+м": "chat:imagePaste"
+      }
+    },
+    {
+      "context": "ModelPicker",
+      "bindings": {
+        "ы": "modelPicker:thisSessionOnly"
+      }
+    },
+    {
+      "context": "EffortSlider",
+      "bindings": {
+        "ы": "effortSlider:thisSessionOnly"
+      }
     }
   ]
 }
