@@ -55,6 +55,8 @@ next step needs. The hook says which case it is; follow its wording.
 
 - Absolute dates (`9 сентября 2026`), not relative ones. Exact symbol names,
   not vague references.
+- Inside a user-invoked command → `Дальше` names its file and arguments
+  (`~/.claude/skills/review/SKILL.md на !<iid>`), never a bare `/review`.
 
 ```markdown
 ## Задача
@@ -114,6 +116,9 @@ replaced:
   → it is in context through the `@` in the first prompt; missing there →
   `Read` it before anything else. Either way steps come from the plan, state
   from the snapshot; the snapshot wins on state, the plan on steps.
+- `Дальше` inside a user-invoked command (`/review`, `/commit`) → `Read` its
+  SKILL.md and continue; never ask the user to retype it — the Skill tool
+  can't call it, and the user's call already started the run.
 - Open only the files the first step touches. The rest of `Карта` stays a
   pointer until a step needs it.
 - Don't re-run what `Проверено` lists. Re-check one of its lines only when the

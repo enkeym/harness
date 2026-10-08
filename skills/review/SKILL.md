@@ -97,7 +97,8 @@ Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 scope is the MR's diff after `git fetch` — the only fetch /review runs; no
 checkout, no typecheck or tests, they go to the not-checked line. Several MRs
 run one by one: report → drafts → next; after a large one (section 2) the
-rest go to a fresh session through `handoff`.
+rest go to a fresh session through `handoff`, `Дальше` naming this file and
+the remaining `!<iid>` — the new session continues on its own.
 
 ## 2. Pass
 
