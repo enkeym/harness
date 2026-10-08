@@ -55,8 +55,8 @@ next step needs. The hook says which case it is; follow its wording.
 
 - Absolute dates (`9 сентября 2026`), not relative ones. Exact symbol names,
   not vague references.
-- Inside a user-invoked command → `Дальше` names its file and arguments
-  (`~/.claude/skills/review/SKILL.md на !<iid>`), never a bare `/review`.
+- Inside a user-invoked command → `Дальше` is an action, never a bare
+  `/review`: `Read ~/.claude/skills/review/SKILL.md, продолжить на !<iid>`.
 
 ```markdown
 ## Задача
