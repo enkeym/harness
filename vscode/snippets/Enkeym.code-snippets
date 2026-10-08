@@ -1,0 +1,563 @@
+{
+   "Self-closing component": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "<c",
+    "body": "<${1:Component} $2/>",
+    "description": "Self-closing component tag"
+  },
+"Console Log Named": {
+  "scope": "javascript,typescript,javascriptreact,typescriptreact",
+  "prefix": ["clg", "сдп"],
+   "body": ["console.log(${2:'[${1:label}] ${1:variable}:', ${3:${1:variable}}})$0"],
+  "description": "console.log with variable name"
+},
+"Console Log Info": {
+  "scope": "javascript,typescript,javascriptreact,typescriptreact",
+  "prefix": ["cli", "сдш"],
+   "body": ["console.info(${2:'[${1:label}] ${1:variable}:', ${3:${1:variable}}})$0"],
+  "description": "console.info with variable name"
+
+},
+"Console Log Warn": {
+  "scope": "javascript,typescript,javascriptreact,typescriptreact",
+  "prefix": ["clw", "сдц"],
+  "body": ["console.warn(${0:'[${1:label}] ${1:variable}:', ${3:${1:variable}}})"],
+  "description": "console.warn with variable name"
+},
+"Console Log Error": {
+  "scope": "javascript,typescript,javascriptreact,typescriptreact",
+  "prefix": ["cle", "сду"],
+   "body": ["console.error(${2:'[${1:label}] ${1:variable}:', ${3:${1:variable}}})$0"],
+  "description": "console.error with variable name"
+},
+  "Console Log Table": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": ["clt", "сде"],
+    "body": ["console.table(${0:arg})"],
+    "description": "console.table with variable name"
+  },
+  "children": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "ch",
+    "body": ["children"],
+    "description": "children"
+  },
+  "length": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "ln",
+    "body": ["length"],
+    "description": "length"
+  },
+  "express": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exs",
+    "body": ["import express from 'express'"],
+    "description": "import express"
+  },
+  "Export constant (React component, optional body)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": ["exc", "учс"],
+    "body": ["export const ${1:${TM_FILENAME_BASE}} = "],
+    "description": "Exported constant with optional component body"
+  },
+  "Export named component with props (type)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exct",
+    "body": [
+      "type ${1:ComponentProps} = {",
+      "  ${2:title}: ${3:string};",
+      "};",
+      "",
+      "export const ${4:ComponentName} = ({ ${2} }: ${1}) => {",
+      "  return <div>{${2}}</div>;",
+      "};"
+    ],
+    "description": "Named export component with props (type)"
+  },
+  "Export named component with props (interface)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exci",
+    "body": [
+      "interface ${1:ComponentProps} {",
+      "  ${2:title}: ${3:string};",
+      "};",
+      "",
+      "export const ${4:ComponentName} = ({ ${2} }: ${1}) => {",
+      "  return <div>{${2}}</div>;",
+      "};"
+    ],
+    "description": "Named export component with props (interface)"
+  },
+  "Typed Object (type)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "type",
+    "body": ["type ${1:ComponentName} = {", "  ${2:key}: ${3:type}", "};"],
+    "description": "Type alias for component props"
+  },
+  "Typed Object (interface)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "interface",
+    "body": ["interface ${1:ComponentName} {", "  ${2:key}: ${3:type}", "}"],
+    "description": "Interface for component props"
+  },
+  "export function": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exf",
+    "body": ["export function ${TM_FILENAME_BASE}(${1:props}) {${2:value}}"],
+    "description": "export const"
+  },
+  "export class": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": ["excc", "учсс"],
+    "body": ["export class ${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/upcase}${2:/upcase}/g}"],
+    "description": "export class"
+  },
+  "const": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "cns",
+    "body": ["const ${1:${TM_FILENAME_BASE}} = ${0://value}"],
+    "description": "const"
+  },
+  "class constructor": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "con",
+    "body": ["constructor(${1:param}) {", "$2", "}"],
+    "description": "constructor"
+  },
+  "res status": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "rs",
+    "body": ["res.status(${1:код}).json({ message: '${2:сообщение}' })"],
+    "description": "ответ с сервера"
+  },
+  "create Api": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "createApi",
+    "body": [
+      "import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'"
+    ],
+    "description": "RTK Query"
+  },
+  "preventDefault()": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "prev",
+    "body": ["preventDefault()"],
+    "description": "Resetting standard actions"
+  },
+  "Auto import styles": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": ["scss", "ысыы"],
+    "body": ["import styles from './${TM_FILENAME_BASE}.module.scss';"],
+    "description": "Import local module.scss file based on filename"
+  },
+  "Export Async Function": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exfa",
+    "body": [
+      "export async function ${1:functionName}(${2:args}) {",
+      "  ${3:// your code here}",
+      "}"
+    ],
+    "description": "Create export async function"
+  },
+  "Export Type": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "ext",
+    "body": ["export type ${1:TypeName} = $2"],
+    "description": "Create export type"
+  },
+  "useState (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useState",
+    "body": [
+      "const [${1:state}, set${1/(.*)/${1:/capitalize}/}] = useState${2:<${3:type}>}(${4:initialValue});"
+    ],
+    "description": "useState with optional generic type"
+  },
+  "useReducer (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useReducer",
+    "body": [
+      "const [${1:state}, dispatch${1/(.*)/${1:/capitalize}/}] = useReducer(${2:reducer}, ${3:initialState});"
+    ],
+    "description": "useReducer with inferred dispatcher"
+  },
+  "useRef (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useRef",
+    "body": ["const ${1:ref} = useRef${2:<${3:HTMLDivElement}>}(${4:null});"],
+    "description": "useRef with optional generic type"
+  },
+  "useMemo (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useMemo",
+    "body": [
+      "const ${1:memoizedValue} = useMemo(() => {",
+      "  ${2:returnValue}",
+      "}, [${3:dependencies}]);"
+    ],
+    "description": "useMemo typed"
+  },
+  "useCallback (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useCallback",
+    "body": [
+      "const ${1:callbackFn} = useCallback${2}((${3:args}) => {",
+      "  ${0:// logic here}",
+      "}, [${4:dependencies}]);"
+    ],
+    "description": "useCallback typed"
+  },
+  "useEffect (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useEffect",
+    "body": [
+      "useEffect(() => {",
+      "\t${1:// side effect here}",
+      "\t${2:return () => ${3:/* cleanup here */}}",
+      "}, [${4:dependencies}]);"
+    ],
+    "description": "useEffect with optional inline cleanup"
+  },
+  "useLayoutEffect (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useLayoutEffect",
+    "body": [
+      "useLayoutEffect(() => {",
+      "\t${1:// synchronous side effect here}",
+      "\t${2:return () => ${3:/* cleanup here */}}",
+      "}, [${4:dependencies}]);"
+    ],
+    "description": "useLayoutEffect with optional inline cleanup"
+  },
+
+  "useContext (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useContext",
+    "body": ["const ${1:context} = useContext(${2:MyContext});"],
+    "description": "useContext hook"
+  },
+  "useId (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "useId",
+    "body": ["const ${1:id} = useId();"],
+    "description": "useId hook"
+  },
+  "Typed ChangeEvent Handler": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "onch",
+    "body": [
+      "const handle${1:Change} = (e: React.ChangeEvent<${2:HTMLInputElement}>) => {",
+      "  ${3:// logic here}",
+      "};"
+    ],
+    "description": "Typed onChange handler"
+  },
+  "Typed Submit Handler": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "onsub",
+    "body": [
+      "const handle${1:Submit} = (e: React.FormEvent<HTMLFormElement>) => {",
+      "  e.preventDefault()",
+      "  ${2:// logic here}",
+      "};"
+    ],
+    "description": "Typed form submit handler"
+  },
+  "Type Alias": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "type",
+    "body": ["type ${1:TypeName} = {", "  ${2:key}: ${3:type}", "};"],
+    "description": "Type alias definition"
+  },
+  "Exported Type Alias": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "ext",
+    "body": ["export type ${1:TypeName} = {", "  ${2:key}: ${3:type}", "};"],
+    "description": "Export type alias"
+  },
+  "Exported Interface": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exif",
+    "body": [
+      "export interface ${1:InterfaceName} {",
+      "  ${2:key}: ${3:type}",
+      "}"
+    ],
+    "description": "Export interface"
+  },
+  "Import useState + useEffect": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "imse",
+    "body": ["import { useState, useEffect } from 'react';"],
+    "description": "Import useState and useEffect"
+  },
+  "Import useCallback + useRef": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "imrc",
+    "body": ["import { useCallback, useRef } from 'react';"],
+    "description": "Import useCallback and useRef"
+  },
+  "Import React + FC": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "imrfc",
+    "body": ["import React, { FC } from 'react';"],
+    "description": "Import React and FC"
+  },
+  "React arrow component (rafc)": {
+    "prefix": "rafc",
+    "body": [
+      "${1:\"use client\"}",
+      "",
+      "import React from 'react';",
+      "",
+      "export const ${TM_FILENAME_BASE} = () => {",
+      "  return <div>${TM_FILENAME_BASE}${0}</div>;",
+      "};"
+    ],
+    "description": "React arrow function component with optional 'use client'"
+  },
+  "React Server Component (rsc)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "rsc",
+    "body": [
+      "export default async function ${TM_FILENAME_BASE}() {",
+      "  // const data = await fetch(...); // пример async запроса",
+      "  return (",
+      "    <div>${TM_FILENAME_BASE}${0}</div>",
+      "  );",
+      "}"
+    ],
+    "description": "React Server Component"
+  },
+  "React arrow from prop component (rafcp)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "rafcp",
+    "body": [
+      "import React from 'react';",
+      "",
+      "export const ${TM_FILENAME_BASE} = ({}: ${1:Props}) => {",
+      "  return <div>${TM_FILENAME_BASE}</div>;",
+      "};",
+      ""
+    ],
+    "description": "React functional component with props"
+  },
+
+  "React FC component with interface props (rafci)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "rafci",
+    "body": [
+      "import React from 'react';",
+      "",
+      "interface ${TM_FILENAME_BASE}Props {",
+      "  $1",
+      "}",
+      "",
+      "export const ${TM_FILENAME_BASE} = ({ $2 }: ${TM_FILENAME_BASE}Props) => {",
+      "  return <div>${TM_FILENAME_BASE}</div>;",
+      "};",
+      ""
+    ],
+    "description": "React functional component with typed props interface"
+  },
+  "React Component with Props (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "rafct",
+    "body": [
+      "type ${TM_FILENAME_BASE}Props = {",
+      "  ${1:title}: ${2:string};",
+      "};",
+      "",
+      "const ${TM_FILENAME_BASE} = ({ ${1} }: ${TM_FILENAME_BASE}Props) => {",
+      "  return <div>{${1}}</div>;",
+      "};",
+      "",
+      "export default ${TM_FILENAME_BASE};"
+    ],
+    "description": "React component with typed props using type alias"
+  },
+  "React Component with Children (TS)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "rafcc",
+    "body": [
+      "import type { ReactNode } from 'react';",
+      "",
+      "type ${TM_FILENAME_BASE}Props = {",
+      "  children: ReactNode;",
+      "};",
+      "",
+      "const ${TM_FILENAME_BASE} = ({ children }: ${TM_FILENAME_BASE}Props) => {",
+      "  return <div>{children}</div>;",
+      "};",
+      "",
+      "export default ${TM_FILENAME_BASE};"
+    ],
+    "description": "React component with typed children prop"
+  },
+  "React Component — FC (TS)": {
+    "prefix": "rfc",
+    "body": [
+      "import type { FC } from 'react';",
+      "",
+      "type ${1:T${TM_FILENAME_BASE}Props} = {",
+      "  $2",
+      "}",
+      "",
+      "export const ${TM_FILENAME_BASE}: FC<$1> = ({ $2 }) => {",
+      "  return <div>${TM_FILENAME_BASE}</div>;",
+      "};"
+    ],
+    "description": "React.FC with typed props (TS)"
+  },
+"useCustomHook": {
+  "scope": "javascript,typescript,javascriptreact,typescriptreact",
+  "prefix": ["useh", "гыур"],
+  "body": [
+    "type T${TM_FILENAME_BASE/(.*)/${1:/capitalize}/}Props = {",
+    "  ${2:value}: ${3:string};",
+    "};",
+    "",
+    "export const ${TM_FILENAME_BASE} = ({ ${2:value} }: T${TM_FILENAME_BASE/(.*)/${1:/capitalize}/}Props) => {",
+    "  $0",
+    "",
+    "  return {",
+    "    ${2:value},",
+    "  };",
+    "};"
+  ],
+  "description": "React Custom Hook"
+},
+  "React Component — Function (TS)": {
+    "prefix": "rfcf",
+    "body": [
+      "import React from 'react';",
+      "",
+      "type ${1:T${TM_FILENAME_BASE}Props} = {",
+      "  $2",
+      "};",
+      "",
+      "export function ${TM_FILENAME_BASE}({ $3 }: $1) {",
+      "  return ${4://write there}",
+      "}"
+    ],
+    "description": "Typed React function component without React.FC (TS)"
+  },
+  "React Component — const (child JSX)": {
+    "prefix": "rfcc",
+    "body": [
+      "const ${TM_FILENAME_BASE} = () => {",
+      "  return (",
+      "    <div>",
+      "      ${TM_FILENAME_BASE}",
+      "    </div>",
+      "  );",
+      "};",
+      "",
+      "export default ${TM_FILENAME_BASE};"
+    ],
+    "description": "Basic server-compatible React component using const declaration and child JSX element"
+  },
+  "Export default const component (modern)": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exdc",
+    "body": [
+      "const ${TM_FILENAME_BASE} = () => {",
+      "  return <div>${TM_FILENAME_BASE}</div>;",
+      "};",
+      "",
+      "export default ${TM_FILENAME_BASE};"
+    ],
+    "description": "Modern default export component"
+  },
+  "Export default function": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": "exdf",
+    "body": [
+      "export default function ${TM_FILENAME_BASE}(${1:params}) {",
+      "  ${0:// TODO: implement}",
+      "}"
+    ],
+    "description": "Export default function"
+  },
+  // Nest
+  "NestJS Injectable Class": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": ["inj", "што"],
+    "body": [
+      "import { Injectable } from '@nestjs/common';",
+      "",
+      "@Injectable()",
+      "export class ${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/upcase}${2:/upcase}/g} {",
+      "  $0",
+      "}"
+    ],
+    "description": "Creates NestJS injectable class from filename"
+  },
+    "NestJS Module": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact",
+    "prefix": ["mod", "ьщв"],
+    "body": [
+      "import { Module } from '@nestjs/common';",
+      "",
+      "@Module({",
+      "  imports: [$1],",
+      "  controllers: [$2],",
+      "  providers: [$3],",
+      "  exports: [$4],",
+      "})",
+      "export class ${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/upcase}${2:/upcase}/g} {}",
+      ""
+    ],
+    "description": "NestJS Module"
+  },
+  "NestJS DTO": {
+  "scope": "typescript",
+  "prefix": ["dto", "вещ"],
+  "body": [
+    "export class ${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/upcase}${2:/upcase}/g} {",
+    "  $0",
+    "}"
+  ],
+  "description": "Creates DTO class from filename"
+},
+"NestJS Sequelize Entity (Simple)": {
+  "scope": "typescript",
+  "prefix": ["ent", "уте"],
+  "body": [
+    "import { Table, Column, Model, DataType } from 'sequelize-typescript';",
+    "import { ApiProperty } from '@nestjs/swagger';",
+    "import { v4 as uuidv4 } from 'uuid';",
+    "",
+    "interface T${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/capitalize}${2:/capitalize}/g}Attributes {",
+    "  $1",
+    "}",
+    "",
+    "@Table({",
+    "  tableName: '${TM_FILENAME_BASE/(.*)\\.entity/$1/}',",
+    "  timestamps: true,",
+    "  paranoid: true,",
+    "})",
+    "export class ${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/capitalize}${2:/capitalize}/g} extends Model<",
+    "  ${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/capitalize}${2:/capitalize}/g},",
+    "  Partial<T${TM_FILENAME_BASE/[-.]([a-z])|^([a-z])/${1:/capitalize}${2:/capitalize}/g}Attributes>",
+    "> {",
+    "",
+    "  @ApiProperty({",
+    "    description: 'Entity ID (UUID v4)',",
+    "    example: '123e4567-e89b-12d3-a456-426614174000',",
+    "  })",
+    "  @Column({",
+    "    type: DataType.UUID,",
+    "    primaryKey: true,",
+    "    allowNull: false,",
+    "    defaultValue: () => uuidv4(),",
+    "  })",
+    "  id: string;",
+    "",
+    "  $0",
+    "}"
+  ],
+  "description": "Simplified Sequelize entity with UUID primary key"
+}
+}

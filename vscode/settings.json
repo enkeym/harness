@@ -1,0 +1,142 @@
+{
+  "files.autoSave": "afterDelay",
+  "editor.renderWhitespace": "all",
+  "editor.minimap.enabled": false,
+  "explorer.confirmDelete": false,
+  "js/ts.updateImportsOnFileMove.enabled": "always",
+  "explorer.compactFolders": false,
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "editor.wordWrap": "on",
+  "editor.fontLigatures": true,
+  "editor.suggest.shareSuggestSelections": true,
+  "editor.wordBasedSuggestions": "currentDocument",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.fontFamily": "Hack, Consolas, 'Courier New', monospace",
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
+  },
+  "[javascript]": {
+    "editor.maxTokenizationLineLength": 100000,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "js/ts.format.insertSpaceAfterSemicolonInForStatements": false,
+  "js/ts.suggest.autoImports": true,
+  "prettier.trailingComma": "none",
+  "js/ts.preferences.jsxAttributeCompletionStyle": "braces",
+  "eslint.format.enable": true,
+  "oxc.enable.oxlint": true,
+  "oxc.lint.run": "onType", // oxc
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact",
+    "typescript": "typescriptreact"
+  },
+  "emmet.useInlineCompletions": true,
+  "code-runner.executorMap": {
+    "javascript": "node"
+  },
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.profiles.windows": {
+    "Git Bash": {
+      "source": "Git Bash"
+    }
+  },
+  "workbench.startupEditor": "none",
+  "explorer.confirmDragAndDrop": false,
+  "search.quickOpen.includeHistory": false,
+  "search.useIgnoreFiles": true,
+  "diffEditor.ignoreTrimWhitespace": true,
+  "editor.acceptSuggestionOnCommitCharacter": false,
+  "editor.codeActions.triggerOnFocusChange": true,
+  "cSpell.language": "en,ru",
+  "js/ts.preferences.quoteStyle": "double",
+  "editor.smoothScrolling": true,
+  "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
+  "extensions.ignoreRecommendations": true,
+  "window.confirmSaveUntitledWorkspace": false,
+  "prettier.semi": false,
+  "git.autofetch": true,
+  "workbench.layoutControl.enabled": false,
+  "explorer.confirmPasteNative": false,
+  "tailwindCSS.includeLanguages": {
+    "typescript": "html",
+    "typescriptreact": "html"
+  },
+  "js/ts.tsserver.automaticTypeAcquisition.enabled": true,
+  "editor.linkedEditing": true,
+  "js/ts.tsserver.maxMemory": 8192,
+  "security.workspace.trust.untrustedFiles": "open",
+  "window.commandCenter": false,
+  "git.confirmSync": false,
+  "terminal.integrated.smoothScrolling": true,
+  "workbench.list.smoothScrolling": true,
+  "git.openRepositoryInParentFolders": "never",
+  "git.blame.editorDecoration.enabled": false, // Аналог ленса
+  "editor.suggest.preview": true,
+  "editor.suggest.localityBonus": true, // Подсказки во время ввода
+  "editor.inlayHints.enabled": "on", // Показывает сокращения
+  "terminal.integrated.scrollback": 50000,
+  "search.followSymlinks": false,
+  "mergeEditor.showDeletionMarkers": false,
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.useFlatConfig": true,
+  "git.fetchOnPull": true,
+  "git.postCommitCommand": "sync",
+  "eslint.lintTask.enable": true,
+  "eslint.workingDirectories": [
+    {
+      "mode": "auto"
+    }
+  ],
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  "js/ts.implementationsCodeLens.enabled": true,
+  "editor.quickSuggestionsDelay": 0,
+  "editor.glyphMargin": false,
+  "workbench.sideBar.location": "right",
+  "workbench.colorTheme": "Dark+",
+  "editor.parameterHints.cycle": false,
+  "workbench.editor.empty.hint": "hidden",
+  "commentTranslate.targetLanguage": "ru",
+  "workbench.editor.pinnedTabsOnSeparateRow": true,
+  "editor.autoClosingQuotes": "always",
+  "editor.autoClosingBrackets": "always",
+  "editor.autoClosingOvertype": "always",
+  "editor.parameterHints.enabled": false,
+  "remote.autoForwardPortsSource": "hybrid",
+  "html.suggest.hideEndTagSuggestions": true,
+  "cSpell.userWords": ["Krugozor", "стремно"],
+  "chat.extensionUnification.enabled": false,
+  "editor.lightbulb.enabled": "off",
+  "chat.agent.enabled": false,
+  "chat.agentsControl.enabled": "hidden",
+  "workbench.editor.enablePreview": false,
+  "window.newWindowProfile": "По умолчанию",
+  "chat.disableAIFeatures": true,
+  "workbench.browser.openLocalhostLinks": false,
+  "update.showReleaseNotes": false,
+
+  // Path-inteliesense
+  "js/ts.suggest.paths": true,
+  "path-intellisense.showHiddenFiles": false,
+  "path-intellisense.extensionOnImport": true,
+  "editor.unicodeHighlight.nonBasicASCII": false,
+  "terminal.integrated.initialHint": false,
+  "workbench.panel.defaultLocation": "right",
+  // Сочетания клавиш по физическим клавишам — работают в любой раскладке
+  "keyboard.dispatch": "keyCode"
+  // test
+}

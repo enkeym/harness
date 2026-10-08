@@ -27,6 +27,7 @@
 | `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: `credential.helper store`, identity через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
+| `vscode/` | `%APPDATA%\Code\User\{settings.json,keybindings.json,snippets}` — Windows-симлинки на `\\wsl.localhost\…`, только под WSL | VS Code в Windows: настройки (`keyboard.dispatch: keyCode` — сочетания в любой раскладке), клавиши, сниппеты |
 
 История `claude-config` и `ai-hooks` втянута через `git subtree`, так что
 `git log` по этим каталогам показывает всю прежнюю историю.
@@ -57,6 +58,12 @@ node "$(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js" install chr
 - `~/.config/harness/env` — `GITLAB_HOST` (хост для `GITLAB_TOKEN`),
   `ANTHROPIC_MODEL`, при нужде `RAGSAVE_HOME` (каталог ragsave вместо
   `~/.rag-mcp`; задать до запуска `install.sh` — в него лягут и симлинки).
+
+VS Code в Windows симлинк из WSL не видит, поэтому `install.sh` создаёт
+Windows-симлинки через `mklink`. Без прав администратора это работает только
+в режиме разработчика (Параметры → Для разработчиков). Если `mklink` не
+сработал, прежний файл возвращается на место. Если WSL не запущен, VS Code
+поднимет его при старте, чтобы прочитать настройки.
 
 Хуки tokensave в `claude/settings.json` зовут `/usr/local/bin/tokensave` —
 так их пишет `tokensave install`, и `tokensave doctor` сверяет именно путь.

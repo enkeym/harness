@@ -65,6 +65,70 @@ LOCALS=(
   "$HOME/.gitconfig.local|local/gitconfig.local.example"
 )
 
+# VS Code стоит в Windows и читает %APPDATA%\Code\User: симлинк WSL туда
+# Windows-программе не виден, нужен Windows-симлинк на \\wsl.localhost\....
+# Без прав администратора mklink создаёт его только в режиме разработчика.
+VSCODE_LINKS=(settings.json keybindings.json snippets)
+
+# cmd.exe из каталога WSL ругается на UNC-путь первой строкой вывода — запуск из /mnt/c.
+wincmd() { (cd /mnt/c && cmd.exe /c "$@") 2>&1 | tr -d '\r'; }
+
+# Цель Windows-симлинка изнутри WSL не прочитать — её показывает `dir /AL`.
+win_link_target() {
+  wincmd dir /AL "$1" | sed -nE "s/.*<SYMLINKD?> +${2//./\\.} \[(.*)\]\$/\1/p"
+}
+
+# Каталог настроек VS Code в виде /mnt/c/...; пусто — не WSL или VS Code нет.
+vscode_dir() {
+  command -v cmd.exe >/dev/null && command -v wslpath >/dev/null || return 0
+  local appdata dir
+  appdata="$(wincmd 'echo %APPDATA%')"
+  [ -n "$appdata" ] || return 0
+  dir="$(wslpath -u "$appdata")/Code/User"
+  [ -d "$dir" ] && printf '%s' "$dir"
+  return 0
+}
+
+vscode_one() {
+  local dir="$1" name="$2" src="$HARNESS/vscode/$2"
+  local want wdir have out flag=""
+  want="$(wslpath -w "$src")"
+  wdir="$(wslpath -w "$dir")"
+  have="$(win_link_target "$wdir" "$name")" || true
+
+  if [ "$have" = "$want" ]; then
+    good "VS Code $name"; ok=$((ok + 1)); return
+  fi
+  if [ "$MODE" = "--check" ]; then
+    warn "VS Code $name — не симлинк в харнесс, ./install.sh его создаст"
+    drift=$((drift + 1)); return
+  fi
+
+  if [ -e "$dir/$name" ] || [ -L "$dir/$name" ]; then
+    mv "$dir/$name" "$dir/$name.bak-$STAMP"
+  fi
+  [ -d "$src" ] && flag="/D"
+  out="$(wincmd mklink $flag "$wdir\\$name" "$want")" || true
+  if [ "$(win_link_target "$wdir" "$name")" = "$want" ]; then
+    good "VS Code $name → vscode/$name"
+    [ -e "$dir/$name.bak-$STAMP" ] && warn "VS Code $name — прежний сохранён как $name.bak-$STAMP"
+    fixed=$((fixed + 1))
+  else
+    # Без симлинка VS Code остался бы без настроек — возвращаем прежний файл.
+    [ -e "$dir/$name.bak-$STAMP" ] && mv "$dir/$name.bak-$STAMP" "$dir/$name"
+    bad "VS Code $name — mklink не сработал: $out"
+    warn "включить Параметры Windows → Для разработчиков → Режим разработчика и повторить ./install.sh"
+    missing=$((missing + 1))
+  fi
+}
+
+vscode_links() {
+  local dir name
+  dir="$(vscode_dir)"
+  [ -n "$dir" ] || return 0
+  for name in "${VSCODE_LINKS[@]}"; do vscode_one "$dir" "$name"; done
+}
+
 check_one() {
   local target="$1" src="$HARNESS/$2"
 
@@ -166,6 +230,7 @@ machine_paths_check() {
     [ -e "$src" ] || continue
     case " ${srcs[*]:-} " in *" $src "*) ;; *) srcs+=("$src") ;; esac
   done
+  [ -d "$HARNESS/vscode" ] && srcs+=("$HARNESS/vscode")
   [ "${#srcs[@]}" -eq 0 ] && return 0
   # Ничего не нашлось — grep выходит с 1, и без `|| true` pipefail с set -e оборвали бы скрипт.
   hits="$(grep -rnE --exclude-dir=test --exclude-dir=tests --exclude-dir=logs --exclude-dir=node_modules --exclude-dir=__pycache__ \
@@ -277,6 +342,7 @@ case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS):"
     for pair in "${LINKS[@]}"; do check_one "${pair%%|*}" "${pair##*|}"; done
+    vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync --check
     externals
@@ -290,6 +356,7 @@ case "$MODE" in
   install)
     say "Раскатка харнеса из $HARNESS:"
     for pair in "${LINKS[@]}"; do link_one "${pair%%|*}" "${pair##*|}"; done
+    vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync
     externals

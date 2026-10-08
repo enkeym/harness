@@ -17,9 +17,16 @@ paths:
   `ai-hooks/bin/ragsave-sync.sh`.
   Сменил цель в `install.sh` одну — хуки, MCP и фоновые синки падают молча.
 - Пути без машины — `install.sh:machine_paths_check` ищет `/home/<имя>/` и
-  `/Users/<имя>/` во всех источниках `LINKS`, кроме каталогов `test`, `tests`,
-  `logs`. Путь в новом формате (`$USER`, `/root/`) или новый источник вне
+  `/Users/<имя>/` во всех источниках `LINKS` и в `vscode/`, кроме каталогов
+  `test`, `tests`, `logs`. Путь в новом формате (`$USER`, `/root/`) или новый источник вне
   `LINKS` проверка не увидит; фикстура с чужим HOME вне `test/` — ложное ✗.
+- `install.sh:VSCODE_LINKS` ↔ `%APPDATA%\Code\User` VS Code в Windows: цель
+  симлинка читает `win_link_target` из вывода `dir /AL` (`<SYMLINK>`,
+  `<SYMLINKD>`, путь в скобках). Сменится формат `dir` — `--check` выдаст
+  ложное «не симлинк», а install пересоздаст живой симлинк.
+  `vscode/keybindings.json` (`ctrl+alt+a`) зовёт
+  `~/.ai-hooks/bin/ask-mode.mjs` через `!` Claude Code: переименуешь скрипт —
+  сочетание молча сломается.
 - Путь к бинарю tokensave в хуках `claude/settings.json` ↔
   `install.sh:tokensave_hook_check` и `tokensave doctor`: оба сверяют путь
   буквально. `tokensave install`/`reinstall` переписывают хуки своим путём.
