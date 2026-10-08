@@ -18,9 +18,13 @@
       "Edit(~/.ai-hooks/**)",
       "Edit(~/harness/**)"
     ],
-    "deny": ["Agent", "mcp__tokensave__tokensave_field_sites"],
+    "deny": [
+      "Agent",
+      "mcp__tokensave__tokensave_field_sites"
+    ],
     "defaultMode": "default"
   },
+  "model": "opus",
   "disableClaudeAiConnectors": true,
   "hooks": {
     "PreToolUse": [
@@ -93,7 +97,9 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": ["hook-pre-tool-use"]
+            "args": [
+              "hook-pre-tool-use"
+            ]
           }
         ]
       }
@@ -133,7 +139,9 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": ["hook-stop"]
+            "args": [
+              "hook-stop"
+            ]
           }
         ]
       },
@@ -184,7 +192,9 @@
           {
             "type": "command",
             "command": "/usr/local/bin/tokensave",
-            "args": ["hook-prompt-submit"]
+            "args": [
+              "hook-prompt-submit"
+            ]
           }
         ]
       },
@@ -248,6 +258,5 @@
   },
   "showClearContextOnPlanAccept": true,
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false,
-  "model": "sonnet"
+  "remoteControlAtStartup": false
 }
