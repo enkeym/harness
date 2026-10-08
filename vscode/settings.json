@@ -1,5 +1,5 @@
 {
-  "claudeCode.useTerminal": true, "files.autoSave": "afterDelay",
+  "files.autoSave": "afterDelay",
   "editor.renderWhitespace": "all",
   "editor.minimap.enabled": false,
   "explorer.confirmDelete": false,
