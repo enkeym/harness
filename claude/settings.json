@@ -2,6 +2,9 @@
   "cleanupPeriodDays": 45,
   "syncClaudeAiSkills": false,
   "syncClaudeAiPlugins": false,
+  "env": {
+    "CLAUDE_CODE_AUTO_CONNECT_IDE": "false"
+  },
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
@@ -18,7 +21,6 @@
     "deny": ["Agent", "mcp__tokensave__tokensave_field_sites"],
     "defaultMode": "default"
   },
-  "model": "opus",
   "disableClaudeAiConnectors": true,
   "hooks": {
     "PreToolUse": [
@@ -247,7 +249,5 @@
   "showClearContextOnPlanAccept": true,
   "theme": "dark-ansi",
   "remoteControlAtStartup": false,
-  "env": {
-    "CLAUDE_CODE_AUTO_CONNECT_IDE": "false"
-  }
+  "model": "sonnet"
 }
