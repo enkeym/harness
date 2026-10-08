@@ -40,6 +40,13 @@ ticket, commit style, remote and project restrictions come from
 - Committing named paths only (`git add <paths> && git commit`) →
   `git diff --cached --name-only` first: whatever an earlier step staged goes
   into the commit too.
+- A pre-commit hook fails on a file outside the commit (husky runs
+  `prettier --check` or a linter over the whole tree, not the staged files) →
+  that change is the user's: never `git checkout`/`restore`/`stash`/`clean`
+  it — the work is lost or hidden from the user. Formatting only → the
+  project's formatter on that one file (`prettier --write <path>`), content
+  kept, the file stays out of the commit and is named in the report. Anything else → question tool
+  with the hook's output.
 - Push right after the commit: `git push origin <branch>` (`-u` the first
   time). Only the project's own memory or rules file can restrict it; then say
   in one line that the push is left to the user.

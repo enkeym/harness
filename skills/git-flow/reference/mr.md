@@ -99,7 +99,8 @@ Closes <TICKET>
 Default delivery whenever step 1 allows it: the chat gets the result line,
 not the text and not a command. Token: `$GITLAB_TOKEN` only — never printed,
 never `~/.git-credentials`. Never `git push -o merge_request.*`: push options
-reject newlines.
+reject newlines. No separate token probe (`[ -n "$GITLAB_TOKEN" ]`, `echo`):
+step 1's call answers for itself — a 401 or an empty header is step 3's cause.
 
 Host and project from `git remote get-url origin`: `https://<host>/<group>/<repo>.git`
 → API host `<host>`, project id `<group>%2F<repo>` (SSH form `git@<host>:<group>/<repo>.git`
