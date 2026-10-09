@@ -67,9 +67,6 @@ fired and what it wants instead.
 - tokensave errored or answered empty → quote the answer and repeat the same
   `Read`: a repeat of the same target within 3 minutes passes (breaker,
   `~/.claude/state/guard-breaker.json`). Don't reach for the shell instead.
-- `read-refill` (PostToolUse on `tokensave_read`) replaces the cross-session
-  `unchanged: true` stub (JSON or `format: text` header) with the file text
-  from disk; an empty read is a changed stub format, not a missing file.
 
 ## question-guard
 

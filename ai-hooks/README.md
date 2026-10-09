@@ -56,8 +56,6 @@ hooklog-core.mjs                # журнал решений хуков → log
 claude/hook-io.mjs              # общий ввод/вывод PreToolUse + журнал
 claude/bash-router.mjs          # адаптер Claude: PreToolUse(Bash|mcp__ide__executeCode)
 claude/read-router.mjs          # адаптер Claude: PreToolUse(Read) — файл из индекса читает tokensave
-read-core.mjs                   # подмена заглушки `unchanged: true` у tokensave_read текстом с диска
-claude/read-refill.mjs          # адаптер Claude: PostToolUse(mcp__tokensave__tokensave_read)
 claude/ask-guard.mjs            # адаптер Claude: PreToolUse(*) — запрет изменений в ask mode
 claude/ask-reminder.mjs         # правило ask mode в промпт (UserPromptSubmit)
 claude/statusline.mjs           # каталог, ветка, модель, индикатор ask mode
@@ -510,11 +508,8 @@ tokensave) в корне такого репозитория. Файл пров�
 `Edit` даёт дифф, токены тянет чтение; но `Edit` требует `Read`, поэтому файл
 из индекса правят `tokensave_str_replace`. Предохранитель: повтор `Read` той же
 цели в той же сессии в течение 3 минут проходит (`state/guard-breaker.json`),
-иначе ошибка tokensave превращается в цикл одинаковых отказов. На
-`PostToolUse(mcp__tokensave__tokensave_read)` — `read-refill.mjs`: заглушку
-`unchanged: true` из межсессионного кэша tokensave подменяет текстом с диска
-(`read-core.mjs`) — и в JSON, и в `format: text`, формате tokensave по
-умолчанию. Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
+иначе ошибка tokensave превращается в цикл одинаковых отказов.
+Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`

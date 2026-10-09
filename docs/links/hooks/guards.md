@@ -54,13 +54,8 @@ paths:
   `Agent|Grep|Bash|Glob` в `claude/settings.json`. Новая версия tokensave
   переименовала переменную или `tokensave install` сузил matcher — обход снова
   открыт, тесты `test-guards.mjs` этого не увидят: они бьют по нашему гарду.
-- Заглушка `tokensave_read` (`unchanged: true`, поля `file`/`mode`/`mtime_ns`, блоки
-  `[{type:'text'}]`; JSON или заголовок `ключ: значение` в `format: text`, который
-  tokensave отдаёт по умолчанию) — `ai-hooks/read-core.mjs:parseStub`/`withBody`/`refillResponse` ↔ формат
-  ответа tokensave, тест `ai-hooks/test/test-read-refill.mjs`. Сменился формат при
-  обновлении tokensave — хук молча перестаёт подменять, агент снова видит пустые
-  чтения. Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
-  `ai-hooks/read-core.mjs:indexRoot` и `ai-hooks/guard-core.mjs:findRoot`.
+- Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
+  `ai-hooks/guard-core.mjs:findRoot`.
 - Таблица `files` индекса tokensave (`path` относительный от корня, через `/`) —
   `ai-hooks/guard-core.mjs:inIndex`/`relKey` ↔ схема БД tokensave. Сменилась схема —
   роутер чтения молча пропускает всё, тесты `test-guards.mjs` не заметят: они

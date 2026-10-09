@@ -132,15 +132,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__tokensave__tokensave_read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/read-refill.mjs\""
-          }
-        ]
-      },
-      {
         "matcher": "*",
         "hooks": [
           {
