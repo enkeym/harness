@@ -166,8 +166,11 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const first = contextNotice({ transcript_path: file, session_id: 's-soft' });
   check('95k: сработало как soft', first.stage, 'soft');
   check('95k: токены в тексте', /95k/.test(first.text), true);
-  check('95k: про handoff пока не просит', /handoff/.test(first.text), false);
   check('95k: сказано закрыть шаг коммитом', /коммит/.test(first.text), true);
+  // «Новый не начинай» без конца хода толкал закончить его прозой «лучше в новой сессии».
+  check('95k: после коммита — вопрос о переносе',
+    /вопросом AskUserQuestion: «Перенести в новую сессию» первым/.test(first.text), true);
+  check('95k: блок передачи сам не собирает', /Перенос — по скиллу `handoff`/.test(first.text), true);
   check('повтор того же порога молчит', contextNotice({ transcript_path: file, session_id: 's-soft' }), null);
 }
 
@@ -238,7 +241,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const n = contextNotice({ transcript_path: file, session_id: 's-step-soft' }, { phase: 'step' });
   check('95k посреди хода: soft', n.stage, 'soft');
   check('95k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
-  check('95k посреди хода: про handoff пока не просит', /handoff/.test(n.text), false);
+  check('95k посреди хода: вопрос о переносе — только после коммита', /После коммита закончи ход вопросом/.test(n.text), true);
 }
 
 // --- посреди хода на втором пороге: довести шаг до коммита с пушем, и только

@@ -7,8 +7,9 @@ description: "Hands the thread to a fresh session — a snapshot of the task wri
 
 Trigger: in Claude Code two hooks fire at the token thresholds in
 `~/.ai-hooks/context-core.mjs` — `context-meter.mjs` between turns,
-`context-step.mjs` mid-turn, between tool calls. `SOFT` closes the step with no
-handoff yet; `HAND` and `HARD` ask for one. OpenCode has no meter — only
+`context-step.mjs` mid-turn, between tool calls. `SOFT` closes the step and asks
+«Перенести в новую сессию» / «Продолжить здесь», never in prose; `HAND`, `HARD`
+ask for the handoff. OpenCode has no meter — only
 `/handoff` or the user's words. Don't raise context size again yourself. Never
 start a new session for the user; the only writes are the `task-brief` plan
 file and the plan file plan mode names.
