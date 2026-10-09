@@ -27,7 +27,7 @@ const ON_DISK = [
   'client/src/App.tsx', 'client/src/lib/store/useMarkerStore.ts', 'README.md',
   'client/src/index.css', 'package.json', '.env.example',
   'client/node_modules/storm-ui/dist/index.css', '.ragsave/rag.db', '.ragsave/sync.log',
-  '.tokensave/tokensave.db', 'client/src/data.json', 'logs/hooks.jsonl',
+  '.tokensave/tokensave.db', 'client/src/data.json', 'logs/hooks.jsonl', 'logs/events.ndjson',
 ];
 function sandboxProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-project-'));
@@ -195,6 +195,74 @@ bash('rg по файлу → allow', 'allow', 'rg range client/src/App.tsx');
 bash('ps | grep → allow', 'allow', 'ps aux | grep ragsave');
 bash('cat исходника | grep → deny (виноват cat)', 'deny', 'cat client/src/App.tsx | grep useState');
 
+// ---- равносильные формы чтения: печатают файл целиком, как cat ----
+bash('diff /dev/null исходника → deny', 'deny', 'diff /dev/null client/src/App.tsx');
+bash('diff -u исходника и /dev/null → deny', 'deny', 'diff -u client/src/App.tsx /dev/null');
+bash('git diff --no-index /dev/null исходника → deny', 'deny', 'git diff --no-index /dev/null client/src/App.tsx');
+bash('diff двух файлов проекта → allow (сравнение)', 'allow', 'diff README.md package.json');
+bash("grep '' по файлу → deny", 'deny', "grep '' client/src/App.tsx");
+bash('grep . по файлу → deny', 'deny', 'grep . client/src/App.tsx');
+bash('grep -n ^ по файлу → deny', 'deny', 'grep -n ^ client/src/App.tsx');
+bash('grep -v по файлу → deny', 'deny', 'grep -v zzzz client/src/App.tsx');
+bash('grep -cv по файлу → allow (счёт)', 'allow', 'grep -cv zzzz client/src/App.tsx');
+bash('grep -v в пайпе → allow', 'allow', 'ps aux | grep -v grep');
+bash('grep -e . по файлу → deny', 'deny', 'grep -e . client/src/App.tsx');
+bash('grep -n -A30 шаблон по файлу → allow (поиск)', 'allow', 'grep -n -A30 useState client/src/App.tsx');
+for (const c of ['base64', 'hexdump -C', 'cut -c1-', 'sort', 'uniq', 'paste', 'fold', 'pr', 'column -t', 'expand']) {
+  bash(`${c} по файлу → deny`, 'deny', `${c} client/src/App.tsx`);
+}
+bash('sort | uniq в пайпе → allow', 'allow', 'git log --format=%an | sort | uniq -c');
+
+// Тело `bash -c`, `eval` и `bash <<EOF` — те же команды.
+bash('bash -c "cat …" → deny', 'deny', 'bash -c "cat client/src/App.tsx"');
+bash("sh -c 'head …' → deny", 'deny', "sh -c 'head -5 client/src/App.tsx'");
+bash('bash -lc с запуском → allow', 'allow', 'bash -lc "npm test"');
+bash('bash скрипта → allow (запуск)', 'allow', 'bash client/src/App.tsx');
+bash('eval "cat …" → deny', 'deny', 'eval "cat client/src/App.tsx"');
+bash('bash <<EOF с cat в теле → deny', 'deny', "bash <<'EOF'\ncat client/src/App.tsx\nEOF");
+bash('vim -es по файлу → deny', 'deny', "vim -es -c '%p' -c q client/src/App.tsx");
+bash('ex -sc по файлу → deny', 'deny', "ex -sc '%p|q' client/src/App.tsx");
+bash('ed -s по файлу → deny', 'deny', "ed -s client/src/App.tsx <<< $'1d\\nw'");
+
+// Интерпретатор с версией или из Windows (`python.exe` из WSL) — тот же интерпретатор.
+bash('python.exe -c с путём → deny', 'deny', `python.exe -c "print(open('client/src/App.tsx').read())"`);
+bash('python3.12 -c с путём → deny', 'deny', `python3.12 -c "print(open('client/src/App.tsx').read())"`);
+bash('tsx -e с путём → deny', 'deny', `tsx -e "require('fs').readFileSync('client/src/App.tsx')"`);
+bash('python.exe - <<EOF с записью → deny', 'deny', `python.exe - <<'EOF'\nopen('client/src/App.tsx','w').write('x')\nEOF`);
+bash('python3.12 <скрипт> → allow (запуск)', 'allow', 'python3.12 client/src/App.tsx');
+
+// ---- копия в /tmp — то же чтение, копия поверх файла — та же запись ----
+const DRAFT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-draft-'));
+const DRAFT = path.join(DRAFT_DIR, 'App.tsx');
+fs.writeFileSync(DRAFT, '');
+bash('cp исходника в /tmp → deny', 'deny', `cp client/src/App.tsx ${DRAFT_DIR}/g`);
+bash('cp в /tmp && cat копии → deny', 'deny', `cp client/src/App.tsx ${DRAFT_DIR}/g && cat ${DRAFT_DIR}/g`);
+bash('rsync исходника в /tmp → deny', 'deny', `rsync client/src/App.tsx ${DRAFT_DIR}/`);
+bash('cp -t /tmp исходника → deny', 'deny', `cp -t ${DRAFT_DIR} client/src/App.tsx`);
+bash('cp -r каталога в /tmp → allow', 'allow', `cp -r client ${DRAFT_DIR}/copy`);
+bash('cp исходника в новый файл проекта → allow', 'allow', 'cp client/src/App.tsx client/src/App.bak.tsx');
+bash('mv в новый файл (переименование) → allow', 'allow', 'mv README.md NOTES.md');
+bash('cp между черновиками → allow', 'allow', `cp ${DRAFT} ${DRAFT_DIR}/y.tsx`);
+bash('cp черновика поверх файла проекта → deny', 'deny', `cp ${DRAFT} client/src/App.tsx`);
+bash('mv поверх файла проекта → deny', 'deny', 'mv README.md client/src/App.tsx');
+bash('cp /dev/null поверх файла → deny', 'deny', 'cp /dev/null client/src/App.tsx');
+bash('cp в каталог, где такой файл есть → deny', 'deny', `cp ${DRAFT} client/src/`);
+bash('mv -f поверх файла проекта → deny', 'deny', `mv -f ${DRAFT} client/src/App.tsx`);
+fs.symlinkSync(path.join(PROJECT, 'client/src/App.tsx'), path.join(DRAFT_DIR, 'link.tsx'));
+bash('cat ссылки из /tmp на исходник → deny', 'deny', `cat ${DRAFT_DIR}/link.tsx`);
+bash('cat своего черновика → allow', 'allow', `cat ${DRAFT}`);
+bash('ln -s $PWD/исходника в /tmp && cat → deny', 'deny', `ln -s $PWD/client/src/App.tsx ${DRAFT_DIR}/l2 && cat ${DRAFT_DIR}/l2`);
+
+// ---- jq: файлы — операнды после фильтра, а не строки внутри него ----
+bash('jq с путём исходника в строке фильтра → allow', 'allow',
+  `jq -r 'select(.file=="client/src/App.tsx") | .ts' logs/hooks.jsonl`);
+bash('jq по .ndjson вне индекса → allow', 'allow', 'jq -c keys logs/events.ndjson');
+bash('jq --rawfile исходника → deny', 'deny', `jq -n --rawfile s client/src/App.tsx '$s'`);
+bash('jq < файла из индекса → deny', 'deny', 'jq . < client/src/data.json');
+bash('jq по черновику в /tmp → allow', 'allow', `jq -R . ${DRAFT}`);
+bash('jq --arg со значением-путём → allow', 'allow', `jq --arg f client/src/App.tsx '.[$f]' logs/hooks.jsonl`);
+fs.rmSync(DRAFT_DIR, { recursive: true, force: true });
+
 // ---- обход родного хука tokensave ----
 // Хук сам печатает «set TOKENSAVE_DISABLE_GREP_HOOK=1», а `git grep` не видит.
 const OUTSIDE = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-outside-'));
@@ -240,6 +308,21 @@ repo('git grep по $переменной → deny', 'deny', `H=${OLD_SHA}; git 
 repo('шаблон совпал с именем ветки → deny', 'deny', 'git grep -n old');
 repo('шаблон через -e, ветки нет → deny', 'deny', 'git grep -e old client/src');
 repo('git -C . grep без ревизии → deny', 'deny', 'git -C . grep -n foo');
+
+// `git show <ревизия>:<путь>` — тот же файл, что в рабочем дереве, если ревизия — HEAD.
+repo('git show HEAD:<файл> → deny', 'deny', 'git show HEAD:client/src/App.tsx');
+repo('git show @:<файл> → deny', 'deny', 'git show @:client/src/App.tsx');
+repo('git show :<файл> (индекс git) → deny', 'deny', 'git show :client/src/App.tsx');
+repo('git show <текущая ветка>:<файл> → deny', 'deny', 'git show main:client/src/App.tsx');
+repo('git show HEAD:<файл> | sed → deny', 'deny', 'git show HEAD:client/src/App.tsx | sed -n 1,20p');
+repo('git cat-file -p HEAD:<файл> → deny', 'deny', 'git cat-file -p HEAD:client/src/App.tsx');
+repo('git show HEAD:<файл вне индекса> → deny', 'deny', 'git show HEAD:README.md');
+repo('git show <другая ветка>:<файл> → allow', 'allow', 'git show old:client/src/App.tsx');
+repo('git show <sha другого коммита>:<файл> → allow', 'allow', `git show ${OLD_SHA}:client/src/App.tsx`);
+repo('git show HEAD~1:<файл> → allow', 'allow', 'git show HEAD~1:client/src/App.tsx');
+repo('git show HEAD --stat → allow', 'allow', 'git show HEAD --stat');
+repo('git show HEAD:<каталог> → allow', 'allow', 'git show HEAD:client/src');
+check('отказ git show HEAD: называет tokensave_read', /tokensave_read/.test(guardBash('git show HEAD:client/src/App.tsx', REPO, OPENCODE_LABELS) || ''), true);
 check('отказ git grep называет ревизию', /<sha\|ветка>/.test(guardBash('git grep -n foo', REPO, OPENCODE_LABELS) || ''), true);
 fs.rmSync(REPO, { recursive: true, force: true });
 

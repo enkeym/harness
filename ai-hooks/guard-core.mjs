@@ -11,7 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { execFileSync } from 'node:child_process';
-import { segments, tokenize, commandName, quoteEnd, dropConditionals, gitSubcommandAt } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, baseCommand, quoteEnd, dropConditionals, gitSubcommandAt } from './shell-core.mjs';
 import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -70,11 +70,60 @@ export const OPENCODE_LABELS = { read: 'read', edit: 'edit/write' };
 // распозналось, проходит: лучше пропустить обход, чем заблокировать `git`,
 // `tsc`, `eslint` над теми же путями (они читают файл легитимно).
 
-// Команды, которые читают содержимое файла.
+// Команды, которые читают содержимое файла. Фильтры строк (`sort`, `cut`,
+// `column`) с файлом в аргументах печатают его так же, как cat; в пайпе файла нет.
 const READ_CMDS = new Set([
   'cat', 'head', 'tail', 'less', 'more', 'bat', 'nl', 'tac', 'rev',
-  'od', 'xxd', 'strings',
+  'od', 'xxd', 'strings', 'base64', 'hexdump', 'hd',
+  'cut', 'sort', 'uniq', 'paste', 'fold', 'fmt', 'pr', 'column', 'expand', 'unexpand', 'iconv',
 ]);
+
+// Редакторы в пакетном режиме (`vim -es`, `ex -sc '%p'`, `ed -s`) и читают, и пишут.
+const SCRIPT_EDITORS = new Set(['vim', 'vi', 'nvim', 'ex', 'ed']);
+
+// grep с шаблоном, которому отвечает каждая строка (`grep '' f`, `grep . f`), или с `-v`
+// печатает файл, как cat. Поиск с шалоном и контекстом (`-A30`) — поиск, не чтение;
+// счёт и список файлов (`-c`, `-l`, `-q`) строк не печатают.
+const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep']);
+const MATCH_ALL = new Set(['', '.', '^', '$', '.*', '^.*', '.*$', '^.*$']);
+const GREP_VALUE_SHORT = 'ABCmefdD';
+const GREP_VALUE_LONG = new Set(['--file', '--after-context', '--before-context', '--context', '--max-count']);
+
+function grepPrintsAll(toks) {
+  let pattern = null;
+  let invert = false;
+  let quiet = false;
+  const words = [];
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === '--') { words.push(...toks.slice(i + 1)); break; }
+    if (t.startsWith('--')) {
+      if (t === '--invert-match') invert = true;
+      else if (/^--(count|files-with(out)?-match(es)?|quiet|silent)$/.test(t)) quiet = true;
+      else if (t === '--regexp') pattern ??= toks[++i];
+      else if (t.startsWith('--regexp=')) pattern ??= t.slice(9);
+      else if (t.startsWith('--file')) pattern ??= false;
+      if (GREP_VALUE_LONG.has(t)) i++;
+      continue;
+    }
+    if (t.length > 1 && t.startsWith('-')) {
+      for (let j = 1; j < t.length; j++) {
+        const c = t[j];
+        if (c === 'v') invert = true;
+        else if ('clLq'.includes(c)) quiet = true;
+        if (!GREP_VALUE_SHORT.includes(c)) continue;
+        const value = j + 1 < t.length ? t.slice(j + 1) : toks[++i];
+        if (c === 'e') pattern ??= value;
+        if (c === 'f') pattern ??= false;
+        break;
+      }
+      continue;
+    }
+    words.push(t);
+  }
+  if (pattern === null) pattern = words.shift() ?? false;
+  return !quiet && (invert || MATCH_ALL.has(pattern));
+}
 
 // Команды, которые пишут в файл на месте. sed/perl/awk — только с -i.
 const WRITE_CMDS = new Set(['tee', 'dd', 'truncate', 'install']);
@@ -85,7 +134,7 @@ const FILTER_CMDS = new Set(['sed', 'awk', 'gawk']);
 
 // Интерпретаторы: путь прячется внутри строки кода, поэтому у них смотрим
 // весь сегмент целиком, а не отдельные аргументы.
-const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun']);
+const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun', 'tsx', 'ts-node']);
 // Признак строки кода в аргументах или heredoc. Без него интерпретатор
 // исполняет скрипт (`node test/test-guards.mjs`) — это запуск, как `tsc` или
 // `eslint`, а не чтение.
@@ -96,7 +145,32 @@ function runsInlineCode(toks, seg) {
 
 // jq читает свой аргумент всегда. Данные вне индекса (логи хуков, отчёты)
 // другим инструментом не разобрать: Read отдаст весь .jsonl целиком.
-const JQ_DATA_RE = /\.jsonl?$/;
+const JQ_DATA_RE = /\.(jsonl?|ndjson)$/;
+
+// Файлы jq — операнды после фильтра, `--rawfile`/`--slurpfile` и `< файл`. Путь внутри
+// фильтра (`select(.file=="src/a.ts")`) и значение `--arg` — строки, не файлы; после
+// `--args` операнды тоже строки. С `-f` фильтр лежит в файле-программе.
+function jqFiles(toks) {
+  const files = [];
+  let filter = false;
+  let strings = false;
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === '--arg' || t === '--argjson') { i += 2; continue; }
+    if (t === '--rawfile' || t === '--slurpfile') { files.push(toks[i + 2]); i += 2; continue; }
+    if (t === '--indent' || t === '-L') { i++; continue; }
+    if (t === '-f' || t === '--from-file') { filter = true; i++; continue; }
+    if (t === '--args' || t === '--jsonargs') { strings = true; continue; }
+    if (t === '<') { files.push(toks[++i]); continue; }
+    if (/^<[^<(]/.test(t)) { files.push(t.slice(1)); continue; }
+    const r = redirectWords(t);
+    if (r) { i += r - 1; continue; }
+    if (t.length > 1 && t.startsWith('-')) continue;
+    if (!filter) { filter = true; continue; }
+    if (!strings) files.push(t);
+  }
+  return files.filter(Boolean);
+}
 
 // Кандидаты в пути: всё, что похоже на файл с расширением. Ловит и голые
 // аргументы, и пути внутри строк кода — поэтому применяется к сырому сегменту.
@@ -107,6 +181,21 @@ function pathCandidates(text) {
 function isFile(cwd, p) {
   try {
     return fs.statSync(path.resolve(cwd || process.cwd(), p)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+// Сколько слов занимает перенаправление с этого слова: `2>&1`, `>/dev/null` — одно, голое
+// `>`/`2>`/`<<<` — два (цель следует отдельным словом), не перенаправление — 0.
+function redirectWords(t) {
+  if (!/^(\d*|&)[<>]/.test(t)) return 0;
+  return /^(\d*|&)[<>]+$/.test(t) ? 2 : 1;
+}
+
+function isDir(cwd, p) {
+  try {
+    return fs.statSync(path.resolve(cwd || process.cwd(), p)).isDirectory();
   } catch {
     return false;
   }
@@ -146,12 +235,88 @@ function redirectTarget(seg, cwd) {
   return target;
 }
 
-const SCRATCH_DIRS = [...new Set(['/tmp', os.tmpdir()])].map((d) => path.resolve(d) + path.sep);
+// Ссылка в /tmp на файл проекта — не черновик: судим по тому, куда она ведёт. Сам
+// /tmp тоже ссылкой бывает (macOS: /private/tmp), поэтому в списке оба вида.
+const SCRATCH_DIRS = [...new Set(['/tmp', os.tmpdir()].flatMap((d) => {
+  try { return [path.resolve(d), fs.realpathSync(d)]; } catch { return [path.resolve(d)]; }
+}))].map((d) => d + path.sep);
 
 function isScratch(cwd, p) {
-  const abs = path.resolve(cwd || process.cwd(), p);
+  let abs = path.resolve(cwd || process.cwd(), p);
+  try { abs = fs.realpathSync(abs); } catch { /* нового файла ещё нет */ }
   const dir = path.dirname(abs);
-  return SCRATCH_DIRS.some((d) => abs.startsWith(d)) && !findRoot(dir) && !repoRoot(dir);
+  return SCRATCH_DIRS.some((d) => (abs + path.sep).startsWith(d)) && !findRoot(dir) && !repoRoot(dir);
+}
+
+// cp/mv/ln/rsync: источники и назначение (`-t <каталог>` или последний операнд).
+const COPY_CMDS = new Set(['cp', 'mv', 'ln', 'rsync']);
+
+function copyOperands(toks) {
+  const ops = [];
+  let target = null;
+  let opts = true;
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (opts && t === '--') { opts = false; continue; }
+    if (opts && (t === '-t' || t === '--target-directory')) { target = toks[++i]; continue; }
+    if (opts && t.startsWith('--target-directory=')) { target = t.slice(19); continue; }
+    const r = redirectWords(t);
+    if (r) { i += r - 1; continue; }
+    if (opts && t.length > 1 && t.startsWith('-')) continue;
+    ops.push(t);
+  }
+  return { sources: ops, target: target ?? ops.pop() };
+}
+
+// Копия файла проекта в /tmp — чтение: черновик дальше читается свободно, в этой
+// команде или следующей. Копия поверх существующего файла — запись, как `> file`.
+// Каталоги (`cp -r`), новые файлы и переименование проходят.
+// `$PWD/…` — путь от cwd: так ссылку на файл проекта и пишут (`ln -s $PWD/src/a.ts /tmp/a`).
+function copyHit(toks, cwd) {
+  const here = (p) => p.replace(/^\$\{?PWD\}?(?=\/|$)/, cwd || process.cwd());
+  const { sources: raw, target } = copyOperands(toks);
+  const sources = raw.map(here);
+  if (!target || !sources.length) return null;
+  if (isScratch(cwd, target)) {
+    const file = sources.find((s) => isFile(cwd, s) && !isScratch(cwd, s));
+    return file ? { file, read: true } : null;
+  }
+  if (isDir(cwd, target)) {
+    const file = sources.map((s) => path.join(target, path.basename(s))).find((f) => isFile(cwd, f));
+    return file ? { file, read: false } : null;
+  }
+  return isFile(cwd, target) ? { file: target, read: false } : null;
+}
+
+// Тело `bash -c '…'`, `eval '…'`, `bash <<EOF` — те же команды shell, судим их так же.
+// `bash script.sh` — запуск.
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
+
+function shellBody(cmd, toks, seg) {
+  const at = commandIndex(toks);
+  if (cmd === 'eval') return toks.slice(at + 1).join(' ');
+  if (!SHELLS.has(cmd)) return null;
+  const flag = toks.findIndex((t, i) => i > at && /^-[a-zA-Z]*c[a-zA-Z]*$/.test(t));
+  if (flag !== -1) return toks[flag + 1] ?? null;
+  const nl = seg.indexOf('\n');
+  return nl !== -1 && /<<-?\s*['"\\]?\w+/.test(seg.slice(0, nl)) ? seg.slice(nl + 1) : null;
+}
+
+// `git show <ревизия>:<путь>`, `git cat-file -p …` при ревизии HEAD (`@`, `:`, текущая
+// ветка, sha HEAD) — тот же файл, что в рабочем дереве. Другая ревизия — код
+// вне индекса (ревью МР), проходит. Путь с `./` — от cwd, иначе от корня репозитория.
+function gitShowsWorkingFile(toks, from, cwd) {
+  let head;
+  for (const t of toks.slice(from)) {
+    const m = t.match(/^([^-:][^:]*)?:(.+)$/);
+    if (!m) continue;
+    const base = /^\.\.?\//.test(m[2]) ? cwd : repoRoot(cwd) ?? cwd;
+    const file = path.relative(cwd || process.cwd(), path.resolve(base || process.cwd(), m[2]));
+    if (!isFile(cwd, file)) continue;
+    head ??= gitCommit(cwd, 'HEAD');
+    if (head && gitCommit(cwd, m[1] || 'HEAD') === head) return file;
+  }
+  return null;
 }
 
 // Родной хук tokensave отказывает grep/rg/ag по коду в индексе и сам же
@@ -224,11 +389,19 @@ export function guardBash(command, cwd, labels) {
 
     for (const { text: seg } of segments(command, { keepHeredoc: true })) {
       const toks = tokenize(seg);
-      const cmd = commandName(toks);
+      const cmd = baseCommand(commandName(toks));
+
+      const body = shellBody(cmd, toks, seg);
+      const inner = body && guardBash(body, cwd, labels);
+      if (inner) return inner;
 
       const sub = cmd === 'git' ? gitSubcommandAt(toks) : -1;
       if (toks[sub] === 'grep' && projectRoot(cwd) && !gitGrepOutsideIndex(toks, sub + 1, cwd)) {
         return grepReason('`git grep` по рабочему дереву индексированного проекта (по другой ревизии — `git grep … <sha|ветка>`, ревизия словом, не `$переменной`)');
+      }
+      if (toks[sub] === 'show' || toks[sub] === 'cat-file') {
+        const hit = gitShowsWorkingFile(toks, sub + 1, cwd);
+        if (hit) return readReason(hit, fileTools(cwd, hit, labels));
       }
 
       const target = redirectTarget(seg, cwd);
@@ -237,9 +410,21 @@ export function guardBash(command, cwd, labels) {
       // Черновик в /tmp вне проекта читается так же, как пишется: `> /tmp/x`
       // разрешён, значит и `tail /tmp/x`.
       const inPlace = INPLACE_CMDS.has(cmd) && toks.some((t) => /^-i/.test(t) || t === '--in-place');
-      if (READ_CMDS.has(cmd) || (FILTER_CMDS.has(cmd) && !inPlace)) {
+      // `diff /dev/null f` и `git diff --no-index /dev/null f` печатают файл целиком.
+      const diffsNull = (cmd === 'diff' || (toks[sub] === 'diff' && toks.includes('--no-index'))) && toks.includes('/dev/null');
+      if (READ_CMDS.has(cmd) || (FILTER_CMDS.has(cmd) && !inPlace) || diffsNull || (GREP_CMDS.has(cmd) && grepPrintsAll(toks))) {
         const hit = [...pathCandidates(seg)].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
         if (hit) return readReason(hit, fileTools(cwd, hit, labels));
+      }
+
+      if (COPY_CMDS.has(cmd)) {
+        const hit = copyHit(toks, cwd);
+        if (hit) return hit.read ? copyReason(hit.file, fileTools(cwd, hit.file, labels)) : editReason(hit.file, fileTools(cwd, hit.file, labels));
+      }
+
+      if (SCRIPT_EDITORS.has(cmd)) {
+        const hit = anyFile(seg, cwd);
+        if (hit) return evalReason(hit, fileTools(cwd, hit, labels), 'редактор');
       }
 
       if (WRITE_CMDS.has(cmd) || inPlace) {
@@ -253,7 +438,7 @@ export function guardBash(command, cwd, labels) {
       }
 
       if (cmd === 'jq') {
-        const hit = [...pathCandidates(seg)].find((c) => isFile(cwd, c) && !(JQ_DATA_RE.test(c) && !isIndexed(cwd, c)));
+        const hit = jqFiles(toks).find((c) => isFile(cwd, c) && !isScratch(cwd, c) && !(JQ_DATA_RE.test(c) && !isIndexed(cwd, c)));
         if (hit) return evalReason(hit, fileTools(cwd, hit, labels));
       }
     }
@@ -277,6 +462,10 @@ export function guardExec(code, cwd, labels) {
 
 function readReason(file, labels) {
   return `Файл \`${file}\` через shell не читают — ${labels.read}.`;
+}
+
+function copyReason(file, labels) {
+  return `Копия \`${file}\` в /tmp — то же чтение через shell. Файл читают сам: ${labels.read}.`;
 }
 
 // Файл из индекса: Read запрещён роутером чтения, а Edit без Read не работает —
@@ -365,6 +554,6 @@ function grepReason(what) {
     + 'доки, конфиги, yml: rag_search.';
 }
 
-function evalReason(file, labels) {
-  return `Файл \`${file}\` через интерпретатор не читают и не правят — ${labels.read} / ${labels.edit}.`;
+function evalReason(file, labels, via = 'интерпретатор') {
+  return `Файл \`${file}\` через ${via} не читают и не правят — ${labels.read} / ${labels.edit}.`;
 }

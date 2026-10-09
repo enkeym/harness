@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { segments, tokenize, commandIndex, commandName, afterTarget, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 
 export const DENY = 'deny';
@@ -237,15 +237,6 @@ const READS_FILE = new Set([
   'dd', 'paste', 'hexdump', 'hd', 'fold', 'fmt', 'expand', 'iconv', 'column', 'pr', 'comm', 'join',
   ...INTERPRETERS, 'jq', 'yq',
 ]);
-
-// Имя команды без `.exe` (из WSL Windows-бинарь зовётся с ним) и без версии
-// интерпретатора: `python.exe`, `python3.12`, `node22` читают так же, как `python` и `node`.
-const VERSIONED_RE = /^(python|node|ruby|php|perl|deno|bun)[\d.]+$/;
-
-function baseCommand(name) {
-  const s = String(name).replace(/\.exe$/i, '');
-  return VERSIONED_RE.test(s) ? s.replace(/[\d.]+$/, '') : s;
-}
 
 // Копирование и передача: опасен источник, а не назначение.
 const TRANSFER = new Set(['cp', 'mv', 'scp', 'rsync', 'zip', 'install', 'ln']);

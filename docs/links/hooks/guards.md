@@ -28,7 +28,7 @@ paths:
   `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
   такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
   `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
-- Разрешения shell — `ai-hooks/guard-core.mjs:JQ_DATA_RE`/`isScratch` ↔ абзац
+- Разрешения shell — `ai-hooks/guard-core.mjs:JQ_DATA_RE`/`isScratch`/`READ_CMDS`/`copyHit` ↔ абзац
   «Allowed» раздела Bash в `rules/core.md` и «Shell guard» в
   `skills/hooks-guards/SKILL.md`. Сузил гард без правки правил — агент по
   тексту правил идёт в отказ; расширил — правила молча запрещают разрешённое.
@@ -64,7 +64,7 @@ paths:
   `claude/settings.json`; `opencode/plugin/tokensave-guard.js` импортирует
   `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
-- Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`
+- Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`/`baseCommand`
   на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`
   включена в `ai-hooks/guard-core.mjs:guardBash` и
   `ai-hooks/skill-core.mjs:commitMessageProblem`: сняли — `node <<EOF` с путём

@@ -350,6 +350,15 @@ export function commandName(toks) {
   return path.basename(toks[commandIndex(toks)] || '');
 }
 
+// Имя команды без `.exe` (из WSL Windows-бинарь зовётся с ним) и без версии
+// интерпретатора: `python.exe`, `python3.12`, `node22` читают так же, как `python` и `node`.
+const VERSIONED_RE = /^(python|node|ruby|php|perl|deno|bun)[\d.]+$/;
+
+export function baseCommand(name) {
+  const s = String(name).replace(/\.exe$/i, '');
+  return VERSIONED_RE.test(s) ? s.replace(/[\d.]+$/, '') : s;
+}
+
 // Подкоманда git: первый свободный токен после `git`, минуя глобальные опции
 // с аргументом (`git -C dir commit`, `git -c k=v push`). Без этого
 // `git log --grep commit` считался бы коммитом. Индекс в токенах или -1.

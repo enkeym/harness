@@ -83,16 +83,16 @@ fired and what it wants instead.
 ## Shell guard
 
 - `bash-router` denies reading or writing an existing file through the shell
-  (`cat`, `head`, `sed -n`/`awk` with a file, `sed -i`, `tee`, `> file`, `node -e`/`python -c` with a path,
-  a heredoc into an interpreter) and names the tool that passes. Same rule for
-  `mcp__ide__executeCode`; `jq` over a `.json`/`.jsonl` outside the index,
-  `>`/`>>` into `/tmp/` outside a project and `cat`/`tail` of such a file pass.
-  Output clipping is `output-clip`.
-- `node <file>` (`python`, `bun`, `deno` alike) with no `-e`/`-p`/`-c` and no
-  heredoc is a run, not a read: `node ~/.ai-hooks/bin/<script>.mjs` passes.
+  (`cat`/`sort`/`base64`, `sed -n`/`awk`/`grep ''`/`grep -v` with a file, `diff
+  /dev/null`, `git show HEAD:<file>`, `sed -i`, `tee`, `> file`, `cp`/`mv` into
+  `/tmp` or over a file, `vim -es`/`ed`, `node -e`/`python -c` with a path, a
+  heredoc into an interpreter) and names the tool that passes; `mcp__ide__executeCode` too.
+  Pass: `jq` over a `.json`/`.jsonl`/`.ndjson` outside the index, `>`/`>>` into `/tmp/`
+  outside a project and `cat`/`tail` of it, `git show <other rev>:<file>`, `node <file>`
+  (`python.exe`, `tsx` alike) without `-e`/`-p`/`-c`/heredoc (a run). Clipping: `output-clip`.
 - It splits commands like the security guard: `&`, `$(…)`, backticks,
-  `( … )`, `then`, `sudo -u x`, `xargs` don't hide a `cat`, and a heredoc body
-  stays with its `node`/`python`. `grep`/`rg` and pipes reading stdin pass.
+  `( … )`, `then`, `sudo -u x`, `xargs`, `bash -c`/`eval` don't hide a `cat`, and a heredoc body
+  stays with its `node`/`python`. `grep`/`rg` with a pattern and pipes reading stdin pass.
 - `grep`/`rg`/`ag` over indexed code is refused by tokensave's own
   `hook-pre-tool-use`; its off switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git
   grep` over the working tree are denied by `bash-router` — tokensave answers.
