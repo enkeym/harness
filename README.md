@@ -89,7 +89,9 @@ tokensave 7.12.1 в песочном HOME):
 Поэтому на новой машине:
 
 1. Поставить бинарь tokensave (в `/usr/local/bin`, иначе поправить путь хуков).
-   `tokensave install` и `reinstall` не запускать.
+   `tokensave install` и `reinstall` не запускать — агентам они запрещены
+   (`Bash(tokensave *install*)` в `permissions.deny`, то же в `permission.bash`
+   OpenCode), хотя `tokensave doctor` их советует.
 2. `./install.sh` — хуки, права, MCP и правила придут из репозитория.
 3. `tokensave githooks on` — глобальные git-хуки в `~/.config/git/hooks` (куда уже
    смотрит `core.hooksPath` из `git/gitconfig`). Конфиги агентов он не трогает.

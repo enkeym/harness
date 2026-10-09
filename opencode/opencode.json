@@ -107,7 +107,8 @@
       "curl* --upload-file*": "ask",
       "curl* --json*": "ask",
       "wget* --post-*": "ask",
-      "wget* --body-*": "ask"
+      "wget* --body-*": "ask",
+      "tokensave *install*": "deny"
     },
     "tokensave_tokensave_*": "deny",
     "tokensave_tokensave_read": "allow",
