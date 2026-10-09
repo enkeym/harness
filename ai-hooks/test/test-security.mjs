@@ -170,6 +170,18 @@ check('printenv', bash('printenv'), 'ask');
 check('env без аргументов', bash('env'), 'ask');
 check('env как обёртка', bash('env NODE_ENV=test pnpm test'), 'allow');
 check('printenv одной переменной', bash('printenv NODE_ENV'), 'allow');
+check('jq -n env', bash('jq -n env'), 'ask');
+check("jq -n '$ENV'", bash("jq -n '$ENV'"), 'ask');
+check('jq -n env в пайпе jq', bash("jq -n 'env | keys'"), 'ask');
+check('jq -n [env]', bash("jq -nc '[env]'"), 'ask');
+check('jq env после --args', bash('jq -n --args env a b'), 'ask');
+check('jq env в интерполяции строки', bash(`jq -rn '"\\(env)"'`), 'ask');
+check('jq env за пайпом', bash("echo '{}' | jq 'env'"), 'ask');
+check('jq одной переменной $ENV', bash("jq -n '$ENV.HOME'"), 'allow');
+check('jq одной переменной env', bash("jq -rn 'env[\"HOME\"]'"), 'allow');
+check('jq ключ .env', bash("jq '.env' package.json"), 'allow');
+check('jq строка "env"', bash(`jq '.[] | select(.name == "env")' x.json`), 'allow');
+check('jq программа из файла env', bash('jq -f env data.json'), 'allow');
 check('docker compose config', bash('docker compose config'), 'ask');
 check('docker compose config --services', bash('docker compose config --services'), 'allow');
 

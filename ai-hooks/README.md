@@ -399,7 +399,9 @@ Claude.
 (`sudo -u root`, `env -i`, `xargs -0`, `timeout 5s`, `nice`) пропускаются до
 настоящей команды, у `ssh`, `docker exec`/`run`, `kubectl exec` — опции с
 аргументом до цели (`-p 2222`, `-u root`, `-n prod`). Окружение целиком
-печатают и `sudo env`, `printenv` без имени, `set`, `export -p`, `declare -x`.
+печатают и `sudo env`, `printenv` без имени, `set`, `export -p`, `declare -x`,
+jq с программой `env` или `$ENV` (`jq -n env`, `[env]`, `$ENV | keys`); одна
+переменная (`env.HOME`, `$ENV["HOME"]`) и ключ `.env` проходят.
 Пути ищутся разрезом строки, а не regex-поиском: команда в 200 КБ разбирается
 за доли секунды. Отдельно закрыт git:
 `git show HEAD:.env` и `git cat-file` читают секрет из истории, даже когда

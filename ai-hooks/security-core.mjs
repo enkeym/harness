@@ -350,10 +350,11 @@ function grepWithoutInclude(toks) {
 // ключ); с `-f` в любой склейке (`-nf`, `-fn`) он — файл программы. Остальные
 // свободные — файлы, кроме идущих после `--args`/`--jsonargs`: те — строки. Опции
 // разбираются и после них: `--args . a --rawfile s .env` читает `.env`.
+// Программа — null, когда она в файле.
 const JQ_PAIR_OPTS = new Set(['--arg', '--argjson']);
 const JQ_FILE_PAIR_OPTS = new Set(['--rawfile', '--slurpfile']);
 
-function jqFiles(toks) {
+function jqArgs(toks) {
   const args = toks.slice(commandIndex(toks) + 1);
   const files = [];
   const positional = [];
@@ -379,7 +380,7 @@ function jqFiles(toks) {
   const [first, ...rest] = positional;
   if (first && fromFile) files.push(first.t);
   files.push(...rest.filter((p) => !p.strings).map((p) => p.t));
-  return files;
+  return { program: fromFile ? null : first?.t ?? null, files };
 }
 
 function readsSecret(seg, toks, cmd) {
@@ -398,7 +399,7 @@ function readsSecret(seg, toks, cmd) {
     .filter(isSecretPath);
   if (inputs.length) return inputs[0];
 
-  if (cmd === 'jq') return secretPathsIn('', jqFiles(toks))[0] || null;
+  if (cmd === 'jq') return secretPathsIn('', jqArgs(toks).files)[0] || null;
   if (READS_FILE.has(cmd)) return secrets[0];
 
   if (TRANSFER.has(cmd)) {
@@ -487,7 +488,12 @@ function nestedReadsFile(nested) {
 }
 
 // Команда печатает окружение целиком: голый `env` (и за обёрткой — `sudo env`),
-// `printenv` без имени, `set`, `export -p`, `declare -x`. Имя команды или null.
+// `printenv` без имени, `set`, `export -p`, `declare -x`, программа jq с `env`
+// или `$ENV` целиком (`env`, `[env]`, `$ENV | keys`), а не с одной переменной
+// (`env.HOME`, `$ENV["HOME"]`); ключ `.env`, переменная `$env` и строка `"env"` —
+// не окружение. Имя команды или null.
+const JQ_ENV_RE = /(?<![\w."$])(?:\$ENV|env)(?![\w"]|\s*[.[])/;
+
 function printsEnv(toks) {
   const at = commandIndex(toks);
   const cmd = path.basename(toks[at] || '');
@@ -497,6 +503,7 @@ function printsEnv(toks) {
   if (cmd === 'printenv' && rest.every((t) => t.startsWith('-'))) return cmd;
   if (cmd === 'set' && rest.length === 0) return cmd;
   if (['export', 'declare', 'typeset'].includes(cmd) && rest.every((t) => /^-[px]+$/.test(t))) return cmd;
+  if (cmd === 'jq' && JQ_ENV_RE.test(jqArgs(toks).program ?? '')) return cmd;
   return null;
 }
 

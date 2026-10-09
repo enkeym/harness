@@ -60,6 +60,8 @@
       "declare -*": "ask",
       "typeset": "ask",
       "typeset -*": "ask",
+      "*jq *env*": "ask",
+      "*jq *$ENV*": "ask",
       "docker compose*config*": "ask",
       "docker-compose*config*": "ask",
       "pg_dump*": "ask",

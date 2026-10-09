@@ -22,7 +22,7 @@ fired and what it wants instead.
 - Asks confirmation: database dumps, non-local databases, pushes to protected
   branches, force push (`-f`, `+refspec`), branch deletion, push to the
   current branch (no refspec, `HEAD`, `@`, a `$…` name), deploy, remote-host commands,
-  outbound data.
+  outbound data, the whole environment (`env`, `printenv`, `jq -n env`): name one variable.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.
 - OpenCode runs it from the plugin: only the hard block applies there, the
