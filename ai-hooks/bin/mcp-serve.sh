@@ -12,6 +12,12 @@
 # Поэтому проект выбирается здесь и явно — по каталогу сессии, и только если
 # индекс уже создан. Индекса нет — сервер не поднимается: отсутствующий
 # инструмент виден сразу, чужой граф не виден никогда.
+#
+# tokensave с 7.15 объявляет только ядро и прячет остальное за tokensave_more,
+# а Claude Code и так отдаёт MCP-инструменты модели только по имени, схему —
+# по ToolSearch. Урезанный список там ничего не экономит, зато вызов
+# record_decision или session_recall падает «No such tool available». Поэтому
+# под Claude Code — полный список; OpenCode грузит схемы целиком и остаётся на ядре.
 set -u
 
 kind="${1:?usage: mcp-serve.sh tokensave|ragsave}"
@@ -38,6 +44,7 @@ case "$kind" in
       exit 1
     }
     cd "$root" || exit 1
+    [ -n "${CLAUDECODE:-}" ] && export TOKENSAVE_TOOLS="${TOKENSAVE_TOOLS:-full}"
     exec "${AI_HOOKS_TOKENSAVE_CMD:-/usr/local/bin/tokensave}" serve -p "$root"  # переменная — подмена в тестах
     ;;
   ragsave)

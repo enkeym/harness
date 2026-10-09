@@ -56,6 +56,12 @@ paths:
   открыт, тесты `test-guards.mjs` этого не увидят: они бьют по нашему гарду.
 - Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
   `ai-hooks/guard-core.mjs:findRoot`.
+- Полный список инструментов — `TOKENSAVE_TOOLS=full` в `ai-hooks/bin/mcp-serve.sh`
+  (имя и значение есть только в бинаре, `serve --help` о них молчит) ↔ раздел Tools
+  в `claude/CLAUDE.md` и строка про стартовый список в `skills/tokensave-routing/SKILL.md`.
+  Новая версия tokensave переименовала переменную — Claude Code снова получает ядро,
+  а правила обещают всё: `record_decision`/`session_recall` падают «No such tool».
+  Проверка: `tools/list` у `tokensave serve` с этой переменной — 86, без `tokensave_more`.
 - Таблица `files` индекса tokensave (`path` относительный от корня, через `/`) —
   `ai-hooks/guard-core.mjs:inIndex`/`relKey` ↔ схема БД tokensave. Сменилась схема —
   роутер чтения молча пропускает всё, тесты `test-guards.mjs` не заметят: они

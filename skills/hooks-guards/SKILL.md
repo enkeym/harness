@@ -106,8 +106,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   end unless the repo root has `.ragsave-disable` (`rag_status`: `autosync`,
   `last_sync`); tokensave syncs itself. Creating an index is the user's call —
   say `tokensave init <path>` / `ragsave init` is needed, don't run either.
-- MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the session
-  directory. Outside a project the server doesn't come up — tools are absent, not wrong.
+- MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh` in the session directory;
+  no project → no server, tools absent. Claude Code gets every tokensave tool.
 - `links-context` (PostToolUse on edit tools, native and tokensave; reads
   stay silent) injects a domain file of the project's impact map when the edited path
   matches its `paths:` — once per session per domain. Treat the text as the
