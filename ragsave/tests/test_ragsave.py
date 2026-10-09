@@ -902,6 +902,57 @@ def test_fts_query() -> None:
     check_true("однобуквенные отбрасываются", "а" not in _fts_query("а деплой"))
 
 
+def test_progress_bar() -> None:
+    import io
+    import shutil
+
+    from ragsave import cli
+
+    print("\n--- прогресс-бар ---")
+
+    def draw(columns: int, steps) -> str:
+        original = shutil.get_terminal_size, sys.stderr
+        shutil.get_terminal_size = lambda fallback=(100, 20): os.terminal_size((columns, 20))
+        sys.stderr = out = io.StringIO()
+        try:
+            bar = cli._make_bar(min_interval=0)
+            steps(bar)
+        finally:
+            shutil.get_terminal_size, sys.stderr = original
+        return out.getvalue()
+
+    def frames(bar) -> None:
+        bar(1, 3773, "src/components/very/long/path/to/some/file.tsx")
+        bar(3773, 3773, "готово")
+
+    for columns in (57, 50, 20):
+        text = draw(columns, frames)
+        visible = [line for chunk in text.replace("\033[K", "").split("\r")
+                   for line in chunk.split("\n")]
+        widest = max(len(line) for line in visible)
+        check_true(f"кадр влезает в {columns} колонок", widest <= columns - 1,
+                   f"ширина {widest}")
+    check_true("в широком окне деталь видна", "готово" in draw(120, frames))
+
+    def summary(bar) -> None:
+        frames(bar)
+        bar.say("без изменений: 3748")
+        bar.finish()
+
+    check_true(
+        "строка итога стирает кадр, finish не даёт пустой строки",
+        draw(57, summary).endswith("\033[K\r\033[K[ragsave] без изменений: 3748\n"),
+    )
+
+    def cancelled(bar) -> None:
+        frames(bar)
+        bar.finish()
+        bar.finish()
+
+    check_true("finish оставляет кадр и переводит строку один раз",
+               draw(57, cancelled).endswith("█" * 10 + "] 100% (3773/3773)     0с\033[K\n"))
+
+
 def main() -> int:
     test_chunker()
     test_file_filters()
@@ -916,6 +967,7 @@ def main() -> int:
     test_index_needs_init()
     test_idle_unload()
     test_fts_query()
+    test_progress_bar()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")
     return 1 if FAILED else 0
 

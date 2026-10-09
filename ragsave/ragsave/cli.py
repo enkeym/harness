@@ -26,6 +26,10 @@ from .indexer import (
 from .store import Store
 
 _BAR_WIDTH = 28
+# Уже не сужаем: в окне, где не влезают и 10 клеток, кадр просто обрезается.
+_BAR_MIN_WIDTH = 10
+# Короче деталь не показываем — обрывок в пару букв ничего не говорит.
+_DETAIL_MIN = 10
 
 # Код возврата «проект уже индексируется»: отличим от настоящего отказа (1).
 EXIT_BUSY = 3
@@ -55,12 +59,20 @@ def _make_bar(min_interval: float = 0.1, elapsed_before: float = 0.0):
     фрагментов на быстрых файлах может мелькать чаще, чем терминал успевает
     отрисовать, и тратить время на саму печать, а не на индексацию.
     elapsed_before — сколько чужой синк уже шёл до того, как его стали рисовать.
+
+    Кадр не шире columns - 1: перенесённую строку \r не вернёт к началу, и
+    верхние ряды каждого кадра остались бы на экране. Поэтому в узком окне
+    сначала пропадает деталь, потом сужается полоска, в конце режется весь кадр.
+    say(message) печатает строку-сообщение, стерев кадр, — иначе сообщение
+    приклеилось бы к нему; следующий tick рисует кадр заново.
     """
     last = 0.0
     started = time.monotonic() - elapsed_before
+    # На экране висит кадр без перевода строки.
+    drawn = False
 
     def render(done: float, total: int, detail: str) -> None:
-        nonlocal last
+        nonlocal last, drawn
         now = time.monotonic()
         finishing = total > 0 and done >= total
         if not finishing and now - last < min_interval:
@@ -68,8 +80,6 @@ def _make_bar(min_interval: float = 0.1, elapsed_before: float = 0.0):
         last = now
 
         fraction = 0.0 if total == 0 else min(1.0, done / total)
-        filled = int(round(_BAR_WIDTH * fraction))
-        bar = "█" * filled + "░" * (_BAR_WIDTH - filled)
         elapsed = now - started
         pct = int(fraction * 100)
         # done дробный внутри батча (эмбеддинг файла ещё не дописан) — в счётчике
@@ -77,17 +87,36 @@ def _make_bar(min_interval: float = 0.1, elapsed_before: float = 0.0):
         # реально попал в индекс.
         shown = min(total, int(done))
 
-        columns = shutil.get_terminal_size(fallback=(100, 20)).columns
-        prefix = f"[ragsave] [{bar}] {pct:3d}% ({shown}/{total}) {elapsed:5.0f}с  "
-        room = max(10, columns - len(prefix) - 1)
-        text = detail if len(detail) <= room else detail[:room - 1] + "…"
-        sys.stderr.write(f"\r{prefix}{text}\033[K")
+        limit = shutil.get_terminal_size(fallback=(100, 20)).columns - 1
+        # shown дополнен до ширины total — иначе полоска сужалась бы по мере счёта.
+        counters = f"] {pct:3d}% ({shown:>{len(str(total))}}/{total}) {elapsed:5.0f}с"
+        width = max(_BAR_MIN_WIDTH,
+                    min(_BAR_WIDTH, limit - len("[ragsave] [") - len(counters)))
+        filled = int(round(width * fraction))
+        line = f"[ragsave] [{'█' * filled}{'░' * (width - filled)}{counters}"
+        room = limit - len(line) - 2
+        if detail and room >= _DETAIL_MIN:
+            line += "  " + (detail if len(detail) <= room else detail[:room - 1] + "…")
+        sys.stderr.write(f"\r{line[:limit]}\033[K")
         sys.stderr.flush()
+        drawn = True
+
+    def say(message: str) -> None:
+        nonlocal drawn
+        if drawn:
+            sys.stderr.write("\r\033[K")
+            drawn = False
+        stderr_progress(message)
 
     def finish() -> None:
-        sys.stderr.write("\n")
-        sys.stderr.flush()
+        """Оставить последний кадр на экране и перейти на новую строку."""
+        nonlocal drawn
+        if drawn:
+            sys.stderr.write("\n")
+            sys.stderr.flush()
+            drawn = False
 
+    render.say = say  # type: ignore[attr-defined]
     render.finish = finish  # type: ignore[attr-defined]
     return render
 
@@ -137,7 +166,6 @@ def _watch_holder(paths: ProjectPaths, deadline: float) -> None:
 def _cmd_index(args: argparse.Namespace, force: bool) -> int:
     root = _root_or_exit(args.path)
     quiet = getattr(args, "quiet", False)
-    progress = None if quiet else stderr_progress
     if not quiet:
         print(f"[ragsave] проект: {root}", file=sys.stderr)
         parallel = f", воркеров: {config.EMBED_PARALLEL}" if config.EMBED_PARALLEL else ""
@@ -157,7 +185,7 @@ def _cmd_index(args: argparse.Namespace, force: bool) -> int:
             wait = max(0.0, deadline - time.monotonic())
         bar = None if quiet else _make_bar()
         report = index_project(
-            root=root, force=force, progress=progress, tick=bar,
+            root=root, force=force, progress=None if bar is None else bar.say, tick=bar,
             lock_wait=wait,
         )
     except SyncInProgress as exc:
@@ -172,10 +200,11 @@ def _cmd_index(args: argparse.Namespace, force: bool) -> int:
     except (SyncCancelled, KeyboardInterrupt):
         if bar is not None:
             bar.finish()
-            bar = None
         print("ragsave: синк отменён; изменения подхватит следующий синк", file=sys.stderr)
         return EXIT_CANCELLED
     except RuntimeError as exc:
+        if bar is not None:
+            bar.finish()
         print(f"ragsave: {exc}", file=sys.stderr)
         return 1
     finally:
