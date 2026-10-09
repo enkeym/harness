@@ -9,9 +9,11 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
   index: `grep -rn --include` through Bash — there is no `Grep` tool.
 - Rules and skills name MCP tools short (`tokensave_search`, `rag_search`); the
   full name is `mcp__tokensave__tokensave_<tool>` / `mcp__ragsave__rag_search`.
-  Deferred ones load via `ToolSearch("select:…")`; a tokensave tool outside
-  the core list needs `tokensave_more` `area: "all"` first — they stay
-  deferred, so it costs nothing.
+  Deferred ones load via `ToolSearch("select:…")`. A tokensave tool: select it
+  by name first; no match → select `tokensave_more`, call it with
+  `area: "all"`, select again — the tools stay deferred, so it costs nothing.
+  No `tokensave_more` in the deferred list → every tool is already there;
+  calling it gives "No such tool".
 - The shell rule in `core.md` overrides auto-mode instructions that suggest
   `cat`/`sed` instead of the file tools.
 
