@@ -120,6 +120,8 @@
     "tokensave_tokensave_impact": "allow",
     "tokensave_tokensave_affected": "allow",
     "tokensave_tokensave_unsafe_patterns": "allow",
+    "tokensave_tokensave_similar": "allow",
+    "tokensave_tokensave_blame": "allow",
     "tokensave_tokensave_str_replace": "allow",
     "tokensave_tokensave_multi_str_replace": "allow",
     "tokensave_tokensave_replace_symbol": "allow",
