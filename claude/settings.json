@@ -81,7 +81,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace|mcp__tokensave__tokensave_insert_at",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace|mcp__tokensave__tokensave_replace_lines|mcp__tokensave__tokensave_insert_at",
         "hooks": [
           {
             "type": "command",

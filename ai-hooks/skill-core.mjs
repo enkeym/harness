@@ -11,9 +11,10 @@
 // сессию, и скилл в ней снова не загружен — как и в контексте модели.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
-import { segments, tokenize, commandIndex, commandName, gitSubcommandAt } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, baseCommand, gitSubcommandAt, copyOperands } from './shell-core.mjs';
 
 const STATE_FILE = statePath('skills-loaded.json');
 // Сессия с --resume живёт днями; неделя покрывает её, а файл не растёт вечно.
@@ -33,7 +34,7 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // read-router, а Edit без Read не работает. Путь у них бывает относительным от
 // корня проекта. replace_symbol и insert_at_symbol пути не несут, а символов у
 // файлов инструкций нет.
-export const MCP_EDIT_RE = /tokensave_(str_replace|multi_str_replace|insert_at)$/;
+export const MCP_EDIT_RE = /tokensave_(str_replace|multi_str_replace|replace_lines|insert_at)$/;
 
 function editedFile(toolName, toolInput, cwd) {
   if (EDIT_TOOLS.has(toolName)) return toolInput?.file_path || toolInput?.notebook_path;
@@ -46,7 +47,8 @@ export const GATES = [
     id: 'instructions',
     requires: ['skill-authoring'],
     what: 'правка файла инструкций (SKILL.md, reference/, commands/*.md, CLAUDE.md)',
-    matches: (toolName, toolInput, cwd) => isInstructionFile(editedFile(toolName, toolInput, cwd)),
+    matches: (toolName, toolInput, cwd) => isInstructionFile(editedFile(toolName, toolInput, cwd))
+      || (toolName === 'Bash' && bashWrites(toolInput?.command, cwd).some(isInstructionFile)),
   },
   {
     id: 'commit',
@@ -61,9 +63,62 @@ export function isInstructionFile(p) {
   return INSTRUCTION_FILE_RE.test(s) || CLAUDE_MD_RE.test(s);
 }
 
-// Любой сегмент команды — `git … commit`. Пайп не исключение: `… | git commit
-// -F -` коммитит так же. Разбор — общий shell-core, как у security-guard:
-// обёртки (`sudo`, `env X=1`), фоновый `&` и `$(…)` своя копия пропускала.
+// Запись файла через shell: назначение cp/mv/ln/rsync/install (в каталог —
+// каталог/имя источника), цель `>`/`>>`, файлы tee, sed/perl -i, пути git
+// checkout/restore. Копия *из* файла — чтение, его судит bash-router. Существующий
+// файл bash-router переписать и так не даст, а новый SKILL.md и откат через git — даст.
+const COPY_CMDS = new Set(['cp', 'mv', 'ln', 'rsync', 'install']);
+const INPLACE_CMDS = new Set(['sed', 'perl']);
+
+export function bashWrites(command, cwd) {
+  if (!command) return [];
+  const out = [];
+  try {
+    for (const { text } of segments(command)) {
+      const toks = tokenize(text);
+      const at = commandIndex(toks);
+      const cmd = baseCommand(commandName(toks));
+      toks.forEach((t, i) => {
+        const m = t.match(/^(?:\d*|&)>>?(.*)$/);
+        if (m && !m[1].startsWith('&')) out.push(m[1] || toks[i + 1]);
+      });
+      const sub = cmd === 'git' ? gitSubcommandAt(toks) : -1;
+      if (COPY_CMDS.has(cmd)) {
+        const { sources, target } = copyOperands(toks);
+        if (target) out.push(target, ...sources.map((s) => path.join(target, path.basename(s))));
+      } else if (cmd === 'tee' || (INPLACE_CMDS.has(cmd) && toks.some((t) => /^-[a-zA-Z]*i|^--in-place/.test(t)))) {
+        out.push(...toks.slice(at + 1));
+      } else if (sub !== -1 && ['checkout', 'restore'].includes(toks[sub])) {
+        out.push(...toks.slice(sub + 1));
+      }
+    }
+  } catch {
+    return [];
+  }
+  const home = os.homedir();
+  return out.filter(Boolean).map((p) =>
+    path.resolve(cwd || process.cwd(), p.replace(/^(~|\$HOME|\$\{HOME\})(?=\/|$)/, home)));
+}
+
+// Коммит со своим содержимым или сообщением: commit, commit-tree (своё дерево), am
+// (свой патч), `--continue` после конфликта (разрешение писал агент), merge с
+// `-m`/`-F`. Без них merge/cherry-pick/revert/rebase переносят готовые коммиты, pull —
+// чужой код: ревью там нечего. У cherry-pick/revert `-m 1` — номер родителя.
+const RESUMING = new Set(['merge', 'cherry-pick', 'revert', 'rebase']);
+
+function makesCommit(toks, at) {
+  const sub = toks[at];
+  const args = toks.slice(at + 1);
+  if (sub === 'commit' || sub === 'commit-tree') return true;
+  if (sub === 'am') return !args.some((t) => /^--(abort|quit|show-current-patch)/.test(t));
+  if (!RESUMING.has(sub)) return false;
+  if (args.includes('--continue')) return true;
+  return sub === 'merge' && args.some((t) => /^(-m|-F|--message|--file)(=|$)|^-[mF]./.test(t));
+}
+
+// Любой сегмент команды — `git … commit` или другая подкоманда из makesCommit. Пайп
+// не исключение: `… | git commit -F -` коммитит так же. Разбор — общий shell-core, как у
+// security-guard: обёртки (`sudo`, `env X=1`), фоновый `&` и `$(…)` своя копия пропускала.
 export function isGitCommit(command) {
   if (!command) return false;
   try {
@@ -71,7 +126,7 @@ export function isGitCommit(command) {
       const all = tokenize(text);
       // Срез от настоящей команды: `sudo -u git git commit` — git здесь второй.
       const toks = all.slice(commandIndex(all));
-      return commandName(toks) === 'git' && toks[gitSubcommandAt(toks)] === 'commit';
+      return commandName(toks) === 'git' && makesCommit(toks, gitSubcommandAt(toks));
     });
   } catch {
     return false;

@@ -11,7 +11,10 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { execFileSync } from 'node:child_process';
-import { segments, tokenize, commandIndex, commandName, baseCommand, quoteEnd, dropConditionals, gitSubcommandAt } from './shell-core.mjs';
+import {
+  segments, tokenize, commandIndex, commandName, baseCommand, quoteEnd, dropConditionals, gitSubcommandAt,
+  redirectWords, copyOperands,
+} from './shell-core.mjs';
 import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -186,13 +189,6 @@ function isFile(cwd, p) {
   }
 }
 
-// Сколько слов занимает перенаправление с этого слова: `2>&1`, `>/dev/null` — одно, голое
-// `>`/`2>`/`<<<` — два (цель следует отдельным словом), не перенаправление — 0.
-function redirectWords(t) {
-  if (!/^(\d*|&)[<>]/.test(t)) return 0;
-  return /^(\d*|&)[<>]+$/.test(t) ? 2 : 1;
-}
-
 function isDir(cwd, p) {
   try {
     return fs.statSync(path.resolve(cwd || process.cwd(), p)).isDirectory();
@@ -248,25 +244,8 @@ function isScratch(cwd, p) {
   return SCRATCH_DIRS.some((d) => (abs + path.sep).startsWith(d)) && !findRoot(dir) && !repoRoot(dir);
 }
 
-// cp/mv/ln/rsync: источники и назначение (`-t <каталог>` или последний операнд).
+// cp/mv/ln/rsync: источники и назначение — `copyOperands` из shell-core.
 const COPY_CMDS = new Set(['cp', 'mv', 'ln', 'rsync']);
-
-function copyOperands(toks) {
-  const ops = [];
-  let target = null;
-  let opts = true;
-  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
-    const t = toks[i];
-    if (opts && t === '--') { opts = false; continue; }
-    if (opts && (t === '-t' || t === '--target-directory')) { target = toks[++i]; continue; }
-    if (opts && t.startsWith('--target-directory=')) { target = t.slice(19); continue; }
-    const r = redirectWords(t);
-    if (r) { i += r - 1; continue; }
-    if (opts && t.length > 1 && t.startsWith('-')) continue;
-    ops.push(t);
-  }
-  return { sources: ops, target: target ?? ops.pop() };
-}
 
 // Копия файла проекта в /tmp — чтение: черновик дальше читается свободно, в этой
 // команде или следующей. Копия поверх существующего файла — запись, как `> file`.

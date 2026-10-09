@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { STATE_ROOT, projectKey, repoRootOr } from './state-core.mjs';
-import { segments, tokenize, commandIndex, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, gitSubcommandAt, dropConditionals, baseCommand } from './shell-core.mjs';
 
 const STATE_DIR = path.join(STATE_ROOT, 'ask-mode');
 const DEFAULT_FILE = path.join(STATE_DIR, 'default');
@@ -104,8 +104,11 @@ export function resetMode(cwd, sid) {
 
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
+// Правящие инструменты tokensave (`tokensave_more` area edit). `rename` без
+// `dry_run: false` только показывает план и дифф — это чтение.
 const TOKENSAVE_WRITE_RE =
-  /tokensave_(str_replace|multi_str_replace|replace_symbol|insert_at|insert_at_symbol)$/;
+  /tokensave_(str_replace|multi_str_replace|replace_symbol|replace_lines|insert_at|insert_at_symbol|delete_symbol)$/;
+const TOKENSAVE_RENAME_RE = /tokensave_rename$/;
 
 // Артефакт — публикация наружу, а не ответ в чате.
 const ARTIFACT_WRITE_ACTIONS = new Set([
@@ -122,16 +125,19 @@ const READONLY_AGENTS = new Set([
 // Команды, которые меняют состояние всегда.
 const MUTATING_CMDS = new Set([
   'rm', 'rmdir', 'mv', 'cp', 'mkdir', 'touch', 'ln', 'chmod', 'chown', 'chgrp',
-  'truncate', 'tee', 'dd', 'shred', 'install', 'patch', 'unzip', 'tar',
+  'truncate', 'tee', 'dd', 'shred', 'install', 'patch', 'unzip', 'tar', 'rsync', 'unlink',
+  // Редакторы: из Bash они работают только скриптом (`ed -s`, `vim -es`), а скрипт правит.
+  'ed', 'ex', 'vim', 'vi', 'nvim',
 ]);
 
 // Команды, у которых меняет состояние только часть подкоманд.
 const MUTATING_SUBCMDS = {
   git: new Set(['add', 'commit', 'push', 'checkout', 'switch', 'reset', 'revert', 'merge',
-    'rebase', 'apply', 'stash', 'cherry-pick', 'clean', 'rm', 'mv', 'tag', 'restore', 'init']),
-  npm: new Set(['i', 'install', 'ci', 'add', 'remove', 'rm', 'uninstall', 'link', 'publish', 'update', 'upgrade']),
-  pnpm: new Set(['i', 'install', 'add', 'remove', 'rm', 'link', 'publish', 'update', 'up']),
-  yarn: new Set(['install', 'add', 'remove', 'link', 'publish', 'upgrade']),
+    'rebase', 'apply', 'stash', 'cherry-pick', 'clean', 'rm', 'mv', 'tag', 'restore', 'init',
+    'pull', 'am', 'update-ref', 'commit-tree']),
+  npm: new Set(['i', 'install', 'ci', 'add', 'remove', 'rm', 'uninstall', 'link', 'publish', 'update', 'upgrade', 'version']),
+  pnpm: new Set(['i', 'install', 'add', 'remove', 'rm', 'link', 'publish', 'update', 'up', 'version']),
+  yarn: new Set(['install', 'add', 'remove', 'link', 'publish', 'upgrade', 'version']),
   bun: new Set(['install', 'add', 'remove', 'link', 'publish', 'update']),
   pip: new Set(['install', 'uninstall']),
   pip3: new Set(['install', 'uninstall']),
@@ -149,7 +155,12 @@ const MUTATING_SUBCMDS = {
 };
 
 const INPLACE_CMDS = new Set(['sed', 'perl', 'awk', 'gawk']);
-const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'deno', 'bun', 'php']);
+// Буквы со значением в связке коротких флагов: после них остаток слова — значение
+// (`perl -Mlib`), а не `-i`. У awk связок нет: `-i inplace`.
+const INPLACE_VALUE_FLAGS = { sed: 'efl', perl: 'eEMmIxFCdD' };
+const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'deno', 'bun', 'php', 'tsx', 'ts-node']);
+const EVAL_INLINE = new Set(['-e', '-c', '--eval', '-p', '--print']);
+const HEREDOC_RE = /<<-?\s*['"\\]?\w+/;
 
 // Однострочник интерпретатора запрещаем не за сам факт `-e`/`-c`, а за запись:
 // `python3 -c "json.load(...)"` — обычное чтение, и блокировать его значит
@@ -157,7 +168,7 @@ const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'deno', 'bun', '
 // Без закрывающей \b: writeFileSync, mkdirSync, rmSync — те же имена с суффиксом.
 // У open() смотрим именно режим вторым аргументом: open('a.json') — это чтение.
 const EVAL_WRITE_RE =
-  /\b(writeFile|appendFile|createWriteStream|unlink|rmdir|rmSync|mkdir|rename|copyFile|chmod|chown|truncate|rmtree|makedirs|savefig|to_csv|to_json|execSync|spawnSync|popen|subprocess)|open\s*\([^)]*,\s*['"][rbt+]*[wax]/;
+  /\b(writeFile|appendFile|createWriteStream|unlink|rmdir|rmSync|mkdir|rename|copyFile|chmod|chown|truncate|rmtree|makedirs|savefig|to_csv|to_json|execSync|spawnSync|popen|subprocess|write_text|write_bytes|os\.remove|os\.replace|shutil\.(move|copy))|open\s*\([^)]*,\s*['"][rbt+]*[wax]/;
 
 // Перенаправление в файл. Дескрипторы (`2>&1`) и /dev/null не в счёт.
 const REDIRECT_RE = /(?<![0-9&])>>?\s*(?!&|\/dev\/(?:null|stdout|stderr))[\w./~$-]/;
@@ -198,20 +209,22 @@ function firstArg(tokens, at) {
 function gitMutates(tokens) {
   const at = gitSubcommandAt(tokens);
   const sub = tokens[at];
-  if (sub !== 'branch') return MUTATING_SUBCMDS.git.has(sub);
   const args = tokens.slice(at + 1);
+  if (sub === 'worktree') return !['list', undefined].includes(args.find((t) => !t.startsWith('-')));
+  if (sub !== 'branch') return MUTATING_SUBCMDS.git.has(sub);
   if (args.some((t) => BRANCH_WRITE_RE.test(t))) return true;
   return !args.some((t) => BRANCH_LIST_FLAGS.has(t)) && args.some((t) => !t.startsWith('-'));
 }
 
-// Команды, которые запускает сама команда: `bash -c "…"`, `eval "…"`,
+// Команды, которые запускает сама команда: `bash -c "…"`, `bash <<EOF`, `eval "…"`,
 // `find … -exec rm {} \;`.
-function nested(tokens, at) {
+function nested(tokens, at, body) {
   const cmd = path.basename(tokens[at]);
   const rest = tokens.slice(at + 1);
   if (SHELLS.has(cmd)) {
     const c = rest.findIndex((t) => /^-[a-z]*c[a-z]*$/.test(t));
-    return c === -1 || !rest[c + 1] ? [] : [rest[c + 1]];
+    if (c !== -1) return rest[c + 1] ? [rest[c + 1]] : [];
+    return body ? [body] : [];
   }
   if (cmd === 'eval') return [rest.join(' ')];
   if (cmd === 'find') {
@@ -226,26 +239,45 @@ function nested(tokens, at) {
   return [];
 }
 
+// `sed -i`, `perl -pi`, `sed -Ei`, `--in-place`, gawk `-i inplace`.
+function inPlace(cmd, tokens) {
+  return tokens.some((t) => {
+    if (t === '--in-place' || t.startsWith('--in-place=')) return true;
+    if (!INPLACE_VALUE_FLAGS[cmd]) return /^-i/.test(t);
+    if (!/^-[^-]/.test(t)) return false;
+    for (const c of t.slice(1)) {
+      if (c === 'i') return true;
+      if (INPLACE_VALUE_FLAGS[cmd].includes(c)) return false;
+    }
+    return false;
+  });
+}
+
 // Разбор shell — общий с гардом безопасности (shell-core): `&`, `( … )`,
 // `$(…)`, обёртки с опциями (`sudo -u app`). Кавычки учтены: `node -e "a;
-// write(…)"` — одна команда, а не две.
+// write(…)"` — одна команда, а не две. Тело heredoc остаётся со своей командой
+// (keepHeredoc): `python3 - <<EOF` с записью в теле — тот же однострочник, а `=>`
+// в теле — не перенаправление. Флаги и перенаправления — по первой строке.
 export function bashMutates(command, depth = 0) {
   const text = String(command || '');
   if (!text.trim() || depth > 3) return false;
 
-  for (const { text: seg } of segments(text)) {
-    const tokens = tokenize(seg);
+  for (const { text: seg } of segments(text, { keepHeredoc: true })) {
+    const nl = seg.indexOf('\n');
+    const head = nl === -1 ? seg : seg.slice(0, nl);
+    const body = nl !== -1 && HEREDOC_RE.test(head) ? seg.slice(nl + 1) : null;
+    const tokens = tokenize(head);
     const at = commandIndex(tokens);
-    const cmd = path.basename(tokens[at] || '');
-    if (REDIRECT_RE.test(dropConditionals(seg))) return true;
+    const cmd = baseCommand(path.basename(tokens[at] || ''));
+    if (REDIRECT_RE.test(dropConditionals(head))) return true;
     if (!cmd || isSelf(tokens, at)) continue;
 
     if (MUTATING_CMDS.has(cmd)) return true;
     if (cmd === 'find' && tokens.includes('-delete')) return true;
-    if (nested(tokens, at).some((inner) => bashMutates(inner, depth + 1))) return true;
-    if (INPLACE_CMDS.has(cmd) && tokens.some((t) => /^-i/.test(t) || t === '--in-place')) return true;
+    if (nested(tokens, at, body).some((inner) => bashMutates(inner, depth + 1))) return true;
+    if (INPLACE_CMDS.has(cmd) && inPlace(cmd, tokens)) return true;
     if (EVAL_CMDS.has(cmd)
-      && tokens.some((t) => t === '-e' || t === '-c' || t === '--eval')
+      && (body !== null || tokens.some((t) => EVAL_INLINE.has(t)))
       && EVAL_WRITE_RE.test(seg)) return true;
     if (tokens.some((t) => FORMATTERS.has(path.basename(t))) && tokens.some((t) => FORMAT_WRITE_FLAGS.has(t))) return true;
     if (cmd === 'git') {
@@ -260,7 +292,7 @@ export function askGuard(toolName, toolInput = {}) {
   const name = String(toolName || '');
   const ti = toolInput || {};
 
-  if (WRITE_TOOLS.has(name) || TOKENSAVE_WRITE_RE.test(name)) {
+  if (WRITE_TOOLS.has(name) || TOKENSAVE_WRITE_RE.test(name) || (TOKENSAVE_RENAME_RE.test(name) && ti.dry_run === false)) {
     return `правка файлов (${name})`;
   }
   if (name === 'Bash' || name === 'mcp__ide__executeCode') {

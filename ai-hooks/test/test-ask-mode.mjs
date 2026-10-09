@@ -65,6 +65,11 @@ const cases = [
   ['mcp__tokensave__tokensave_str_replace', {}, 'deny'],
   ['mcp__tokensave__tokensave_multi_str_replace', {}, 'deny'],
   ['mcp__tokensave__tokensave_read', {}, 'allow'],
+  // Правящие инструменты tokensave из `tokensave_more` area edit.
+  ['mcp__tokensave__tokensave_replace_lines', { path: 'a.ts' }, 'deny'],
+  ['mcp__tokensave__tokensave_delete_symbol', { symbol: 'x' }, 'deny'],
+  ['mcp__tokensave__tokensave_rename', { symbol: 'x', new_name: 'y', dry_run: false }, 'deny'],
+  ['mcp__tokensave__tokensave_rename', { symbol: 'x', new_name: 'y' }, 'allow'],
   ['mcp__ragsave__rag_search', {}, 'allow'],
   ['Agent', { subagent_type: 'Explore' }, 'allow'],
   ['Agent', { subagent_type: 'general-purpose' }, 'deny'],
@@ -107,6 +112,19 @@ const shell = [
   ['git branch', false], ['git branch feat/new', true], ['git branch -a --list "feat/*"', false],
   ['npx prettier --write .', true], ['prettier -w src', true], ['pnpm exec eslint --fix src', true],
   ['npx prettier --check .', false], ['npx eslint src', false],
+  // Правка на месте связкой коротких флагов, heredoc в интерпретатор, редакторы.
+  ["perl -pi -e 's/a/b/' a.ts", true], ["sed -Ei 's/a/b/' a.ts", true], ["sed -ni 's/a/b/p' a.ts", true],
+  ["perl -ne 'print if /x/' a.ts", false], ['sed -n 1p a.ts', false],
+  ["python.exe - <<'EOF'\nopen('a.txt','w').write('x')\nEOF", true],
+  ["python3 - <<'EOF'\nfrom pathlib import Path\nPath('a').write_text('x')\nEOF", true],
+  ["node - <<'EOF'\nrequire('fs').writeFileSync('a','x')\nEOF", true],
+  ["node - <<'EOF'\nconst f = (a) => a\nconsole.log(f(1))\nEOF", false],
+  [`python3.12 -c "open('a','w').write('x')"`, true],
+  ["ed -s a.ts <<< $'1d\\nw'", true], ["ex -sc '%s/a/b/|x' a.ts", true], ["vim -es -c '%s/a/b/' -c wq a.ts", true],
+  ['rsync -a src/ dst/', true], ['unlink a.ts', true],
+  ['git worktree add ../wt', true], ['git worktree remove ../wt', true], ['git worktree list', false],
+  ['git pull', true], ['git am 0001.patch', true], ['git update-ref refs/heads/x HEAD', true],
+  ['npm version patch', true], ['pnpm version patch', true], ['npm view axios version', false],
 ];
 for (const [command, want] of shell) {
   check(`bash: ${command}`, bashMutates(command), want);

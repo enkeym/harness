@@ -389,3 +389,28 @@ export function afterTarget(toks, start, argOpts) {
   if (toks[i] === '--') i++;
   return toks.slice(i + 1);
 }
+
+// Сколько слов занимает перенаправление с этого слова: `2>&1`, `>/dev/null` — одно, голое
+// `>`/`2>`/`<<<` — два (цель следует отдельным словом), не перенаправление — 0.
+export function redirectWords(t) {
+  if (!/^(\d*|&)[<>]/.test(t)) return 0;
+  return /^(\d*|&)[<>]+$/.test(t) ? 2 : 1;
+}
+
+// cp/mv/ln/rsync/install: источники и назначение (`-t <каталог>` или последний операнд).
+export function copyOperands(toks) {
+  const ops = [];
+  let target = null;
+  let opts = true;
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (opts && t === '--') { opts = false; continue; }
+    if (opts && (t === '-t' || t === '--target-directory')) { target = toks[++i]; continue; }
+    if (opts && t.startsWith('--target-directory=')) { target = t.slice(19); continue; }
+    const r = redirectWords(t);
+    if (r) { i += r - 1; continue; }
+    if (opts && t.length > 1 && t.startsWith('-')) continue;
+    ops.push(t);
+  }
+  return { sources: ops, target: target ?? ops.pop() };
+}

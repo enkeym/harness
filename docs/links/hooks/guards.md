@@ -39,7 +39,11 @@ paths:
   правка SKILL.md через tokensave молча проходит мимо skill-authoring. Тот же
   `MCP_EDIT_RE` берёт `ai-hooks/security-core.mjs:securityGuard` (matcher `*`):
   новый инструмент правки tokensave, не вписанный туда, правит харнес из чужой
-  сессии без ask и `.env` без запрета.
+  сессии без ask и `.env` без запрета. Источник списка — `tokensave_more` area edit
+  (сейчас с `path`: `str_replace`, `multi_str_replace`, `replace_lines`, `insert_at`);
+  тот же список целиком (и символьные, `rename` с `dry_run: false`) —
+  `ai-hooks/ask-core.mjs:TOKENSAVE_WRITE_RE`/`TOKENSAVE_RENAME_RE` (matcher `*`): новая версия
+  tokensave добавила инструмент — ask mode молча пропускает его правки.
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`
@@ -65,9 +69,10 @@ paths:
   `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
 - Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`/`baseCommand`
+  (+ `copyOperands`/`redirectWords` для guard-core и `skill-core.mjs:bashWrites`)
   на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`
-  включена в `ai-hooks/guard-core.mjs:guardBash` и
-  `ai-hooks/skill-core.mjs:commitMessageProblem`: сняли — `node <<EOF` с путём
+  включена в `ai-hooks/guard-core.mjs:guardBash`, `ai-hooks/ask-core.mjs:bashMutates` и
+  `ai-hooks/skill-core.mjs:commitMessageProblem`: сняли — `node <<EOF` с путём или записью
   в теле проходит мимо, а сообщение `git commit -F - <<EOF` без пустой строки
   после заголовка не проверяется; включили в security-core — тело
   `cat > README.md <<EOF` читается как аргументы cat и даёт ложный запрет, а

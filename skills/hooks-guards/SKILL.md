@@ -34,9 +34,9 @@ fired and what it wants instead.
 
 - In ask mode: blocks edits, mutating commands, publishing. Reads, search and
   tests stay; an edit is shown as a diff. Wrappers don't hide a write:
-  `bash -c`, `eval`, `find -exec`, `( … )`, `&`, `prettier --write`,
-  `git branch -D` are refused too; only a command that itself runs
-  `ask-mode.mjs` passes.
+  `bash -c`, `eval`, `( … )`, `&`, `perl -pi`, a heredoc into `python`, `ed`/`vim -es`,
+  `git pull`/`worktree add`, `tokensave_replace_lines`/`rename` (not a dry run) are
+  refused too; only a command that itself runs `ask-mode.mjs` passes.
 - Ask mode is on only if the statusline says so or
   `node ~/.ai-hooks/bin/ask-mode.mjs status` says so. A refusal that doesn't
   mention ask mode has another source — name it; don't prescribe `/ask-off`.
@@ -48,8 +48,8 @@ fired and what it wants instead.
 ## skill-gate
 
 - Denies an edit of a SKILL.md, `skills/*/reference/*.md`, `commands/*.md` or
-  any `CLAUDE.md` until `skill-authoring` is loaded in this session, and a
-  `git commit` until `review-standards`, `review-security` and `git-flow` are,
+  any `CLAUDE.md` (also via `cp`/`>`/`git checkout --`) until `skill-authoring` is loaded, and
+  a commit (`commit`, `commit-tree`, `am`, `merge -m`, `--continue`) until `review-standards`, `review-security`, `git-flow` are,
   or while its message has a non-empty line 2 — empty it and repeat, no amend.
 - The refusal names the missing skill: load it with `Skill(<name>)`, do what
   it says (the review skills mean running the checklist on the diff, not just

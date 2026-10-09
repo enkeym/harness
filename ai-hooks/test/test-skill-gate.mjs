@@ -75,7 +75,23 @@ const bash = (command) => ({ command });
   check('commit: в пайпе', isGitCommit('printf "msg" | git commit -F -'), true);
   check('commit: после &&', isGitCommit('git add -A && git commit -q -m x'), true);
   check('commit: git log не коммит', isGitCommit('git log --oneline -3'), false);
-  check('commit: commit-tree не коммит', isGitCommit('git commit-tree HEAD^{tree}'), false);
+  // Коммит из своего дерева, патча, сообщения или разрешённого конфликта — тот же коммит.
+  check('commit: commit-tree', isGitCommit('git commit-tree HEAD^{tree}'), true);
+  check('commit: commit-tree -p -m', isGitCommit('git commit-tree HEAD^{tree} -p HEAD -m x'), true);
+  check('commit: am', isGitCommit('git am 0001.patch'), true);
+  check('commit: am --abort не коммит', isGitCommit('git am --abort'), false);
+  check('commit: merge -m', isGitCommit('git merge -m x feature'), true);
+  check('commit: merge -F', isGitCommit('git merge -F /tmp/m feature'), true);
+  check('commit: merge --continue', isGitCommit('git merge --continue'), true);
+  check('commit: merge без сообщения не коммит', isGitCommit('git merge --no-ff feature'), false);
+  check('commit: merge --abort не коммит', isGitCommit('git merge --abort'), false);
+  check('commit: cherry-pick --continue', isGitCommit('git cherry-pick --continue'), true);
+  check('commit: revert --continue', isGitCommit('git revert --continue'), true);
+  check('commit: rebase --continue', isGitCommit('git rebase --continue'), true);
+  check('commit: cherry-pick готового коммита не коммит', isGitCommit('git cherry-pick abc123'), false);
+  check('commit: revert -m 1 — номер родителя, не сообщение', isGitCommit('git revert -m 1 abc123'), false);
+  check('commit: rebase main не коммит', isGitCommit('git rebase main'), false);
+  check('commit: pull не коммит', isGitCommit('git pull'), false);
   check('commit: слово в аргументе', isGitCommit('grep -rn commit src/'), false);
   check('commit: пусто', isGitCommit(''), false);
 check('commit: за sudo', isGitCommit('sudo git commit -m x'), true);
@@ -98,6 +114,7 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   check('сообщение: несколько -m — git сам ставит пустую строку', bad('git commit -m "fix: x" -m "- body"'), false);
   check('сообщение: однострочный -m', bad('git commit -q -m "fix: x"'), false);
   check('сообщение: не коммит', bad("cat <<'EOF'\na\nb\nEOF"), false);
+  check('сообщение: merge -m без пустой строки', bad('git merge -m "merge: x\n- body" feature'), true);
   check('сообщение: причина цитирует заголовок', commitMessageProblem("git commit -F - <<'EOF'\nfix: x\nbody\nEOF")?.includes('«fix: x»'), true);
 
   check('имя: plugin:skill', skillName('plugin:skill-authoring'), 'skill-authoring');
@@ -123,6 +140,22 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   const HARNESS = path.join(os.homedir(), 'harness');
   check('относительный path — от cwd', missingSkills(`${TS}str_replace`, { path: 'skills/doctor/SKILL.md' }, new Set(), HARNESS)?.id, 'instructions');
   check('относительный path вне инструкций → null', missingSkills(`${TS}str_replace`, { path: 'src/a.ts' }, new Set(), HARNESS), null);
+  check('tokensave_replace_lines SKILL.md → instructions', missingSkills(`${TS}replace_lines`, { path: 'skills/doctor/SKILL.md', start: 1, end: 1, new_content: '' }, new Set(), HARNESS)?.id, 'instructions');
+
+  // Запись файла инструкций через shell: копия, ссылка, перенаправление, git checkout/restore.
+  const viaBash = (command) => missingSkills('Bash', { command }, new Set(), HARNESS)?.id ?? null;
+  for (const command of [
+    'cp /tmp/x skills/newskill/SKILL.md', 'mv /tmp/x CLAUDE.md', 'cp /tmp/SKILL.md skills/doctor/',
+    'cp -t skills/doctor /tmp/SKILL.md', 'ln -sf /tmp/x skills/doctor/SKILL.md', 'install -m644 /tmp/x skills/doctor/SKILL.md',
+    'rsync /tmp/x rules/core.md', 'git checkout HEAD~1 -- skills/doctor/SKILL.md', 'git restore --source HEAD~1 CLAUDE.md',
+    'echo x >> CLAUDE.md', "cat > skills/newskill/SKILL.md <<'EOF'\n# x\nEOF", 'tee -a rules/core.md < /tmp/x',
+    "sed -i 's/a/b/' skills/doctor/SKILL.md", 'cd /tmp && cp x ~/harness/skills/doctor/SKILL.md',
+  ]) check(`bash: ${command.split('\n')[0]} → instructions`, viaBash(command), 'instructions');
+  for (const command of [
+    'cp skills/doctor/SKILL.md /tmp/x', 'git diff skills/doctor/SKILL.md > /tmp/d', 'git add skills/doctor/SKILL.md',
+    'wc -l CLAUDE.md', 'git checkout -b feat/x', 'cp /tmp/x src/a.ts', 'echo CLAUDE.md > /tmp/list',
+  ]) check(`bash: ${command} → null`, viaBash(command), null);
+  check('hook: cp поверх SKILL.md через Bash → deny', decision(gate('sid-a', 'Bash', bash(`cp /tmp/x ${SKILL_MD}`))), 'deny');
 
   const log = fs.readFileSync(env.AI_HOOKS_HOOKS_LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   check('запрет в hooks.jsonl с именем хука', [log[0]?.hook, log[0]?.decision, log[0]?.sid], ['skill-gate', 'deny', 'sid-a']);
