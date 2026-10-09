@@ -8,8 +8,9 @@ paths:
 # hooks/ragsave — связи, которых граф не видит
 
 ## Контракты и доки
-- Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) ↔ проверка
-  `exit_code = 3` для источника `ragsave*` в `ai-hooks/bin/log-error.sh`. Сменил код
+- Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) и отмены
+  `EXIT_CANCELLED` (4) ↔ проверка `exit_code` 3|4 для источника `ragsave*` в
+  `ai-hooks/bin/log-error.sh`. Сменил код
   или дал его другому отказу — журнал снова полон пропусков или молчит о сбое.
 - Лог синка и отказ от него — `.ragsave/sync.log` и `.ragsave-disable` в
   `ai-hooks/bin/ragsave-sync.sh` ↔ `ragsave/ragsave/config.py:SYNC_LOG_NAME`/`DISABLE_MARK`,

@@ -666,7 +666,9 @@ def test_cache_gc() -> None:
 def test_sync_lock() -> None:
     print("\n--- замок на проект ---")
 
-    from ragsave.indexer import SyncInProgress, index_project, sync_lock
+    from ragsave.indexer import (
+        SyncInProgress, holder_pid, index_project, read_progress, sync_lock,
+    )
 
     original_dim = config.EMBED_DIM
     config.EMBED_DIM = FakeEmbedder.dim
@@ -697,6 +699,18 @@ def test_sync_lock() -> None:
             report = index_project(root=root, embedder=FakeEmbedder())
             check("после освобождения замка индексация идёт", report.added, 1)
             check_true("отметка снята", not again.exists())
+
+            # Ход синка публикуется для `ragsave sync --wait` и убирается в конце.
+            progress = root / ".ragsave" / ".sync.progress"
+            seen = []
+            (root / "b.md").write_text("# b", encoding="utf-8")
+            index_project(root=root, embedder=FakeEmbedder(),
+                          tick=lambda done, total, detail: seen.append(read_progress(progress)))
+            check("ход синка опубликован с PID", (seen[0] or {}).get("pid"), os.getpid())
+            check_true("после синка файла хода нет", not progress.exists())
+
+            check("PID из записи замка", holder_pid("PID 42, начат 2026-10-09 13:15:56"), 42)
+            check("запись без PID", holder_pid("неизвестный процесс"), None)
             with sync_lock(lock_path):
                 check_true("замок отпущен после индексации", True)
 

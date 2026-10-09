@@ -51,6 +51,9 @@ SCAN_QUEUE = 64
 # по этому коду log-error.sh и не пишет запись.
 LOCK_HELD_MESSAGE = "another sync is already in progress"
 
+# Как часто идущий синк обновляет .sync.progress для `ragsave sync --wait`.
+PROGRESS_INTERVAL = 0.5
+
 
 class SyncInProgress(RuntimeError):
     """Другой процесс уже индексирует этот проект; pid — его PID, если записан."""
@@ -123,11 +126,10 @@ def sync_lock(lock_path: Path, wait: float = 0.0) -> Iterator[None]:
                 if time.monotonic() >= deadline:
                     handle.seek(0)
                     holder = handle.read().strip() or "неизвестный процесс"
-                    pid = re.match(r"PID (\d+)", holder)
                     raise SyncInProgress(
                         f"{LOCK_HELD_MESSAGE} ({holder}); по окончании он "
                         f"пройдёт ещё раз и подхватит свежие правки",
-                        int(pid.group(1)) if pid else None,
+                        holder_pid(holder),
                     ) from None
                 time.sleep(0.5)
         handle.seek(0)
@@ -137,6 +139,50 @@ def sync_lock(lock_path: Path, wait: float = 0.0) -> Iterator[None]:
         yield
     finally:
         handle.close()
+
+
+def _publishing_tick(
+    path: Path, tick: Callable[[float, int, str], None],
+) -> Callable[[float, int, str], None]:
+    """tick, который ещё и публикует ход синка в файл.
+
+    Его рисует `ragsave sync --wait`, пока ждёт замок, — и для фонового синка
+    с --quiet тоже. Запись атомарная и не чаще PROGRESS_INTERVAL; ошибка
+    записи синк не валит — прогресс только для глаз.
+    """
+    started = time.time()
+    last = 0.0
+    tmp = path.with_name(path.name + ".tmp")
+
+    def publish(done: float, total: int, detail: str) -> None:
+        nonlocal last
+        now = time.monotonic()
+        if now - last >= PROGRESS_INTERVAL:
+            last = now
+            state = {"pid": os.getpid(), "started": started,
+                     "done": done, "total": total, "detail": detail}
+            try:
+                tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+                os.replace(tmp, path)
+            except OSError:
+                pass
+        tick(done, total, detail)
+
+    return publish
+
+
+def read_progress(path: Path) -> dict | None:
+    """Последний опубликованный ход синка; None — не публиковался."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def holder_pid(holder: str) -> int | None:
+    """PID из записи в замке («PID 123, начат …»); None — записи нет."""
+    match = re.match(r"PID (\d+)", holder)
+    return int(match.group(1)) if match else None
 
 
 def lock_holder(lock_path: Path) -> str | None:
@@ -350,11 +396,17 @@ def index_project(
     paths.again_mark.touch()
     with sync_lock(paths.lock, wait=lock_wait):
         paths.again_mark.unlink(missing_ok=True)
-        report = _index_pass(root, paths, encoder, force, log, bump)
-        while paths.again_mark.exists():
-            paths.again_mark.unlink(missing_ok=True)
-            log("пока шёл проход, синк запросили ещё раз — повторный проход")
-            report.absorb(_index_pass(root, paths, encoder, False, log, bump))
+        # Ход упавшего держателя не должен рисоваться как ход этого прохода.
+        paths.progress.unlink(missing_ok=True)
+        bump = _publishing_tick(paths.progress, bump)
+        try:
+            report = _index_pass(root, paths, encoder, force, log, bump)
+            while paths.again_mark.exists():
+                paths.again_mark.unlink(missing_ok=True)
+                log("пока шёл проход, синк запросили ещё раз — повторный проход")
+                report.absorb(_index_pass(root, paths, encoder, False, log, bump))
+        finally:
+            paths.progress.unlink(missing_ok=True)
     return report
 
 

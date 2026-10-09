@@ -96,6 +96,9 @@ function sandbox() {
   const res = sb.run('ragsave sync', '/work/p', sb.detail('чужой вывод следующего прохода\n'), '3');
   check('ragsave код 3 без строки — код 0 и без записи', [res.status, sb.read()], [0, '']);
 
+  sb.run('ragsave sync', '/work/p', sb.detail('ragsave: синк отменён\n'), '4');
+  check('ragsave код 4 (ragsave cancel) — без записи', sb.read(), '');
+
   sb.run('ragsave sync', '/work/p', sb.detail('Traceback\n'), '1');
   check('ragsave код 1 — запись есть', /ragsave sync \| \/work\/p \| exit=1\n/.test(sb.read()), true);
 

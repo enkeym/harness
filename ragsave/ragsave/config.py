@@ -17,6 +17,8 @@ INDEX_DIR = ".ragsave"
 DB_NAME = "rag.db"
 LOCK_NAME = ".sync.lock"
 AGAIN_NAME = ".sync.again"
+# Ход идущего синка — его рисует `ragsave sync --wait`, пока ждёт замок
+PROGRESS_NAME = ".sync.progress"
 # Лог фонового синка и отказ от него пишет и читает ai-hooks/bin/ragsave-sync.sh:
 # имена правятся вместе.
 SYNC_LOG_NAME = "sync.log"
@@ -178,6 +180,10 @@ class ProjectPaths:
     @property
     def again_mark(self) -> Path:
         return self.index_dir / AGAIN_NAME
+
+    @property
+    def progress(self) -> Path:
+        return self.index_dir / PROGRESS_NAME
 
     @property
     def sync_log(self) -> Path:
