@@ -22,8 +22,9 @@ Here only what exists in OpenCode alone.
 - `@commit` runs the `git-flow` procedure in its own session; model and
   permissions are in `opencode/agent/commit.md`. User-invoked only — never
   delegate to it on your own.
-- In the main session `git commit` and `git push` are gated by
-  `permission.bash` — run them, don't add a chat question on top.
+- In the main session `git commit` (and `am`, `merge`, `--continue`) and
+  `git push` are gated by `permission.bash` — run them, don't add a chat
+  question on top.
 
 ## Claude Code only
 

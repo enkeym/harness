@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals, makesCommit } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 
 export const DENY = 'deny';
@@ -173,8 +173,10 @@ function gitPushReason(toks, at) {
   return null;
 }
 
-// Коммит — точка, где человек проверяет, что именно уходит в историю.
-function gitCommitReason(toks) {
+// Коммит — точка, где человек проверяет, что именно уходит в историю. У merge
+// `-n` — не --no-verify, поэтому флаги разбираются только у самого commit.
+function gitCommitReason(toks, at) {
+  if (toks[at] !== 'commit') return `\`git ${toks[at]}\` создаёт коммит`;
   if (toks.includes('--amend')) return 'amend переписывает последний коммит';
   if (toks.includes('--no-verify') || toks.includes('-n')) return 'коммит с --no-verify обходит git-хуки';
   return 'создание коммита';
@@ -697,7 +699,7 @@ export function guardBashSecurity(command, depth = 0) {
 
     if (cmd === 'git') {
       const at = gitSubcommandAt(toks);
-      if (toks[at] === 'commit') return { level: ASK, reason: gitCommitReason(toks) };
+      if (makesCommit(toks, at)) return { level: ASK, reason: gitCommitReason(toks, at) };
       if (toks[at] === 'push') {
         const reason = gitPushReason(toks, at);
         if (reason) return { level: ASK, reason };

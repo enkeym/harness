@@ -92,6 +92,9 @@ function ocBash(command) {
 const CORE_ASK = [
   'git commit -m x', 'git -C /tmp/r commit -m x', 'git push', 'git push origin main',
   'git -C /tmp/r push origin HEAD', 'git -c k=v push origin main',
+  'git commit-tree HEAD^{tree} -m x', 'git am x.patch', 'git -C /tmp/r am x.patch', 'git merge -m x feat',
+  'git -C /tmp/r merge -m x feat', 'git merge --continue', 'git rebase --continue',
+  'git cherry-pick --continue', 'git revert --continue',
   'env', 'printenv', 'dotenv -e .env -- printenv', 'set', 'export -p', 'declare -x', 'jq -n env', "jq -n '$ENV'",
   "echo '{}' | jq env",
   'docker compose config', 'docker-compose config',

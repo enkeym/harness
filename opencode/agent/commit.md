@@ -37,6 +37,7 @@ permission:
     "curl*": allow
     "gh pr*": allow
     "git commit --amend*": deny
+    "git commit-tree*": deny
     "git push --force*": deny
     "git push -f*": deny
     "git push --delete*": deny

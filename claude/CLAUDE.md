@@ -15,10 +15,10 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 
 ## Hooks
 
-- `git commit` and `git push` are gated by security-guard (commit always asks;
-  push asks only for a protected, current or computed branch, force or
-  deletion) — run them, don't
-  add a chat question on top.
+- `git commit` and `git push` are gated by security-guard (every commit form
+  asks, `am`, `merge -m`, `--continue` too; push asks only for a protected,
+  current or computed branch, force or deletion) — run them, don't add a chat
+  question on top.
 - A hook blocked or warned; ask mode, guards, index sync, bootstrap → load
   `hooks-guards` before reacting.
 

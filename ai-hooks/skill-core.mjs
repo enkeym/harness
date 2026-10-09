@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
-import { segments, tokenize, commandIndex, commandName, baseCommand, gitSubcommandAt, copyOperands } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, baseCommand, gitSubcommandAt, copyOperands, makesCommit } from './shell-core.mjs';
 
 const STATE_FILE = statePath('skills-loaded.json');
 // Сессия с --resume живёт днями; неделя покрывает её, а файл не растёт вечно.
@@ -98,22 +98,6 @@ export function bashWrites(command, cwd) {
   const home = os.homedir();
   return out.filter(Boolean).map((p) =>
     path.resolve(cwd || process.cwd(), p.replace(/^(~|\$HOME|\$\{HOME\})(?=\/|$)/, home)));
-}
-
-// Коммит со своим содержимым или сообщением: commit, commit-tree (своё дерево), am
-// (свой патч), `--continue` после конфликта (разрешение писал агент), merge с
-// `-m`/`-F`. Без них merge/cherry-pick/revert/rebase переносят готовые коммиты, pull —
-// чужой код: ревью там нечего. У cherry-pick/revert `-m 1` — номер родителя.
-const RESUMING = new Set(['merge', 'cherry-pick', 'revert', 'rebase']);
-
-function makesCommit(toks, at) {
-  const sub = toks[at];
-  const args = toks.slice(at + 1);
-  if (sub === 'commit' || sub === 'commit-tree') return true;
-  if (sub === 'am') return !args.some((t) => /^--(abort|quit|show-current-patch)/.test(t));
-  if (!RESUMING.has(sub)) return false;
-  if (args.includes('--continue')) return true;
-  return sub === 'merge' && args.some((t) => /^(-m|-F|--message|--file)(=|$)|^-[mF]./.test(t));
 }
 
 // Любой сегмент команды — `git … commit` или другая подкоманда из makesCommit. Пайп

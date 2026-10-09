@@ -377,6 +377,23 @@ export function gitSubcommandAt(toks) {
   return -1;
 }
 
+// Коммит со своим содержимым или сообщением: commit, commit-tree (своё дерево), am
+// (свой патч), `--continue` после конфликта (разрешение писал агент), merge с
+// `-m`/`-F`. Без них merge/cherry-pick/revert/rebase переносят готовые коммиты, pull —
+// чужой код: ревью там нечего. У cherry-pick/revert `-m 1` — номер родителя.
+// Общий для skill-gate (ревью до коммита) и security-guard (подтверждение коммита).
+const RESUMING = new Set(['merge', 'cherry-pick', 'revert', 'rebase']);
+
+export function makesCommit(toks, at) {
+  const sub = toks[at];
+  const args = toks.slice(at + 1);
+  if (sub === 'commit' || sub === 'commit-tree') return true;
+  if (sub === 'am') return !args.some((t) => /^--(abort|quit|show-current-patch)/.test(t));
+  if (!RESUMING.has(sub)) return false;
+  if (args.includes('--continue')) return true;
+  return sub === 'merge' && args.some((t) => /^(-m|-F|--message|--file)(=|$)|^-[mF]./.test(t));
+}
+
 // Аргументы после цели: `ssh [опции] host команда…`, `docker exec [опции]
 // контейнер команда…`. Опции разбираются только до цели — дальше идёт чужая
 // команда со своими флагами (`cat -n .env`).

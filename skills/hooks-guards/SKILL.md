@@ -19,9 +19,9 @@ fired and what it wants instead.
   `--include`, or with one `.env` matches (`*`, `.*`), over a directory (files like `*.mjs` pass) — it reads `.env`; in an indexed project
   look the symbol up with `tokensave_search`, docs, configs and yml with `rag_search`,
   elsewhere add `--include=*.ts`. Take a variable's shape from `.env.example`, its value from the user.
-- Asks confirmation: database dumps, non-local databases, pushes to protected
-  branches, force push (`-f`, `+refspec`), branch deletion, push to the
-  current branch (no refspec, `HEAD`, `@`, a `$…` name), deploy, remote-host commands,
+- Asks confirmation: every commit (`commit-tree`, `am`, `merge -m`, `--continue` too),
+  database dumps, non-local databases, pushes to protected branches, force push (`-f`,
+  `+refspec`), branch deletion, push to the current branch (no refspec, `HEAD`, `@`, a `$…` name), deploy, remote-host commands,
   outbound data, the whole environment (`env`, `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.

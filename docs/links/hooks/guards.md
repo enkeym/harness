@@ -69,7 +69,9 @@ paths:
   `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
 - Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`/`baseCommand`
-  (+ `copyOperands`/`redirectWords` для guard-core и `skill-core.mjs:bashWrites`)
+  (+ `copyOperands`/`redirectWords` для guard-core и `skill-core.mjs:bashWrites`;
+  `makesCommit` — формы коммита для `skill-core.mjs:isGitCommit` и `ask` в
+  `security-core.mjs:guardBashSecurity`: новая форма в одном месте — коммит без ревью или без подтверждения)
   на security-core, ask-core, skill-core и guard-core. Опция `keepHeredoc`
   включена в `ai-hooks/guard-core.mjs:guardBash`, `ai-hooks/ask-core.mjs:bashMutates` и
   `ai-hooks/skill-core.mjs:commitMessageProblem`: сняли — `node <<EOF` с путём или записью

@@ -351,7 +351,9 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 `ask` — там, где операция законная, но нужен человек: `pg_dump` и другие
 выгрузки, клиент БД на неместном хосте (`-h`, слитный `-hHOST`, `--host`, URL,
 строка подключения `host=…`, `PGHOST=`/`MYSQL_HOST=` в любом месте команды),
-`git push` в main/dev/prod (в том числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
+коммит — `git commit` и те же формы, что ловит гейт скиллов (`commit-tree`, `am`,
+`merge -m`/`-F`, `merge`/`cherry-pick`/`revert`/`rebase --continue`; общий
+`shell-core.mjs:makesCommit`), `git push` в main/dev/prod (в том числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
 `-uf`, `+refspec`), удаление ветки (`--delete`, `:ветка`), `--all`/`--mirror`,
 шаблон `*`, push без явной ветки, в `HEAD`/`@` или в ветку из `$…`/`` `…` ``,
 `docker compose` с прод-конфигом, `kubectl apply`, команды через
@@ -377,8 +379,8 @@ prompt injection из файлов чужого проекта снимала б
 сессии — `directory`. Блокируется только `deny`: спросить человека из плагина нельзя,
 поэтому `ask` там держат правила `permission.bash` в `opencode.json` и агентах
 (у `@commit` — запреты force push, `+refspec`, удаления ветки, `--mirror`,
-`--all`). Шаблоны OpenCode не разбирают хосты и refspec, поэтому спрашивают
-грубее ядра (`psql* -h*` и на localhost, `git push*` целиком); что каждое
+`--all`, `commit-tree`). Шаблоны OpenCode не разбирают хосты и refspec, поэтому спрашивают
+грубее ядра (`psql* -h*` и на localhost, `git push*` и `git merge*` целиком); что каждое
 `ask` ядра накрыто шаблоном, проверяет `test-opencode-plugin.mjs` — новое
 `ask`-правило добавляется туда примером вместе с шаблоном. Ошибка самого гарда вызов не блокирует — fail-open, как в адаптере
 Claude.
