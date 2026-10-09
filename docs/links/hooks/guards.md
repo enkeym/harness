@@ -49,7 +49,8 @@ paths:
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`
   ловит имя `TOKENSAVE_DISABLE_GREP_HOOK` из подсказки самого бинаря
   (`tokensave hook-pre-tool-use`), а запрет `git grep` по рабочему дереву в `guardBash` полагается
-  на то, что `grep`/`rg`/`ag` уже судит этот хук — matcher
+  на то, что `grep`/`rg`/`ag` уже судит этот хук (свой `git grep` он с 7.15 судит
+  тоже, но `HEAD`, текущую ветку и `$var` пропускает — наш запрет не дубль) — matcher
   `Agent|Grep|Bash|Glob` в `claude/settings.json`. Новая версия tokensave
   переименовала переменную или `tokensave install` сузил matcher — обход снова
   открыт, тесты `test-guards.mjs` этого не увидят: они бьют по нашему гарду.
