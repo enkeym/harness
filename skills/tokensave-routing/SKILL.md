@@ -24,6 +24,12 @@ file, a path outside the index, a string `search` missed.
 | How/where/why with no name; docs, configs, yml, migrations, CI, infrastructure | `rag_search` (`only_outside_tokensave: true` when the answer is not code) |
 | Decision after approval               | `record_decision`: one line + `reason`, `files`, `tags`       |
 
+- Only the core tools (`context`, `search`, `status`, `read`, `body`, `files`,
+  `callers`, `callees`, `impact`, `str_replace`, `multi_str_replace`) are
+  listed at start. Any other → `tokensave_more` with its area first:
+  `navigate` (`signature`), `edit` (`replace_symbol`, `insert_at*`), `git`
+  (`affected`), `memory` (`session_recall`, `record_decision`), `analysis`.
+  "No such tool" on a tokensave name means this step was skipped.
 - Arguments from the schema, not memory. Pass `seen_node_ids` from one
   `context` into `exclude_node_ids` of the next.
 - Scope with `path_include`/`path_exclude` — a monorepo pulls in a foreign

@@ -126,6 +126,7 @@
     "tokensave_tokensave_insert_at": "allow",
     "tokensave_tokensave_insert_at_symbol": "allow",
     "tokensave_tokensave_status": "allow",
+    "tokensave_tokensave_more": "allow",
     "tokensave_tokensave_session_recall": "allow",
     "tokensave_tokensave_record_decision": "allow"
   },
