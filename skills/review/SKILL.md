@@ -80,8 +80,8 @@ missing ref → name it in one line and stop.
   and `+/-` totals, the reviewed commits as `--oneline` or `коммиты не смотрел`.
 - Ref other than `HEAD`: read files as `git show <ref>:<path>`, usages as
   `git grep -n <name> <ref>` — the ref a literal sha or branch, never `$var`.
-  The tokensave graph holds the working tree, not the ref; bash-router refuses
-  `git grep` over the working tree.
+  The tokensave graph holds the working tree, not the ref; a ref at `HEAD`'s
+  sha (a branch on it too) is the graph — bash-router refuses both forms there.
 - Free words after the target are the focus: checked first, full pass still.
 
 ### 1.1 Audit
