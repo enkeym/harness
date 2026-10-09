@@ -690,7 +690,6 @@ def test_sync_lock() -> None:
                                "another sync is already in progress" in str(exc),
                                str(exc))
                     check_true("в сообщении есть PID держателя", "PID" in str(exc))
-                    check("PID держателя в исключении", exc.pid, os.getpid())
 
             again = root / ".ragsave" / ".sync.again"
             check_true("отказ оставил отметку на повтор", again.exists())
@@ -700,14 +699,17 @@ def test_sync_lock() -> None:
             check("после освобождения замка индексация идёт", report.added, 1)
             check_true("отметка снята", not again.exists())
 
-            # Ход синка публикуется для `ragsave sync --wait` и убирается в конце.
+            # Ход синка публикуется для `ragsave sync` у занятого замка; в конце
+            # в файле остаётся последний кадр.
             progress = root / ".ragsave" / ".sync.progress"
             seen = []
             (root / "b.md").write_text("# b", encoding="utf-8")
             index_project(root=root, embedder=FakeEmbedder(),
                           tick=lambda done, total, detail: seen.append(read_progress(progress)))
             check("ход синка опубликован с PID", (seen[0] or {}).get("pid"), os.getpid())
-            check_true("после синка файла хода нет", not progress.exists())
+            last = read_progress(progress) or {}
+            check("после синка в файле хода последний кадр",
+                  (last.get("done"), last.get("total")), (2, 2))
 
             check("PID из записи замка", holder_pid("PID 42, начат 2026-10-09 13:15:56"), 42)
             check("запись без PID", holder_pid("неизвестный процесс"), None)
@@ -739,6 +741,153 @@ def test_sync_lock() -> None:
             check_true("после повтора отметки нет", not again.exists())
     finally:
         config.EMBED_DIM = original_dim
+
+
+def test_busy_sync() -> None:
+    print("\n--- ragsave sync при занятом замке ---")
+
+    import io
+    import signal
+    import threading
+    import time
+    import types
+
+    from ragsave import cli, indexer
+    from ragsave.config import ProjectPaths
+    from ragsave.indexer import _publishing_tick, sync_lock
+
+    original = (config.EMBED_DIM, indexer.Embedder, os.kill, subprocess.run,
+                cli.read_progress, cli.index_project, signal.getsignal(signal.SIGTERM))
+    config.EMBED_DIM = FakeEmbedder.dim
+    indexer.Embedder = FakeEmbedder
+
+    def run(root: Path, *flags: str) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        saved = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = out, err
+        try:
+            code = cli.main(["sync", *flags, str(root)])
+        finally:
+            sys.stdout, sys.stderr = saved
+        return code, out.getvalue(), err.getvalue()
+
+    def hold(paths: ProjectPaths, work) -> threading.Thread:
+        """Другой синк: держит замок в потоке, пока идёт work()."""
+        ready = threading.Event()
+
+        def body() -> None:
+            with sync_lock(paths.lock):
+                ready.set()
+                work()
+
+        thread = threading.Thread(target=body)
+        thread.start()
+        ready.wait(5)
+        return thread
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(root)], check=True,
+                           capture_output=True)
+            (root / "a.md").write_text("# a", encoding="utf-8")
+            paths = ProjectPaths(root=root)
+
+            release = threading.Event()
+            thread = hold(paths, lambda: release.wait(10))
+            started = time.monotonic()
+            code, _, _ = run(root, "--quiet")
+            check("--quiet при занятом замке — код 3", code, cli.EXIT_BUSY)
+            check_true("--quiet не ждёт", time.monotonic() - started < 0.5)
+            release.set()
+            thread.join()
+
+            # Без --quiet: рисует ход держателя, ждёт его конца и проходит сам.
+            # Последний кадр (3/3) попадает в файл только через flush —
+            # троттлинг его пропускает.
+            again_seen = []
+
+            def sync_work() -> None:
+                publish = _publishing_tick(paths.progress, lambda done, total, detail: None)
+                publish(1, 3, "чужой: a.md")
+                time.sleep(1.2)
+                publish(2, 3, "чужой: b.md")
+                publish(3, 3, "чужой: готово")
+                publish.flush()
+                again_seen.append(paths.again_mark.exists())
+
+            paths.again_mark.unlink(missing_ok=True)
+            thread = hold(paths, sync_work)
+            code, out, err = run(root)
+            thread.join()
+            check("ждал чужой синк и прошёл сам", code, 0)
+            check_true("свой итог в JSON", '"added": 1' in out, out)
+            check_true("виден ход держателя", "чужой: a.md" in err, err)
+            check_true("бар дорисован до последнего кадра", "100% (3/3)" in err, err)
+            check_true("свой проход после чужого", "свой проход" in err, err)
+            check("наблюдатель не ставит .sync.again", again_seen, [False])
+
+            # Хук взял замок между пробой и попыткой: не молчать в замке, а
+            # снова смотреть его ход.
+            real_index = cli.index_project
+            raced = []
+
+            def racing_index(**kwargs):
+                if not raced:
+                    raced.append(hold(paths, lambda: time.sleep(1)))
+                return real_index(**kwargs)
+
+            cli.index_project = racing_index
+            (root / "b.md").write_text("# b", encoding="utf-8")
+            code, out, err = run(root)
+            cli.index_project = real_index
+            raced[0].join()
+            check("после перехвата замка прошёл сам", code, 0)
+            check_true("перехвативший замок виден", "его ход" in err, err)
+            check_true("перехват не потерял правку", '"added": 1' in out, out)
+
+            # Ctrl+C наблюдателя останавливает CLI-синк: SIGTERM держателю.
+            kills = []
+
+            def fake_kill(pid: int, sig: int) -> None:
+                kills.append((pid, sig))
+                release.set()
+
+            def interrupt(path: Path):
+                raise KeyboardInterrupt
+
+            real_run = original[3]
+
+            def ps_says(command: str):
+                def fake_run(argv, *args, **kwargs):
+                    if argv[0] != "ps":
+                        return real_run(argv, *args, **kwargs)
+                    return types.SimpleNamespace(stdout=command)
+                return fake_run
+
+            os.kill, cli.read_progress = fake_kill, interrupt
+            subprocess.run = ps_says("/venv/bin/python /venv/bin/ragsave sync --quiet /p\n")
+            release.clear()
+            thread = hold(paths, lambda: release.wait(10))
+            code, _, err = run(root)
+            thread.join()
+            check("Ctrl+C останавливает чужой синк — код 4", code, cli.EXIT_CANCELLED)
+            check("SIGTERM ушёл держателю", kills, [(os.getpid(), signal.SIGTERM)])
+
+            kills.clear()
+            subprocess.run = ps_says("/venv/bin/python /venv/bin/ragsave serve\n")
+            release.clear()
+            thread = hold(paths, lambda: release.wait(10))
+            code, _, err = run(root)
+            release.set()
+            thread.join()
+            check("rag_index сервера не трогает — код 3", code, cli.EXIT_BUSY)
+            check("серверу SIGTERM не шлёт", kills, [])
+            check_true("объясняет, почему не остановил", "не CLI-синк" in err, err)
+    finally:
+        (config.EMBED_DIM, indexer.Embedder, os.kill, subprocess.run,
+         cli.read_progress, cli.index_project, sigterm) = original
+        signal.signal(signal.SIGTERM, sigterm)
 
 
 def test_sync_state() -> None:
@@ -963,6 +1112,7 @@ def main() -> int:
     test_engine_version()
     test_cache_gc()
     test_sync_lock()
+    test_busy_sync()
     test_sync_state()
     test_index_needs_init()
     test_idle_unload()

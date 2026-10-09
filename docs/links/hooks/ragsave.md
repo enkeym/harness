@@ -9,7 +9,8 @@ paths:
 
 ## Контракты и доки
 - Код занятого замка ragsave — `ragsave/ragsave/cli.py:EXIT_BUSY` (3) и отмены
-  `EXIT_CANCELLED` (4) ↔ проверка `exit_code` 3|4 для источника `ragsave*` в
+  `EXIT_CANCELLED` (4, Ctrl+C наблюдателя шлёт держателю SIGTERM в
+  `cli.py:_stop_holder`) ↔ проверка `exit_code` 3|4 для источника `ragsave*` в
   `ai-hooks/bin/log-error.sh`. Сменил код
   или дал его другому отказу — журнал снова полон пропусков или молчит о сбое.
 - Лог синка и отказ от него — `.ragsave/sync.log` и `.ragsave-disable` в

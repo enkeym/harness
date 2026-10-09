@@ -97,7 +97,7 @@ function sandbox() {
   check('ragsave код 3 без строки — код 0 и без записи', [res.status, sb.read()], [0, '']);
 
   sb.run('ragsave sync', '/work/p', sb.detail('ragsave: синк отменён\n'), '4');
-  check('ragsave код 4 (ragsave cancel) — без записи', sb.read(), '');
+  check('ragsave код 4 (Ctrl+C наблюдателя) — без записи', sb.read(), '');
 
   sb.run('ragsave sync', '/work/p', sb.detail('Traceback\n'), '1');
   check('ragsave код 1 — запись есть', /ragsave sync \| \/work\/p \| exit=1\n/.test(sb.read()), true);

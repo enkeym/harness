@@ -17,7 +17,7 @@ INDEX_DIR = ".ragsave"
 DB_NAME = "rag.db"
 LOCK_NAME = ".sync.lock"
 AGAIN_NAME = ".sync.again"
-# Ход идущего синка — его рисует `ragsave sync --wait`, пока ждёт замок
+# Ход идущего синка — его рисует `ragsave sync`, пока ждёт занятый замок
 PROGRESS_NAME = ".sync.progress"
 # Лог фонового синка и отказ от него пишет и читает ai-hooks/bin/ragsave-sync.sh:
 # имена правятся вместе.

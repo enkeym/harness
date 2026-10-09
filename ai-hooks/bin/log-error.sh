@@ -32,7 +32,8 @@ if [ -n "$detail_log" ] && [ -f "$detail_log" ] &&
 fi
 # У ragsave код 3 означает только занятый замок (EXIT_BUSY в cli.py) — узнаём
 # его по коду, не по строке в логе: ragsave-sync.sh лог такого прохода удаляет.
-# Код 4 — синк остановлен `ragsave cancel` (EXIT_CANCELLED): решение человека.
+# Код 4 — синк остановлен Ctrl+C в ручном `ragsave sync` (EXIT_CANCELLED):
+# решение человека.
 case "$source_name" in
 ragsave*) case "$exit_code" in 3 | 4) exit 0 ;; esac ;;
 esac

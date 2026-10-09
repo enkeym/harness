@@ -51,16 +51,13 @@ SCAN_QUEUE = 64
 # по этому коду log-error.sh и не пишет запись.
 LOCK_HELD_MESSAGE = "another sync is already in progress"
 
-# Как часто идущий синк обновляет .sync.progress для `ragsave sync --wait`.
+# Как часто идущий синк обновляет .sync.progress для `ragsave sync`, упёршегося
+# в занятый замок.
 PROGRESS_INTERVAL = 0.5
 
 
 class SyncInProgress(RuntimeError):
-    """Другой процесс уже индексирует этот проект; pid — его PID, если записан."""
-
-    def __init__(self, message: str, pid: int | None = None) -> None:
-        super().__init__(message)
-        self.pid = pid
+    """Другой процесс уже индексирует этот проект."""
 
 
 @dataclass
@@ -107,31 +104,25 @@ class Scanned:
 
 
 @contextmanager
-def sync_lock(lock_path: Path, wait: float = 0.0) -> Iterator[None]:
+def sync_lock(lock_path: Path) -> Iterator[None]:
     """Замок на проект: тот же файл, что раньше держал flock в хуке.
 
     flock(2) снимается ядром при закрытии дескриптора, поэтому упавший процесс
     замок не оставляет. В файл пишется PID и время — для сообщения тому, кто
-    пришёл вторым.
+    пришёл вторым. Не ждёт: занят — сразу SyncInProgress.
     """
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a+", encoding="utf-8")
     try:
-        deadline = time.monotonic() + wait
-        while True:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() >= deadline:
-                    handle.seek(0)
-                    holder = handle.read().strip() or "неизвестный процесс"
-                    raise SyncInProgress(
-                        f"{LOCK_HELD_MESSAGE} ({holder}); по окончании он "
-                        f"пройдёт ещё раз и подхватит свежие правки",
-                        holder_pid(holder),
-                    ) from None
-                time.sleep(0.5)
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.seek(0)
+            holder = handle.read().strip() or "неизвестный процесс"
+            raise SyncInProgress(
+                f"{LOCK_HELD_MESSAGE} ({holder}); по окончании он "
+                f"пройдёт ещё раз и подхватит свежие правки"
+            ) from None
         handle.seek(0)
         handle.truncate()
         handle.write(f"PID {os.getpid()}, начат {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -146,28 +137,38 @@ def _publishing_tick(
 ) -> Callable[[float, int, str], None]:
     """tick, который ещё и публикует ход синка в файл.
 
-    Его рисует `ragsave sync --wait`, пока ждёт замок, — и для фонового синка
-    с --quiet тоже. Запись атомарная и не чаще PROGRESS_INTERVAL; ошибка
-    записи синк не валит — прогресс только для глаз.
+    Его рисует `ragsave sync`, упёршийся в занятый замок, — и для фонового
+    синка с --quiet тоже. Запись атомарная и не чаще PROGRESS_INTERVAL; ошибка
+    записи синк не валит — прогресс только для глаз. flush() дописывает
+    последний кадр, который троттлинг мог пропустить.
     """
     started = time.time()
     last = 0.0
+    latest: dict | None = None
     tmp = path.with_name(path.name + ".tmp")
 
+    def write() -> None:
+        try:
+            tmp.write_text(json.dumps(latest, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
     def publish(done: float, total: int, detail: str) -> None:
-        nonlocal last
+        nonlocal last, latest
+        latest = {"pid": os.getpid(), "started": started,
+                  "done": done, "total": total, "detail": detail}
         now = time.monotonic()
         if now - last >= PROGRESS_INTERVAL:
             last = now
-            state = {"pid": os.getpid(), "started": started,
-                     "done": done, "total": total, "detail": detail}
-            try:
-                tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-                os.replace(tmp, path)
-            except OSError:
-                pass
+            write()
         tick(done, total, detail)
 
+    def flush() -> None:
+        if latest is not None:
+            write()
+
+    publish.flush = flush  # type: ignore[attr-defined]
     return publish
 
 
@@ -367,7 +368,6 @@ def index_project(
     force: bool = False,
     progress: Callable[[str], None] | None = None,
     tick: Callable[[float, int, str], None] | None = None,
-    lock_wait: float = 0.0,
 ) -> IndexReport:
     """Синхронизировать индекс проекта с текущим состоянием файлов.
 
@@ -377,8 +377,7 @@ def index_project(
     с перезаписью через \\r). Разделены нарочно: progress должен оставаться
     на экране, tick — нет.
 
-    lock_wait — сколько секунд ждать, если проект уже индексирует другой
-    процесс; по истечении — SyncInProgress.
+    Проект уже индексирует другой процесс — сразу SyncInProgress.
 
     Пришедший к занятому замку оставляет отметку .sync.again, и держатель
     замка по окончании проходит ещё раз: иначе правка, сделанная после того,
@@ -394,19 +393,25 @@ def index_project(
     bump = tick or (lambda done, total, detail: None)
 
     paths.again_mark.touch()
-    with sync_lock(paths.lock, wait=lock_wait):
+    with sync_lock(paths.lock):
         paths.again_mark.unlink(missing_ok=True)
-        # Ход упавшего держателя не должен рисоваться как ход этого прохода.
+        # Ход прошлого держателя не должен рисоваться как ход этого прохода.
         paths.progress.unlink(missing_ok=True)
-        bump = _publishing_tick(paths.progress, bump)
+        publish = _publishing_tick(paths.progress, bump)
         try:
-            report = _index_pass(root, paths, encoder, force, log, bump)
+            report = _index_pass(root, paths, encoder, force, log, publish)
             while paths.again_mark.exists():
                 paths.again_mark.unlink(missing_ok=True)
                 log("пока шёл проход, синк запросили ещё раз — повторный проход")
-                report.absorb(_index_pass(root, paths, encoder, False, log, bump))
-        finally:
+                report.absorb(_index_pass(root, paths, encoder, False, log, publish))
+        except BaseException:
             paths.progress.unlink(missing_ok=True)
+            raise
+        # Последний кадр остаётся в файле до следующего синка: наблюдатель,
+        # заставший конец, дорисует бар до него, а не застынет на кадре,
+        # пойманном последним опросом. Оборванный синк файл убирает — бар
+        # наблюдателя останется там, где синк остановился.
+        publish.flush()
     return report
 
 
