@@ -9,10 +9,9 @@ Trigger: in Claude Code two hooks fire at the token thresholds in
 `~/.ai-hooks/context-core.mjs` — `context-meter.mjs` between turns,
 `context-step.mjs` mid-turn, between tool calls. `SOFT` closes the step and asks
 «Перенести в новую сессию» / «Продолжить здесь», never in prose; `HAND`, `HARD`
-ask for the handoff. OpenCode has no meter — only
-`/handoff` or the user's words. Don't raise context size again yourself. Never
-start a new session for the user; the only writes are the `task-brief` plan
-file and the plan file plan mode names.
+ask for the handoff. OpenCode has no meter — only `/handoff` or the user's words.
+Don't raise context size again yourself. Never start a new session for the user;
+the only writes are the `task-brief` plan file and the plan file plan mode names.
 
 Mid-turn the answer is never cut in half: finish the step in hand, then end
 the turn with the handoff, not a summary — also when no next step remains or
@@ -21,9 +20,10 @@ session that has changed nothing gets no handoff at `SOFT`: it
 would list what was read, the next session would read the same and hit the
 same threshold. From `HAND` such a session is usually an analysis, not a
 prelude to an edit — it delivers its conclusion first, then ends the turn with
-one question: move to a new session (recommended) or stay; a move is built from conclusions (`Решения`,
-`Открытые вопросы`, `Дальше`), with nothing under `Карта` beyond the files the
-next step needs. The hook says which case it is; follow its wording.
+one question: move to a new session (recommended) or stay; a move is built
+from conclusions (`Решения`, `Открытые вопросы`, `Дальше`), with nothing
+under `Карта` beyond the files the next step needs. The hook says which case
+it is; follow its wording.
 
 ## Steps
 

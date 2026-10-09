@@ -15,8 +15,8 @@ their step 1 (scope), their triage step (edits) and their Output sections.
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —
 the user fetches before calling /review, the MR mode (1.2) aside; no diff
-against `main`, `dev` or any other branch unless picked in a scope menu. No checkout, stash or switch. A
-missing ref → name it in one line and stop.
+against `main`, `dev` or any other branch unless picked in a scope menu. No
+checkout, stash or switch. A missing ref → name it in one line and stop.
 
 ## 1. Scope
 
@@ -88,8 +88,9 @@ missing ref → name it in one line and stop.
 
 The area's files at `HEAD`, no diff; `Аудит` → a second question: three of
 the repo's top-level areas and `Всё приложение`, the rest through «Other».
-`review-security` in full, step 5 on every entry point; the `review-standards` checklist, no regression pass. Whole app → auth,
-payments, upload, webhooks, outbound calls, config first; report per module.
+`review-security` in full, step 5 on every entry point; the
+`review-standards` checklist, no regression pass. Whole app → auth, payments,
+upload, webhooks, outbound calls, config first; report per module.
 
 ### 1.2 Open MRs
 

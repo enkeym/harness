@@ -27,7 +27,8 @@ or branch still needs: `test-coverage`.
 ## Mocks
 - Mock boundaries only: network, DB, filesystem, time (`jest.useFakeTimers` or
   injected clock), external SDKs. Never internal project modules.
-- NestJS: `Test.createTestingModule({ providers: [Service, { provide: Repo, useValue: mock }] })`;
+- NestJS:
+  `Test.createTestingModule({ providers: [Service, { provide: Repo, useValue: mock }] })`;
   e2e = real `INestApplication` with `main.ts` pipes/filters + `supertest`.
 - React: mock the API client and timers, not the component's own hooks; query
   by role and text; `userEvent` over `fireEvent`.

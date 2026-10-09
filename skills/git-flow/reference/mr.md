@@ -102,9 +102,10 @@ never `~/.git-credentials`. Never `git push -o merge_request.*`: push options
 reject newlines. No separate token probe (`[ -n "$GITLAB_TOKEN" ]`, `echo`):
 step 1's call answers for itself — a 401 or an empty header is step 3's cause.
 
-Host and project from `git remote get-url origin`: `https://<host>/<group>/<repo>.git`
-→ API host `<host>`, project id `<group>%2F<repo>` (SSH form `git@<host>:<group>/<repo>.git`
-the same); `<api>` = `https://<host>/api/v4/projects/<id>`, written out.
+Host and project from `git remote get-url origin`:
+`https://<host>/<group>/<repo>.git` → API host `<host>`, project id
+`<group>%2F<repo>` (SSH form `git@<host>:<group>/<repo>.git` the same);
+`<api>` = `https://<host>/api/v4/projects/<id>`, written out.
 
 1. Branch pushed. `curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN"
    "<api>/merge_requests?source_branch=<branch>&state=opened"` → an open MR

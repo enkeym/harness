@@ -65,8 +65,9 @@ fence, never inside it; four backticks keep the inner ` ``` ` blocks inside:
 - Markup inside a fence only what both Telegram and GitLab render:
   `**bold**`, inline code, ` ``` ` fences with a language, plain `-` and `1.`
   lists, emoji. No `#` headings, `>` quotes, `---` rules, tables, markdown
-  links, `*`/`_` italics — Telegram shows them as raw characters. Identifiers, paths and anything with
-  `_` or `*` always in backticks: bare `__init__` turns italic in Telegram.
+  links, `*`/`_` italics — Telegram shows them as raw characters.
+  Identifiers, paths and anything with `_` or `*` always in backticks: bare
+  `__init__` turns italic in Telegram.
 
 ## Finding
 

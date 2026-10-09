@@ -1,11 +1,12 @@
 # Project facts — resolved, never assumed
 
 Read by `git-flow`, `review-standards`, `test-coverage`, `test-conventions` and
-`test-browser` before the first step that needs a fact below. Order of authority is in `rules/core.md`
-(*Project facts outrank skills*): memory and the project's rules file first,
-then the repository, then a skill default. Resolve once per session; state
-each fact used in one line (`База: dev (форк 1 коммит назад)`) so a wrong one
-is caught before it is acted on.
+`test-browser` before the first step that needs a fact below. Order of
+authority is in `rules/core.md` (*Project facts outrank skills*): memory and
+the project's rules file first, then the repository, then a skill default.
+Resolve once per session; state each fact used in one line
+(`База: dev (форк 1 коммит назад)`) so a wrong one is caught before it is
+acted on.
 
 ## Resolution
 

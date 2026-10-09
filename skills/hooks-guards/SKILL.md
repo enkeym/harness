@@ -5,24 +5,25 @@ description: "How the local hooks behave — security-guard, ask-guard, skill-ga
 
 # Hooks and guards
 
-CLAUDE.md already says never route around a refusal. This names which hook
-fired and what it wants instead.
+Never route around a refusal (`rules/core.md`); this names the hook and what it wants.
 
 ## security-guard
 
 - Hard-blocks reading secret stores: `.env*`, `.envrc`, keys, certificates,
   `secrets.yaml`, Terraform state and `*.tfvars`, `/proc/*/environ`,
   `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
-  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, `xargs -a`, `tar`, `dotenv -p`,
-  an interpreter (`python.exe`, `python3.12`, heredoc code), a `Grep` glob (`.env*`), a symlink to
-  one, the browser (`file://`, `browser_file_upload`), a recursive `grep` without
-  `--include`, or with one `.env` matches (`*`, `.*`), over a directory (files like `*.mjs` pass) — it reads `.env`; in an indexed project
-  look the symbol up with `tokensave_search`, docs, configs and yml with `rag_search`,
-  elsewhere add `--include=*.ts`. Take a variable's shape from `.env.example`, its value from the user.
+  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, `xargs -a`, `tar`,
+  `dotenv -p`, an interpreter (`python.exe`, `python3.12`, heredoc code), a `Grep` glob
+  (`.env*`), a symlink to one, the browser (`file://`, `browser_file_upload`), a recursive
+  `grep` without `--include`, or with one `.env` matches (`*`, `.*`), over a directory
+  (files like `*.mjs` pass) — it reads `.env`; in an indexed project look the symbol up
+  with `tokensave_search`, docs, configs and yml with `rag_search`, elsewhere add
+  `--include=*.ts`. Take a variable's shape from `.env.example`, its value from the user.
 - Asks confirmation: every commit (`commit-tree`, `am`, `merge -m`, `--continue` too),
   database dumps, non-local databases, pushes to protected branches, force push (`-f`,
-  `+refspec`), branch deletion, push to the current branch (no refspec, `HEAD`, `@`, a `$…` name), deploy, remote-host commands,
-  outbound data, the whole environment (`env`, `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
+  `+refspec`), branch deletion, push to the current branch (no refspec, `HEAD`, `@`, a
+  `$…` name), deploy, remote-host commands, outbound data, the whole environment (`env`,
+  `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.
 - OpenCode runs it from the plugin: only the hard block applies there, the
@@ -48,9 +49,11 @@ fired and what it wants instead.
 ## skill-gate
 
 - Denies an edit of a SKILL.md, `skills/*/reference/*.md`, `commands/*.md` or
-  any `CLAUDE.md` (also via `cp`/`>`/`git checkout --`) until `skill-authoring` is loaded, and
-  a commit (`commit`, `commit-tree`, `am`, `merge -m`, `--continue`) until `review-standards`, `review-security`, `git-flow` are,
-  or while its message has a non-empty line 2 — empty it and repeat, no amend.
+  any `CLAUDE.md` (also via `cp`/`>`/`git checkout --`) until
+  `skill-authoring` is loaded, and a commit (`commit`, `commit-tree`, `am`,
+  `merge -m`, `--continue`) until `review-standards`, `review-security`,
+  `git-flow` are, or while its message has a non-empty line 2 — empty it and
+  repeat, no amend.
 - The refusal names the missing skill: load it with `Skill(<name>)`, do what
   it says (the review skills mean running the checklist on the diff, not just
   loading), then repeat the call. Loaded-state is per session — after `/clear`
@@ -84,13 +87,14 @@ fired and what it wants instead.
   (`cat`/`sort`/`base64`, `sed -n`/`awk`/`grep ''`/`grep -v` with a file, `diff
   /dev/null`, `git show HEAD:<file>`, `sed -i`, `tee`, `> file`, `cp`/`mv` into
   `/tmp` or over a file, `vim -es`/`ed`, `node -e`/`python -c` with a path, a
-  heredoc into an interpreter) and names the tool that passes; `mcp__ide__executeCode` too.
-  Pass: `jq` over a `.json`/`.jsonl`/`.ndjson` outside the index, `>`/`>>` into `/tmp/`
-  outside a project and `cat`/`tail` of it, `git show <other rev>:<file>`, `node <file>`
-  (`python.exe`, `tsx` alike) without `-e`/`-p`/`-c`/heredoc (a run). Clipping: `output-clip`.
-- It splits commands like the security guard: `&`, `$(…)`, backticks,
-  `( … )`, `then`, `sudo -u x`, `xargs`, `bash -c`/`eval` don't hide a `cat`, and a heredoc body
-  stays with its `node`/`python`. `grep`/`rg` with a pattern and pipes reading stdin pass.
+  heredoc into an interpreter) and names the tool that passes;
+  `mcp__ide__executeCode` too. Pass: `jq` over a `.json`/`.jsonl`/`.ndjson`
+  outside the index, `>`/`>>` into `/tmp/` outside a project and `cat`/`tail`
+  of it, `git show <other rev>:<file>`, `node <file>` (`python.exe`, `tsx`
+  alike) without `-e`/`-p`/`-c`/heredoc (a run). Clipping: `output-clip`.
+- It splits commands like the security guard: `&`, `$(…)`, backticks, `( … )`, `then`,
+  `sudo -u x`, `xargs`, `bash -c`/`eval` don't hide a `cat`, and a heredoc body stays with
+  its `node`/`python`. `grep`/`rg` with a pattern and pipes reading stdin pass.
 - `grep`/`rg`/`ag` over indexed code is refused by tokensave's own
   `hook-pre-tool-use`; its off switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git
   grep` over the working tree are denied by `bash-router` — tokensave answers.
@@ -102,9 +106,8 @@ fired and what it wants instead.
   end unless the repo root has `.ragsave-disable` (`rag_status`: `autosync`,
   `last_sync`); tokensave syncs itself. Creating an index is the user's call —
   say `tokensave init <path>` / `ragsave init` is needed, don't run either.
-- MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the
-  session directory. Outside a project the server doesn't come up — tools are
-  absent, not wrong.
+- MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the session
+  directory. Outside a project the server doesn't come up — tools are absent, not wrong.
 - `links-context` (PostToolUse on edit tools, native and tokensave; reads
   stay silent) injects a domain file of the project's impact map when the edited path
   matches its `paths:` — once per session per domain. Treat the text as the
@@ -122,8 +125,7 @@ fired and what it wants instead.
    `block`, `slow`, `crash`) with `sid`, `target`, `ms`; allowed calls are not written.
    The per-session trace of "what blocked, what came next".
 2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes
-   (`exit=crash`); first read on any ragsave report. Marks live in
-   `~/.claude/state/`.
+   (`exit=crash`); first read on any ragsave report. Marks live in `~/.claude/state/`.
 3. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red
    → roll back, don't patch further.
