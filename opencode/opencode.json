@@ -116,6 +116,7 @@
     "tokensave_tokensave_signature": "allow",
     "tokensave_tokensave_context": "allow",
     "tokensave_tokensave_search": "allow",
+    "tokensave_tokensave_files": "allow",
     "tokensave_tokensave_callers": "allow",
     "tokensave_tokensave_callees": "allow",
     "tokensave_tokensave_impact": "allow",
