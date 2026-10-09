@@ -44,7 +44,7 @@ paths:
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
 - Обход родного grep-хука tokensave — `ai-hooks/guard-core.mjs:HOOK_OFF_RE`
   ловит имя `TOKENSAVE_DISABLE_GREP_HOOK` из подсказки самого бинаря
-  (`tokensave hook-pre-tool-use`), а запрет `git grep` в `guardBash` полагается
+  (`tokensave hook-pre-tool-use`), а запрет `git grep` по рабочему дереву в `guardBash` полагается
   на то, что `grep`/`rg`/`ag` уже судит этот хук — matcher
   `Agent|Grep|Bash|Glob` в `claude/settings.json`. Новая версия tokensave
   переименовала переменную или `tokensave install` сузил matcher — обход снова

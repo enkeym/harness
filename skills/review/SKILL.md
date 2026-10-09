@@ -78,9 +78,10 @@ missing ref → name it in one line and stop.
   (`незакоммиченные` / `мерж <sha>` / `коммиты <KEY>` / `последние <n>` /
   `от <base>` / `аудит <area>`), files
   and `+/-` totals, the reviewed commits as `--oneline` or `коммиты не смотрел`.
-- Ref other than `HEAD`: read files as `git show <ref>:<path>`; callers from
-  the tokensave graph of the working tree, said in one line. `git grep` only
-  without `.tokensave/` — bash-router refuses it in an indexed project.
+- Ref other than `HEAD`: read files as `git show <ref>:<path>`, usages as
+  `git grep -n <name> <ref>` — the ref a literal sha or branch, never `$var`.
+  The tokensave graph holds the working tree, not the ref; bash-router refuses
+  `git grep` over the working tree.
 - Free words after the target are the focus: checked first, full pass still.
 
 ### 1.1 Audit

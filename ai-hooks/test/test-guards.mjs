@@ -208,6 +208,41 @@ bash('имя переменной в тексте коммита → allow', 'al
 bash('git log/status в индексированном проекте → allow', 'allow', 'git log --oneline -5 && git status --short');
 fs.rmSync(OUTSIDE, { recursive: true, force: true });
 
+// `git grep` по чужой ревизии ищет код, которого нет в индексе (ревью МР);
+// по рабочему дереву — обход. Репозиторий: `old` — первый коммит, `main` — HEAD.
+const REPO = sandboxProject();
+const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: REPO, encoding: 'utf8' }).trim();
+git('init', '-q', '-b', 'main');
+git('add', 'client/src/App.tsx');
+git('commit', '-qm', 'a');
+git('branch', 'old');
+git('add', 'README.md');
+git('commit', '-qm', 'b');
+const HEAD_SHA = git('rev-parse', 'HEAD');
+const OLD_SHA = git('rev-parse', 'old');
+const repo = (desc, want, command) => bash(desc, want, command, REPO);
+repo('git grep по sha другого коммита → allow', 'allow', `git grep -n foo ${OLD_SHA} -- client/src`);
+repo('git grep по другой ветке → allow', 'allow', 'git grep -n foo old');
+repo('git grep по <ветка>:<путь> → allow', 'allow', 'git grep -n foo old:client/src');
+repo('git grep -ne шаблон ревизия → allow', 'allow', 'git grep -ne foo old');
+repo('git grep -A 3 шаблон ревизия → allow', 'allow', 'git grep -A 3 foo old');
+repo('git grep --max-count 2 шаблон ревизия → allow', 'allow', 'git grep --max-count 2 foo old');
+repo('git --no-pager grep по другой ветке → allow', 'allow', 'git --no-pager grep -n foo old');
+repo('git grep без ревизии → deny', 'deny', 'git grep -n foo -- client/src');
+repo('git grep по пути без -- → deny', 'deny', 'git grep -n foo client/src');
+repo('git grep по HEAD → deny', 'deny', 'git grep -n foo HEAD');
+repo('git grep по @ → deny', 'deny', 'git grep -n foo @');
+repo('git grep по текущей ветке → deny', 'deny', 'git grep -n foo main');
+repo('git grep по sha самого HEAD → deny', 'deny', `git grep -n foo ${HEAD_SHA}`);
+repo('git grep по :<путь> (индекс git) → deny', 'deny', 'git grep -n foo :client/src');
+repo('git grep по другой ветке и HEAD → deny', 'deny', 'git grep -n foo old HEAD');
+repo('git grep по $переменной → deny', 'deny', `H=${OLD_SHA}; git grep -n foo $H`);
+repo('шаблон совпал с именем ветки → deny', 'deny', 'git grep -n old');
+repo('шаблон через -e, ветки нет → deny', 'deny', 'git grep -e old client/src');
+repo('git -C . grep без ревизии → deny', 'deny', 'git -C . grep -n foo');
+check('отказ git grep называет ревизию', /<sha\|ветка>/.test(guardBash('git grep -n foo', REPO, OPENCODE_LABELS) || ''), true);
+fs.rmSync(REPO, { recursive: true, force: true });
+
 // ---- легитимные инструменты над теми же путями ----
 bash('git diff по исходнику → allow', 'allow', 'git diff client/src/App.tsx');
 bash('tsc по исходнику → allow', 'allow', 'npx tsc --noEmit client/src/App.tsx');

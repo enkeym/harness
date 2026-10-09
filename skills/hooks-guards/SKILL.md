@@ -95,8 +95,8 @@ fired and what it wants instead.
   stays with its `node`/`python`. `grep`/`rg` and pipes reading stdin pass.
 - `grep`/`rg`/`ag` over indexed code is refused by tokensave's own
   `hook-pre-tool-use`; its off switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git
-  grep` in an indexed project are denied by `bash-router`, finally — use
-  `tokensave_search`, `callers`, `search` `literal: true`, `rag_search` for docs.
+  grep` over the working tree are denied by `bash-router` — tokensave answers.
+  `git grep … <sha|branch>` off HEAD (an MR head) passes; a `$var` ref doesn't.
 
 ## Background hooks
 

@@ -10,7 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { segments, tokenize, commandName, quoteEnd, dropConditionals } from './shell-core.mjs';
+import { execFileSync } from 'node:child_process';
+import { segments, tokenize, commandName, quoteEnd, dropConditionals, gitSubcommandAt } from './shell-core.mjs';
 import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -160,6 +161,59 @@ function isScratch(cwd, p) {
 // Только форма присваивания: имя в тексте коммита или README — не обход.
 const HOOK_OFF_RE = /\bTOKENSAVE_DISABLE_GREP_HOOK=/;
 
+// `git grep … <ревизия>` ищет в коде, которого в индексе нет: tokensave держит
+// рабочее дерево, а ревью МР читает чужой коммит (`git show <sha>:<путь>`).
+// Без ревизии, с `HEAD`, `@`, текущей веткой или sha самого HEAD — то же
+// рабочее дерево, обход. Ревизию от пути отличает git: слово, которое
+// `rev-parse` не узнал, — путь; `$H` хук не раскрывает, это тоже путь. git не
+// ответил → отказ, как раньше.
+const GIT_GREP_VALUE_LONG = new Set(['--after-context', '--before-context', '--context', '--max-count', '--max-depth', '--threads']);
+const GIT_GREP_VALUE_SHORT = 'ABCmef';
+
+// Слова после шаблона и до `--`: ревизии и пути вперемешку. Шаблон — первое
+// свободное слово, если его не дали через `-e`/`-f`. В связке коротких флагов
+// (`-ne foo`, `-nA3`) буква со значением берёт остаток слова, последняя —
+// следующее слово.
+function gitGrepWords(toks, from) {
+  const words = [];
+  let pattern = false;
+  for (let i = from; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === '--') break;
+    if (GIT_GREP_VALUE_LONG.has(t)) { i++; continue; }
+    if (/^-[^-]/.test(t)) {
+      const at = [...t.slice(1)].findIndex((c) => GIT_GREP_VALUE_SHORT.includes(c));
+      if (at !== -1) {
+        pattern ||= 'ef'.includes(t[at + 1]);
+        if (at + 2 === t.length) i++;
+      }
+      continue;
+    }
+    if (!t.startsWith('-')) words.push(t);
+  }
+  return pattern ? words : words.slice(1);
+}
+
+function gitCommit(cwd, rev) {
+  try {
+    return execFileSync('git', ['rev-parse', '--verify', '-q', `${rev}^{commit}`], {
+      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+// `<ревизия>:<путь>` — дерево ревизии; `:<путь>` — индекс git, то есть HEAD.
+function gitGrepOutsideIndex(toks, from, cwd) {
+  const words = gitGrepWords(toks, from);
+  if (!words.length) return false;
+  const head = gitCommit(cwd, 'HEAD');
+  if (!head) return false;
+  const revs = words.map((w) => gitCommit(cwd, w.split(':')[0] || 'HEAD')).filter(Boolean);
+  return revs.length > 0 && revs.every((c) => c !== head);
+}
+
 // Возвращает причину запрета или null. Любая неожиданность → null (fail-open).
 // keepHeredoc: тело `node <<EOF … EOF` — часть сегмента интерпретатора, иначе
 // путь внутри него распадался бы на безобидные строки.
@@ -172,8 +226,9 @@ export function guardBash(command, cwd, labels) {
       const toks = tokenize(seg);
       const cmd = commandName(toks);
 
-      if (cmd === 'git' && toks[1] === 'grep' && projectRoot(cwd)) {
-        return grepReason('`git grep` в индексированном проекте');
+      const sub = cmd === 'git' ? gitSubcommandAt(toks) : -1;
+      if (toks[sub] === 'grep' && projectRoot(cwd) && !gitGrepOutsideIndex(toks, sub + 1, cwd)) {
+        return grepReason('`git grep` по рабочему дереву индексированного проекта (по другой ревизии — `git grep … <sha|ветка>`, ревизия словом, не `$переменной`)');
       }
 
       const target = redirectTarget(seg, cwd);
