@@ -174,7 +174,8 @@ for (const file of [...allMd, path.join(HARNESS, 'rules', 'core.md')]) {
   const text = read(file);
   const ticket = [...text.matchAll(/\b[A-Z][A-Z0-9]{1,9}-\d{2,}\b/g)].map((m) => m[0]).find((t) => !PLACEHOLDER_TICKETS.has(t));
   check(`${rel}: без номеров тикетов`, !ticket, ticket);
-  const host = [...text.matchAll(/https?:\/\/[^\s)`'"]+/g)].map((m) => m[0]).find((u) => !ALLOWED_HOSTS.test(u) && !/<[a-z-]+>/.test(u));
+  // Хост из переменной окружения (`https://$GITLAB_HOST/…`) — тоже плейсхолдер.
+  const host = [...text.matchAll(/https?:\/\/[^\s)`'"]+/g)].map((m) => m[0]).find((u) => !ALLOWED_HOSTS.test(u) && !/<[a-z-]+>|^https?:\/\/\$\{?[A-Z_]+\}?\//.test(u));
   check(`${rel}: без реальных хостов`, !host, host);
   const project = projectNames.find((n) => new RegExp(`\\b${n.replace(/[-_]/g, '[-_]')}\\b`, 'i').test(text));
   check(`${rel}: без имён проектов`, !project, project);
