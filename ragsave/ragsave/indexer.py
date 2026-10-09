@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import sqlite3
 import subprocess
 import sys
@@ -52,7 +53,11 @@ LOCK_HELD_MESSAGE = "another sync is already in progress"
 
 
 class SyncInProgress(RuntimeError):
-    """Другой процесс уже индексирует этот проект."""
+    """Другой процесс уже индексирует этот проект; pid — его PID, если записан."""
+
+    def __init__(self, message: str, pid: int | None = None) -> None:
+        super().__init__(message)
+        self.pid = pid
 
 
 @dataclass
@@ -118,9 +123,11 @@ def sync_lock(lock_path: Path, wait: float = 0.0) -> Iterator[None]:
                 if time.monotonic() >= deadline:
                     handle.seek(0)
                     holder = handle.read().strip() or "неизвестный процесс"
+                    pid = re.match(r"PID (\d+)", holder)
                     raise SyncInProgress(
                         f"{LOCK_HELD_MESSAGE} ({holder}); по окончании он "
-                        f"пройдёт ещё раз и подхватит свежие правки"
+                        f"пройдёт ещё раз и подхватит свежие правки",
+                        int(pid.group(1)) if pid else None,
                     ) from None
                 time.sleep(0.5)
         handle.seek(0)

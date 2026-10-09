@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -687,6 +688,7 @@ def test_sync_lock() -> None:
                                "another sync is already in progress" in str(exc),
                                str(exc))
                     check_true("в сообщении есть PID держателя", "PID" in str(exc))
+                    check("PID держателя в исключении", exc.pid, os.getpid())
 
             again = root / ".ragsave" / ".sync.again"
             check_true("отказ оставил отметку на повтор", again.exists())

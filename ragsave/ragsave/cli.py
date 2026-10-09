@@ -100,6 +100,11 @@ def _cmd_index(args: argparse.Namespace, force: bool) -> int:
         )
     except SyncInProgress as exc:
         print(f"ragsave: {exc}", file=sys.stderr)
+        if not quiet:
+            if exc.pid is not None:
+                print(f"[ragsave] жив ли он: ps -o pid,etime,cmd -p {exc.pid}", file=sys.stderr)
+            print(f"[ragsave] итог фонового синка появится в {ProjectPaths(root=root).sync_log}; "
+                  f"дождаться здесь: ragsave sync --wait 600", file=sys.stderr)
         return EXIT_BUSY
     except RuntimeError as exc:
         print(f"ragsave: {exc}", file=sys.stderr)
