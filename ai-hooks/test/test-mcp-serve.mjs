@@ -94,14 +94,6 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 }
 
 {
-  const sb = sandbox();
-  const tools = (extra) => sb.run(['tokensave'], { TOKENSAVE_TOOLS: undefined, ...extra }).stderr;
-  check('tokensave: под Claude Code — полный список', tools({ CLAUDECODE: '1' }), 'TOKENSAVE_TOOLS=full\n');
-  check('tokensave: заданный TOKENSAVE_TOOLS не перебивается', tools({ CLAUDECODE: '1', TOKENSAVE_TOOLS: 'core' }), 'TOKENSAVE_TOOLS=core\n');
-  check('tokensave: вне Claude Code (OpenCode) — список сервера', tools({ CLAUDECODE: undefined }), '');
-}
-
-{
   const sb = sandbox({ indexes: ['ragsave'] });
   const res = sb.run(['tokensave']);
   check('tokensave: индекса нет — код 1, без запуска', [res.status, res.calls], [1, []]);

@@ -102,7 +102,6 @@ user asks, not the only trigger.
 - **Memory answers with a method, never with a result.** Before designing a
   subsystem, `tokensave_session_recall`; after a choice you would otherwise
   re-explain (library, schema, rejected option), `tokensave_record_decision`.
-  Not listed at start → `tokensave_more` `area: "all"` first, if it is listed.
   A recalled number, status or "it works" is a hypothesis to re-run, not an
   answer to quote, and a bug the user reports outranks any memory line that
   says otherwise. What may be written and how memory is kept fresh:

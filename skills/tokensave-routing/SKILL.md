@@ -24,10 +24,9 @@ file, a path outside the index, a string `search` missed.
 | How/where/why with no name; docs, configs, yml, migrations, CI, infrastructure | `rag_search` (`only_outside_tokensave: true` when the answer is not code) |
 | Decision after approval               | `record_decision`: one line + `reason`, `files`, `tags`       |
 
-- Claude Code gets every tool at start. OpenCode gets the core ones
-  (`context`, `search`, `status`, `read`, `body`, `files`, `callers`,
-  `callees`, `impact`, `str_replace`, `multi_str_replace`) plus
-  `tokensave_more`; another (`signature`, `replace_symbol`, `affected`,
+- OpenCode lists the core tools (`context`, `search`, `status`, `read`, `body`,
+  `files`, `callers`, `callees`, `impact`, `str_replace`, `multi_str_replace`)
+  plus `tokensave_more`; another (`signature`, `replace_symbol`, `affected`,
   `session_recall`, `similar`, `blame`…) → `tokensave_more` `area: "all"`
   once per session first.
 - Arguments from the schema, not memory. Pass `seen_node_ids` from one
