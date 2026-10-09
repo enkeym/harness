@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { segments, tokenize, commandIndex, commandName, afterTarget, gitSubcommandAt } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, afterTarget, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 
 export const DENY = 'deny';
@@ -346,6 +346,42 @@ function grepWithoutInclude(toks) {
   return !(paths.length && paths.every((p) => FILE_OPERAND_RE.test(p)));
 }
 
+// jq: первый свободный аргумент — программа, а не путь (`jq '.env'` берёт
+// ключ); с `-f` в любой склейке (`-nf`, `-fn`) он — файл программы. Остальные
+// свободные — файлы, кроме идущих после `--args`/`--jsonargs`: те — строки. Опции
+// разбираются и после них: `--args . a --rawfile s .env` читает `.env`.
+const JQ_PAIR_OPTS = new Set(['--arg', '--argjson']);
+const JQ_FILE_PAIR_OPTS = new Set(['--rawfile', '--slurpfile']);
+
+function jqFiles(toks) {
+  const args = toks.slice(commandIndex(toks) + 1);
+  const files = [];
+  const positional = [];
+  let fromFile = false;
+  let strings = false;
+  let opts = true;
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i];
+    if (opts && t === '--') {
+      opts = false;
+    } else if (opts && REDIRECT_RE.test(t)) {
+      if (/^\d*[<>]+$/.test(t)) i++;
+    } else if (opts && t.startsWith('-') && t !== '-') {
+      if (JQ_FILE_PAIR_OPTS.has(t)) {
+        files.push(args[i + 2] ?? '');
+        i += 2;
+      } else if (JQ_PAIR_OPTS.has(t)) i += 2;
+      else if (t === '--indent' || t === '-L') i++;
+      else if (t === '--args' || t === '--jsonargs') strings = true;
+      else if (t === '--from-file' || /^-[^-]*f/.test(t)) fromFile = true;
+    } else positional.push({ t, strings });
+  }
+  const [first, ...rest] = positional;
+  if (first && fromFile) files.push(first.t);
+  files.push(...rest.filter((p) => !p.strings).map((p) => p.t));
+  return files;
+}
+
 function readsSecret(seg, toks, cmd) {
   // Цель перенаправления вывода — запись, она безвредна: `echo X > .env`,
   // `cat <<EOF > .env`. Отсеиваем её до всего остального, иначе читающая
@@ -357,11 +393,12 @@ function readsSecret(seg, toks, cmd) {
   // Перенаправление ввода отдаёт файл любой команде, и тогда её имя ничего не
   // решает: `while read …; done < .env`, `cat<.env`. `<<` и `<<<` — heredoc и
   // here-string, `<(…)` — подстановка процесса: пути там нет.
-  const inputs = [...String(seg).matchAll(/(?:^|[^<])<(?![<(])\s*([\w@.\-/\\~$]+)/g)]
+  const inputs = [...dropConditionals(seg).matchAll(/(?:^|[^<])<(?![<(])\s*([\w@.\-/\\~$]+)/g)]
     .map((m) => m[1].replace(/\\\./g, '.'))
     .filter(isSecretPath);
   if (inputs.length) return inputs[0];
 
+  if (cmd === 'jq') return secretPathsIn('', jqFiles(toks))[0] || null;
   if (READS_FILE.has(cmd)) return secrets[0];
 
   if (TRANSFER.has(cmd)) {

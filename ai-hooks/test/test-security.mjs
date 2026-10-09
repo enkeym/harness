@@ -73,6 +73,22 @@ check('Read .environment.ts', read('src/.environment.ts'), 'allow');
 check('Read обычного config.json', read('src/config.json'), 'allow');
 check('Read обычного config', read('deploy/config'), 'allow');
 check('jq по полю .key', bash("jq '.data.key' package.json"), 'allow');
+check('jq по полю .env', bash("jq -e '.env, .autoConnectIde' settings.json"), 'allow');
+check('jq по файлу .env', bash("jq . .env"), 'deny');
+check('jq --rawfile .env', bash("jq -n --rawfile s .env '$s'"), 'deny');
+check('jq -rf с программой из .env', bash("jq -rf .env data.json"), 'deny');
+check('jq -fn с программой из .env', bash("jq -fn .env"), 'deny');
+check('jq --rawfile после --args', bash("jq --args . a --rawfile s .env"), 'deny');
+check('jq --args: строка .env — не файл', bash("jq -n --args '$ARGS' .env"), 'allow');
+check('cat .env после `))` в кавычках внутри (( ))', bash('(( a == "))" )); cat .env'), 'deny');
+check('cat .env в подстановке в кавычках внутри (( ))', bash('(( "$(cat .env)" ))'), 'deny');
+check('`<` в [[ ]] — сравнение, не чтение', bash('[[ $a < .env ]] && echo x'), 'allow');
+check('cat .env во вложенных группах ((…) )', bash('((cat .env) )'), 'deny');
+check('cat .env в подстановке внутри (( ))', bash('(( $(cat .env | wc -l) > 0 ))'), 'deny');
+check('cat .env после [[ && ]]', bash('[[ -n a && -n b ]] && cat .env'), 'deny');
+check('`[[` словом echo не прячет cat .env', bash('echo [[ ; cat .env'), 'deny');
+check('`[[` и `]]` в кавычках не прячут < .env', bash('xargs echo "[[" < .env "]]"'), 'deny');
+check('`$((` в кавычках не прячет < .env', bash('xargs echo "$((" < .env "))"'), 'deny');
 
 // --- MCP-инструменты идут мимо Read и должны проверяться так же
 check('tokensave_read по .env', run('mcp__tokensave__tokensave_read', { file: '.env' }), 'deny');

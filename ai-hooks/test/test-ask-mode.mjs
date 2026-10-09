@@ -90,6 +90,8 @@ const shell = [
   [`python3 -c "print(open('a.json').read())"`, false],
   [`node -e "const a=1; require('fs').rmSync('dist',{recursive:true})"`, true],
   ['echo "a;b" | tr a b', false],
+  ['[[ $a > $b ]] && echo new', false], ['(( n > 5 )) && echo big', false],
+  ['[[ -n "$a" ]] && echo x > out.txt', true],
   // Управление режимом проходит, только когда команда — сам ask-mode.mjs.
   ['node ~/.ai-hooks/bin/ask-mode.mjs off', false],
   ['rm -rf src; echo ask-mode.mjs', true],

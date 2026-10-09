@@ -124,6 +124,15 @@ bash('2>&1 — не файл → allow', 'allow', 'npm test 2>&1');
 bash('путь в кавычках в /tmp и 2>&1 → allow', 'allow', 'node t.mjs > "/tmp/t-$f.log" 2>&1', '/tmp');
 bash('перенаправление в исходник в кавычках → deny', 'deny', 'echo x > "client/src/App.tsx"');
 bash('`>` внутри строки в кавычках → allow', 'allow', `echo "a > b" | wc -l`);
+bash('`>` как сравнение в [[ ]] → allow', 'allow', '[[ "$S" > "20:20:00" ]] && echo new');
+bash('перенаправление после [[ ]] → deny', 'deny', '[[ -n "$a" ]] && echo x > client/src/App.tsx');
+bash('`>` после && внутри [[ ]] → allow', 'allow', '[[ -n "$a" && "$S" > "20:20:00" ]] && echo new');
+bash('`>` в (( )) → allow', 'allow', '(( n > 5 )) && echo big');
+bash('`>` в $(( )) → allow', 'allow', 'echo $(( a > b ))');
+bash('`>` и `;` в for (( )) → allow', 'allow', 'for ((i=0; i>5; i++)); do :; done');
+bash('перенаправление после (( )) → deny', 'deny', '(( n > 5 )) && echo x > client/src/App.tsx');
+bash('`[[` словом echo — перенаправление настоящее → deny', 'deny', 'echo [[ > client/src/App.tsx ]]');
+bash('`]]` в кавычках не закрывает условие → deny', 'deny', 'if [[ "$x" == "]]" ]]; then echo x > client/src/App.tsx; fi');
 bash('`"` в кавычках подстановки внутри "…" не закрывает строку → allow', 'allow',
   `echo "$(jq -r 'select(.a=="<x>/src</x>")' f)"`);
 bash('перенаправление после такой строки → deny', 'deny',

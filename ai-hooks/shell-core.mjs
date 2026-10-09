@@ -61,6 +61,38 @@ export function segments(command, { keepHeredoc = false } = {}) {
     return j;
   };
 
+  // `(( … ))` и `$(( … ))` — арифметика: `;` в ней не разделитель
+  // (`for ((i=0; i<5; i++))`), команды — только в подстановках. Конец — `))`
+  // подряд; иначе bash читает `((cat .env) )` как две вложенные группы, и это
+  // команда. Скобки в кавычках не считаются: `(( a == "))" ))` целиком
+  // арифметика, а подстановка в двойных — команда. Индекс второй `)` или -1.
+  const takeArith = (open) => {
+    const mark = subs.length;
+    let depth = 0;
+    let innerEnd = -1;
+    let dq = false;
+    for (let j = open; j < text.length; j++) {
+      const c = text[j];
+      if (c === '\\') { j++; continue; }
+      if (c === '$' && text[j + 1] === '(' && text[j + 2] !== '(') { j = takeParen(j + 1); continue; }
+      if (c === '`') { j = takeBacktick(j); continue; }
+      if (c === '"') { dq = !dq; continue; }
+      if (dq) continue;
+      if (c === "'") { j = quoteEnd(text, j); continue; }
+      if (c === '(') depth++;
+      else if (c === ')') {
+        if (--depth === 1) innerEnd = j;
+        if (depth === 0) {
+          if (j === innerEnd + 1) return j;
+          break;
+        }
+      }
+    }
+    subs.length = mark;
+    return -1;
+  };
+  let inTest = false;
+
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     const next = text[i + 1];
@@ -98,6 +130,30 @@ export function segments(command, { keepHeredoc = false } = {}) {
 
     if (c === '\\' && i + 1 < text.length) { buf += c + next; i++; continue; }
     if (c === '"' || c === "'") { quote = c; buf += c; continue; }
+
+    // `[[ … ]]` — условие: `&&`, `||`, `( )` в нём не делят команду, а `<`/`>`
+    // сравнивают строки. Подстановки внутри разбираются выше, как обычно.
+    // Только в позиции команды: в `echo [[ ; cat .env` это слово echo, и
+    // `cat .env` исполняется. Перевод строки условие закрывает.
+    if (inTest && c !== '\n') {
+      if (c === ']' && next === ']') { inTest = false; buf += ']]'; i++; } else buf += c;
+      continue;
+    }
+    inTest = false;
+    if (c === '[' && next === '[' && keywordLead(buf) === buf.length) {
+      inTest = true;
+      buf += '[[';
+      i++;
+      continue;
+    }
+    if (c === '(' && next === '(') {
+      const end = takeArith(i);
+      if (end !== -1) {
+        buf += text.slice(i, end + 1);
+        i = end;
+        continue;
+      }
+    }
 
     if ((c === '|' && next === '|') || (c === '&' && next === '&')) { i++; cut(false); continue; }
     if (c === '|') { if (next === '&') i++; cut(true); continue; }
@@ -189,6 +245,62 @@ export function tokenize(seg) {
 // Слова shell, после которых идёт команда: `then cat .env`, `do cat .env`,
 // `! cat .env`, `{ cat .env; }`.
 const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{']);
+
+// Длина ведущих пробелов и ключевых слов: с этой позиции начинается команда.
+function keywordLead(text) {
+  let at = 0;
+  for (const m of String(text).matchAll(/\s*(\S+)\s+/gy)) {
+    if (!SHELL_KEYWORDS.has(m[1])) break;
+    at = m.index + m[0].length;
+  }
+  return at + text.slice(at).match(/^\s*/)[0].length;
+}
+
+// Позиция `closer` вне кавычек или -1.
+function closeOutsideQuotes(text, from, closer) {
+  for (let i = from, quote = null; i < text.length; i++) {
+    const c = text[i];
+    if (c === '\\' && quote !== "'") { i++; continue; }
+    if (quote) { if (c === quote) quote = null; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (text.startsWith(closer, i)) return i;
+  }
+  return -1;
+}
+
+// `[[ … ]]` и `(( … ))` в позиции команды, `$(( … ))` вне кавычек — сравнение
+// и арифметика: `<`/`>` в них не перенаправление. Перенаправления гарды ищут
+// в тексте без них. Где угодно вырезать нельзя: в `xargs echo "[[" < .env "]]"`
+// это строки, и чтение спряталось бы. Незакрытое условие остаётся как есть.
+export function dropConditionals(seg) {
+  const text = String(seg);
+  let i = keywordLead(text);
+  // `for ((i=0; i<n; i++))` — `for` не ключевое слово перед командой, а заголовок.
+  i += text.slice(i).match(/^for\s*(?=\(\()/)?.[0].length ?? 0;
+  let out = text.slice(0, i);
+  const opener = text.slice(i, i + 2);
+  const close = opener === '[[' || opener === '((' ? closeOutsideQuotes(text, i + 2, opener === '[[' ? ']]' : '))') : -1;
+  if (close !== -1) {
+    out += ' ';
+    i = close + 2;
+  }
+  for (let quote = null; i < text.length; i++) {
+    const c = text[i];
+    if (c === '\\' && quote !== "'") { out += text.slice(i, i + 2); i++; continue; }
+    if (quote) { if (c === quote) quote = null; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (text.startsWith('$((', i)) {
+      const end = closeOutsideQuotes(text, i + 3, '))');
+      if (end !== -1) {
+        out += ' ';
+        i = end + 1;
+        continue;
+      }
+    }
+    out += c;
+  }
+  return out;
+}
 
 // Обёртки, за которыми стоит настоящая команда, и их опции с аргументом:
 // `sudo -u root cat` — команда cat, а не root.

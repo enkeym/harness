@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { segments, tokenize, commandName, quoteEnd } from './shell-core.mjs';
+import { segments, tokenize, commandName, quoteEnd, dropConditionals } from './shell-core.mjs';
 import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -124,6 +124,8 @@ function anyFile(text, cwd) {
 // Строки в кавычках маскируются, а не вырезаются: `>` внутри них — не
 // перенаправление, но `> "file"` — цель. Вырезанная, она пропадала, и целью
 // становилось следующее слово: `> "/tmp/x.log" 2>&1` — «файл `2`».
+// `>` в `[[ … ]]` и `(( … ))` — сравнение: `[[ "$S" > "20:20:00" ]]` давал
+// «файл `20`».
 function redirectTarget(seg, cwd) {
   const quoted = [];
   const line = seg.split('\n')[0];
@@ -135,7 +137,7 @@ function redirectTarget(seg, cwd) {
     bare += `\0${quoted.push(line.slice(i + 1, end)) - 1}\0`;
     i = end;
   }
-  const m = bare.match(/(?:^|[^=\-<>])>>?\s*(\0\d+\0|[\w@.\-/\\]+)/);
+  const m = dropConditionals(bare).match(/(?:^|[^=\-<>])>>?\s*(\0\d+\0|[\w@.\-/\\]+)/);
   if (!m) return null;
   // Цель в кавычках судим как без них: `> "$OUT"` вычисляется, как и `> $OUT`.
   const target = m[1].startsWith('\0') ? quoted[Number(m[1].slice(1, -1))].match(/^[\w@.\-/\\]+/)?.[0] : m[1];

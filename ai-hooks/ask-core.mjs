@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { STATE_ROOT, projectKey, repoRootOr } from './state-core.mjs';
-import { segments, tokenize, commandIndex, gitSubcommandAt } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
 
 const STATE_DIR = path.join(STATE_ROOT, 'ask-mode');
 const DEFAULT_FILE = path.join(STATE_DIR, 'default');
@@ -237,7 +237,7 @@ export function bashMutates(command, depth = 0) {
     const tokens = tokenize(seg);
     const at = commandIndex(tokens);
     const cmd = path.basename(tokens[at] || '');
-    if (REDIRECT_RE.test(seg)) return true;
+    if (REDIRECT_RE.test(dropConditionals(seg))) return true;
     if (!cmd || isSelf(tokens, at)) continue;
 
     if (MUTATING_CMDS.has(cmd)) return true;
