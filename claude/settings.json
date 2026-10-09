@@ -16,7 +16,32 @@
       "Bash(node ~/.ai-hooks/bin/usage-report.mjs:*)",
       "mcp__playwright__*",
       "Edit(~/.ai-hooks/**)",
-      "Edit(~/harness/**)"
+      "Edit(~/harness/**)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git show *)",
+      "Bash(git rev-parse *)",
+      "Bash(git rev-list *)",
+      "Bash(git merge-base *)",
+      "Bash(git ls-files *)",
+      "Bash(git ls-remote *)",
+      "Bash(git branch --show-current)",
+      "Bash(git tag -l *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh release list *)",
+      "Bash(gh release view *)",
+      "Bash(gh pr view *)",
+      "Bash(ls *)",
+      "Bash(cat /tmp/*)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(jq *)",
+      "Bash(wc *)",
+      "Bash(python.exe -m pytest *)",
+      "Bash(sc.exe query *)",
+      "Edit(//tmp/**)"
     ],
     "deny": [
       "Agent",
@@ -253,10 +278,15 @@
   "language": "Russian",
   "modelSettings": {
     "claude-opus-5-5": {
-      "effortLevel": "medium"
+      "effortLevel": "high"
     }
   },
   "showClearContextOnPlanAccept": true,
   "theme": "dark-ansi",
-  "remoteControlAtStartup": false
+  "remoteControlAtStartup": false,
+  "autoMode": {
+    "allow": [
+      "$defaults"
+    ]
+  }
 }
