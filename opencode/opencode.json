@@ -53,6 +53,7 @@
       "git -* push*": "ask",
       "env": "ask",
       "printenv*": "ask",
+      "dotenv*printenv*": "ask",
       "set": "ask",
       "export": "ask",
       "export -*": "ask",

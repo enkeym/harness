@@ -206,8 +206,8 @@ function bareHosts(toks) {
   for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
     const t = toks[i];
     if (OUTBOUND_ARG_OPTS.has(t)) { i++; continue; }
-    // Перенаправления (`2>&1`, `>out.json`) — не адреса.
-    if (/^(-|@|\d*[<>])/.test(t) || t.includes('://')) continue;
+    // Перенаправления (`2>&1`, `>out.json`) и `\` переноса строки — не адреса.
+    if (/^(-|@|\d*[<>]|\\$)/.test(t) || t.includes('://')) continue;
     hosts.push(t.replace(/^[^@/]*@/, '').split(/[/:?]/)[0]);
   }
   return hosts;
@@ -227,17 +227,94 @@ function outboundReason(toks, seg) {
 // транскрипте и уезжает в каждый следующий запрос. Запись в секретный файл
 // ничего не раскрывает.
 
+const INTERPRETERS = new Set(['node', 'python', 'python3', 'ruby', 'php', 'perl', 'deno', 'bun', 'tsx', 'ts-node']);
+
 // Команды, которые показывают содержимое файла или исполняют его.
 const READS_FILE = new Set([
   'cat', 'head', 'tail', 'less', 'more', 'bat', 'nl', 'tac', 'rev', 'od', 'xxd', 'strings',
   'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'sed', 'awk', 'gawk', 'cut', 'sort', 'uniq',
   'source', '.', 'diff', 'vimdiff', 'base64', 'openssl',
   'dd', 'paste', 'hexdump', 'hd', 'fold', 'fmt', 'expand', 'iconv', 'column', 'pr', 'comm', 'join',
-  'node', 'python', 'python3', 'ruby', 'php', 'perl', 'deno', 'bun', 'jq', 'yq',
+  ...INTERPRETERS, 'jq', 'yq',
 ]);
 
+// Имя команды без `.exe` (из WSL Windows-бинарь зовётся с ним) и без версии
+// интерпретатора: `python.exe`, `python3.12`, `node22` читают так же, как `python` и `node`.
+const VERSIONED_RE = /^(python|node|ruby|php|perl|deno|bun)[\d.]+$/;
+
+function baseCommand(name) {
+  const s = String(name).replace(/\.exe$/i, '');
+  return VERSIONED_RE.test(s) ? s.replace(/[\d.]+$/, '') : s;
+}
+
 // Копирование и передача: опасен источник, а не назначение.
-const TRANSFER = new Set(['cp', 'mv', 'scp', 'rsync', 'tar', 'zip', 'install', 'ln']);
+const TRANSFER = new Set(['cp', 'mv', 'scp', 'rsync', 'zip', 'install', 'ln']);
+
+// tar: архив — аргумент `f` (`cf -`, `-czf out.tgz`, `--file=…`), остальные операнды —
+// члены. При создании член читается (`tar cf - .env | tar xOf -` — тот же `cat`),
+// при извлечении — только с `O`/`--to-stdout`, иначе он пишется на диск.
+function tarReadsSecret(toks, secrets) {
+  const args = toks.slice(commandIndex(toks) + 1);
+  let archive = null;
+  let extract = false;
+  let toStdout = false;
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i];
+    if (t === '--file') archive = args[i + 1];
+    else if (t.startsWith('--file=')) archive = t.slice('--file='.length);
+    else if (t === '--extract' || t === '--get') extract = true;
+    else if (t === '--to-stdout') toStdout = true;
+    // Склейка коротких: `-czf`, а первым аргументом — и без дефиса (`cf`, `xOzf`).
+    else if (/^-[A-Za-z]+$/.test(t) || (i === 0 && /^[A-Za-z]+$/.test(t))) {
+      if (t.includes('x')) extract = true;
+      if (t.includes('O')) toStdout = true;
+      if (t.includes('f')) archive = args[i + 1];
+    }
+  }
+  if (extract && !toStdout) return null;
+  return secrets.find((s) => s !== archive) || null;
+}
+
+// `xargs -a .env cmd` отдаёт строки файла аргументами — то же перенаправление ввода.
+function xargsInputs(toks) {
+  const files = [];
+  const at = toks.findIndex((t) => path.basename(t) === 'xargs');
+  if (at === -1) return files;
+  for (let i = at + 1; i < commandIndex(toks); i++) {
+    const t = toks[i];
+    if (t === '-a' || t === '--arg-file') files.push(toks[i + 1] || '');
+    else if (t.startsWith('--arg-file=')) files.push(t.slice('--arg-file='.length));
+    else if (/^-a./.test(t)) files.push(t.slice(2));
+  }
+  return files;
+}
+
+// dotenv-cli: `dotenv [-e файл]… [-v k=v] [-p VAR] [--] команда`. Сам он файла не
+// показывает — кроме `-p`, что печатает значение переменной; опасна запускаемая
+// команда (`printenv`, `cat .env`).
+const DOTENV_ARG_OPTS = new Set(['-e', '-v', '-p']);
+
+function dotenvParts(toks, at) {
+  const opts = [];
+  let i = at + 1;
+  for (; i < toks.length && toks[i].startsWith('-'); i++) {
+    if (toks[i] === '--') {
+      i++;
+      break;
+    }
+    const opt = toks[i];
+    if (DOTENV_ARG_OPTS.has(opt)) i++;
+    opts.push({ opt, arg: toks[i] });
+  }
+  return { opts, command: toks.slice(i).join(' ') };
+}
+
+function dotenvPrintsSecret(toks) {
+  const { opts } = dotenvParts(toks, commandIndex(toks));
+  if (!opts.some((o) => o.opt === '-p')) return null;
+  const files = opts.filter((o) => o.opt === '-e').map((o) => o.arg);
+  return (files.length ? files : ['.env']).find(isSecretPath) || null;
+}
 
 function secretReason(file) {
   return {
@@ -396,11 +473,13 @@ function readsSecret(seg, toks, cmd) {
   // here-string, `<(…)` — подстановка процесса: пути там нет.
   const inputs = [...dropConditionals(seg).matchAll(/(?:^|[^<])<(?![<(])\s*([\w@.\-/\\~$]+)/g)]
     .map((m) => m[1].replace(/\\\./g, '.'))
+    .concat(xargsInputs(toks))
     .filter(isSecretPath);
   if (inputs.length) return inputs[0];
 
   if (cmd === 'jq') return secretPathsIn('', jqArgs(toks).files)[0] || null;
   if (READS_FILE.has(cmd)) return secrets[0];
+  if (cmd === 'tar') return tarReadsSecret(toks, secrets);
 
   if (TRANSFER.has(cmd)) {
     // Последний свободный аргумент — назначение; всё до него читается.
@@ -457,6 +536,8 @@ function nestedCommands(toks, cmd) {
 
   if (cmd === 'eval') out.push(toks.slice(at + 1).join(' '));
 
+  if (cmd === 'dotenv') out.push(dotenvParts(toks, at).command);
+
   if (cmd === 'ssh') out.push(afterTarget(toks, at + 1, SSH_ARG_OPTS).join(' '));
 
   if (CONTAINER_CMDS.has(cmd)) {
@@ -484,7 +565,7 @@ function nestedCommands(toks, cmd) {
 // Первое слово вложенной команды — чтобы понять, читает ли она файл, когда
 // путь остался снаружи (`find . -name .env -exec cat {} \;`).
 function nestedReadsFile(nested) {
-  return nested.some((c) => READS_FILE.has(commandName(tokenize(c))));
+  return nested.some((c) => READS_FILE.has(baseCommand(commandName(tokenize(c)))));
 }
 
 // Команда печатает окружение целиком: голый `env` (и за обёрткой — `sudo env`),
@@ -492,7 +573,27 @@ function nestedReadsFile(nested) {
 // или `$ENV` целиком (`env`, `[env]`, `$ENV | keys`), а не с одной переменной
 // (`env.HOME`, `$ENV["HOME"]`); ключ `.env`, переменная `$env` и строка `"env"` —
 // не окружение. Имя команды или null.
-const JQ_ENV_RE = /(?<![\w."$])(?:\$ENV|env)(?![\w"]|\s*[.[])/;
+const JQ_ENV_RE = /(?<![\w."$])(?:\$ENV|env)(?![\w"]|\s*[.[])/g;
+
+// `{env, x}` и `{env: …}` — ключ объекта (`{env}` = `{env: .env}`), а не окружение:
+// слева `{` или `,` внутри фигурных скобок, справа `,`, `}` или `:`.
+function jqObjectKey(program, at, len) {
+  if (!/^\s*[,}:]/.test(program.slice(at + len))) return false;
+  const before = program.slice(0, at).trimEnd();
+  if (before.endsWith('{')) return true;
+  if (!before.endsWith(',')) return false;
+  const open = [];
+  for (const ch of before) {
+    if ('{[('.includes(ch)) open.push(ch);
+    else if ('}])'.includes(ch)) open.pop();
+  }
+  return open[open.length - 1] === '{';
+}
+
+function jqPrintsEnv(program) {
+  const s = String(program ?? '');
+  return [...s.matchAll(JQ_ENV_RE)].some((m) => m[0] === '$ENV' || !jqObjectKey(s, m.index, m[0].length));
+}
 
 function printsEnv(toks) {
   const at = commandIndex(toks);
@@ -503,7 +604,7 @@ function printsEnv(toks) {
   if (cmd === 'printenv' && rest.every((t) => t.startsWith('-'))) return cmd;
   if (cmd === 'set' && rest.length === 0) return cmd;
   if (['export', 'declare', 'typeset'].includes(cmd) && rest.every((t) => /^-[px]+$/.test(t))) return cmd;
-  if (cmd === 'jq' && JQ_ENV_RE.test(jqArgs(toks).program ?? '')) return cmd;
+  if (cmd === 'jq' && jqPrintsEnv(jqArgs(toks).program)) return cmd;
   return null;
 }
 
@@ -513,7 +614,7 @@ export function guardBashSecurity(command, depth = 0) {
 
   for (const { text: seg, piped } of segments(raw)) {
     const toks = tokenize(seg);
-    const cmd = commandName(toks);
+    const cmd = baseCommand(commandName(toks));
 
     // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
     const envCmd = printsEnv(toks);
@@ -534,10 +635,16 @@ export function guardBashSecurity(command, depth = 0) {
       if (verdict) return verdict;
     }
 
-    // Путь снаружи, чтение внутри: `find . -name .env -exec cat {} \;`.
-    if (nested.length && nestedReadsFile(nested)) {
+    // Путь снаружи, чтение внутри: `find . -name .env -exec cat {} \;`. У dotenv путь
+    // снаружи — его `-e`: файл уходит в окружение, а не в вывод `node dist/main.js`.
+    if (nested.length && cmd !== 'dotenv' && nestedReadsFile(nested)) {
       const outer = secretPathsIn(seg, toks)[0];
       if (outer) return secretReason(outer);
+    }
+
+    if (cmd === 'dotenv') {
+      const printed = dotenvPrintsSecret(toks);
+      if (printed) return secretReason(printed);
     }
 
     // git читает содержимое из истории, даже когда файла нет в рабочей копии.
@@ -552,8 +659,10 @@ export function guardBashSecurity(command, depth = 0) {
     // Запись безвредна — `cp .env.example .env` и `echo X >> .env` ничего не
     // раскрывают, и блокировать их значит мешать обычной настройке проекта.
     // Читающая команда из пайпа берёт путь из соседнего сегмента
-    // (`echo .env | xargs cat`), поэтому кандидатов ищем по всей строке.
-    const scope = piped && READS_FILE.has(cmd) ? raw : seg;
+    // (`echo .env | xargs cat`), поэтому кандидатов ищем по всей строке. Так же
+    // интерпретатор с heredoc (`python - <<EOF`): его код — в следующих строках.
+    const heredocCode = INTERPRETERS.has(cmd) && seg.includes('<<');
+    const scope = (piped && READS_FILE.has(cmd)) || heredocCode ? raw : seg;
     const secret = readsSecret(scope, toks, cmd);
     if (secret) return secretReason(secret);
 
