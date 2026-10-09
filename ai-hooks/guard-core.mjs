@@ -87,12 +87,14 @@ const SCRIPT_EDITORS = new Set(['vim', 'vi', 'nvim', 'ex', 'ed']);
 // grep с шаблоном, которому отвечает каждая строка (`grep '' f`, `grep . f`), или с `-v`
 // печатает файл, как cat. Поиск с шалоном и контекстом (`-A30`) — поиск, не чтение;
 // счёт и список файлов (`-c`, `-l`, `-q`) строк не печатают.
+// Возвращает файлы-операнды (в пайпе — пусто) или null: шаблон с путём
+// (`git ls-files | grep -v '^src/a.ts'`) — строка, не чтение файла.
 const GREP_CMDS = new Set(['grep', 'egrep', 'fgrep']);
 const MATCH_ALL = new Set(['', '.', '^', '$', '.*', '^.*', '.*$', '^.*$']);
 const GREP_VALUE_SHORT = 'ABCmefdD';
 const GREP_VALUE_LONG = new Set(['--file', '--after-context', '--before-context', '--context', '--max-count']);
 
-function grepPrintsAll(toks) {
+function grepPrintedFiles(toks) {
   let pattern = null;
   let invert = false;
   let quiet = false;
@@ -125,7 +127,7 @@ function grepPrintsAll(toks) {
     words.push(t);
   }
   if (pattern === null) pattern = words.shift() ?? false;
-  return !quiet && (invert || MATCH_ALL.has(pattern));
+  return !quiet && (invert || MATCH_ALL.has(pattern)) ? words.map((w) => w.replace(/^<(?![<(])/, '')) : null;
 }
 
 // Команды, которые пишут в файл на месте. sed/perl/awk — только с -i.
@@ -391,8 +393,9 @@ export function guardBash(command, cwd, labels) {
       const inPlace = INPLACE_CMDS.has(cmd) && toks.some((t) => /^-i/.test(t) || t === '--in-place');
       // `diff /dev/null f` и `git diff --no-index /dev/null f` печатают файл целиком.
       const diffsNull = (cmd === 'diff' || (toks[sub] === 'diff' && toks.includes('--no-index'))) && toks.includes('/dev/null');
-      if (READ_CMDS.has(cmd) || (FILTER_CMDS.has(cmd) && !inPlace) || diffsNull || (GREP_CMDS.has(cmd) && grepPrintsAll(toks))) {
-        const hit = [...pathCandidates(seg)].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
+      const grepped = GREP_CMDS.has(cmd) ? grepPrintedFiles(toks) : null;
+      if (READ_CMDS.has(cmd) || (FILTER_CMDS.has(cmd) && !inPlace) || diffsNull || grepped) {
+        const hit = [...(grepped ?? pathCandidates(seg))].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
         if (hit) return readReason(hit, fileTools(cwd, hit, labels));
       }
 

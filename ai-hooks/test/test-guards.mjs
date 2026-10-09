@@ -206,6 +206,11 @@ bash('grep -n ^ по файлу → deny', 'deny', 'grep -n ^ client/src/App.tsx
 bash('grep -v по файлу → deny', 'deny', 'grep -v zzzz client/src/App.tsx');
 bash('grep -cv по файлу → allow (счёт)', 'allow', 'grep -cv zzzz client/src/App.tsx');
 bash('grep -v в пайпе → allow', 'allow', 'ps aux | grep -v grep');
+bash('grep -v с путём-шаблоном в пайпе → allow (шаблон, не файл)', 'allow', "git ls-files | grep -v '^client/src/App.tsx'");
+bash('grep -e путь-шаблон в пайпе → allow', 'allow', 'git ls-files | grep -ve client/src/App.tsx');
+bash('grep -v путь-шаблон по файлу → deny (виноват файл)', 'deny', 'grep -v client/src/App.tsx README.md');
+bash('grep -v < файл → deny', 'deny', 'grep -v zzzz < client/src/App.tsx');
+bash('grep -v <файл слитно → deny', 'deny', 'grep -v zzzz <client/src/App.tsx');
 bash('grep -e . по файлу → deny', 'deny', 'grep -e . client/src/App.tsx');
 bash('grep -n -A30 шаблон по файлу → allow (поиск)', 'allow', 'grep -n -A30 useState client/src/App.tsx');
 for (const c of ['base64', 'hexdump -C', 'cut -c1-', 'sort', 'uniq', 'paste', 'fold', 'pr', 'column -t', 'expand']) {

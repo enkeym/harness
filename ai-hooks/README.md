@@ -144,7 +144,7 @@ ANSI-последовательности и повторы `copying DB` чис�
 на файлы доменов, и каждый открывается frontmatter `paths:` в формате `.claude/rules`.
 Родное path-scoped правило тут не работает: зонд показал, что оно срабатывает на
 встроенном `Read` и молчит на `tokensave_read`. Хук висит на `PostToolUse` инструментов
-правки (`Edit|Write|MultiEdit` и `tokensave_str_replace|multi_str_replace|insert_at|insert_at_symbol|replace_symbol`;
+правки (`Edit|Write|MultiEdit` и `tokensave_str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol`;
 тот же список — `EDIT_TOOL_RE` в самом хуке): на чтении домен (~1,4k токенов)
 оплачивала бы и сессия без правок. Путь — из `tool_input` (`file_path` / `path`; для
 `replace_symbol`/`insert_at_symbol` — поле `file`/`file_path` из ответа), сверяет с глобами через `path.matchesGlob` и добавляет тело совпавшего
@@ -514,7 +514,7 @@ tokensave) в корне такого репозитория. Файл пров�
 (`read-core.mjs`) — и в JSON, и в `format: text`, формате tokensave по
 умолчанию. Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
-(matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
+(matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
 Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,

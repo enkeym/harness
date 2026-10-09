@@ -27,10 +27,10 @@ const STATE_DIR = statePath('links-context');
 // Та же выборка, что matcher хука в claude/settings.json: там — чтобы не
 // запускать node на каждом чтении, здесь — чтобы правило проверялось тестом.
 const EDIT_TOOL_RE =
-  /^(Edit|Write|MultiEdit|mcp__tokensave__tokensave_(str_replace|multi_str_replace|insert_at|insert_at_symbol|replace_symbol))$/;
+  /^(Edit|Write|MultiEdit|mcp__tokensave__tokensave_(str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol))$/;
 
-// Путь правленого файла: Edit/Write — file_path, tokensave_str_replace и
-// insert_at — path. replace_symbol и insert_at_symbol пути на входе не несут —
+// Путь правленого файла: Edit/Write — file_path, tokensave_str_replace,
+// replace_lines и insert_at — path. replace_symbol и insert_at_symbol пути на входе не несут —
 // берём `file`/`file_path` из ответа.
 function touchedFile(input) {
   const ti = input.tool_input || {};

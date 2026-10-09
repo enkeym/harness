@@ -86,6 +86,8 @@ const dir = project();
   check('относительный путь из tokensave_str_replace', out.includes('order.paid'), out);
   const insert = run(dir, 'mcp__tokensave__tokensave_insert_at', { path: 'src/orders/service.ts', anchor: '1', content: 'x' });
   check('путь из tokensave_insert_at', insert.includes('order.paid'), insert);
+  const lines = run(dir, 'mcp__tokensave__tokensave_replace_lines', { path: 'src/orders/service.ts', start: 1, end: 1, new_content: 'x' });
+  check('путь из tokensave_replace_lines', lines.includes('order.paid'), lines);
 }
 
 // Чтение домен не подключает: сессия без правок за карту не платит.
