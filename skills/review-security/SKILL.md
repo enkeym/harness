@@ -18,8 +18,8 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
    `-----BEGIN`, `AKIA`, `sk_`, `ghp_`, `xox`, `eyJ`,
    `password|secret|token|api[_-]?key|private[_-]?key` next to a literal,
    `user:pass@` URLs, real infrastructure hosts/ports, real-looking emails and
-   phones in fixtures. Hit → stop, tell the user in one line. Secret in an earlier branch commit →
-   needs **rotation**, not deletion; say so.
+   phones in fixtures. Hit → stop, tell the user in one line. Secret in an
+   earlier branch commit → needs **rotation**, not deletion; say so.
 3. Missing controls. For every new or changed entry point — route, action,
    handler, webhook, job, upload, bot or CLI command — list what it needs:
    authentication, ownership, input validation, size and rate limits,
