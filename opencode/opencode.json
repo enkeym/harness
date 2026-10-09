@@ -119,7 +119,6 @@
     "tokensave_tokensave_callees": "allow",
     "tokensave_tokensave_impact": "allow",
     "tokensave_tokensave_affected": "allow",
-    "tokensave_tokensave_unsafe_patterns": "allow",
     "tokensave_tokensave_similar": "allow",
     "tokensave_tokensave_blame": "allow",
     "tokensave_tokensave_str_replace": "allow",
