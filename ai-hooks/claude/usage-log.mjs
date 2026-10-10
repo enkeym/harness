@@ -33,7 +33,7 @@ export const PRICES = {
   'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite5m: 1.25, cacheWrite1h: 2 },
 };
 
-function priceFor(model) {
+export function priceFor(model) {
   const key = Object.keys(PRICES).find((k) => String(model).startsWith(k));
   return key ? PRICES[key] : null;
 }
