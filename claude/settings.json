@@ -279,7 +279,7 @@
   "language": "Russian",
   "modelSettings": {
     "claude-opus-5-5": {
-      "effortLevel": "high"
+      "effortLevel": "medium"
     }
   },
   "showClearContextOnPlanAccept": true,
