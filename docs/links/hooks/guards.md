@@ -54,6 +54,8 @@ paths:
   `Agent|Grep|Bash|Glob` в `claude/settings.json`. Новая версия tokensave
   переименовала переменную или `tokensave install` сузил matcher — обход снова
   открыт, тесты `test-guards.mjs` этого не увидят: они бьют по нашему гарду.
+  Тот же хук — причина, по которой отказ рекурсивного grep в
+  `ai-hooks/security-core.mjs:guardBashSecurity` даёт `--include` только вне индекса.
 - Алиасы tokensave — `ai-hooks/tool-args-core.mjs:normalizeToolInput` берут и хук `tool-args`, и
   `ai-hooks/security-core.mjs:securityGuard`, `ai-hooks/skill-core.mjs:editedFile` (хуки видят исходный
   вход): алиас мимо гардов — правка `.env` или SKILL.md под ним без проверки.

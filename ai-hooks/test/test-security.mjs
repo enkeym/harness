@@ -145,6 +145,12 @@ check('grep -r без --include', bash('grep -r useState src'), 'deny');
 check('grep -rn без --include', bash('grep -rn "TODO" .'), 'deny');
 check('отказ grep называет rag_search для доков и конфигов',
   /rag_search/.test(guardBashSecurity('grep -rn deploy ansible')?.reason || ''), true);
+// В индексированном проекте grep по коду с `--include` останавливает хук
+// tokensave: совет «добавь --include» там ведёт во второй отказ подряд.
+check('отказ grep ведёт точную строку в tokensave_search literal',
+  /tokensave_search.*literal: true/.test(guardBashSecurity('grep -rn foo src')?.reason || ''), true);
+check('отказ grep даёт --include только вне индекса',
+  /вне индекс[а-я]*[^.]*--include/.test(guardBashSecurity('grep -rn foo src')?.reason || ''), true);
 check('grep -Rni без --include', bash('grep -Rni token'), 'deny');
 check('grep --recursive без --include', bash('grep --recursive foo src'), 'deny');
 check('egrep -r без --include', bash('egrep -r "a|b" .'), 'deny');

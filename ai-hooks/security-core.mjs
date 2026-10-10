@@ -682,8 +682,10 @@ export function guardBashSecurity(command, depth = 0) {
       return {
         level: DENY,
         reason: 'рекурсивный grep без `--include` на расширения кода читает и `.env` в дереве. ' +
-          'Символ в индексированном проекте ищет `tokensave_search`; доки, конфиги, yml, ' +
-          'инфраструктуру — `rag_search`; вне индексов укажи файлы: `--include=*.ts` (можно несколько).',
+          'В проекте с `.tokensave/` символ ищет `tokensave_search`, точную строку — ' +
+          '`tokensave_search` с `literal: true` (grep по коду там останавливает хук tokensave ' +
+          'и с `--include`); доки, конфиги, yml, инфраструктуру — `rag_search`; вне индексов ' +
+          'укажи файлы: `--include=*.ts` (можно несколько).',
       };
     }
 
