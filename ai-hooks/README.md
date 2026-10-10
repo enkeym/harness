@@ -527,7 +527,11 @@ tokensave) в корне такого репозитория. Файл пров�
 `Edit` даёт дифф, токены тянет чтение; но `Edit` требует `Read`, поэтому файл
 из индекса правят `tokensave_str_replace`. Предохранитель: повтор `Read` той же
 цели в той же сессии в течение 3 минут проходит (`state/guard-breaker.json`),
-иначе ошибка tokensave превращается в цикл одинаковых отказов.
+иначе ошибка tokensave превращается в цикл одинаковых отказов. MCP-сервер
+поднят на корне сессии (`mcp-serve.sh`): файл другого проекта он без `graph_root`
+не читает («resolves outside selected graph root»), поэтому отказ называет
+`graph_root` с корнем индекса файла, а в сессии вне проекта сервера нет и `Read`
+проходит.
 `node ~/.ai-hooks/claude/tool-args.mjs` (matcher `mcp__tokensave__tokensave_read|…_str_replace|…_multi_str_replace`):
 схемы этих инструментов отложены, модель угадывает имена параметров, и сервер
 отвечал «missing required parameter» — 334 ошибки за 22.09–10.10.2026

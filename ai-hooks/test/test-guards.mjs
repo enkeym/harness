@@ -394,6 +394,23 @@ read('Read конфига агента внутри проекта → allow', '
   check('[core] isIndexed по README', isIndexed(PROJECT, 'README.md'), false);
   const reason = guardRead(path.join(PROJECT, 'client/src/lib/store/useMarkerStore.ts'), PROJECT, OPENCODE_LABELS, sid + '-r');
   check('[core] причина называет tokensave_body и read', reason.includes('tokensave_body') && reason.includes('read'), true);
+  check('[core] файл своего проекта — без graph_root', reason.includes('graph_root'), false);
+}
+
+// tokensave сессии обслуживает только её проект: файл чужого индекса без
+// graph_root отвечает «resolves outside selected graph root».
+{
+  const sid = `read-foreign-${process.pid}`;
+  const other = sandboxProject();
+  const file = path.join(PROJECT, 'client/src/App.tsx');
+  const reason = guardRead(file, other, OPENCODE_LABELS, sid);
+  check('[core] файл чужого проекта — отказ с graph_root его корня',
+    reason?.includes(`graph_root: "${PROJECT}"`), true);
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-bare-'));
+  check('[core] сессия вне проекта (tokensave не поднят) — Read проходит',
+    guardRead(file, bare, OPENCODE_LABELS, sid + '-bare'), null);
+  fs.rmSync(other, { recursive: true, force: true });
+  fs.rmSync(bare, { recursive: true, force: true });
 }
 
 fs.rmSync(PROJECT, { recursive: true, force: true });

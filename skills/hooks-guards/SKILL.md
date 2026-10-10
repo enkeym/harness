@@ -62,11 +62,11 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 ## Read router
 
-- `read-router` denies `Read` of a file that is in the tokensave index (table
-  `files`); take the symbol with `tokensave_body`/`signature`, the file or a
-  range with `tokensave_read` (`mode: "lines"` plus `lines: "A-B"`; `lines`
-  alone returns the whole file), an overview with `tokensave_context`.
-  New files, `README`, configs outside the index and agent config paths pass.
+- `read-router` denies `Read` of a file in the tokensave index (table `files`): symbol →
+  `tokensave_body`/`signature`, file or range → `tokensave_read` (`mode: "lines"` plus
+  `lines: "A-B"`; `lines` alone returns the whole file), overview → `tokensave_context`;
+  another project's file → `graph_root: "<its root>"` on each call. New files, `README`,
+  configs outside the index, agent config paths and a session outside a project pass.
   Its edits: `tokensave_str_replace` — `Edit` needs a `Read` first.
 - tokensave errored or answered empty → quote the answer and repeat the same
   `Read`: a repeat of the same target within 3 minutes passes (breaker,

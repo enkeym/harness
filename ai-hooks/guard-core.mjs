@@ -528,9 +528,17 @@ export function breakerAllows(sessionId, key) {
 
 export function guardRead(filePath, cwd, labels, sessionId) {
   if (!isIndexed(cwd, filePath)) return null;
+  // MCP-сервер tokensave поднят на корне сессии (mcp-serve.sh:find_root): вне
+  // проекта его нет, а файл чужого индекса он без graph_root не читает.
+  const sessionRoot = findRoot(path.resolve(cwd || process.cwd()));
+  if (!sessionRoot) return null;
   if (breakerAllows(sessionId, `Read:${path.resolve(cwd || process.cwd(), String(filePath))}`)) return null;
+  const fileRoot = projectRoot(cwd, filePath);
+  const foreign = path.resolve(fileRoot) === path.resolve(sessionRoot)
+    ? ''
+    : `Файл другого проекта: каждому вызову tokensave добавь graph_root: "${fileRoot}". `;
   return (
-    `Файл в индексе tokensave. Вместо ${labels.read}: tokensave_body / tokensave_signature (символ), ` +
+    `Файл в индексе tokensave. ${foreign}Вместо ${labels.read}: tokensave_body / tokensave_signature (символ), ` +
     'tokensave_read (файл; диапазон — `mode: "lines", lines: "A-B"`, без `mode` придёт весь файл), tokensave_context (обзор). ' +
     `tokensave ответил ошибкой или пусто — процитируй ответ и повтори ${labels.read}: ` +
     'повтор той же цели в течение 3 минут проходит.'

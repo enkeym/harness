@@ -27,7 +27,8 @@ paths:
   Тот же хук — причина, по которой отказ рекурсивного grep в
   `ai-hooks/security-core.mjs:guardBashSecurity` даёт `--include` только вне индекса.
 - Корень индекса — вторая копия `ai-hooks/bin/mcp-serve.sh:find_root` в
-  `ai-hooks/guard-core.mjs:findRoot`.
+  `ai-hooks/guard-core.mjs:findRoot`. По ней `guardRead` знает, на каком проекте поднят
+  MCP-сервер: разошлись — роутер шлёт в tokensave без `graph_root` или туда, где его нет.
 - Таблица `files` индекса tokensave (`path` относительный от корня, через `/`) —
   `ai-hooks/guard-core.mjs:inIndex`/`relKey` ↔ схема БД tokensave. Сменилась схема —
   роутер чтения молча пропускает всё, тесты `test-guards.mjs` не заметят: они
