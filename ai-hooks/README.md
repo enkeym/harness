@@ -65,6 +65,7 @@ context-core.mjs                # замер занятости окна, пор
 claude/context-meter.mjs        # порог на ходу пользователя (UserPromptSubmit)
 claude/context-step.mjs         # порог посреди хода, между вызовами (PostToolUse)
 claude/paste-guard.mjs          # промпт длиннее предела — не в контекст (UserPromptSubmit, block)
+claude/plan-guard.mjs           # план длиннее предела или с наслоенным снимком — не выходит (PreToolUse: ExitPlanMode)
 question-core.mjs               # конец хода без меню: работа, порог контекста, вопрос текстом
 claude/question-guard.mjs       # адаптер Claude: Stop — такой ход не завершается (block)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
@@ -526,7 +527,8 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 (matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,
 `node ~/.ai-hooks/claude/paste-guard.mjs` на `UserPromptSubmit` первым в
-цепочке — заблокированный промпт остальным хукам не достаётся.
+цепочке — заблокированный промпт остальным хукам не достаётся,
+`node ~/.ai-hooks/claude/plan-guard.mjs` на `PreToolUse` (matcher `ExitPlanMode`).
 Гейт скиллов: `node ~/.ai-hooks/claude/skill-track.mjs` на `PreToolUse`
 (matcher `Skill`) и на `UserPromptSubmit`, `node ~/.ai-hooks/claude/skill-gate.mjs`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at`,
@@ -639,6 +641,15 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 `UserPromptSubmit` отвечает `decision: block` на промпт длиннее
 `AI_HOOKS_PASTE_LIMIT` (40k символов; нормальная передача — до 6k): вставка не
 попадает в окно, пользователь видит причину — данные в файл, путь в промпт.
+
+Вторая дыра того же рода — план, с которым стартует новая сессия. Цепочка
+передач дописывала снимок поверх прежних в один файл плана: за два дня он
+вырос с 4k до 61k символов, база — с 23k до 52k токенов на каждом запросе.
+`claude/plan-guard.mjs` на `PreToolUse(ExitPlanMode)` отказывает, если в плане
+второй `## Состояние`, заголовок с «прежнее»/«устарело» или длина больше
+`AI_HOOKS_PLAN_LIMIT` (12k символов; бриф со снимком — до 10k). Текст плана —
+`tool_input.plan`, без него — файл `planFilePath`; агент переписывает файл и
+выходит снова.
 
 **Ограничитель вывода.** `claude/output-clip.mjs` на `PreToolUse(Bash)` заменяет
 команду на `bin/clip-output.sh <метка> -- '<команда>'`, если она из шумных

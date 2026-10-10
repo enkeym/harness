@@ -451,6 +451,45 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     oversizedPrompt('передача\n'.repeat(700)), null);
 }
 
+// --- план на выходе из plan mode: без наслоенных снимков и не длиннее предела
+{
+  const PLAN_HOOK = path.join(ROOT, 'claude', 'plan-guard.mjs');
+  const runPlan = (toolInput, toolName = 'ExitPlanMode', limit = '1000') => {
+    const out = execFileSync('node', [PLAN_HOOK], {
+      input: JSON.stringify({ tool_name: toolName, tool_input: toolInput }),
+      encoding: 'utf8',
+      env: { ...process.env, ...ENV, AI_HOOKS_PLAN_LIMIT: limit },
+    });
+    return out.trim() ? JSON.parse(out).hookSpecificOutput : null;
+  };
+  const snapshot = '## Состояние\nшаг 2 в работе\n\n## Дальше\nшаг 3\n';
+  check('короткий план проходит', runPlan({ plan: snapshot }), null);
+  const long = runPlan({ plan: snapshot + 'бриф\n'.repeat(300) });
+  check('план длиннее предела — deny', long?.permissionDecision, 'deny');
+  check('отказ называет предел и скилл',
+    /AI_HOOKS_PLAN_LIMIT/.test(long?.permissionDecisionReason)
+      && /handoff/.test(long?.permissionDecisionReason), true);
+  check('второй «## Состояние» — deny и в пределе',
+    runPlan({ plan: snapshot + snapshot })?.permissionDecision, 'deny');
+  check('раздел «(прежнее)» — deny',
+    runPlan({ plan: `${snapshot}## Состояние (прежнее)\nx\n` })?.permissionDecision, 'deny');
+  check('раздел «устарело» — deny',
+    runPlan({ plan: `${snapshot}### 5б: устарело\nx\n` })?.permissionDecision, 'deny');
+  check('«прежнее» в тексте, не в заголовке — проходит',
+    runPlan({ plan: `${snapshot}прежнее решение отвергнуто\n` }), null);
+  const file = path.join(tmp, 'plan.md');
+  fs.writeFileSync(file, snapshot + snapshot);
+  check('без plan — читает planFilePath',
+    runPlan({ planFilePath: file })?.permissionDecision, 'deny');
+  check('другой инструмент — молчит', runPlan({ plan: snapshot + snapshot }, 'Read'), null);
+  check('предел по умолчанию не режет бриф со снимком',
+    runPlan({ plan: snapshot + 'бриф\n'.repeat(1900) }, 'ExitPlanMode', ''), null);
+  check('битый stdin: молчит', (() => {
+    const out = execFileSync('node', [PLAN_HOOK], { input: '{', encoding: 'utf8', env: { ...process.env, ...ENV } });
+    return out.trim() || null;
+  })(), null);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 process.stdout.write(failed ? `\n=== ${failed} FAIL ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);

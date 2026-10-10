@@ -109,6 +109,15 @@
         ]
       },
       {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/plan-guard.mjs\""
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {

@@ -47,7 +47,8 @@ function verdictPayload(decision, reason) {
 // Цель вызова для журнала: путь, команда, код или паттерн — что есть.
 function targetOf(input) {
   const ti = input.tool_input || {};
-  const target = ti.file_path || ti.path || ti.command || ti.code || ti.pattern || ti.glob || '';
+  const target = ti.file_path || ti.path || ti.command || ti.code || ti.pattern || ti.glob
+    || ti.planFilePath || '';
   return String(target).replace(/\s+/g, ' ').slice(0, 200);
 }
 
