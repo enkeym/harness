@@ -92,7 +92,9 @@ it is a guess. Then:
 
 One finished session, checked for whether the harness steered it right.
 Transcript: `~/.claude/projects/<project path, every non-alphanumeric → ->/<sid>.jsonl`;
-no `sid` → the newest one other than the current.
+no `sid` → the newest one other than the current. The directory name starts with
+`-`: pass transcripts by absolute path (or after `--`), never a relative
+`-home-…/x.jsonl` — `jq` and `basename` parse it as an option.
 
 ```
 jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | [.name, ((.input.file_path // .input.path // .input.file // .input.command // .input.skill // "") | tostring | .[0:90])] | @tsv' <transcript>
