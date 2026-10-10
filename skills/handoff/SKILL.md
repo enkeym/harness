@@ -16,14 +16,11 @@ a new session; write only the `task-brief` plan file and plan mode's plan file.
 Mid-turn the answer is never cut in half: finish the step in hand, then, while
 work continues, end the turn with the handoff, not a summary — also when the
 edits were reverted; the step not started goes first under `Дальше`. A
-session that has changed nothing gets no handoff at `SOFT`: it
-would list what was read, the next session would read the same and hit the
-same threshold. From `HAND` such a session is usually an analysis, not a
-prelude to an edit — it delivers its conclusion first, then ends the turn with
-one question: move to a new session (recommended) or stay; a move is built
-from conclusions (`Решения`, `Открытые вопросы`, `Дальше`), with nothing
-under `Карта` beyond the files the next step needs. The hook says which case
-it is; follow its wording.
+session that has changed nothing gets no handoff at `SOFT` — the next one
+would re-read the same and hit the same threshold. From `HAND` it delivers its
+conclusion, then one question: move (recommended) or stay; a move carries
+conclusions only (`Решения`, `Открытые вопросы`, `Дальше`) and the files the
+next step needs. The hook says which case it is; follow its wording.
 
 ## Steps
 
@@ -40,20 +37,23 @@ it is; follow its wording.
 4. Plan form, in this order — plan mode allows one write, the new file it
    names, so an old plan is edited before entering:
    1. A `task-brief` plan exists → tick the steps whose commits landed,
-      rewrite a step that changed.
+      rewrite a step that changed (a user's correction too), no new sections.
    2. `EnterPlanMode`; write the snapshot below into the file its prompt
       names, `Дальше` pointing at the old plan and its first unticked step,
       or naming the next step itself when there is no plan; name the next
-      step in one line at the top of `## Состояние`.
+      step in one line at the top of `## Состояние`. A snapshot already in
+      the file (often the brief's file) is replaced, never kept below as
+      `Состояние (прежнее)`, `устарело`, `что сделано в N`.
    3. `ExitPlanMode` — its dialog is where the user clears the context and
-      continues; print nothing after it. Stale after the next commit — rerun
-      `/handoff`.
-5. Chat form: print the snapshot as one fenced ```markdown block. After it,
-   one line: ready to copy into a new session (`/new`) once copied. Stale
+      continues; print nothing after it.
+5. Chat form: print the snapshot as one fenced ```markdown block, then one
+   line: ready to copy into a new session (`/new`). Either form is stale
    after the next commit — rerun `/handoff`, don't trust the old one.
 
 ## Snapshot (Russian, only sections that apply)
 
+- Rebuilt from scratch, ≤3000 characters: the next session re-pays the plan
+  file on every request. A landed step is one hash under `Состояние`.
 - Absolute dates (`9 сентября 2026`), not relative ones. Exact symbol names,
   not vague references.
 - Inside a user-invoked command → `Дальше` is an action, never a bare
@@ -94,12 +94,12 @@ it is; follow its wording.
 
 Dialogue retelling; file contents, diffs, command output, stack traces;
 anything one command restores (`git status`, `git log`, a signature); secrets.
-Data of any kind — DB dumps, JSONL records, logs, result tables past a few
-rows: write them to a file and name the path; the next session processes the
-file with a script and reads only the totals. `paste-guard.mjs` blocks a
-prompt above its size limit, and one pasted dump costs more than the whole
-session's base context. Architectural decisions go to
-`tokensave_record_decision`, not here.
+Data — dumps, logs, result tables past a few rows: write a file, name the
+path; the next session reads only its totals (`paste-guard.mjs` blocks an
+oversized prompt). Committed steps and their checks. What outlives the
+task — what the product is, stack, build and install commands — goes to the
+project's `CLAUDE.md`, loaded every session; an architectural decision to
+`tokensave_record_decision`.
 
 ## Receiving a handoff
 
