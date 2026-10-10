@@ -4,8 +4,7 @@ Read by `review-standards` and `test-coverage` before the impact pass, and by
 `task-brief` when the task touches a listed domain. The graph
 (`tokensave_impact`, `callers`, `callees`, `affected`) answers
 "who calls this". This file answers the rest: links that exist at runtime but
-not in any call edge, and that a change silently breaks. What memory may
-answer instead: [memory-hygiene.md](memory-hygiene.md).
+not in any call edge, and that a change silently breaks.
 
 Only in a project with an index — `.tokensave/` or `.ragsave/rag.db`: the
 candidates come from it. Without one, do the impact pass with
