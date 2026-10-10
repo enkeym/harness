@@ -10,9 +10,12 @@
 //   grep   Grep, Glob и Bash с grep/rg/ag/find в команде
 //   bash   остальной Bash
 //   edit   Edit, Write
-// deny — ответы «hook error» на вызовы инструментов (запреты и повторы).
-// Стоимость — Σ(input + cache_read + cache_creation) по всем ответам ассистента:
-// столько токенов контекста прочитала модель за сессию; out — Σ output.
+// deny — отказы хуков на вызовы инструментов: «hook error» в тексте или
+// toolDenialKind permission-rule (новые версии пишут отказ без префикса).
+// Один ответ API лежит в транскрипте несколькими записями — по блоку на запись,
+// с одним message.id и одной и той же usage: turns, ctx и out считаются по
+// message.id один раз. Стоимость — Σ(input + cache_read + cache_creation) по
+// ответам: столько токенов контекста прочитала модель за сессию; out — Σ output.
 // Запись с моделью <synthetic> — без вызова API (ошибка /login, «No response
 // requested») — не ответ: не в turns и не в модель.
 //
@@ -64,21 +67,33 @@ function group(block) {
   return null;
 }
 
-function session(file) {
-  const r = { file: basename(file).slice(0, 8), start: '', model: '', turns: 0, deny: 0, ctx: 0, out: 0 };
-  for (const g of GROUPS) r[g] = 0;
+// Записи основной цепочки транскрипта по порядку.
+function* records(file) {
   for (const line of readFileSync(file, 'utf8').split('\n')) {
     if (!line) continue;
     let rec;
     try { rec = JSON.parse(line); } catch { continue; }
-    if (rec.isSidechain) continue;
+    if (!rec.isSidechain) yield rec;
+  }
+}
+
+const text = (content) => (typeof content === 'string' ? content : JSON.stringify(content ?? ''));
+const isDeny = (rec, b) => b.is_error && (rec.toolDenialKind === 'permission-rule' || /hook error/.test(text(b.content)));
+
+function session(file) {
+  const r = { file: basename(file).slice(0, 8), start: '', model: '', turns: 0, deny: 0, ctx: 0, out: 0 };
+  for (const g of GROUPS) r[g] = 0;
+  const answered = new Set();
+  for (const rec of records(file)) {
     if (!r.start && rec.timestamp) r.start = rec.timestamp;
     const content = rec.message?.content;
     if (!Array.isArray(content)) continue;
     if (rec.type === 'assistant') {
       if (rec.message.model === '<synthetic>') continue;
       const u = rec.message.usage;
-      if (u) {
+      const id = rec.message.id ?? rec.uuid;
+      if (u && !answered.has(id)) {
+        answered.add(id);
         r.turns += 1;
         r.model = (rec.message.model ?? '').replace('claude-', '');
         r.ctx += (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
@@ -91,7 +106,7 @@ function session(file) {
       }
     } else if (rec.type === 'user') {
       for (const b of content) {
-        if (b.type === 'tool_result' && b.is_error && /hook error/.test(JSON.stringify(b.content ?? ''))) r.deny += 1;
+        if (b.type === 'tool_result' && isDeny(rec, b)) r.deny += 1;
       }
     }
   }

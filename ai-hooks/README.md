@@ -105,7 +105,7 @@ test/test-output-clip.mjs       # что оборачивается, что не
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert
 test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам (git-корень), источники, --sessions, неверные аргументы
 test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент и <synthetic> мимо, порог размера, rest, неверный аргумент
-test/test-tool-share.mjs        # доля инструментов: граница делит сессии, <synthetic> не в turns, каталог HOME — ~, неверная граница или размер — использование
+test/test-tool-share.mjs        # доля инструментов: граница делит сессии, <synthetic> не в turns, один message.id — один ход, отказ по toolDenialKind — deny, каталог HOME — ~, неверная граница или размер — использование
 test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, блок mcp в opencode.json, перерегистрация в Claude
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, занятый замок не трогает sync.log, выбор каталога и бинаря, тихие выходы
