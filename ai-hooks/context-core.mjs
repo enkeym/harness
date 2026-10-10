@@ -150,13 +150,18 @@ function inRepo(file, cwd) {
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
-function isWork(toolName, toolInput, cwd) {
+export function isWork(toolName, toolInput, cwd) {
   if (!toolName) return false;
   if (EDIT_TOOL.test(toolName)) return inRepo(toolInput?.file_path || toolInput?.notebook_path, cwd);
   // replace_symbol и insert_at_symbol пути не несут: символ — из индекса проекта сессии.
   if (EDIT_MCP.test(toolName)) return toolInput?.path ? inRepo(toolInput.path, cwd) : Boolean(repoRoot(cwd));
   if (toolName === 'Bash') return /\bgit\s+commit\b/.test(String(toolInput?.command || ''));
   return false;
+}
+
+// Была ли в сессии работа — для Stop-хука, который судит конец хода по порогу.
+export function sessionWorked(sessionId) {
+  return Boolean(sessionId && record(sessionId)?.worked);
 }
 
 // Отметка «в сессии появилась работа». Пишется один раз за сессию: дальше запись

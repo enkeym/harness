@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тесты question-guard: ответ, который кончается вопросом или ожиданием
 // решения пользователя текстом, блокирует Stop; вопрос через меню, код, цитата,
-// заголовок, условие без просьбы решения, повторный Stop — нет.
+// заголовок, условие без просьбы решения, повторный Stop — нет. Ход с правкой
+// или коммитом и ход за порогом контекста без меню блокируются при любом тексте.
 // Хук гоняется настоящим процессом на временном транскрипте.
 
 import { ISOLATED_HOOKS_LOG } from './env-isolate.mjs';
@@ -14,6 +15,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOOK = path.join(ROOT, 'claude', 'question-guard.mjs');
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'question-guard-test-'));
+// Работа — правка внутри git-корня сессии; песочница — свой репозиторий.
+const REPO = path.join(DIR, 'repo');
+fs.mkdirSync(path.join(REPO, '.git'), { recursive: true });
+const { noteWork, HAND } = await import('../context-core.mjs');
 
 let failed = 0;
 function check(name, ok, detail = '') {
@@ -23,14 +28,19 @@ function check(name, ok, detail = '') {
 
 const prompt = (text) => ({ type: 'user', message: { role: 'user', content: text } });
 const say = (text) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } });
-const call = (name) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: `t-${name}`, name, input: {} }] } });
+const call = (name, input = {}) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: `t-${name}`, name, input }] } });
+// Ответ с usage: по нему context-core считает занятость окна.
+const sayAt = (tokens, text) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }],
+  usage: { input_tokens: 10, cache_read_input_tokens: tokens - 10, cache_creation_input_tokens: 0, output_tokens: 0 } } });
+const commit = () => call('Bash', { command: 'git commit -m x' });
+const edit = (file) => call('Edit', { file_path: file });
 const result = (name) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `t-${name}`, content: 'ok' }] } });
 
 let n = 0;
 function run(records, extra = {}) {
   const transcript = path.join(DIR, `t${n++}.jsonl`);
   fs.writeFileSync(transcript, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
-  const input = JSON.stringify({ session_id: `test-${process.pid}`, transcript_path: transcript, hook_event_name: 'Stop', ...extra });
+  const input = JSON.stringify({ session_id: `test-${process.pid}`, cwd: REPO, transcript_path: transcript, hook_event_name: 'Stop', ...extra });
   const r = spawnSync('node', [HOOK], { input, encoding: 'utf8' });
   if (r.status !== 0) return { error: r.stderr };
   return r.stdout ? JSON.parse(r.stdout) : null;
@@ -132,6 +142,37 @@ check('вопрос в середине — пропуск', run([prompt('x'), s
 // last_assistant_message свежее транскрипта.
 check('last_assistant_message — block',
   blocked(run([prompt('x'), say('Готово.')], { last_assistant_message: 'Готово. Пушить?' })));
+
+// Ход с работой без меню — block при любом тексте. Случай из жизни: ожидание
+// решения в предпоследнем абзаце и словами, которых нет в AWAIT_RE.
+const workBlocked = (out) => out?.decision === 'block' && out.reason.startsWith('Ход с правкой или коммитом');
+check('коммит и «начну по вашему слову» не в конце — block', workBlocked(run([prompt('x'), commit(), result('Bash'),
+  say('Шаг закоммичен.\n\nОбновление остановит службу, поэтому начну его только по вашему слову.\n\nРешения записаны.')])));
+check('правка в репозитории и «Готово.» — block', workBlocked(run([prompt('x'),
+  edit(path.join(REPO, 'a.ts')), result('Edit'), say('Готово.')])));
+check('правка и AskUserQuestion — пропуск', run([prompt('x'), edit(path.join(REPO, 'a.ts')), result('Edit'),
+  call('AskUserQuestion'), result('AskUserQuestion'), say('Делаю первый.')]) === null);
+check('запись вне репозитория — пропуск', run([prompt('x'),
+  call('Write', { file_path: path.join(DIR, 'note.md') }), result('Write'), say('Записал.')]) === null);
+check('коммит в прошлом ходе, сейчас ответ — пропуск', run([prompt('a'), commit(), result('Bash'),
+  say('Закоммитил.'), prompt('что там?'), say('Там фикс кэша.')]) === null);
+check('работа и stop_hook_active — пропуск', run([prompt('x'), commit(), result('Bash'), say('Готово.')],
+  { stop_hook_active: true }) === null);
+
+// Ход за порогом контекста без меню: причина — текст context-meter для этого порога.
+const ctxBlocked = (out, word) => out?.decision === 'block' && out.reason.startsWith('Ход кончился без меню')
+  && out.reason.includes(word);
+check('HAND и коммит в ходе — block с передачей', ctxBlocked(run([prompt('x'), commit(), result('Bash'),
+  sayAt(HAND + 20_000, 'Шаг закоммичен.')]), 'handoff'));
+check('HAND без работы — block с вопросом о переносе', ctxBlocked(run([prompt('x'),
+  sayAt(HAND + 20_000, 'Вывод: кэш не сбрасывается.')], { session_id: 'q-idle' }), 'Перенести в новую сессию'));
+check('SOFT без работы — пропуск', run([prompt('x'), sayAt(100_000, 'Вывод готов.')],
+  { session_id: 'q-idle-soft' }) === null);
+noteWork({ session_id: 'q-worked', cwd: REPO, tool_name: 'Edit', tool_input: { file_path: path.join(REPO, 'a.ts') } });
+check('SOFT и работа в прошлых ходах — block', ctxBlocked(run([prompt('x'),
+  sayAt(100_000, 'Вывод готов.')], { session_id: 'q-worked' }), 'Перенести в новую сессию'));
+check('HAND и ExitPlanMode — пропуск', run([prompt('x'), commit(), result('Bash'), call('ExitPlanMode'),
+  result('ExitPlanMode'), sayAt(HAND + 20_000, 'Передача готова.')]) === null);
 
 // Битые строки транскрипта пропускаются, пустой транскрипт — тишина.
 {

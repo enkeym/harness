@@ -74,12 +74,11 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 ## question-guard
 
-- Stop hook: a last paragraph that asks the user — `?`, a wait for a decision
-  ("Как скажете «ок»", "Дайте знать", "Let me know"), options ("Варианты:",
-  "Можно A или B") — does not end the turn; the reason quotes the line.
-- Ask it through `AskUserQuestion`, recommended option first; rhetorical →
-  rewrite the ending. Not judged: code, `>` quote, `#` heading, a quoted
-  phrase, a turn with `AskUserQuestion`/`ExitPlanMode`, the second Stop.
+- Stop hook: a turn without `AskUserQuestion`/`ExitPlanMode` is blocked once when
+  context is past the meter's threshold (do what its text says), when the turn
+  edited the repo or committed (next step through the menu, next step first;
+  task closed entirely → one-line result), or when the last paragraph asks in
+  text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite the ending).
 
 ## Shell guard
 

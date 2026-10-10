@@ -11,8 +11,15 @@
 // Вопрос без `?` тоже вопрос: «Как скажете „ок“ — закоммичу» ждёт решения так же,
 // как «Коммитить?», и висит так же. Такой случай прошёл мимо хука — отсюда
 // AWAIT_RE и OPTIONS_HEAD_RE.
+//
+// Словарь формулировок не закрывается никогда: «начну по вашему слову» в
+// предпоследнем абзаце прошло мимо него после коммита на 173k, хотя context-meter
+// велел передачу. Поэтому раньше текста судится структура хода, без разбора слов:
+// ход с правкой или коммитом и любой ход за порогом контекста кончаются меню.
+// Регэкспы остаются только для хода без работы — ответа на вопрос.
 
 import fs from 'node:fs';
+import { contextUsed, level, noticeText, isWork, sessionWorked } from './context-core.mjs';
 
 // Инструменты, которые сами задают вопрос человеку.
 const MENU_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
@@ -47,6 +54,13 @@ export const REASON = 'Ответ кончается вопросом польз
   + 'рекомендуемый первым. Задай его сейчас через AskUserQuestion. Вопрос риторический '
   + 'и ответа не ждёт — перепиши концовку без него.';
 
+export const WORK_REASON = 'Ход с правкой или коммитом кончился без меню. Правило core.md: '
+  + 'следующий шаг и решение пользователя — только через AskUserQuestion. Остался шаг, '
+  + 'проверка или решение — задай его сейчас, следующий шаг первым вариантом. Задача закрыта '
+  + 'целиком и решать нечего — закончи ход строкой итога без вопроса.';
+
+export const CONTEXT_REASON = 'Ход кончился без меню, а контекст за порогом.';
+
 function readLines(file) {
   try {
     return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
@@ -63,24 +77,28 @@ function isPrompt(rec) {
   return Array.isArray(content) && !content.some((b) => b?.type === 'tool_result');
 }
 
-// Последний ход: текст последнего текстового блока ассистента и был ли вызов меню.
-export function lastTurn(lines) {
+// Последний ход: текст последнего текстового блока ассистента, был ли вызов меню
+// и была ли работа — правка в репозитории или коммит, как её считает context-core.
+export function lastTurn(lines, cwd) {
   let text = null;
   let menu = false;
+  let worked = false;
   for (let i = lines.length - 1; i >= 0; i--) {
     let rec;
     try { rec = JSON.parse(lines[i]); } catch { continue; }
     if (isPrompt(rec)) break;
     if (rec.type !== 'assistant' || !Array.isArray(rec.message?.content)) continue;
     for (const block of rec.message.content) {
-      if (block?.type === 'tool_use' && MENU_TOOLS.has(block.name)) menu = true;
+      if (block?.type !== 'tool_use') continue;
+      if (MENU_TOOLS.has(block.name)) menu = true;
+      else if (!worked && isWork(block.name, block.input, cwd)) worked = true;
     }
     if (text === null) {
       const blocks = rec.message.content.filter((b) => b?.type === 'text' && b.text?.trim());
       if (blocks.length) text = blocks[blocks.length - 1].text;
     }
   }
-  return { text, menu };
+  return { text, menu, worked };
 }
 
 // Строки прозы с номером абзаца: без код-блоков, инлайн-кода, цитат и
@@ -119,11 +137,22 @@ export function pendingQuestion(text) {
 }
 
 // Вход Stop → причина блока или null. Второй Stop подряд (stop_hook_active)
-// пропускается: модель уже получила причину, второй блок — это петля.
+// пропускается: модель уже получила причину, второй блок — это петля; он же
+// выход, когда работа закрыта целиком и спрашивать нечего.
+//
+// Порядок: порог контекста (сессия с работой — с SOFT, без неё — с HAND, как
+// велят тексты context-meter), затем работа в ходе, затем текст.
 export function questionVerdict(input) {
   if (!input || input.stop_hook_active || !input.transcript_path) return null;
-  const { text, menu } = lastTurn(readLines(input.transcript_path));
+  const { text, menu, worked } = lastTurn(readLines(input.transcript_path), input.cwd);
   if (menu) return null;
+  const used = contextUsed(input.transcript_path);
+  const stage = level(used?.tokens);
+  const didWork = worked || sessionWorked(input.session_id);
+  if (stage && (didWork || stage !== 'soft')) {
+    return `${CONTEXT_REASON} ${noticeText(stage, used.tokens, { worked: didWork })}`;
+  }
+  if (worked) return WORK_REASON;
   // last_assistant_message свежее транскрипта: последняя запись может не успеть на диск.
   const last = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : text;
   const line = last ? pendingQuestion(last) : null;
