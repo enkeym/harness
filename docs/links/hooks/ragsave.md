@@ -19,6 +19,6 @@ paths:
   `rag_status`. Переименовал в одном месте — статус снова показывает живой
   автосинк, которого нет.
 - Список хранилищ секретов `ragsave/ragsave/config.py:SECRET_NAME_RE` — пара к
-  гарду, строка в `hooks/guards.md`.
+  гарду, строка в `hooks/guards/security.md`.
 - Каталог логов `ragsave/ragsave/server.py:_log_failure` — строка
   `AI_HOOKS_LOG_DIR` в `hooks/logs.md`.
