@@ -29,6 +29,10 @@ file, a path outside the index, a string `search` missed.
   plus `tokensave_more`; another (`signature`, `replace_symbol`, `affected`,
   `session_recall`, `similar`, `blame`…) → `tokensave_more` `area: "all"`
   once per session first.
+- `read` `map`/`signatures` of a large file comes back cut at 15k characters —
+  half a file at full price, then re-read in ranges. Large file → `search`
+  with `path_include` for the names, `body` per symbol; a `lines` range only
+  around a symbol already found.
 - Arguments from the schema, not memory. Pass `seen_node_ids` from one
   `context` into `exclude_node_ids` of the next.
 - Scope with `path_include`/`path_exclude` — a monorepo pulls in a foreign

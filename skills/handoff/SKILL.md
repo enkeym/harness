@@ -120,8 +120,8 @@ replaced:
 - `Дальше` inside a user-invoked command (`/review`, `/commit`) → `Read` its
   SKILL.md and continue; never ask the user to retype it — the Skill tool
   can't call it, and the user's call already started the run.
-- Open only the files the first step touches. The rest of `Карта` stays a
-  pointer until a step needs it.
+- Read what `Карта` names for the first step — symbols through `body`, not
+  whole files in ranges; the rest stays a pointer until a step needs it.
 - Don't re-run what `Проверено` lists. Re-check one of its lines only when the
   work changes that behaviour again, or when `git status` contradicts it —
   then say which line and why.
