@@ -56,6 +56,8 @@ hooklog-core.mjs                # журнал решений хуков → log
 claude/hook-io.mjs              # общий ввод/вывод PreToolUse + журнал
 claude/bash-router.mjs          # адаптер Claude: PreToolUse(Bash|mcp__ide__executeCode)
 claude/read-router.mjs          # адаптер Claude: PreToolUse(Read) — файл из индекса читает tokensave
+tool-args-core.mjs              # угаданные имена параметров tokensave (path у read, file и old_string у правок) → настоящие
+claude/tool-args.mjs            # адаптер Claude: PreToolUse(tokensave_read|str_replace|multi_str_replace) — updatedInput
 claude/ask-guard.mjs            # адаптер Claude: PreToolUse(*) — запрет изменений в ask mode
 claude/ask-reminder.mjs         # правило ask mode в промпт (UserPromptSubmit)
 claude/statusline.mjs           # каталог, ветка, модель, индикатор ask mode
@@ -91,6 +93,7 @@ logs/hooks.jsonl                # решения хуков по сессиям:
 test/test-guards.mjs            # shell-гард: одни сценарии через оба адаптера
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, respond, decide, журнал
+test/test-tool-args.mjs         # имена параметров tokensave: алиасы, пары замен, ответ хука, гарды под угаданным именем
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
 test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любой правкой; чтение молчит
@@ -520,6 +523,12 @@ tokensave) в корне такого репозитория. Файл пров�
 из индекса правят `tokensave_str_replace`. Предохранитель: повтор `Read` той же
 цели в той же сессии в течение 3 минут проходит (`state/guard-breaker.json`),
 иначе ошибка tokensave превращается в цикл одинаковых отказов.
+`node ~/.ai-hooks/claude/tool-args.mjs` (matcher `mcp__tokensave__tokensave_read|…_str_replace|…_multi_str_replace`):
+схемы этих инструментов отложены, модель угадывает имена параметров, и сервер
+отвечал «missing required parameter» — 334 ошибки за 22.09–10.10.2026
+(`bin/tool-share.mjs --waste`). Хук отдаёт `updatedInput` с настоящими именами
+без решения о разрешении. Хуки идут параллельно и видят исходный вход, поэтому
+security-guard и skill-gate сверяют путь через тот же `normalizeToolInput`.
 Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
@@ -756,6 +765,7 @@ node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-question-guard.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
 node ~/.ai-hooks/test/test-hook-io.mjs
+node ~/.ai-hooks/test/test-tool-args.mjs
 node ~/.ai-hooks/test/test-statusline.mjs
 ```
 

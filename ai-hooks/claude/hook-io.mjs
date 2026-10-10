@@ -60,6 +60,13 @@ export function decide(input, decision, reason) {
   finish(verdictPayload(decision, reason));
 }
 
+// Вызов с исправленным входом. Без permissionDecision: allow отсюда снял бы
+// вопрос о разрешении и plan mode, а решать их — не дело этого хука.
+export function rewrite(input, updatedInput, reason) {
+  logDecision('rewrite', { target: targetOf(input), reason });
+  finish({ hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput } });
+}
+
 // reason === null → вызов разрешён, иначе запрет.
 export function respond(input, reason) {
   decide(input, reason ? 'deny' : null, reason);

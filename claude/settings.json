@@ -109,6 +109,15 @@
         ]
       },
       {
+        "matcher": "mcp__tokensave__tokensave_read|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/tool-args.mjs\""
+          }
+        ]
+      },
+      {
         "matcher": "ExitPlanMode",
         "hooks": [
           {

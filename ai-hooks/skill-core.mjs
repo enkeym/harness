@@ -15,6 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { statePath, readJSON, writeJSON } from './state-core.mjs';
 import { segments, tokenize, commandIndex, commandName, baseCommand, gitSubcommandAt, copyOperands, makesCommit } from './shell-core.mjs';
+import { normalizeToolInput } from './tool-args-core.mjs';
 
 const STATE_FILE = statePath('skills-loaded.json');
 // Сессия с --resume живёт днями; неделя покрывает её, а файл не растёт вечно.
@@ -36,9 +37,12 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // файлов инструкций нет.
 export const MCP_EDIT_RE = /tokensave_(str_replace|multi_str_replace|replace_lines|insert_at)$/;
 
+// Путь правки tokensave — после normalizeToolInput: `file` вместо `path` хук
+// tool-args исправит уже после гейта.
 function editedFile(toolName, toolInput, cwd) {
   if (EDIT_TOOLS.has(toolName)) return toolInput?.file_path || toolInput?.notebook_path;
-  if (MCP_EDIT_RE.test(toolName) && toolInput?.path) return path.resolve(cwd || process.cwd(), String(toolInput.path));
+  const ti = normalizeToolInput(toolName, toolInput);
+  if (MCP_EDIT_RE.test(toolName) && ti?.path) return path.resolve(cwd || process.cwd(), String(ti.path));
   return null;
 }
 

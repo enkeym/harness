@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals, makesCommit } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
+import { normalizeToolInput } from './tool-args-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -817,7 +818,9 @@ function guardHarnessEdit(filePath, cwd) {
 // своя ли правка харнеса.
 export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   const name = String(toolName || '');
-  const ti = toolInput || {};
+  // Имена tokensave — настоящие: хук tool-args переименует `file` в `path` уже
+  // после гарда, и правка `.env` по `file` иначе прошла бы без проверки.
+  const ti = normalizeToolInput(name, toolInput) || {};
 
   if (name === 'Read') return guardReadSecurity(ti.file_path || ti.path || '');
   if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit') {
