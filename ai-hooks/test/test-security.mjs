@@ -80,6 +80,15 @@ check('jq -rf с программой из .env', bash("jq -rf .env data.json"),
 check('jq -fn с программой из .env', bash("jq -fn .env"), 'deny');
 check('jq --rawfile после --args', bash("jq --args . a --rawfile s .env"), 'deny');
 check('jq --args: строка .env — не файл', bash("jq -n --args '$ARGS' .env"), 'allow');
+check('jq по полю .env, затем {env} из настроек', bash("jq -e '.env, .autoConnectIde' claude/settings.json >/dev/null 2>&1; jq -c '{env, autoConnectIde}' ~/.claude/settings.json"), 'allow');
+// Шаблон grep — строка, не файл: читаются только операнды после него.
+check('grep в пайпе с .npmrc в шаблоне', bash(`git ls-files | grep -iE "\\.npmrc|lock|Dockerfile"`), 'allow');
+check('grep с \\.env в шаблоне по документу', bash('grep -n -i "secret\\|\\.env" skills/hooks-guards/SKILL.md'), 'allow');
+check('grep -e с .env в шаблоне', bash('grep -rn -e .env --include=*.md docs'), 'allow');
+check('grep по .env операндом после шаблона', bash('grep -n "AWG_MTU" docker-compose.yml .env'), 'deny');
+check('grep -f с шаблонами из .env', bash('grep -f .env src/app.ts'), 'deny');
+check('grep --include=.env*', bash('grep -rn --include=.env* TOKEN .'), 'deny');
+check('grep в пайпе по .env операндом', bash('git status | grep -n TOKEN .env'), 'deny');
 check('cat .env после `))` в кавычках внутри (( ))', bash('(( a == "))" )); cat .env'), 'deny');
 check('cat .env в подстановке в кавычках внутри (( ))', bash('(( "$(cat .env)" ))'), 'deny');
 check('`<` в [[ ]] — сравнение, не чтение', bash('[[ $a < .env ]] && echo x'), 'allow');

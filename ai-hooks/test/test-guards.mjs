@@ -235,6 +235,18 @@ bash('python3.12 -c с путём → deny', 'deny', `python3.12 -c "print(open(
 bash('tsx -e с путём → deny', 'deny', `tsx -e "require('fs').readFileSync('client/src/App.tsx')"`);
 bash('python.exe - <<EOF с записью → deny', 'deny', `python.exe - <<'EOF'\nopen('client/src/App.tsx','w').write('x')\nEOF`);
 bash('python3.12 <скрипт> → allow (запуск)', 'allow', 'python3.12 client/src/App.tsx');
+// Флаги после скрипта или модуля — его аргументы, а не код: `-p` у pytest — плагин.
+bash('python.exe -m pytest с -p → allow (запуск)', 'allow', 'python.exe -m pytest client/src/App.tsx -q -p no:cacheprovider');
+const PT = path.join(os.tmpdir(), `ts-guards-pt-${process.pid}.txt`);
+fs.writeFileSync(PT, '');
+bash('python -m pytest > /tmp; grep по выводу → allow', 'allow',
+  `python3 -m pytest -p no:cacheprovider > ${PT} 2>&1; grep -E "FAILED|passed" ${PT}`);
+fs.rmSync(PT, { force: true });
+bash('python3 <скрипт> -c x → allow (аргумент скрипта)', 'allow', 'python3 client/src/App.tsx -c x');
+bash('node -r модуль <скрипт> → allow (запуск)', 'allow', 'node -r dotenv/config client/src/App.tsx args');
+bash('node -r модуль -e с путём → deny', 'deny', `node -r dotenv/config -e "require('./package.json')"`);
+bash('perl -I каталог -e с путём → deny', 'deny', `perl -I lib -e "print 1" client/src/App.tsx`);
+bash('php -r с путём → deny', 'deny', `php -r "echo file_get_contents('client/src/App.tsx');"`);
 
 // ---- копия в /tmp — то же чтение, копия поверх файла — та же запись ----
 const DRAFT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-draft-'));

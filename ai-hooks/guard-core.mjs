@@ -140,12 +140,21 @@ const FILTER_CMDS = new Set(['sed', 'awk', 'gawk']);
 // Интерпретаторы: путь прячется внутри строки кода, поэтому у них смотрим
 // весь сегмент целиком, а не отдельные аргументы.
 const EVAL_CMDS = new Set(['node', 'python', 'python3', 'ruby', 'perl', 'php', 'deno', 'bun', 'tsx', 'ts-node']);
-// Признак строки кода в аргументах или heredoc. Без него интерпретатор
-// исполняет скрипт (`node test/test-guards.mjs`) — это запуск, как `tsc` или
-// `eslint`, а не чтение.
-const INLINE_CODE_RE = /^(-e|--eval|-p|--print|-c|-E|-r|eval)$|^--(eval|print)=/;
-function runsInlineCode(toks, seg) {
-  return toks.slice(1).some((t) => INLINE_CODE_RE.test(t)) || /<<-?\s*['"\\]?\w+/.test(seg);
+// Признак строки кода — флаг до скрипта или модуля (`-m`) либо heredoc. Без него
+// интерпретатор исполняет скрипт (`node test/test-guards.mjs`) — это запуск, как `tsc`
+// или `eslint`, а не чтение. Флаги после скрипта — его аргументы (`-p` у pytest —
+// плагин). `-r` — код только у php; у node и ruby это подключаемый модуль.
+const INLINE_CODE_RE = /^(-e|--eval|-p|--print|-c|-E|eval)$|^--(eval|print)=/;
+const VALUE_FLAGS = new Set(['-r', '--require', '--import', '--loader', '-I', '-W', '-X']);
+function runsInlineCode(cmd, toks, seg) {
+  if (/<<-?\s*['"\\]?\w+/.test(seg)) return true;
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (INLINE_CODE_RE.test(t) || (t === '-r' && cmd === 'php')) return true;
+    if (t === '-m' || !t.startsWith('-')) return false;
+    if (VALUE_FLAGS.has(t)) i++;
+  }
+  return false;
 }
 
 // jq читает свой аргумент всегда. Данные вне индекса (логи хуков, отчёты)
@@ -416,7 +425,7 @@ export function guardBash(command, cwd, labels) {
         if (hit) return editReason(hit, fileTools(cwd, hit, labels));
       }
 
-      if (EVAL_CMDS.has(cmd) && runsInlineCode(toks, seg)) {
+      if (EVAL_CMDS.has(cmd) && runsInlineCode(cmd, toks, seg)) {
         const hit = anyFile(seg, cwd);
         if (hit) return evalReason(hit, fileTools(cwd, hit, labels));
       }

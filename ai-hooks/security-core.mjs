@@ -371,10 +371,12 @@ function includeHitsEnv(glob) {
   }
 }
 
-function grepWithoutInclude(toks) {
+// Разбор аргументов grep: файлы — операнды после шаблона, `-f` — файл шаблонов.
+function grepArgs(toks) {
   const args = toks.slice(commandIndex(toks) + 1);
   let recursive = false;
   const includes = [];
+  const patternFiles = [];
   // Шаблон задан через -e/-f — тогда первый операнд уже путь, а не шаблон.
   let patternOpt = false;
   const operands = [];
@@ -393,9 +395,12 @@ function grepWithoutInclude(toks) {
       continue;
     }
     if (t === '--recursive' || t === '--dereference-recursive') recursive = true;
-    else if (/^--(regexp|file)=/.test(t)) patternOpt = true;
-    else if (t === '--regexp' || t === '--file') {
+    else if (/^--(regexp|file)=/.test(t)) {
       patternOpt = true;
+      if (t.startsWith('--file=')) patternFiles.push(t.slice('--file='.length));
+    } else if (t === '--regexp' || t === '--file') {
+      patternOpt = true;
+      if (t === '--file') patternFiles.push(args[i + 1] ?? '');
       i++;
     } else if (/^-[^-]/.test(t)) {
       for (const [k, ch] of [...t.slice(1)].entries()) {
@@ -403,7 +408,9 @@ function grepWithoutInclude(toks) {
         if (!GREP_ARG_SHORT.includes(ch)) continue;
         if (ch === 'e' || ch === 'f') patternOpt = true;
         // Опция последняя в склейке — её аргумент следующим токеном.
-        if (k === t.length - 2) i++;
+        const last = k === t.length - 2;
+        if (ch === 'f') patternFiles.push(last ? args[i + 1] ?? '' : t.slice(k + 2));
+        if (last) i++;
         break;
       }
     } else if (REDIRECT_RE.test(t)) {
@@ -411,10 +418,20 @@ function grepWithoutInclude(toks) {
       if (/^\d*[<>]+$/.test(t)) i++;
     } else if (!t.startsWith('--')) operands.push(t);
   }
+  return { recursive, includes, patternFiles, files: patternOpt ? operands : operands.slice(1) };
+}
+
+function grepWithoutInclude(toks) {
+  const { recursive, includes, files } = grepArgs(toks);
   if (!recursive) return false;
   if (includes.length) return includes.some(includeHitsEnv);
-  const paths = patternOpt ? operands : operands.slice(1);
-  return !(paths.length && paths.every((p) => FILE_OPERAND_RE.test(p)));
+  return !(files.length && files.every((p) => FILE_OPERAND_RE.test(p)));
+}
+
+// Шаблон grep — строка, а не файл: `git ls-files | grep '\.npmrc'` ничего не читает.
+function grepReadsSecret(toks) {
+  const { includes, patternFiles, files } = grepArgs(toks);
+  return secretPathsIn([...files, ...patternFiles, ...includes].join(' '), [])[0] || null;
 }
 
 // jq: первый свободный аргумент — программа, а не путь (`jq '.env'` берёт
@@ -472,6 +489,7 @@ function readsSecret(seg, toks, cmd) {
   if (inputs.length) return inputs[0];
 
   if (cmd === 'jq') return secretPathsIn('', jqArgs(toks).files)[0] || null;
+  if (GREP_CMDS.has(cmd)) return grepReadsSecret(toks);
   if (READS_FILE.has(cmd)) return secrets[0];
   if (cmd === 'tar') return tarReadsSecret(toks, secrets);
 
