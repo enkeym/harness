@@ -98,8 +98,7 @@ Data — dumps, logs, result tables past a few rows: write a file, name the
 path; the next session reads only its totals (`paste-guard.mjs` blocks an
 oversized prompt). Committed steps and their checks. What outlives the
 task — what the product is, stack, build and install commands — goes to the
-project's `CLAUDE.md`, loaded every session; an architectural decision to
-`tokensave_record_decision`.
+project's `CLAUDE.md`, loaded every session.
 
 ## Receiving a handoff
 

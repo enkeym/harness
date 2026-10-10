@@ -91,7 +91,7 @@ A line earns its place only if a name search cannot settle the link. Six kinds:
 
 Out: anything the graph already returns, module structure, architecture notes,
 how something works, history, status of a migration, plans, measurements,
-decisions (those go to `tokensave_record_decision`).
+decisions.
 
 ## Line format
 

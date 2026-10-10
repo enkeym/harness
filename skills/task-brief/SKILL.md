@@ -35,7 +35,7 @@ verified by code, docs or a run before it reaches the user.
    cheaper path, a conflict with what the code or a recorded decision already
    does. Not style, not "could be an issue" without a mechanism.
 3. Check each: `tokensave_context`/`rag_search` for the code, the installed
-   version's docs, `tokensave_session_recall`, a quick run when one settles
+   version's docs, a quick run when one settles
    it. Refuted → dropped silently; unverifiable → kept, marked.
 4. Brainstorm asked → 3+ approaches that differ in mechanism, each with the
    one cost that decides between them. No padding options.
@@ -51,15 +51,12 @@ verified by code, docs or a run before it reaches the user.
 Рекомендация: <один выбор>. Передумаю, если: <условие>.
 ```
 
-A choice made here that the user accepts → `tokensave_record_decision`.
-
 ## Reason before asking
 
 1. Restate the goal as a result the user will see, one sentence. Can't →
    that is the first question.
 2. Read what the task touches: `tokensave_context` / `rag_search` on the
-   affected area, `tokensave_callers` on symbols that change,
-   `tokensave_session_recall` for earlier decisions. A gap the repository
+   affected area, `tokensave_callers` on symbols that change. A gap the repository
    answers is not a question.
 3. List every gap and close each one of three ways: answered by code, the
    rules files or memory; defaulted to the neighbour's pattern (`Допущения`);
@@ -131,4 +128,4 @@ the approval; no chat line. OpenCode: print the block, then one line:
   becomes `1. [x] <title> — <hash>`, a changed one is rewritten; at `handoff`
   drop `Возражения` and each `Допущения` line no open step relies on — the
   next session pays for every line. OpenCode: chat only — `handoff` copies
-  the remaining steps. An architectural choice → `tokensave_record_decision`.
+  the remaining steps.

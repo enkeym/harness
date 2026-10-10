@@ -1,6 +1,6 @@
 ---
 name: tokensave-routing
-description: "Which tokensave or ragsave tool answers a question — symbols, callers and impact, edits, decision memory, search outside code, another project — and what an empty answer means. Load before a non-trivial search or edit in an indexed project, or when a tokensave or rag_search call comes back empty or broken."
+description: "Which tokensave or ragsave tool answers a question — symbols, callers and impact, edits, search outside code, another project — and what an empty answer means. Load before a non-trivial search or edit in an indexed project, or when a tokensave or rag_search call comes back empty or broken."
 ---
 
 # tokensave and ragsave routing
@@ -22,12 +22,11 @@ file, a path outside the index, a string `search` missed.
 | Where a field is read or written      | `search` `literal: true` on `.field`                          |
 | Edit a symbol                         | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*` |
 | How/where/why with no name; docs, configs, yml, migrations, CI, infrastructure | `rag_search` (`only_outside_tokensave: true` when the answer is not code) |
-| Decision after approval               | `record_decision`: one line + `reason`, `files`, `tags`       |
 
 - OpenCode lists the core tools (`context`, `search`, `status`, `read`, `body`,
   `files`, `callers`, `callees`, `impact`, `str_replace`, `multi_str_replace`)
   plus `tokensave_more`; another (`signature`, `replace_symbol`, `affected`,
-  `session_recall`, `similar`, `blame`…) → `tokensave_more` `area: "all"`
+  `similar`, `blame`…) → `tokensave_more` `area: "all"`
   once per session first.
 - `read` `map`/`signatures` of a large file comes back cut at 15k characters —
   half a file at full price, then re-read in ranges. Large file → `search`

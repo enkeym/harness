@@ -83,7 +83,7 @@ user asks, not the only trigger.
 | Commit, branch, or touch a Jira or MR text — after the two review skills; an MR after `test-coverage` too | `git-flow` |
 | Create, edit or review a skill, an agent file, a rules file, CLAUDE.md or AGENTS.md | `skill-authoring`   |
 
-## Three triggers that must not wait for a skill
+## Two triggers that must not wait for a skill
 
 - **Commit and push.** A logical unit is done (a plan task, a verified edit, a
   green fix) → impact pass, `review-standards`, `review-security`, fix
@@ -99,10 +99,3 @@ user asks, not the only trigger.
   its consumers. No `.tokensave/` in the project → `grep -rn --include` over
   the changed names, no map, and one line saying so. Where the map lives, how
   it is split and how it is checked: `skills/shared/impact-map.md`.
-- **Memory answers with a method, never with a result.** Before designing a
-  subsystem, `tokensave_session_recall`; after a choice you would otherwise
-  re-explain (library, schema, rejected option), `tokensave_record_decision`.
-  A recalled number, status or "it works" is a hypothesis to re-run, not an
-  answer to quote, and a bug the user reports outranks any memory line that
-  says otherwise. What may be written and how memory is kept fresh:
-  `skills/shared/memory-hygiene.md`. Scope: skill `tokensave-routing`.
