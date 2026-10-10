@@ -127,8 +127,8 @@ the approval; no chat line. OpenCode: print the block, then one line:
   only, reprint just them, wait again.
 - The brief is the spec: one step, one commit (`rules/core.md` commit trigger).
   A step that turns out different → one line saying so before continuing.
-- Claude Code: the plan file is the brief across sessions — tick a step
-  (`1. [x] …`) when its commit lands, rewrite one that changed; `handoff`
-  links it from the snapshot and leaves via `ExitPlanMode`; `cleanup.mjs`
-  drops a plan untouched for 14 days. OpenCode: chat only — `handoff` copies
+- Claude Code: the plan file is the brief across sessions — a landed step
+  becomes `1. [x] <title> — <hash>`, a changed one is rewritten; at `handoff`
+  drop `Возражения` and each `Допущения` line no open step relies on — the
+  next session pays for every line. OpenCode: chat only — `handoff` copies
   the remaining steps. An architectural choice → `tokensave_record_decision`.
