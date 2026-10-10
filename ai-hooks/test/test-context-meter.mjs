@@ -317,7 +317,9 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 
   const first = contextNotice({ transcript_path: soft, session_id: sid }, { phase: 'step' });
   check('без правок: работу бросать не велят', /Работу продолжай/.test(first.text), true);
-  check('без правок: про handoff не просят', /handoff/.test(first.text), false);
+  check('без правок: при оставшихся шагах — вопрос о переносе',
+    /Остались шаги плана.*AskUserQuestion/.test(first.text), true);
+  check('без правок: коммит не просят', /коммит/.test(first.text), false);
   check('без правок: сказано сузить чтение', /символом или диапазоном/.test(first.text), true);
 
   const second = contextNotice({ transcript_path: hand, session_id: sid }, { phase: 'step' });
