@@ -33,7 +33,7 @@ function sandbox() {
 function run(home, args = []) {
   return execFileSync('node', [SCRIPT, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, HOME: home, AI_HOOKS_STATE_DIR: '' },  // состояние — под HOME песочницы
+    env: { ...process.env, HOME: home, AI_HOOKS_STATE_DIR: '', AI_HOOKS_LOG_DIR: '' },  // состояние и журналы — под HOME песочницы
   });
 }
 
@@ -100,6 +100,22 @@ const totalCost = (recs) => Math.round(recs.reduce((s, r) => s + (r.cost || 0), 
   const after = readUsage(home);
   const months = new Set(after.filter((r) => r.rollup).map((r) => r.rollup));
   check('разные месяцы не слиты', months.size, 2);
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
+// --- 3a. Журналы — в AI_HOOKS_LOG_DIR, а не под HOME
+{
+  const home = sandbox();
+  const logDir = path.join(home, 'custom-logs');
+  fs.mkdirSync(logDir);
+  const usage = path.join(logDir, 'usage.jsonl');
+  fs.writeFileSync(usage, JSON.stringify(session('a', 200, 1)) + '\n');
+  execFileSync('node', [SCRIPT, '--force'], {
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, AI_HOOKS_STATE_DIR: '', AI_HOOKS_LOG_DIR: logDir },
+  });
+  const after = fs.readFileSync(usage, 'utf8').split('\n').filter(Boolean).map(JSON.parse);
+  check('AI_HOOKS_LOG_DIR: свёртка в своём каталоге', after.filter((r) => r.rollup).length, 1);
   fs.rmSync(home, { recursive: true, force: true });
 }
 

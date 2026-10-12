@@ -26,7 +26,7 @@ function check(name, got, want) {
 // usage.jsonl лежит под HOME — отчёт видит только песочницу.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'usage-report-'));
 const logDir = path.join(home, '.ai-hooks', 'logs');
-const env = { ...process.env, HOME: home };
+const env = { ...process.env, HOME: home, AI_HOOKS_LOG_DIR: '' };
 
 const run = (...args) => spawnSync('node', [REPORT, ...args], { encoding: 'utf8', env });
 const report = (...args) => run(...args).stdout;

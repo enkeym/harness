@@ -17,7 +17,8 @@ import os from 'node:os';
 import { performance } from 'node:perf_hooks';
 
 const HOME = process.env.HOME || os.homedir();
-const LOG_DIR = process.env.AI_HOOKS_LOG_DIR || path.join(HOME, '.ai-hooks', 'logs');
+// Каталог всех журналов хуков: hooks.jsonl, errors.log, usage.jsonl.
+export const LOG_DIR = process.env.AI_HOOKS_LOG_DIR || path.join(HOME, '.ai-hooks', 'logs');
 
 export const HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG || path.join(LOG_DIR, 'hooks.jsonl');
 const ERRORS_LOG = path.join(LOG_DIR, 'errors.log');

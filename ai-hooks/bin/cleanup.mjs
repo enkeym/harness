@@ -18,7 +18,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { STATE_ROOT, statePath, isEntryPoint } from '../state-core.mjs';
+import { STATE_ROOT, statePath, isEntryPoint, writeAtomic } from '../state-core.mjs';
+import { LOG_DIR } from '../hooklog-core.mjs';
+import { USAGE_FILE } from '../claude/usage-log.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const STAMP = statePath('.cleanup-stamp');
@@ -103,7 +105,7 @@ function pruneDir(dir, maxAgeDays, dryRun) {
 // порога сворачиваются в одну строку на месяц, и файл перестаёт расти линейно
 // по числу сессий, не теряя картину за год.
 function rollupUsage(dryRun, keepDays = 90) {
-  const file = path.join(HOME, '.ai-hooks', 'logs', 'usage.jsonl');
+  const file = USAGE_FILE;
   let lines;
   try { lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean); } catch { return null; }
 
@@ -129,7 +131,7 @@ function rollupUsage(dryRun, keepDays = 90) {
 
   const out = [...months.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v).concat(fresh);
   if (converted > 0 && !dryRun) {
-    fs.writeFileSync(file, out.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    writeAtomic(file, out.map((r) => JSON.stringify(r)).join('\n') + '\n');
   }
   return { collapsed: converted, kept: out.length };
 }
@@ -173,12 +175,12 @@ function mergeRollup(acc, next) {
 // Журналы (отказы фоновых задач, диагностика гардов): обрезаем хвостом, а не
 // целиком — последние записи и есть то, ради чего в них смотрят.
 function trimLog(dryRun, name = 'errors.log', maxBytes = 2 * 1024 * 1024, keepLines = 500) {
-  const file = path.join(HOME, '.ai-hooks', 'logs', name);
+  const file = path.join(LOG_DIR, name);
   try {
     if (fs.statSync(file).size <= maxBytes) return 0;
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     const dropped = Math.max(0, lines.length - keepLines);
-    if (dropped && !dryRun) fs.writeFileSync(file, lines.slice(-keepLines).join('\n'));
+    if (dropped && !dryRun) writeAtomic(file, lines.slice(-keepLines).join('\n'));
     return dropped;
   } catch {
     return 0;

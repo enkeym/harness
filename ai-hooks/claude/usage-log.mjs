@@ -14,12 +14,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { isEntryPoint } from '../state-core.mjs';
+import { isEntryPoint, writeAtomic } from '../state-core.mjs';
+import { LOG_DIR } from '../hooklog-core.mjs';
 import { runHook } from './hook-io.mjs';
 
-const HOME = process.env.HOME || os.homedir();
-const LOG_DIR = path.join(HOME, '.ai-hooks', 'logs');
 export const USAGE_FILE = path.join(LOG_DIR, 'usage.jsonl');
 
 // USD за миллион токенов. Cache write — 5-минутный (×1.25 от input), для
@@ -141,13 +139,13 @@ export function summarize({ session_id, transcript_path, cwd }) {
   return acc;
 }
 
+// Через rename: Stop двух сессий разом не оставит обрезанный файл.
 export function upsert(record, file = USAGE_FILE) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
   const kept = readLines(file).filter((l) => {
     try { return JSON.parse(l).session_id !== record.session_id; } catch { return false; }
   });
   kept.push(JSON.stringify(record));
-  fs.writeFileSync(file, kept.join('\n') + '\n');
+  writeAtomic(file, kept.join('\n') + '\n');
 }
 
 export function check(input) {

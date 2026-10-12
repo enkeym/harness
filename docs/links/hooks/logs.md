@@ -13,11 +13,10 @@ paths:
 
 ## Флаги и переключатели
 - `AI_HOOKS_LOG_DIR` (по умолчанию `~/.ai-hooks/logs`) — читают
-  `ai-hooks/hooklog-core.mjs:LOG_DIR`, `ai-hooks/bin/log-error.sh`,
-  `ragsave/ragsave/server.py:_log_failure`; тот же каталог зашит без переменной в
-  `ai-hooks/claude/usage-log.mjs:LOG_DIR`, `ai-hooks/bin/cleanup.mjs:trimLog`,
-  `ai-hooks/bin/cleanup.mjs:rollupUsage`. Сменил путь в одном месте — errors.log
-  расползается на два каталога, cleanup смотрит не туда.
+  `ai-hooks/hooklog-core.mjs:LOG_DIR` (его импортируют `ai-hooks/claude/usage-log.mjs`
+  и `ai-hooks/bin/cleanup.mjs`), `ai-hooks/bin/log-error.sh`,
+  `ragsave/ragsave/server.py:_log_failure`. Сменил путь в одном месте — errors.log
+  расползается на два каталога.
 - `AI_HOOKS_STATE_DIR` / `~/.claude/state/clip-output` — `ai-hooks/state-core.mjs:STATE_ROOT`
   задаёт корень, `ai-hooks/bin/cleanup.mjs:TARGETS` чистит `clip-output` под ним,
   а `ai-hooks/bin/clip-output.sh` пишет в зашитый `${HOME}/.claude/state/clip-output`.

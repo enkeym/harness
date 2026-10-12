@@ -65,18 +65,22 @@ export function readJSON(file, fallback = {}) {
 // Через временный файл и rename: состояние пишут параллельные процессы (хуки,
 // отвязанный раннер доктора), и прямой writeFileSync давал читателю пустой
 // файл посреди записи — readJSON отдавал fallback, а вызывающий записывал его
-// обратно поверх настоящего состояния.
-export function writeJSON(file, obj) {
+// обратно поверх настоящего состояния. Тем же путём переписываются журналы.
+export function writeAtomic(file, text) {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(obj));
+    fs.writeFileSync(tmp, text);
     fs.renameSync(tmp, file);
     return true;
   } catch {
     try { fs.unlinkSync(tmp); } catch { /* временного файла не было */ }
     return false;
   }
+}
+
+export function writeJSON(file, obj) {
+  return writeAtomic(file, JSON.stringify(obj));
 }
 
 // ---------------------------------------------------------------------------
