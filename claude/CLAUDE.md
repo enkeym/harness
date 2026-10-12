@@ -5,8 +5,9 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 ## Tools
 
 - Files: the **Tool choice** table in `core.md`; the `read-router` hook
-  refuses `Read` on a file in the tokensave index. Exact string outside the
-  index: `grep -rn --include` through Bash — there is no `Grep` tool.
+  refuses `Read` on a file in the tokensave index, `.md` and `.json`
+  included. Exact string outside the index: `grep -rn --include` through
+  Bash — there is no `Grep` tool.
 - Rules and skills name MCP tools short (`tokensave_search`, `rag_search`); the
   full name is `mcp__tokensave__tokensave_<tool>` / `mcp__ragsave__rag_search`.
   Deferred ones load via `ToolSearch("select:…")`.
