@@ -1,6 +1,6 @@
 ---
 name: impact-map
-description: "Creates the implicit-links map (docs/links/ or .claude/links/) of a project indexed by tokensave or ragsave — seeded candidates, one file per domain, validated by check-impact-map.mjs; an existing map only gets the checker or, with --reseed, the missing candidates. User-invoked as /impact-map."
+description: "Creates the implicit-links map (docs/links/) of a project indexed by tokensave or ragsave — seeded candidates, one file per domain, validated by check-impact-map.mjs; an existing map only gets the checker or, with --reseed, the missing candidates. User-invoked as /impact-map."
 disable-model-invocation: true
 allowed-tools: Bash(node ~/.ai-hooks/bin/init-impact-map.mjs:*), Bash(node ~/.ai-hooks/bin/seed-impact-map.mjs:*), Bash(node ~/.ai-hooks/bin/check-impact-map.mjs:*), Read, Write, mcp__tokensave__tokensave_search, mcp__ragsave__rag_search
 argument-hint: "[project path] [--reseed]"
@@ -74,7 +74,7 @@ empty → cwd.
 ## Output
 
 ```
-карта: <docs/links | .claude/links> — <создана | уже была>
+карта: docs/links — <создана | уже была>
 - <домен> — <n строк> — <виды связей> — paths: <глобы>
 проверка: <строка чекера>
 ```
@@ -82,7 +82,7 @@ empty → cwd.
 `--reseed`:
 
 ```
-карта: <docs/links | .claude/links> — уже была, кандидатов вне карты: <n>
+карта: docs/links — уже была, кандидатов вне карты: <n>
 <файл домена>:
 - <строка в формате карты>
 ```

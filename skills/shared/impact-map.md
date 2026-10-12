@@ -12,13 +12,11 @@ candidates come from it. Without one, do the impact pass with
 
 ## Where it lives
 
-The map is committed, so the repository decides who reads it:
-
-- **Your own repository** (every commit is yours) → `docs/links/`.
-- **Shared repository** (other authors in `git log`) → `.claude/links/`,
-  which the global gitignore already covers. Personal notes about someone
-  else's codebase stay out of their history; a new top-level file there is the
-  team's decision, not yours.
+- `docs/links/`, beside the project's other docs, in every repository: a
+  committed map outlives the clone, an ignored one dies with it.
+- A team that refuses the map in its history → `docs/links/` goes into the
+  clone's `.git/info/exclude`; a line in their `.gitignore` is itself a commit
+  to their history. The path stays, only the commit is skipped.
 - The project already keeps a map under another name — sections of
   `CLAUDE.md`, `docs/architecture.md`, an ADR folder, another agent's rules →
   that is the map. Add the line there, in the format that file already uses.

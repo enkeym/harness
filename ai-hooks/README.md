@@ -144,7 +144,7 @@ ANSI-последовательности и повторы `copying DB` чис�
 синхронизирует граф сам, а `post-commit` git-хук tokensave зовёт `sync`.
 
 `claude/links-context.mjs` — не гард, а контекст: карта неявных связей проекта
-(`docs/links/` или `.claude/links/`, формат — `skills/shared/impact-map.md`) разбита
+(`docs/links/`, формат — `skills/shared/impact-map.md`) разбита
 на файлы доменов, и каждый открывается frontmatter `paths:` в формате `.claude/rules`.
 Родное path-scoped правило тут не работает: зонд показал, что оно срабатывает на
 встроенном `Read` и молчит на `tokensave_read`. Хук висит на `PostToolUse` инструментов
@@ -458,8 +458,8 @@ diff`, показывающий строку с ключом, или чужой 
 `claude/project-bootstrap.mjs` на `SessionStart` (`startup|clear`) смотрит
 корень репозитория и сообщает в контекст, чего нет: CLAUDE.md проекта,
 `.env.example` при наличии `.env`, husky, CI и dependabot для GitHub-remote,
-`.gitlab-ci.yml` для GitLab, карты неявных связей (`docs/links/` или
-`.claude/links/`) в проекте с индексом tokensave или ragsave. Что делать —
+`.gitlab-ci.yml` для GitLab, карты неявных связей (`docs/links/`) в проекте
+с индексом tokensave или ragsave. Что делать —
 скилл `hooks-guards`: каждый пропуск предлагается одной строкой в первом
 ответе (для карты — `/impact-map`), сам агент ничего не создаёт.
 Про husky/CI/карту хук напоминает раз в неделю на проект (метки в

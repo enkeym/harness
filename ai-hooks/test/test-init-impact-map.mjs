@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Тесты создания первой карты неявных связей. Ловится то, ради чего скрипт
-// написан: карта в проекте без графа, карта в чужую историю, вторая карта
+// написан: карта в проекте без графа, карта не в docs/links, вторая карта
 // поверх существующей. Гоняется на временных git-репозиториях.
 
 import './env-isolate.mjs';
@@ -70,7 +70,7 @@ function run(script, dir) {
   const dir = project({ tokensave: false });
   const { code, out } = run(SCRIPT, dir);
   check('без индекса карта не создаётся', code === 0 && out.includes('нет индекса tokensave или ragsave'), out.trim());
-  check('без индекса каталога нет', !fs.existsSync(path.join(dir, 'docs/links')) && !fs.existsSync(path.join(dir, '.claude/links')));
+  check('без индекса каталога нет', !fs.existsSync(path.join(dir, 'docs/links')));
 }
 
 // Только ragsave — карта заводится, кандидатов seed соберёт через git grep.
@@ -93,19 +93,13 @@ function run(script, dir) {
   check('второй запуск не трогает карту', again.code === 0 && again.out.includes('уже есть'), again.out.trim());
 }
 
-// Чужой автор в истории — карта уходит в игнорируемый .claude/links.
+// Чужой автор в истории — карта всё равно в docs/links, рядом с доками;
+// не коммитить её — решение .git/info/exclude, не скрипта.
 {
   const dir = project({ authors: [ME, 'other@example.test'] });
   const { code, out } = run(SCRIPT, dir);
-  check('чужой автор → .claude/links', code === 0 && out.includes('создана .claude/links/INDEX.md'), out.trim());
-  check('docs/links не создан', !fs.existsSync(path.join(dir, 'docs/links')));
-}
-
-// Пустая история — своя: чужого автора в ней нет.
-{
-  const dir = project({ authors: [] });
-  const { code, out } = run(SCRIPT, dir);
-  check('пустая история → docs/links', code === 0 && out.includes('создана docs/links/INDEX.md'), out.trim());
+  check('чужой автор → docs/links', code === 0 && out.includes('создана docs/links/INDEX.md'), out.trim());
+  check('.claude/links не создан', !fs.existsSync(path.join(dir, '.claude/links')));
 }
 
 // Плоская карта старого формата — не наращивать вторую, а разбить.

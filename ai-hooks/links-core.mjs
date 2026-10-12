@@ -6,13 +6,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Каталоги карты: свой репозиторий и общий (там карта не коммитится).
-export const MAP_DIRS = ['docs/links', '.claude/links'];
+// Каталог карты — рядом с остальными доками проекта. Команда против коммита
+// карты → каталог уходит в .git/info/exclude, путь тот же.
+export const MAP_DIR = 'docs/links';
 export const INDEX_NAME = 'INDEX.md';
 
-// Первый существующий каталог карты под корнем проекта; нет → null.
+// Каталог карты под корнем проекта; нет → null.
 export function mapDirOf(root) {
-  return MAP_DIRS.map((d) => path.join(root, d)).find((d) => fs.existsSync(d)) || null;
+  const dir = path.join(root, MAP_DIR);
+  return fs.existsSync(dir) ? dir : null;
 }
 
 // Индексы, при которых карта нужна: есть чем собрать кандидатов (seed) и есть

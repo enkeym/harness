@@ -1,21 +1,18 @@
 #!/usr/bin/env node
 // Первая карта неявных связей в проекте с индексом tokensave или ragsave
-// (кандидатов без графа seed собирает через git grep): скелет INDEX.md там, где
-// карте место по авторству репозитория. Связи в неё пишет скилл impact-map —
-// скрипт знает только, нужна ли карта вообще и где она лежит.
+// (кандидатов без графа seed собирает через git grep): скелет docs/links/INDEX.md.
+// Связи в неё пишет скилл impact-map — скрипт знает только, нужна ли карта
+// вообще и есть ли она уже.
 //
 // Использование: init-impact-map.mjs [cwd] — проект берётся от cwd (git-корень).
 // Код 0 — карта есть или создана, либо не нужна; 1 — плоская карта, разбить руками.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { repoRootOr } from '../state-core.mjs';
 import { projectRoot } from '../guard-core.mjs';
-import { hasIndex } from '../links-core.mjs';
+import { hasIndex, MAP_DIR, INDEX_NAME } from '../links-core.mjs';
 
-const OWN_DIR = 'docs/links';
-const SHARED_DIR = '.claude/links';
 const LEGACY = ['docs/implicit-links.md', '.claude/implicit-links.md'];
 
 const INDEX_SKELETON = `# Карта скрытых связей — индекс
@@ -30,32 +27,13 @@ const INDEX_SKELETON = `# Карта скрытых связей — индек�
 const root = repoRootOr(process.argv[2] || process.cwd());
 const say = (line) => process.stdout.write(`${line}\n`);
 
-function git(args) {
-  try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch {
-    return '';
-  }
-}
-
-// Свой репозиторий — каждый коммит от текущего user.email. Пустая история —
-// тоже свой: чужого автора в ней нет. Нет user.email — решить нельзя, карта
-// идёт в игнорируемый каталог, чтобы не попасть в чужую историю по догадке.
-function isOwnRepository() {
-  const me = git(['config', 'user.email']);
-  if (!me) return false;
-  const authors = git(['log', '--format=%ae']).split('\n').filter(Boolean);
-  return authors.every((a) => a === me);
-}
-
 if (!projectRoot(root) && !hasIndex(root)) {
   say(`карта: в ${root} нет индекса tokensave или ragsave — impact через grep, карта не нужна`);
   process.exit(0);
 }
 
-const existing = [OWN_DIR, SHARED_DIR].find((d) => fs.existsSync(path.join(root, d)));
-if (existing) {
-  say(`карта: ${existing} — уже есть`);
+if (fs.existsSync(path.join(root, MAP_DIR))) {
+  say(`карта: ${MAP_DIR} — уже есть`);
   process.exit(0);
 }
 
@@ -65,8 +43,7 @@ if (legacy) {
   process.exit(1);
 }
 
-const mapDir = isOwnRepository() ? OWN_DIR : SHARED_DIR;
-const indexFile = path.join(root, mapDir, 'INDEX.md');
+const indexFile = path.join(root, MAP_DIR, INDEX_NAME);
 fs.mkdirSync(path.dirname(indexFile), { recursive: true });
 fs.writeFileSync(indexFile, INDEX_SKELETON);
-say(`карта: создана ${mapDir}/INDEX.md`);
+say(`карта: создана ${MAP_DIR}/${INDEX_NAME}`);

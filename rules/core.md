@@ -93,9 +93,9 @@ user asks, not the only trigger.
   `git-flow`.
 - **Impact before the review skills.** Every symbol whose behaviour the diff
   changes goes through `tokensave_impact`/`callers` and the project's map of
-  implicit links (`docs/links/`, `.claude/links/` in a shared repository, or
-  whatever map the project already keeps); each hit ends as unaffected, fixed,
-  or covered by a test. Green tests on the changed symbol prove nothing about
-  its consumers. No `.tokensave/` in the project → `grep -rn --include` over
-  the changed names, no map, and one line saying so. Where the map lives, how
+  implicit links (`docs/links/`, or whatever map the project already keeps);
+  each hit ends as unaffected, fixed, or covered by a test. Green tests on the
+  changed symbol prove nothing about its consumers. No `.tokensave/` in the
+  project → `grep -rn --include` over the changed names, no map, and one line
+  saying so. Where the map lives, how
   it is split and how it is checked: `skills/shared/impact-map.md`.

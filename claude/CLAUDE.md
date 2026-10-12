@@ -30,6 +30,5 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 it fits: `/doctor` when the harness misbehaves (loops, repeated refusals, dead
 index, expired provider auth), `/optimize` and `/usage` for spend and
 settings, `/impact-map` when an indexed project (`.tokensave/` or
-`.ragsave/rag.db`) has no `docs/links/` or `.claude/links/`, `/review` when
-the user asks to review a colleague's branch or MR. `/test-browser`
-is never offered.
+`.ragsave/rag.db`) has no `docs/links/`, `/review` when the user asks to
+review a colleague's branch or MR. `/test-browser` is never offered.

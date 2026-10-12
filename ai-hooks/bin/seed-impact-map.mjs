@@ -22,7 +22,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { repoRootOr } from '../state-core.mjs';
 import { projectRoot } from '../guard-core.mjs';
-import { hasIndex } from '../links-core.mjs';
+import { hasIndex, MAP_DIR } from '../links-core.mjs';
 
 const TOKENSAVE = process.env.AI_HOOKS_TOKENSAVE_CMD || 'tokensave';
 const LIMIT = 500;
@@ -50,7 +50,7 @@ const COMMENT_RE = /^(?:\/\/|\/\*|\*)/;
 // Тесты и моки эмитят те же события, что и код, но связью не являются.
 const TEST_FILE_RE = /\.(spec|test|stories)\.[jt]sx?$|(^|\/)(test|tests|__tests__|__mocks__|e2e)\//;
 // Карта и документация цитируют те же строки — это не вторая сторона связи.
-const PATH_EXCLUDE = ['node_modules', 'dist', 'build', '.claude/links', 'docs/links'];
+const PATH_EXCLUDE = ['node_modules', 'dist', 'build', MAP_DIR];
 // Имена переменных окружения — из примера, сам `.env` гард читать не даёт.
 const ENV_EXAMPLE_RE = /^\.env(\.[\w-]+)*\.(example|sample|template)$/;
 // Связь живёт в коде; строка из docs/ или .md цитирует её, а не образует.
