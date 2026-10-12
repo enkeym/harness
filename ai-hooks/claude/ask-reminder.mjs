@@ -4,20 +4,11 @@
 // того, как уже собрался править файл.
 
 import { isOn, ASK_DENY_HINT } from '../ask-core.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (c) => { raw += c; });
-process.stdin.on('end', () => {
-  let input;
-  try { input = JSON.parse(raw); } catch { process.exit(0); }
-  if (!isOn(input.cwd, input.session_id)) process.exit(0);
+export function check(input) {
+  return isOn(input.cwd, input.session_id) ? { context: ASK_DENY_HINT } : null;
+}
 
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext: ASK_DENY_HINT,
-    },
-  }));
-  process.exit(0);
-});
+if (isEntryPoint(import.meta.url)) runHook(check, 'UserPromptSubmit');

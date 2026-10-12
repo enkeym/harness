@@ -59,7 +59,7 @@ state-core.mjs             # единый корень рантайм-состо
 ask-core.mjs                # ask mode: состояние режима и что считается изменением
 hooklog-core.mjs                # журнал решений хуков → logs/hooks.jsonl, захват падений
 claude/hook-io.mjs              # общий ввод/вывод: runHook, ответ check → JSON события, журнал
-claude/dispatch.mjs             # один node на PreToolUse/PostToolUse: matcher'ы, check адаптеров, слияние ответов
+claude/dispatch.mjs             # один node на PreToolUse/PostToolUse/UserPromptSubmit/Stop: matcher'ы, check адаптеров, слияние ответов
 claude/bash-router.mjs          # адаптер Claude: PreToolUse(Bash|mcp__ide__executeCode)
 claude/read-router.mjs          # адаптер Claude: PreToolUse(Read) — файл из индекса читает tokensave
 tool-args-core.mjs              # угаданные имена параметров tokensave (path у read, file и old_string у правок) → настоящие
@@ -101,7 +101,7 @@ logs/hooks.jsonl                # решения хуков по сессиям:
 test/test-guards.mjs            # shell-гард: одни сценарии через оба адаптера
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, runHook deny/ask/null, журнал
-test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, регистрация
+test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, block обрывает UPS и Stop, регистрация
 test/test-tool-args.mjs         # имена параметров tokensave: алиасы, пары замен, ответ хука, гарды под угаданным именем
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
@@ -528,15 +528,17 @@ tokensave) в корне такого репозитория. Файл пров�
 
 ## Подключение
 
-**Claude Code** — `~/.claude/settings.json`, секция `hooks`. `PreToolUse` и
-`PostToolUse` — один `node ~/.ai-hooks/claude/dispatch.mjs <Event>` на matcher `*`:
-старт node ~100 мс, и Bash раньше поднимал шесть процессов. Matcher'ы проверок — в
+**Claude Code** — `~/.claude/settings.json`, секция `hooks`. `PreToolUse`,
+`PostToolUse`, `UserPromptSubmit` и `Stop` — один `node ~/.ai-hooks/claude/dispatch.mjs <Event>`
+(на matcher `*` у событий инструмента): старт node ~100 мс, и Bash раньше поднимал
+шесть процессов. Matcher'ы проверок — в
 `TABLE` диспетчера, ниже они в скобках. Каждая проверка судит исходный вход,
 как параллельный хук: deny у кого-то — deny с причинами всех запретивших, правки входа
 отброшены; иначе ask (+ `updatedInput`); иначе `updatedInput`; additionalContext
-склеивается в порядке таблицы. Падение проверки — `crash` под её именем,
+склеивается в порядке таблицы. `block` (стёртый промпт, незавершённый ход) —
+ответ сразу, проверки ниже по таблице не идут. Падение проверки — `crash` под её именем,
 остальные работают. Адаптеры экспортируют `check(input)` и остаются точками
-входа для тестов.
+входа для тестов; `bin/cleanup.mjs` — ещё и CLI (`--force`, `--dry-run`).
 `bash-router` (matcher `Bash|mcp__ide__executeCode`),
 `read-router` (matcher `Read`): файл из таблицы
 `files` индекса tokensave читают `tokensave_body`/`tokensave_read`, не `Read`
@@ -561,17 +563,19 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
 Экономия контекста: `output-clip` на `PreToolUse`
 (matcher `Bash`; его правка входа без причины и в журнал не пишется), `context-step` на `PostToolUse`,
-`node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,
-`node ~/.ai-hooks/claude/paste-guard.mjs` на `UserPromptSubmit` первым в
-цепочке — заблокированный промпт остальным хукам не достаётся,
+`context-meter` на `UserPromptSubmit`,
+`paste-guard` на `UserPromptSubmit` первым в таблице — заблокированный промпт
+остальные проверки не видят (у `tokensave hook-prompt-submit` свой процесс),
 `plan-guard` на `PreToolUse` (matcher `ExitPlanMode`).
 Гейт скиллов: `skill-track` на `PreToolUse`
-(matcher `Skill`) и `node ~/.ai-hooks/claude/skill-track.mjs` на `UserPromptSubmit`, `skill-gate`
+(matcher `Skill`) и `skill-track` на `UserPromptSubmit`, `skill-gate`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at`,
 после гардов и до shell-гарда).
-Вопрос только через меню: `node ~/.ai-hooks/claude/question-guard.mjs` на `Stop`.
-Черновики `/tmp`: `scratch` на `PreToolUse`
-(matcher `Bash|Write`), `node ~/.ai-hooks/claude/scratch.mjs` на `Stop` и `SessionEnd`.
+На `Stop` по порядку: `usage-log`, `cleanup` (`../bin/cleanup.mjs`),
+`question-guard` (вопрос только через меню), `scratch` — блок question-guard
+значит «ход не кончен», и черновики убирает повторный Stop.
+Черновики `/tmp`: `scratch` ещё на `PreToolUse`
+(matcher `Bash|Write`) и `node ~/.ai-hooks/claude/scratch.mjs` на `SessionEnd`.
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs` — в нём shell-гард и гард безопасности.
@@ -730,7 +734,8 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 
 ## Уборка
 
-`bin/cleanup.mjs` висит на `Stop` и проходит раз в сутки (метка
+`bin/cleanup.mjs` зовёт диспетчер на `Stop` — молча, отчёт печатает только CLI, —
+и проходит раз в сутки (метка
 `~/.claude/state/.cleanup-stamp`). Убирает то, что мертво по устройству: метки
 подсказок ragsave (дроссель внутри — 15 минут, метка старше двух суток
 бессмысленна), метки диагностики проектов и ask mode по сессиям (`default` не трогает), метки
@@ -752,7 +757,7 @@ Claude Code, кеш вставок,
 копились в `/tmp`. `claude/scratch.mjs` перед каждым `Bash` и `Write`
 записывает в `~/.claude/state/scratch-<sid>.jsonl` пути в `/tmp`, которых ещё
 нет, — всё, что по ним появится, создал агент. На `Stop` (ход закончен,
-работа сдана) и `SessionEnd` (`/clear`, выход) файлы и ссылки из списка
+работа сдана; блок question-guard уборку откладывает) и `SessionEnd` (`/clear`, выход) файлы и ссылки из списка
 удаляются, каталоги — только пустые; путь,
 созданный раньше записи, и чужие файлы остаются. Не записываются: выражения
 (`$X`, glob), `/tmp/claude-<uid>` (им управляет Claude Code) и репозиторий в

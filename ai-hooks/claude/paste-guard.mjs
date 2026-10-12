@@ -11,14 +11,12 @@
 // пороги, тот же файл, что и у остальных замеров контекста.
 
 import { oversizedPrompt } from '../context-core.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (c) => { raw += c; });
-process.stdin.on('end', () => {
-  try {
-    const reason = oversizedPrompt(JSON.parse(raw).prompt);
-    if (reason) process.stdout.write(JSON.stringify({ decision: 'block', reason }));
-  } catch { /* предохранитель не должен ломать ход */ }
-  process.exit(0);
-});
+export function check(input) {
+  const reason = oversizedPrompt(input.prompt);
+  return reason ? { block: reason } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'UserPromptSubmit');

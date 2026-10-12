@@ -6,7 +6,7 @@
 // ассистента (по блоку контента), и в каждой полный usage — считать надо один
 // раз на message.id. Запись в logs/usage.jsonl — одна на сессию, при каждом
 // Stop перезаписывается (upsert по session_id), так что файл — снимок, а не
-// журнал событий. Любая ошибка → тихий выход: учёт не должен ломать ответ.
+// журнал событий. Любая ошибка → crash в журнал хуков: учёт не должен ломать ответ.
 //
 // Источники контекста: размер каждого tool_result (символы) привязывается к
 // tool_use по id и суммируется по инструменту, для Read — ещё и по файлу.
@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const LOG_DIR = path.join(HOME, '.ai-hooks', 'logs');
@@ -149,15 +150,10 @@ export function upsert(record, file = USAGE_FILE) {
   fs.writeFileSync(file, kept.join('\n') + '\n');
 }
 
-if (isEntryPoint(import.meta.url)) {
-  let raw = '';
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (c) => { raw += c; });
-  process.stdin.on('end', () => {
-    try {
-      const record = summarize(JSON.parse(raw));
-      if (record) upsert(record);
-    } catch { /* учёт не должен ломать ответ */ }
-    process.exit(0);
-  });
+export function check(input) {
+  const record = summarize(input);
+  if (record) upsert(record);
+  return null;
 }
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'Stop');

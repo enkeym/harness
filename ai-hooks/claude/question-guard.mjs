@@ -5,17 +5,15 @@
 // Логика — question-core.mjs.
 //
 // Не больше одного блока на ход: повторный Stop приходит со
-// stop_hook_active: true и пропускается. Любая ошибка → выход без вывода.
+// stop_hook_active: true и пропускается. Любая ошибка → crash в журнал, ход не держится.
 
-import { readInput } from './hook-io.mjs';
-import { logDecision } from '../hooklog-core.mjs';
 import { questionVerdict } from '../question-core.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-readInput((input) => {
+export function check(input) {
   const reason = questionVerdict(input);
-  if (reason) {
-    logDecision('block', { reason });
-    process.stdout.write(JSON.stringify({ decision: 'block', reason }));
-  }
-  process.exit(0);
-});
+  return reason ? { block: reason } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'Stop');

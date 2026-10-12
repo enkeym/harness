@@ -24,7 +24,8 @@ const ALL = null;
 const EDIT_MCP = 'mcp__tokensave__tokensave_';
 
 // [имя, matcher | ALL, модуль]. Имя уходит в hooks.jsonl — то же, что у
-// отдельного хука; модуль по умолчанию — ./<имя>.mjs.
+// отдельного хука; модуль по умолчанию — ./<имя>.mjs. У UserPromptSubmit и Stop
+// инструмента нет — там только ALL.
 const TABLE = {
   PreToolUse: [
     ['ask-guard', ALL],
@@ -42,6 +43,20 @@ const TABLE = {
   PostToolUse: [
     ['context-step', ALL],
     ['links-context', new RegExp(`^(Edit|Write|MultiEdit|${EDIT_MCP}(str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol))$`)],
+  ],
+  UserPromptSubmit: [
+    // Первым: стёртый промпт не помечает скилл и не несёт контекст.
+    ['paste-guard', ALL],
+    ['skill-track', ALL],
+    ['ask-reminder', ALL],
+    ['context-meter', ALL],
+  ],
+  Stop: [
+    ['usage-log', ALL],
+    ['cleanup', ALL, '../bin/cleanup.mjs'],
+    // Блок — ход не кончен: черновики уберёт повторный Stop.
+    ['question-guard', ALL],
+    ['scratch', ALL],
   ],
 };
 

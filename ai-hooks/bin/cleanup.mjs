@@ -5,7 +5,8 @@
 //   cleanup.mjs --force    — прибраться сейчас, игнорируя дроссель
 //   cleanup.mjs --dry-run  — показать, что удалилось бы
 //
-// Вешается на Stop и потому обязан быть дешёвым: дроссель по метке времени
+// На Stop его зовёт claude/dispatch.mjs через check — молча: текст в stdout
+// сломал бы JSON ответа. Обязан быть дешёвым: дроссель по метке времени
 // делает проход раз в сутки, всё остальное — обход нескольких каталогов.
 //
 // Что здесь НЕ чистится и почему: транскрипты (~/.claude/projects) — ими
@@ -17,7 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { STATE_ROOT, statePath } from '../state-core.mjs';
+import { STATE_ROOT, statePath, isEntryPoint } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const STAMP = statePath('.cleanup-stamp');
@@ -57,10 +58,6 @@ const TARGETS = [
   [path.join(HOME, '.claude', 'plans'), 14, 'планы задач'],
 ];
 
-const args = process.argv.slice(2);
-const dryRun = args.includes('--dry-run');
-const force = args.includes('--force') || dryRun;
-
 function throttled() {
   try {
     return Date.now() - fs.statSync(STAMP).mtimeMs < THROTTLE_MS;
@@ -81,7 +78,7 @@ function stamp() {
 // сессии молча стартуют с другим режимом.
 const KEEP = new Set([statePath('ask-mode', 'default')]);
 
-function pruneDir(dir, maxAgeDays) {
+function pruneDir(dir, maxAgeDays, dryRun) {
   let files = 0;
   let bytes = 0;
   const cutoff = Date.now() - maxAgeDays * DAY;
@@ -105,7 +102,7 @@ function pruneDir(dir, maxAgeDays) {
 // Журнал расходов: подробности нужны недолго, суммы — всегда. Записи старше
 // порога сворачиваются в одну строку на месяц, и файл перестаёт расти линейно
 // по числу сессий, не теряя картину за год.
-function rollupUsage(keepDays = 90) {
+function rollupUsage(dryRun, keepDays = 90) {
   const file = path.join(HOME, '.ai-hooks', 'logs', 'usage.jsonl');
   let lines;
   try { lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean); } catch { return null; }
@@ -175,7 +172,7 @@ function mergeRollup(acc, next) {
 
 // Журналы (отказы фоновых задач, диагностика гардов): обрезаем хвостом, а не
 // целиком — последние записи и есть то, ради чего в них смотрят.
-function trimLog(name = 'errors.log', maxBytes = 2 * 1024 * 1024, keepLines = 500) {
+function trimLog(dryRun, name = 'errors.log', maxBytes = 2 * 1024 * 1024, keepLines = 500) {
   const file = path.join(HOME, '.ai-hooks', 'logs', name);
   try {
     if (fs.statSync(file).size <= maxBytes) return 0;
@@ -194,32 +191,45 @@ function human(bytes) {
   return `${bytes} Б`;
 }
 
-if (!force && throttled()) process.exit(0);
+// Один проход уборки → строки отчёта: заголовок и пункты, пустой массив —
+// чистить было нечего, null — дроссель не пустил. dryRun включает force.
+export function cleanup({ dryRun = false, force = false } = {}) {
+  if (!force && !dryRun && throttled()) return null;
 
-const report = [];
-let totalFiles = 0;
-let totalBytes = 0;
-for (const [dir, days, label] of TARGETS) {
-  const { files, bytes } = pruneDir(dir, days);
-  if (files) report.push(`${label}: ${files} файлов, ${human(bytes)}`);
-  totalFiles += files;
-  totalBytes += bytes;
+  const report = [];
+  let totalFiles = 0;
+  let totalBytes = 0;
+  for (const [dir, days, label] of TARGETS) {
+    const { files, bytes } = pruneDir(dir, days, dryRun);
+    if (files) report.push(`${label}: ${files} файлов, ${human(bytes)}`);
+    totalFiles += files;
+    totalBytes += bytes;
+  }
+
+  const usage = rollupUsage(dryRun);
+  if (usage?.collapsed) report.push(`журнал расходов: свёрнуто ${usage.collapsed} записей, осталось ${usage.kept}`);
+  const droppedLines = trimLog(dryRun);
+  if (droppedLines) report.push(`журнал отказов: обрезано ${droppedLines} строк`);
+  // hooks.jsonl растёт на каждом запрете, но разбирают по нему последние сессии —
+  // двух тысяч строк хватает на несколько дней плотной работы.
+  const droppedHooks = trimLog(dryRun, 'hooks.jsonl', 2 * 1024 * 1024, 2000);
+  if (droppedHooks) report.push(`журнал решений хуков: обрезано ${droppedHooks} строк`);
+
+  if (!dryRun) stamp();
+
+  if (!report.length) return [];
+  const head = dryRun ? 'Удалилось бы' : `Убрано ${totalFiles} файлов, ${human(totalBytes)}`;
+  return [`${head}:`, ...report.map((line) => `  ${line}`)];
 }
 
-const usage = rollupUsage();
-if (usage?.collapsed) report.push(`журнал расходов: свёрнуто ${usage.collapsed} записей, осталось ${usage.kept}`);
-const droppedLines = trimLog();
-if (droppedLines) report.push(`журнал отказов: обрезано ${droppedLines} строк`);
-// hooks.jsonl растёт на каждом запрете, но разбирают по нему последние сессии —
-// двух тысяч строк хватает на несколько дней плотной работы.
-const droppedHooks = trimLog('hooks.jsonl', 2 * 1024 * 1024, 2000);
-if (droppedHooks) report.push(`журнал решений хуков: обрезано ${droppedHooks} строк`);
+export function check() {
+  cleanup();
+  return null;
+}
 
-if (!dryRun) stamp();
-
-if (report.length) {
-  const head = dryRun ? 'Удалилось бы' : `Убрано ${totalFiles} файлов, ${human(totalBytes)}`;
-  process.stdout.write(`${head}:\n  ${report.join('\n  ')}\n`);
-} else if (args.length) {
-  process.stdout.write('Чистить нечего.\n');
+if (isEntryPoint(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const lines = cleanup({ dryRun: args.includes('--dry-run'), force: args.includes('--force') });
+  if (lines?.length) process.stdout.write(`${lines.join('\n')}\n`);
+  else if (lines && args.length) process.stdout.write('Чистить нечего.\n');
 }

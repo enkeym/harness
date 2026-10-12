@@ -2,7 +2,8 @@
 // Тесты диспетчера (claude/dispatch.mjs): один процесс на событие отдаёт тот
 // же ответ, что параллельные хуки. deny побеждает ask и правку входа; ask
 // несёт updatedInput; шумная команда — только updatedInput; журнал пишет имя
-// проверки; падение одной проверки не теряет вердикт другой.
+// проверки; падение одной проверки не теряет вердикт другой; block обрывает
+// остальные проверки события.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -128,11 +129,45 @@ function records(sb) {
     null);
 }
 
+// --- UserPromptSubmit: стёртый промпт без контекста ask mode ---
+{
+  const sb = sandbox();
+  askOn(sb, 'sid-d');
+  const ups = (prompt) => run(sb, 'UserPromptSubmit', { session_id: 'sid-d', prompt });
+  check('ask mode: правило режима в additionalContext',
+    ups('привет')?.hookSpecificOutput?.hookEventName, 'UserPromptSubmit');
+  const out = ups('x'.repeat(100000));
+  check('длинная вставка в ask mode: только block', [out?.decision, out?.hookSpecificOutput], ['block', undefined]);
+}
+
+// --- Stop: блок question-guard — ход не кончен, черновики целы ---
+{
+  const sb = sandbox();
+  // cleanup на Stop чистит каталоги под HOME — песочница, не настоящий.
+  sb.env.HOME = sb.dir;
+  const draft = path.join(sb.dir, 'draft.log');
+  bash(sb, `ls > ${draft}`);
+  fs.writeFileSync(draft, '');
+  const transcript = path.join(sb.dir, 't.jsonl');
+  fs.writeFileSync(transcript, [
+    { type: 'user', message: { role: 'user', content: 'почини' } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Починил.\n\nКоммитить сейчас?' }] } },
+  ].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const stop = (extra = {}) => run(sb, 'Stop', { session_id: 'sid-d', transcript_path: transcript, ...extra });
+  check('вопрос текстом: block', stop()?.decision, 'block');
+  check('Stop с блоком: черновик на месте', fs.existsSync(draft), true);
+  check('повторный Stop: молчание', stop({ stop_hook_active: true }), null);
+  check('повторный Stop: черновик убран', fs.existsSync(draft), false);
+  check('Stop: журнал — block question-guard, без crash',
+    records(sb).map((r) => [r.hook, r.decision]), [['question-guard', 'block']]);
+}
+
 // --- регистрация: наши хуки события — один вызов диспетчера ---
 {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'claude', 'settings.json'), 'utf8'));
-  for (const event of ['PreToolUse', 'PostToolUse']) {
-    const ours = settings.hooks[event].flatMap((g) => g.hooks).map((h) => h.command).filter((c) => c.includes('.ai-hooks'));
+  for (const event of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop']) {
+    // ragsave-sync.sh — не проверка диспетчера: фоновая индексация своим процессом.
+    const ours = settings.hooks[event].flatMap((g) => g.hooks).map((h) => h.command).filter((c) => /\.ai-hooks\/.*\.mjs/.test(c));
     check(`settings.json ${event}: только диспетчер`, ours, [`node "$HOME/.ai-hooks/claude/dispatch.mjs" ${event}`]);
   }
 }

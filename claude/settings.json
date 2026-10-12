@@ -111,31 +111,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/usage-log.mjs\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/bin/cleanup.mjs\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/question-guard.mjs\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/scratch.mjs\""
+            "command": "node \"$HOME/.ai-hooks/claude/dispatch.mjs\" Stop"
           }
         ]
       }
@@ -145,7 +121,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/paste-guard.mjs\""
+            "command": "node \"$HOME/.ai-hooks/claude/dispatch.mjs\" UserPromptSubmit"
           }
         ]
       },
@@ -157,30 +133,6 @@
             "args": [
               "hook-prompt-submit"
             ]
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/skill-track.mjs\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/ask-reminder.mjs\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/context-meter.mjs\""
           }
         ]
       }

@@ -13,18 +13,12 @@
 // тысяч токенов — там считает `context-step.mjs` на PostToolUse, фаза 'step'.
 
 import { contextNotice } from '../context-core.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (c) => { raw += c; });
-process.stdin.on('end', () => {
-  try {
-    const notice = contextNotice(JSON.parse(raw));
-    if (notice) {
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: notice.text },
-      }));
-    }
-  } catch { /* замер не должен ломать ход */ }
-  process.exit(0);
-});
+export function check(input) {
+  const notice = contextNotice(input);
+  return notice ? { context: notice.text } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'UserPromptSubmit');
