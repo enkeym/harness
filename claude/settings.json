@@ -3,7 +3,8 @@
   "syncClaudeAiSkills": false,
   "syncClaudeAiPlugins": false,
   "env": {
-    "CLAUDE_CODE_AUTO_CONNECT_IDE": "false"
+    "CLAUDE_CODE_AUTO_CONNECT_IDE": "false",
+    "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
   },
   "includeCoAuthoredBy": false,
   "permissions": {
