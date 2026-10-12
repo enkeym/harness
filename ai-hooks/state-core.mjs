@@ -38,6 +38,13 @@ export function isEntryPoint(metaUrl) {
 // коммит. Переопределяется через AI_HOOKS_STATE_DIR (тесты, изоляция).
 export const STATE_ROOT = process.env.AI_HOOKS_STATE_DIR || path.join(HOME, '.claude', 'state');
 
+// Каталоги черновиков: /tmp и os.tmpdir(). Сам /tmp тоже ссылкой бывает (macOS:
+// /private/tmp), поэтому в списке оба вида. Один список на shell-гард (`> /tmp/x`
+// разрешён) и уборку scratch-core (созданное там удаляется в конце сессии).
+export const TMP_DIRS = [...new Set(['/tmp', os.tmpdir()].flatMap((d) => {
+  try { return [path.resolve(d), fs.realpathSync(d)]; } catch { return [path.resolve(d)]; }
+}))];
+
 // Путь под корнем состояния: statePath('skill-gate.off'),
 // statePath('ask-mode', 'default'). Каталог не создаётся — вызывающий
 // делает mkdirSync(recursive) непосредственно перед записью, как и раньше, так

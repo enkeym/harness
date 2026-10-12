@@ -20,7 +20,10 @@ Shell-гард держит одно правило: **shell запускает 
 `os.tmpdir()` вне проекта (вывод тестов) вместе с чтением такого файла
 `cat`/`head`/`tail`; проект — индекс tokensave или
 `.git` вверх по дереву, клон в `/tmp` черновиком не считается, ссылка из `/tmp` судится
-по тому, куда ведёт.
+по тому, куда ведёт. Созданное агентом в `/tmp` удаляется в конце сессии — см.
+«Уборка». `cd` в `~/.claude/projects` — отказ: каталоги транскриптов
+начинаются с `-`, и относительный путь или glob `*/…` оттуда `ls`, `jq`, `xargs`
+читают как опцию; правило текстом в скилле doctor не держалось.
 
 Разбор нарочно грубый: распознаются формы, а не синтаксис shell. Всё
 нераспознанное проходит — `git diff`, `tsc`, `eslint`, `grep`/`rg` над теми же
@@ -80,6 +83,8 @@ bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
 bin/start-cost.mjs              # стартовая цена сессий по слоям — из транскриптов
 bin/tool-share.mjs              # доля tokensave/rag_search против Read/grep и токены за сессию — из транскриптов, до/после границы; --waste — цена лишних вызовов по классам (ток. и $), топ сессий, недостающие вызовы
 bin/cleanup.mjs                 # уборка меток, кешей и журналов (Stop, раз в сутки)
+scratch-core.mjs                # черновики агента в /tmp: какие пути созданы сессией, их удаление
+claude/scratch.mjs              # адаптер Claude: PreToolUse(Bash|Write) запоминает, SessionEnd удаляет
 bin/ask-mode.mjs                # переключатель: on | off | toggle | reset | default
 opencode/tokensave-guard.mjs    # адаптер OpenCode: плагин (tool.execute.before и др.)
 bin/mcp-serve.sh                # запуск MCP tokensave/ragsave с явно выбранным проектом
@@ -104,6 +109,7 @@ test/test-project-bootstrap.mjs # пропуски проекта, недель�
 test/test-security.mjs          # что deny, что ask, что проходит молча
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
+test/test-scratch.mjs           # черновики /tmp: созданное удаляется, чужое, репозиторий и каталог Claude Code — нет
 test/test-context-meter.mjs     # цифра из последнего хода, порог, одно срабатывание на сессию
 test/test-question-guard.mjs    # работа или порог контекста без меню, вопрос, ожидание решения, варианты → block; код, цитата, заголовок, меню в ходе, stop_hook_active → пропуск
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
@@ -511,6 +517,7 @@ tokensave) в корне такого репозитория. Файл пров�
 | Shell / исполнение кода      | `Bash`, `mcp__ide__executeCode`     | `bash`                          |
 | Сессия началась              | `SessionStart`                      | `event` → `session.created`     |
 | Ответ завершён               | `Stop`                              | `event` → `session.idle`        |
+| Сессия завершена             | `SessionEnd`                        | `event` → `session.deleted`     |
 
 Имена инструментов различаются (Claude: `Read`, `Edit/Write`; OpenCode:
 `read`, `edit/write`) — они вынесены в `CLAUDE_LABELS` / `OPENCODE_LABELS` и
@@ -552,6 +559,8 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at`,
 после гардов и до shell-гарда).
 Вопрос только через меню: `node ~/.ai-hooks/claude/question-guard.mjs` на `Stop`.
+Черновики `/tmp`: `node ~/.ai-hooks/claude/scratch.mjs` на `PreToolUse`
+(matcher `Bash|Write`) и на `SessionEnd`.
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs` — в нём shell-гард и гард безопасности.
@@ -727,6 +736,18 @@ Claude Code, кеш вставок,
 линейно по числу сессий, а картина за год остаётся. Журнал отказов обрезается
 хвостом при превышении 2 МБ.
 
+Черновики в `/tmp` — отдельно и не по времени. Правило «убери за собой» в
+скиллах не держалось: логи сборки, патчи частичного стейджинга, выводы `/review`
+копились в `/tmp`. `claude/scratch.mjs` перед каждым `Bash` и `Write`
+записывает в `~/.claude/state/scratch-<sid>.jsonl` пути в `/tmp`, которых ещё
+нет, — всё, что по ним появится, создал агент. На `SessionEnd` (`/clear`,
+выход) файлы и ссылки из списка удаляются, каталоги — только пустые; путь,
+созданный раньше записи, и чужие файлы остаются. Не записываются: выражения
+(`$X`, glob), `/tmp/claude-<uid>` (им управляет Claude Code) и репозиторий в
+`/tmp`. Убитая сессия `SessionEnd` не получает: её черновики остаются до
+перезагрузки, список уходит со служебными метками через 7 дней. OpenCode — то же
+ядро на `tool.execute.before` и `session.deleted`.
+
 Транскрипты, историю правок и индексы уборщик не трогает: первыми управляет сам
 Claude Code через `cleanupPeriodDays`, на второй держится отмена правок, у
 третьих собственные GC, а внешнее удаление стоит переиндексации.
@@ -760,6 +781,7 @@ node ~/.ai-hooks/test/test-security.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-opencode-plugin.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
+node ~/.ai-hooks/test/test-scratch.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
 node ~/.ai-hooks/test/test-usage-report.mjs
 node ~/.ai-hooks/test/test-start-cost.mjs

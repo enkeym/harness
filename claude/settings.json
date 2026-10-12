@@ -136,6 +136,15 @@
         ]
       },
       {
+        "matcher": "Bash|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/scratch.mjs\""
+          }
+        ]
+      },
+      {
         "matcher": "Agent|Grep|Bash|Glob",
         "hooks": [
           {
@@ -254,6 +263,16 @@
           {
             "type": "command",
             "command": "node \"$HOME/.ai-hooks/claude/context-meter.mjs\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/scratch.mjs\""
           }
         ]
       }

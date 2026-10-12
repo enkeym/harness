@@ -15,7 +15,7 @@ import {
   segments, tokenize, commandIndex, commandName, baseCommand, quoteEnd, dropConditionals, gitSubcommandAt,
   redirectWords, copyOperands,
 } from './shell-core.mjs';
-import { statePath, readJSON, writeJSON, repoRoot } from './state-core.mjs';
+import { statePath, readJSON, writeJSON, repoRoot, TMP_DIRS } from './state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const DB_REL = path.join('.tokensave', 'tokensave.db');
@@ -242,11 +242,8 @@ function redirectTarget(seg, cwd) {
   return target;
 }
 
-// Ссылка в /tmp на файл проекта — не черновик: судим по тому, куда она ведёт. Сам
-// /tmp тоже ссылкой бывает (macOS: /private/tmp), поэтому в списке оба вида.
-const SCRATCH_DIRS = [...new Set(['/tmp', os.tmpdir()].flatMap((d) => {
-  try { return [path.resolve(d), fs.realpathSync(d)]; } catch { return [path.resolve(d)]; }
-}))].map((d) => d + path.sep);
+// Ссылка в /tmp на файл проекта — не черновик: судим по тому, куда она ведёт.
+const SCRATCH_DIRS = TMP_DIRS.map((d) => d + path.sep);
 
 function isScratch(cwd, p) {
   let abs = path.resolve(cwd || process.cwd(), p);
@@ -371,6 +368,19 @@ function gitGrepOutsideIndex(toks, from, cwd) {
   return revs.length > 0 && revs.every((c) => c !== head);
 }
 
+// Каталоги транскриптов (~/.claude/projects/-home-…) начинаются с `-`: после
+// `cd ~/.claude/projects` относительный путь и glob `*/x.jsonl` раскрываются в
+// `-home-…`, и команда читает их как опцию. Правило в скилле doctor не держалось —
+// транскрипты разбирают и без него.
+const TRANSCRIPTS_DIR = path.join(HOME, '.claude', 'projects');
+
+function cdIntoTranscripts(toks, cwd) {
+  const arg = toks.slice(commandIndex(toks) + 1).find((t) => t !== '--' && !/^-[LPe@]+$/.test(t));
+  if (!arg) return false;
+  const dir = arg.replace(/^(~|\$\{?HOME\}?)(?=\/|$)/, HOME);
+  return path.resolve(cwd || process.cwd(), dir) === TRANSCRIPTS_DIR;
+}
+
 // Возвращает причину запрета или null. Любая неожиданность → null (fail-open).
 // keepHeredoc: тело `node <<EOF … EOF` — часть сегмента интерпретатора, иначе
 // путь внутри него распадался бы на безобидные строки.
@@ -382,6 +392,7 @@ export function guardBash(command, cwd, labels) {
     for (const { text: seg } of segments(command, { keepHeredoc: true })) {
       const toks = tokenize(seg);
       const cmd = baseCommand(commandName(toks));
+      if ((cmd === 'cd' || cmd === 'pushd') && cdIntoTranscripts(toks, cwd)) return transcriptsReason();
 
       const body = shellBody(cmd, toks, seg);
       const inner = body && guardBash(body, cwd, labels);
@@ -547,6 +558,12 @@ export function guardRead(filePath, cwd, labels, sessionId) {
 
 function editReason(file, labels) {
   return `Файл \`${file}\` через shell не правят — ${labels.edit}.`;
+}
+
+function transcriptsReason() {
+  return '`cd` в ~/.claude/projects: имена каталогов там начинаются с `-` (`-home-…`), и относительный путь '
+    + 'или glob `*/…` оттуда ls, jq, xargs примут за опцию. Пиши пути абсолютными без cd: '
+    + '`~/.claude/projects/-home-…/<sid>.jsonl`, `~/.claude/projects/*/<sid>.jsonl`.';
 }
 
 function grepReason(what) {

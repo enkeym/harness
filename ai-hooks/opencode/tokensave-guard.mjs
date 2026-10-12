@@ -5,12 +5,15 @@
 //   Claude PreToolUse(Bash)                 → tool.execute.before (throw = deny)
 //   Claude SessionStart (ragsave-sync.sh)   → event: session.created
 //   Claude Stop (ragsave-sync.sh)           → event: session.idle
+//   Claude PreToolUse(Bash|Write) scratch   → tool.execute.before
+//   Claude SessionEnd (scratch.mjs)         → event: session.deleted
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { guardBash, guardRead, OPENCODE_LABELS } from '../guard-core.mjs';
 import { securityGuard, DENY } from '../security-core.mjs';
+import { recordScratch, removeScratch } from '../scratch-core.mjs';
 
 // Каталог bin рядом с этим файлом (../bin), а не зашитый абсолютный путь с
 // именем пользователя — плагин ставится в чужой $HOME.
@@ -42,6 +45,12 @@ const SECURITY_CALLS = {
   patch: (args) => [...String(args.patchText ?? '').matchAll(PATCH_FILE_RE)]
     .map((m) => ['Edit', { file_path: m[1].trim() }]),
   bash: (args) => [['Bash', { command: args.command }]],
+};
+
+// Вызовы, создающие черновики в /tmp, — в терминах ядра уборки.
+const SCRATCH_CALLS = {
+  bash: (args) => ['Bash', { command: args.command }],
+  write: (args) => ['Write', { file_path: args.filePath }],
 };
 
 // Блокируется только DENY (секреты). ASK здесь не спросить — его закрывает
@@ -77,9 +86,17 @@ export const TokensaveGuard = async ({ directory }) => {
         const reason = guardRead(args.filePath, directory, OPENCODE_LABELS, input.sessionID);
         if (reason) throw new Error(reason);
       }
+      const scratch = SCRATCH_CALLS[input.tool];
+      try {
+        if (scratch) recordScratch(input.sessionID, ...scratch(args));
+      } catch { /* уборка не должна ломать вызов */ }
     },
 
     event: async ({ event }) => {
+      if (event.type === 'session.deleted') {
+        try { removeScratch(event.properties?.info?.id); } catch { /* см. выше */ }
+        return;
+      }
       if (!SYNC_EVENTS.has(event.type)) return;
       runDetached('ragsave-sync.sh', directory);
     },

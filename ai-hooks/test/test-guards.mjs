@@ -293,6 +293,13 @@ bash('имя переменной в тексте коммита → allow', 'al
 bash('git log/status в индексированном проекте → allow', 'allow', 'git log --oneline -5 && git status --short');
 fs.rmSync(OUTSIDE, { recursive: true, force: true });
 
+// ---- каталог транскриптов: имена `-home-…` после cd читаются как опции ----
+bash('cd ~/.claude/projects && ls */… → deny', 'deny', 'cd ~/.claude/projects && ls */abc-*.jsonl');
+bash('cd $HOME/.claude/projects/ → deny', 'deny', 'cd $HOME/.claude/projects/ && grep -rl x .');
+bash('cd абсолютным путём в подшелле → deny', 'deny', `(cd ${process.env.HOME}/.claude/projects; jq . -home-x/a.jsonl)`);
+bash('абсолютный путь к транскрипту → allow', 'allow', 'jq -r .type ~/.claude/projects/*/abc.jsonl | wc -l');
+bash('cd в каталог одного проекта → allow', 'allow', 'cd ~/.claude/projects/-home-u-app && ls');
+
 // `git grep` по чужой ревизии ищет код, которого нет в индексе (ревью МР);
 // по рабочему дереву — обход. Репозиторий: `old` — первый коммит, `main` — HEAD.
 const REPO = sandboxProject();

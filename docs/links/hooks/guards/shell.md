@@ -4,13 +4,15 @@ paths:
   - "ai-hooks/shell-core.mjs"
   - "ai-hooks/claude/read-router.mjs"
   - "ai-hooks/claude/bash-router.mjs"
+  - "ai-hooks/scratch-core.mjs"
+  - "ai-hooks/claude/scratch.mjs"
   - "ai-hooks/bin/mcp-serve.sh"
   - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
   - "claude/settings.json"
 ---
 
-# hooks/guards/shell — shell-гард, роутер чтения, хук tokensave, разбор shell
+# hooks/guards/shell — shell-гард, роутер чтения, хук tokensave, разбор shell, уборка /tmp
 
 ## Контракты и доки
 - Разрешения shell — `ai-hooks/guard-core.mjs:JQ_DATA_RE`/`isScratch`/`READ_CMDS`/`copyHit` ↔ абзац
@@ -38,6 +40,15 @@ paths:
   `claude/settings.json`; `opencode/plugin/tokensave-guard.js` импортирует
   `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
+- Уборка черновиков — регистрация `ai-hooks/claude/scratch.mjs` в `claude/settings.json`
+  (PreToolUse matcher `Bash|Write` и `SessionEnd`) ↔ `ai-hooks/scratch-core.mjs:scratchCandidates`
+  (знает только `Write.file_path` и `Bash.command`) и события `tool.execute.before`/`session.deleted`
+  в `ai-hooks/opencode/tokensave-guard.mjs:SCRATCH_CALLS`. Добавил в matcher инструмент без
+  ветки в `scratchCandidates` — его файлы в /tmp не убираются; убрал `SessionEnd` — список
+  копится, файлы остаются.
+- Отказ `cd` в транскрипты — `ai-hooks/guard-core.mjs:TRANSCRIPTS_DIR` ↔ путь
+  транскрипта в §4 `skills/doctor/SKILL.md`. Claude Code перенёс транскрипты — отказ
+  молча не срабатывает, doctor ищет не там.
 - Разбор shell — один модуль `ai-hooks/shell-core.mjs:segments`/`commandIndex`/`gitSubcommandAt`/`baseCommand`
   (+ `copyOperands`/`redirectWords` для guard-core и `skill-core.mjs:bashWrites`;
   `makesCommit` — формы коммита для `skill-core.mjs:isGitCommit` и `ask` в

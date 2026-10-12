@@ -83,22 +83,24 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 ## Shell guard
 
-- `bash-router` denies reading or writing an existing file through the shell
-  (`cat`/`sort`/`base64`, `sed -n`/`awk`/`grep ''`/`grep -v` with a file, `diff
-  /dev/null`, `git show HEAD:<file>`, `sed -i`, `tee`, `> file`, `cp`/`mv` into
-  `/tmp` or over a file, `vim -es`/`ed`, `node -e`/`python -c` with a path, a
-  heredoc into an interpreter) and names the tool that passes;
-  `mcp__ide__executeCode` too. Pass: `jq` over a `.json`/`.jsonl`/`.ndjson`
-  outside the index, `>`/`>>` into `/tmp/` outside a project and `cat`/`tail`
-  of it, `git show <other rev>:<file>`, `node <file>` (`python.exe`, `tsx`
-  alike) without `-e`/`-p`/`-c`/heredoc (a run). Clipping: `output-clip`.
+- `bash-router` denies reading or writing an existing file through the shell (`cat`/`sort`/
+  `base64`, `sed -n`/`awk`/`grep ''`/`grep -v` with a file, `diff /dev/null`, `git show
+  HEAD:<file>`, `sed -i`, `tee`, `> file`, `cp`/`mv` into `/tmp` or over a file, `vim -es`/`ed`,
+  `node -e`/`python -c` with a path, a heredoc into an interpreter) and names the tool that
+  passes; `mcp__ide__executeCode` too. Pass: `jq` over a `.json`/`.jsonl`/`.ndjson` outside the
+  index, `>`/`>>` into `/tmp/` outside a project and `cat`/`tail` of it, `git show <other
+  rev>:<file>`, `node <file>` (`python.exe`, `tsx` alike) without `-e`/`-p`/`-c`/heredoc (a
+  run). Clipping: `output-clip`.
 - It splits commands like the security guard: `&`, `$(…)`, backticks, `( … )`, `then`,
   `sudo -u x`, `xargs`, `bash -c`/`eval` don't hide a `cat`, and a heredoc body stays with
   its `node`/`python`. `grep`/`rg` with a pattern and pipes reading stdin pass.
-- `grep`/`rg`/`ag` over indexed code is refused by tokensave's own
-  `hook-pre-tool-use`; its off switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git
-  grep` over the working tree are denied by `bash-router` — tokensave answers.
-  `git grep … <sha|branch>` off HEAD (an MR head) passes; a `$var` ref doesn't.
+- `grep`/`rg`/`ag` over indexed code is refused by tokensave's own `hook-pre-tool-use`; its off
+  switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git grep` over the working tree are denied by
+  `bash-router` — tokensave answers. `git grep … <sha|branch>` off HEAD passes, `$var` doesn't.
+- `cd`/`pushd` into `~/.claude/projects` is denied: its `-home-…` names, reached relatively or
+  by a glob, read as options. Write `~/.claude/projects/*/<sid>.jsonl` without `cd`.
+- `scratch` deletes at session end each `/tmp` path a `Bash` or `Write` call named before it
+  existed (directories only if empty): don't clean up; what must outlive the session → elsewhere.
 
 ## Background hooks
 
@@ -108,12 +110,11 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   say `tokensave init <path>` / `ragsave init` is needed, don't run either.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the session
   directory. Outside a project the server doesn't come up — tools are absent, not wrong.
-- `links-context` (PostToolUse on edit tools, native and tokensave; reads
-  stay silent) injects a domain file of the project's impact map when the edited path
-  matches its `paths:` — once per session per domain. Treat the text as the
-  map's lines for this change: check them, add the missing link to that
-  file. Silent ≠ no links: a domain without `paths:` is reached only through
-  `INDEX.md`, so the impact pass still reads the index.
+- `links-context` (PostToolUse on edit tools, native and tokensave; reads stay silent) injects
+  a domain file of the project's impact map when the edited path matches its `paths:` — once
+  per session per domain. Treat the text as the map's lines for this change: check them, add
+  the missing link to that file. Silent ≠ no links: a domain without `paths:` is reached only
+  through `INDEX.md`, so the impact pass still reads the index.
 - `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI,
   dependabot, `.env.example`, or an impact map in an indexed project: offer
   in one line in the first reply (`/impact-map` for the map). Silent hook =
@@ -129,6 +130,5 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 3. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red
    → roll back, don't patch further.
-4. Everything under `~/.claude/` is a symlink into `~/harness/claude/`;
-   Edit/Write refuse symlinks — address the target path.
+4. `~/.claude/*` are symlinks into `~/harness/claude/`; Edit/Write refuse them — edit the target.
 5. Deeper diagnosis is `/doctor` — offer it in one line, don't improvise.
