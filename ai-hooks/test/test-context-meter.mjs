@@ -37,7 +37,7 @@ const ENV = {
   AI_HOOKS_CTX_STEP_REPEAT: '20000',
 };
 Object.assign(process.env, ENV);
-const { contextUsed, contextNotice, noteWork, level, oversizedPrompt, WINDOW, SOFT, HAND, HARD, STEP_REPEAT } = await import('../context-core.mjs');
+const { contextUsed, contextNotice, noteWork, level, oversizedPrompt, transcriptLines, WINDOW, SOFT, HAND, HARD, STEP_REPEAT } = await import('../context-core.mjs');
 
 // Работа — правка внутри git-корня сессии; песочница — свой репозиторий.
 const REPO = path.join(tmp, 'repo');
@@ -490,6 +490,16 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
     const out = execFileSync('node', [PLAN_HOOK], { input: '{', encoding: 'utf8', env: { ...process.env, ...ENV } });
     return out.trim() || null;
   })(), null);
+}
+
+// --- Транскрипт целиком: второй чтец в процессе берёт прочитанное, дописанный файл — заново
+{
+  const file = path.join(tmp, 'lines.jsonl');
+  fs.writeFileSync(file, '{"a":1}\n\n{"a":2}\n');
+  check('строки без пустых', transcriptLines(file).length, 2);
+  fs.appendFileSync(file, '{"a":3}\n');
+  check('дописанный файл перечитан', transcriptLines(file).length, 3);
+  check('нет файла — пусто', transcriptLines(path.join(tmp, 'none.jsonl')), []);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

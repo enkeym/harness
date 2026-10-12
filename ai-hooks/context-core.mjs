@@ -71,6 +71,24 @@ const KEEP_MS = 24 * 3600 * 1000;
 // Порядок порогов: объявленный порог гасит только равные и младшие.
 const RANK = { soft: 1, hand: 2, hard: 3 };
 
+// Транскрипт целиком, строками. На Stop его разбирают usage-log и question-guard
+// в одном процессе dispatch — второй берёт уже прочитанное. Ключ — путь, размер
+// и mtime: дописанный файл читается заново. Нет файла → [].
+let transcriptCache = null;
+
+export function transcriptLines(file) {
+  try {
+    const { size, mtimeMs } = fs.statSync(file);
+    const c = transcriptCache;
+    if (c && c.file === file && c.size === size && c.mtimeMs === mtimeMs) return c.lines;
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    transcriptCache = { file, size, mtimeMs, lines };
+    return lines;
+  } catch {
+    return [];
+  }
+}
+
 // Последние TAIL_BYTES файла. При обрезке первая строка почти наверняка
 // неполная — её и отбрасываем, разбор всё равно упал бы на ней.
 function readTail(file) {

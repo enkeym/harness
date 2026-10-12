@@ -18,8 +18,7 @@
 // ход с правкой или коммитом и любой ход за порогом контекста кончаются меню.
 // Регэкспы остаются только для хода без работы — ответа на вопрос.
 
-import fs from 'node:fs';
-import { contextUsed, level, noticeText, isWork, sessionWorked } from './context-core.mjs';
+import { contextUsed, level, noticeText, isWork, sessionWorked, transcriptLines } from './context-core.mjs';
 
 // Инструменты, которые сами задают вопрос человеку.
 const MENU_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
@@ -60,14 +59,6 @@ export const WORK_REASON = 'Ход с правкой или коммитом к�
   + 'целиком и решать нечего — закончи ход строкой итога без вопроса.';
 
 export const CONTEXT_REASON = 'Ход кончился без меню, а контекст за порогом.';
-
-function readLines(file) {
-  try {
-    return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
-  } catch {
-    return [];
-  }
-}
 
 // Реплика человека открывает ход: не служебная вставка и не результат инструмента.
 function isPrompt(rec) {
@@ -144,7 +135,7 @@ export function pendingQuestion(text) {
 // велят тексты context-meter), затем работа в ходе, затем текст.
 export function questionVerdict(input) {
   if (!input || input.stop_hook_active || !input.transcript_path) return null;
-  const { text, menu, worked } = lastTurn(readLines(input.transcript_path), input.cwd);
+  const { text, menu, worked } = lastTurn(transcriptLines(input.transcript_path), input.cwd);
   if (menu) return null;
   const used = contextUsed(input.transcript_path);
   const stage = level(used?.tokens);

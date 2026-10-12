@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isEntryPoint, writeAtomic } from '../state-core.mjs';
 import { LOG_DIR } from '../hooklog-core.mjs';
+import { transcriptLines } from '../context-core.mjs';
 import { runHook } from './hook-io.mjs';
 
 export const USAGE_FILE = path.join(LOG_DIR, 'usage.jsonl');
@@ -74,7 +75,7 @@ function collectResults(rec, uses, sources) {
 function collect(file, acc) {
   const seen = new Map(); // message.id → последняя строка с usage
   const uses = new Map(); // tool_use.id → { name, file }
-  for (const line of readLines(file)) {
+  for (const line of transcriptLines(file)) {
     let rec;
     try { rec = JSON.parse(line); } catch { continue; }
     if (rec.type === 'user') { collectResults(rec, uses, acc.context_sources); continue; }
