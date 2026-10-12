@@ -10,6 +10,8 @@ paths:
   - "ai-hooks/claude/context-*.mjs"
   - "ai-hooks/claude/plan-guard.mjs"
   - "ai-hooks/claude/skill-*.mjs"
+  - "ai-hooks/claude/paste-guard.mjs"
+  - "ai-hooks/claude/project-bootstrap.mjs"
   - "ai-hooks/bin/ask-mode.mjs"
   - "ai-hooks/README.md"
 ---
@@ -37,5 +39,13 @@ paths:
   `skills/handoff/SKILL.md`. Переименовал раздел или поднял лимит снимка в скилле
   без хука — `ExitPlanMode` отказывает плану, собранному по скиллу, или
   пропускает наслоенный.
+- Лимиты — `ai-hooks/context-core.mjs:PASTE_LIMIT` (40k) и `PLAN_LIMIT` (12k) ↔ те же
+  числа в `ai-hooks/README.md` (оба) и `OVERVIEW.md` (вставка). Сменил константу — доки обещают
+  старый порог отказа.
+- Пункты `.claude/bootstrap-ignore` (`claude-md`, `husky`, `ci`, `dependabot`,
+  `env-example`, `impact-map`) — `ai-hooks/claude/project-bootstrap.mjs:bootstrapContext` ↔
+  список в `ai-hooks/README.md` и файлы `.claude/bootstrap-ignore` в чужих
+  проектах. Переименовал пункт — отключённое напоминание снова приходит везде,
+  README учит старому имени.
 - Списки инструментов правки tokensave в `ask-core`/`skill-core` — `hooks/guards/security.md`;
   формы коммита и `keepHeredoc` — `hooks/guards/shell.md`.

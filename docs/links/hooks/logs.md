@@ -22,8 +22,15 @@ paths:
   задаёт корень, `ai-hooks/bin/cleanup.mjs:TARGETS` чистит `clip-output` под ним,
   а `ai-hooks/bin/clip-output.sh` пишет в зашитый `${HOME}/.claude/state/clip-output`.
   Сдвиг корня без скрипта — полные выводы копятся и не чистятся.
+- Имена журналов — `hooks.jsonl` (`ai-hooks/hooklog-core.mjs:HOOKS_LOG`), `errors.log`
+  (`ai-hooks/hooklog-core.mjs:ERRORS_LOG`, `ai-hooks/bin/log-error.sh`,
+  `ragsave/ragsave/server.py:_log_failure`), `usage.jsonl`
+  (`ai-hooks/claude/usage-log.mjs:USAGE_FILE`) ↔ зашитые имена в
+  `ai-hooks/bin/cleanup.mjs:trimLog`/`rollupUsage` и пути в `skills/doctor/SKILL.md`,
+  `skills/usage/SKILL.md`, `skills/optimize/SKILL.md`. Переименовал у писателя —
+  cleanup обрезает несуществующий файл, журнал растёт без предела, doctor читает пустоту.
 
 ## Контракты и доки
 - Порог медленного хука — `ai-hooks/hooklog-core.mjs:SLOW_MS` (800) ↔ порог
-  `ms > 800` в `skills/doctor/SKILL.md`. Сменил константу — doctor ставит
+  «`ms` > 800» у строк `slow` в таблице `skills/doctor/SKILL.md`. Сменил константу — doctor ставит
   диагноз «медленно» по старому порогу.

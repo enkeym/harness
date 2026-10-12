@@ -7,6 +7,7 @@ paths:
   - "ai-hooks/bin/mcp-serve.sh"
   - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
+  - "claude/settings.json"
 ---
 
 # hooks/guards/shell — shell-гард, роутер чтения, хук tokensave, разбор shell

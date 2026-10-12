@@ -7,6 +7,7 @@ paths:
   - "ai-hooks/claude/tool-args.mjs"
   - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
+  - "claude/settings.json"
 ---
 
 # hooks/guards/security — гард безопасности, его пары и списки инструментов
@@ -36,4 +37,7 @@ paths:
 - Алиасы tokensave — `ai-hooks/tool-args-core.mjs:normalizeToolInput` берут и хук `tool-args`, и
   `ai-hooks/security-core.mjs:securityGuard`, `ai-hooks/skill-core.mjs:editedFile` (хуки видят исходный
   вход): алиас мимо гардов — правка `.env` или SKILL.md под ним без проверки.
+  Инструменты с алиасами — `ai-hooks/tool-args-core.mjs:TOOL_RE` ↔ matcher `tool-args` в
+  `claude/settings.json`: новый инструмент только в `TOOL_RE` — гарды сверяют
+  исправленный путь, а сервер получает угаданное имя и отвечает ошибкой.
 - Текст отказа рекурсивного grep и формы коммита для `ask` — `hooks/guards/shell.md`.
