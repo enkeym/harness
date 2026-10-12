@@ -42,7 +42,7 @@ paths:
   `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`), `git/gitconfig`
   (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в
   шаблоне; переименовал файл — install создаёт один, shell ищет другой.
-- Голое имя команды в `mcp/servers.json` (`playwright-mcp`) ↔ PATH оболочки,
+- Голое имя команды в `mcp/servers.json` (`foo-mcp`) ↔ PATH оболочки,
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь, OpenCode — голое имя (его PATH тоже должен видеть
   nvm). Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —
@@ -50,7 +50,11 @@ paths:
 - `install.sh:externals` ↔ раскладка пакета `@playwright/mcp`: chromium
   сверяется через `node_modules/playwright/cli.js install --dry-run` внутри
   глобального пакета (ревизия та, что ждёт MCP). Пакет сменит раскладку —
-  проверка выдаст ложное «не скачан»; та же команда — в README.
+  проверка выдаст ложное «не скачан»; та же команда — в README. Сам сервер
+  в `mcp/servers.json` не входит: Claude — `claude mcp add -s local` в проекте,
+  OpenCode — `opencode.json` проекта под `.git/info/exclude` (README). Синк
+  local scope и проектные файлы не видит — сменилась версия node, путь у
+  Claude в проекте устарел, перерегистрировать руками.
 - `mcp/servers.json` → `ai-hooks/bin/mcp-serve.sh` (аргумент — имя сервера);
   раскладывает по агентам `bin/mcp-sync.mjs`. Новый сервер в JSON без ветки
   `case "$kind"` в `mcp-serve.sh` не стартует.

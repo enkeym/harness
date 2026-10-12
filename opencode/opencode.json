@@ -15,15 +15,6 @@
         "{env:HOME}/.ai-hooks/bin/mcp-serve.sh",
         "ragsave"
       ]
-    },
-    "playwright": {
-      "type": "local",
-      "command": [
-        "playwright-mcp",
-        "--headless",
-        "--browser",
-        "chromium"
-      ]
     }
   },
   "permission": {

@@ -40,7 +40,7 @@ const forOpencode = (cmd) => (cmd.startsWith('~/') ? `{env:HOME}/${cmd.slice(2)}
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
-// Голое имя (`playwright-mcp`) ищется по PATH того, кто запускает синк, и в
+// Голое имя (`foo-mcp`) ищется по PATH того, кто запускает синк, и в
 // Claude уходит найденный путь: так в servers.json не зашита версия node из
 // nvm, а после смены версии --check видит устаревший путь как расхождение.
 // Не нашлось — null: писать агентам команду, которая не стартует, нельзя.

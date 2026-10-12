@@ -6,9 +6,5 @@
   "ragsave": {
     "command": "~/.ai-hooks/bin/mcp-serve.sh",
     "args": ["ragsave"]
-  },
-  "playwright": {
-    "command": "playwright-mcp",
-    "args": ["--headless", "--browser", "chromium"]
   }
 }

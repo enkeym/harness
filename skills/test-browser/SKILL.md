@@ -14,11 +14,14 @@ conventions are `test-conventions`.
 
 ## Setup
 
-1. Resolve the base branch by [../shared/project-facts.md](../shared/project-facts.md).
-2. App running? Dev port from `package.json` scripts or `playwright.config.*`
+1. No `browser_*` tools in the session → stop: the Playwright MCP server is
+   registered per project, not globally; point to the commands in
+   `~/harness/README.md` (*Раскатка*) and a session restart.
+2. Resolve the base branch by [../shared/project-facts.md](../shared/project-facts.md).
+3. App running? Dev port from `package.json` scripts or `playwright.config.*`
    (`webServer.url`). Not running → start it the project's way in the
    background; none found → ask for the URL.
-3. Login and data: the seed or test account the project documents
+4. Login and data: the seed or test account the project documents
    (`.env.example`, e2e fixtures, README). Never a real user's credentials,
    never production.
 

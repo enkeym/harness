@@ -41,13 +41,20 @@ cd ~/harness
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
 
-Playwright MCP репозиторий только регистрирует; пакет и браузер ставятся до
-`./install.sh` (иначе сервер пропущен), той же node из nvm, что в PATH агентов:
+Playwright MCP глобально не регистрируется — только в проекте, где нужен
+`/test-browser`, и вне его git. Пакет и браузер ставятся той же node из nvm, что
+в PATH агентов:
 
 ```bash
 npm i -g @playwright/mcp
 node "$(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js" install chromium
+# из корня проекта; запись ляжет в ~/.claude.json → projects
+claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless --browser chromium
 ```
+
+OpenCode — `opencode.json` в корне проекта с одним блоком
+`mcp.playwright` (`{"type": "local", "command": ["playwright-mcp", "--headless",
+"--browser", "chromium"]}`) и строкой `/opencode.json` в `.git/info/exclude`.
 
 В репозитории нет ни имени пользователя, ни путей этой машины: конфиги
 ссылаются на `$HOME`, `~` или `{env:HOME}` (OpenCode). Значения машины —
