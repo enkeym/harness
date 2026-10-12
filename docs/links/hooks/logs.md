@@ -24,8 +24,8 @@ paths:
 - Имена журналов — `hooks.jsonl` (`ai-hooks/hooklog-core.mjs:HOOKS_LOG`), `errors.log`
   (`ai-hooks/hooklog-core.mjs:ERRORS_LOG`, `ai-hooks/bin/log-error.sh`,
   `ragsave/ragsave/server.py:_log_failure`), `usage.jsonl`
-  (`ai-hooks/claude/usage-log.mjs:USAGE_FILE`) ↔ зашитые имена в
-  `ai-hooks/bin/cleanup.mjs:trimLog`/`rollupUsage` и пути в `skills/doctor/SKILL.md`,
+  (`ai-hooks/claude/usage-log.mjs:USAGE_FILE`, его импортирует `ai-hooks/bin/cleanup.mjs:rollupUsage`)
+  ↔ зашитые имена в `ai-hooks/bin/cleanup.mjs:trimLog` и пути в `skills/doctor/SKILL.md`,
   `skills/usage/SKILL.md`, `skills/optimize/SKILL.md`. Переименовал у писателя —
   cleanup обрезает несуществующий файл, журнал растёт без предела, doctor читает пустоту.
 

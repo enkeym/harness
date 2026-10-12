@@ -138,18 +138,3 @@ export function logCrash(err, input = null) {
     // errors.log недоступен — запись в hooks.jsonl уже сделана
   }
 }
-
-// Последние записи журнала — для напоминаний и /doctor. Битые строки
-// пропускаются. Нет файла → [].
-export function readRecent(limit = 200) {
-  try {
-    const lines = fs.readFileSync(HOOKS_LOG, 'utf8').trim().split('\n').slice(-limit);
-    const out = [];
-    for (const line of lines) {
-      try { out.push(JSON.parse(line)); } catch { /* обрезанная строка */ }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
