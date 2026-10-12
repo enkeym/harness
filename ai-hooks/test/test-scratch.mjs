@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Тесты уборки черновиков в /tmp: настоящий хук claude/scratch.mjs, два
-// события — PreToolUse запоминает, SessionEnd удаляет. Главное — удалить
+// Тесты уборки черновиков в /tmp: настоящий хук claude/scratch.mjs, три
+// события — PreToolUse запоминает, Stop и SessionEnd удаляют. Главное — удалить
 // только созданное агентом: чужой файл в /tmp, репозиторий в /tmp и каталог
 // Claude Code остаются.
 
@@ -27,6 +27,7 @@ function hook(input) {
 }
 const pre = (sid, tool_name, tool_input) => hook({ hook_event_name: 'PreToolUse', session_id: sid, tool_name, tool_input });
 const end = (sid) => hook({ hook_event_name: 'SessionEnd', session_id: sid, reason: 'clear' });
+const stop = (sid) => hook({ hook_event_name: 'Stop', session_id: sid, stop_hook_active: false });
 
 // os.tmpdir() под env-isolate — каталог внутри /tmp.
 const BOX = fs.mkdtempSync(path.join(os.tmpdir(), 'scratch-'));
@@ -99,6 +100,14 @@ const at = (name) => path.join(BOX, name);
   let crashed = false;
   try { end('s7'); } catch { crashed = true; }
   check('несозданный файл не роняет', crashed, false);
+}
+
+// --- 8. Конец хода: черновик удалён сразу, не дожидаясь конца сессии
+{
+  pre('s8', 'Bash', { command: `git diff > ${at('review.patch')}` });
+  fs.writeFileSync(at('review.patch'), 'p');
+  check('Stop молчит', stop('s8'), '');
+  check('черновик хода удалён на Stop', fs.existsSync(at('review.patch')), false);
 }
 
 fs.rmSync(BOX, { recursive: true, force: true });

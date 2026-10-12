@@ -41,11 +41,11 @@ paths:
   `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
   перестаёт вызываться; проверка только со следующей сессии.
 - Уборка черновиков — регистрация `ai-hooks/claude/scratch.mjs` в `claude/settings.json`
-  (PreToolUse matcher `Bash|Write` и `SessionEnd`) ↔ `ai-hooks/scratch-core.mjs:scratchCandidates`
-  (знает только `Write.file_path` и `Bash.command`) и события `tool.execute.before`/`session.deleted`
+  (PreToolUse matcher `Bash|Write`, `Stop` и `SessionEnd`) ↔ `ai-hooks/scratch-core.mjs:scratchCandidates`
+  (знает только `Write.file_path` и `Bash.command`) и события `tool.execute.before`/`session.idle`/`session.deleted`
   в `ai-hooks/opencode/tokensave-guard.mjs:SCRATCH_CALLS`. Добавил в matcher инструмент без
-  ветки в `scratchCandidates` — его файлы в /tmp не убираются; убрал `SessionEnd` — список
-  копится, файлы остаются.
+  ветки в `scratchCandidates` — его файлы в /tmp не убираются; убрал `Stop` — черновики живут
+  до конца сессии, убрал и `SessionEnd` — список копится, файлы остаются.
 - Отказ `cd` в транскрипты — `ai-hooks/guard-core.mjs:TRANSCRIPTS_DIR` ↔ путь
   транскрипта в §4 `skills/doctor/SKILL.md`. Claude Code перенёс транскрипты — отказ
   молча не срабатывает, doctor ищет не там.

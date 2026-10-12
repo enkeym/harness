@@ -167,6 +167,13 @@ for (const command of ['git status', 'git log --oneline', 'npm test', 'ls -la', 
   expect('прочие события синк не запускают', count(), 1);
   await event({ event: { type: 'session.idle' } });
   expect('session.idle запускает синк', waitCount(2), 2);
+
+  // Конец хода убирает черновики в /tmp, созданные за ход.
+  const draft = path.join(PROJECT, 'turn.log');
+  await before({ tool: 'bash', sessionID: 'oc-turn' }, { args: { command: `ls > ${draft}` } });
+  fs.writeFileSync(draft, 'x');
+  await event({ event: { type: 'session.idle', properties: { sessionID: 'oc-turn' } } });
+  expect('session.idle убирает черновик хода', fs.existsSync(draft), false);
 }
 
 process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки пройдены\n');

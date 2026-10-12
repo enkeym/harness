@@ -220,6 +220,14 @@
             "command": "node \"$HOME/.ai-hooks/claude/question-guard.mjs\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/scratch.mjs\""
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

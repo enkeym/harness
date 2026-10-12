@@ -99,8 +99,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   `bash-router` — tokensave answers. `git grep … <sha|branch>` off HEAD passes, `$var` doesn't.
 - `cd`/`pushd` into `~/.claude/projects` is denied: its `-home-…` names, reached relatively or
   by a glob, read as options. Write `~/.claude/projects/*/<sid>.jsonl` without `cd`.
-- `scratch` deletes at session end each `/tmp` path a `Bash` or `Write` call named before it
-  existed (directories only if empty): don't clean up; what must outlive the session → elsewhere.
+- `scratch` deletes at turn and session end each `/tmp` path a `Bash`/`Write` call named before
+  it existed (directories only if empty): don't clean up; what must outlive the turn → elsewhere.
 
 ## Background hooks
 

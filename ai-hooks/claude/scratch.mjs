@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-// Claude Code: уборка черновиков агента в /tmp (../scratch-core.mjs). Два
+// Claude Code: уборка черновиков агента в /tmp (../scratch-core.mjs). Три
 // события в одном хуке — PreToolUse Bash|Write запоминает пути, которых ещё
-// нет, SessionEnd (/clear, выход) удаляет созданное. Всегда молчит и всегда
+// нет, Stop (конец хода) и SessionEnd (/clear, выход) удаляют созданное. Всегда молчит и всегда
 // пропускает.
 
 import { recordScratch, removeScratch } from '../scratch-core.mjs';
 import { readInput } from './hook-io.mjs';
 
+const END_EVENTS = new Set(['Stop', 'SessionEnd']);
+
 readInput((input) => {
   const sid = input.session_id;
-  if (input.hook_event_name === 'SessionEnd') removeScratch(sid);
+  if (END_EVENTS.has(input.hook_event_name)) removeScratch(sid);
   else recordScratch(sid, input.tool_name, input.tool_input);
   process.exit(0);
 });

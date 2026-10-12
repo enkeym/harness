@@ -6,7 +6,7 @@
 //   Claude SessionStart (ragsave-sync.sh)   → event: session.created
 //   Claude Stop (ragsave-sync.sh)           → event: session.idle
 //   Claude PreToolUse(Bash|Write) scratch   → tool.execute.before
-//   Claude SessionEnd (scratch.mjs)         → event: session.deleted
+//   Claude Stop, SessionEnd (scratch.mjs)   → event: session.idle, session.deleted
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
@@ -96,6 +96,9 @@ export const TokensaveGuard = async ({ directory }) => {
       if (event.type === 'session.deleted') {
         try { removeScratch(event.properties?.info?.id); } catch { /* см. выше */ }
         return;
+      }
+      if (event.type === 'session.idle') {
+        try { removeScratch(event.properties?.sessionID); } catch { /* см. выше */ }
       }
       if (!SYNC_EVENTS.has(event.type)) return;
       runDetached('ragsave-sync.sh', directory);
