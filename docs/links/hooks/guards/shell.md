@@ -6,6 +6,7 @@ paths:
   - "ai-hooks/claude/bash-router.mjs"
   - "ai-hooks/scratch-core.mjs"
   - "ai-hooks/claude/scratch.mjs"
+  - "ai-hooks/claude/dispatch.mjs"
   - "ai-hooks/bin/mcp-serve.sh"
   - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
@@ -37,11 +38,14 @@ paths:
   роутер чтения молча пропускает всё, тесты `test-guards.mjs` не заметят: они
   создают таблицу сами.
 - Имена файлов хуков — регистрация по путям `$HOME/.ai-hooks/…` в
-  `claude/settings.json`; `opencode/plugin/tokensave-guard.js` импортирует
-  `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он молча
-  перестаёт вызываться; проверка только со следующей сессии.
-- Уборка черновиков — регистрация `ai-hooks/claude/scratch.mjs` в `claude/settings.json`
-  (PreToolUse matcher `Bash|Write`, `Stop` и `SessionEnd`) ↔ `ai-hooks/scratch-core.mjs:scratchCandidates`
+  `claude/settings.json` (PreToolUse/PostToolUse — `dispatch.mjs <Event>`), имена проверок в
+  `ai-hooks/claude/dispatch.mjs:TABLE` → `./<имя>.mjs` и имя `hook` в `hooks.jsonl`;
+  `opencode/plugin/tokensave-guard.js` импортирует
+  `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он
+  перестаёт вызываться (из TABLE — с строкой `crash` на каждом вызове), doctor ищет
+  старое имя; проверка регистрации только со следующей сессии.
+- Уборка черновиков — `scratch` в `ai-hooks/claude/dispatch.mjs:TABLE` (PreToolUse matcher
+  `Bash|Write`) и `ai-hooks/claude/scratch.mjs` в `claude/settings.json` (`Stop` и `SessionEnd`) ↔ `ai-hooks/scratch-core.mjs:scratchCandidates`
   (знает только `Write.file_path` и `Bash.command`) и события `tool.execute.before`/`session.idle`/`session.deleted`
   в `ai-hooks/opencode/tokensave-guard.mjs:SCRATCH_CALLS`. Добавил в matcher инструмент без
   ветки в `scratchCandidates` — его файлы в /tmp не убираются; убрал `Stop` — черновики живут

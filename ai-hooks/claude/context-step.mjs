@@ -18,22 +18,15 @@
 // каждом вызове напоминание стоило бы дороже того, что экономит.
 
 import { contextNotice, noteWork } from '../context-core.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (c) => { raw += c; });
-process.stdin.on('end', () => {
-  try {
-    const input = JSON.parse(raw);
-    // Сначала отметка о работе, потом замер: именно здесь видно имя инструмента,
-    // а от него зависит, есть ли в сессии что передавать и какой текст порога верен.
-    noteWork(input);
-    const notice = contextNotice(input, { phase: 'step' });
-    if (notice) {
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: notice.text },
-      }));
-    }
-  } catch { /* замер не должен ломать ход */ }
-  process.exit(0);
-});
+export function check(input) {
+  // Сначала отметка о работе, потом замер: именно здесь видно имя инструмента,
+  // а от него зависит, есть ли в сессии что передавать и какой текст порога верен.
+  noteWork(input);
+  const notice = contextNotice(input, { phase: 'step' });
+  return notice ? { context: notice.text } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PostToolUse');

@@ -1,9 +1,12 @@
 #!/usr/bin/env node
-// Хук, который отдаёт решение из самого входа — проверка respond/decide в hook-io
-// без гардов. Поля fixture_* добавляет тест.
-import { readInput, respond, decide } from '../../claude/hook-io.mjs';
+// Хук, который отдаёт решение из самого входа — проверка runHook в hook-io
+// без гардов. Поля fixture_* добавляет тест: fixture_decision — решение,
+// без него fixture_reason значит deny.
+import { runHook } from '../../claude/hook-io.mjs';
 
-readInput((input) => {
-  if (input.fixture_exit === 'decide') decide(input, input.fixture_decision, input.fixture_reason);
-  respond(input, input.fixture_reason);
-});
+runHook((input) => {
+  const decision = input.fixture_exit === 'decide'
+    ? input.fixture_decision
+    : (input.fixture_reason ? 'deny' : null);
+  return decision ? { decision, reason: input.fixture_reason } : null;
+}, 'PreToolUse');

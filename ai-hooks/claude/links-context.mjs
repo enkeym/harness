@@ -19,13 +19,14 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { repoRoot, statePath, projectKey } from '../state-core.mjs';
+import { repoRoot, statePath, projectKey, isEntryPoint } from '../state-core.mjs';
 import { bodyOf, domainFiles, mapDirOf, pathsOf } from '../links-core.mjs';
+import { runHook } from './hook-io.mjs';
 
 const STATE_DIR = statePath('links-context');
 
-// Та же выборка, что matcher хука в claude/settings.json: там — чтобы не
-// запускать node на каждом чтении, здесь — чтобы правило проверялось тестом.
+// Та же выборка, что matcher links-context в claude/dispatch.mjs: там — чтобы не
+// грузить модуль на каждом чтении, здесь — чтобы правило проверялось тестом.
 const EDIT_TOOL_RE =
   /^(Edit|Write|MultiEdit|mcp__tokensave__tokensave_(str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol))$/;
 
@@ -76,35 +77,24 @@ function render(hits) {
     .join('\n\n');
 }
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (c) => { raw += c; });
-process.stdin.on('end', () => {
-  try {
-    const input = JSON.parse(raw);
-    if (!EDIT_TOOL_RE.test(String(input.tool_name || ''))) process.exit(0);
-    const touched = touchedFile(input);
-    if (!touched) process.exit(0);
+export function check(input) {
+  if (!EDIT_TOOL_RE.test(String(input.tool_name || ''))) return null;
+  const touched = touchedFile(input);
+  if (!touched) return null;
 
-    const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
-    const file = path.resolve(cwd, touched);
-    const root = repoRoot(path.dirname(file));
-    if (!root) process.exit(0);
-    const mapDir = mapDirOf(root);
-    if (!mapDir) process.exit(0);
+  const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const file = path.resolve(cwd, touched);
+  const root = repoRoot(path.dirname(file));
+  if (!root) return null;
+  const mapDir = mapDirOf(root);
+  if (!mapDir) return null;
 
-    const rel = path.relative(root, file).split(path.sep).join('/');
-    if (rel.startsWith('..')) process.exit(0);
+  const rel = path.relative(root, file).split(path.sep).join('/');
+  if (rel.startsWith('..')) return null;
 
-    const sessionId = String(input.session_id || 'default');
-    const hits = matchedDomains(root, mapDir, rel).filter((h) => !shown(sessionId, root, h.domain));
-    if (!hits.length) process.exit(0);
+  const sessionId = String(input.session_id || 'default');
+  const hits = matchedDomains(root, mapDir, rel).filter((h) => !shown(sessionId, root, h.domain));
+  return hits.length ? { context: render(hits) } : null;
+}
 
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: render(hits) },
-    }));
-  } catch {
-    // подсказка не должна ломать ход
-  }
-  process.exit(0);
-});
+if (isEntryPoint(import.meta.url)) runHook(check, 'PostToolUse');

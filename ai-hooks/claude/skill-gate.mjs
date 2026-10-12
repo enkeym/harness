@@ -8,12 +8,15 @@
 // запрет, иначе его чинят amend и force push.
 
 import { gateEnabled, loadedSkills, missingSkills, denyReason, commitMessageProblem } from '../skill-core.mjs';
-import { readInput, decide } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-readInput((input) => {
-  if (!input.session_id || !gateEnabled()) decide(input, null);
+export function check(input) {
+  if (!input.session_id || !gateEnabled()) return null;
   const gap = missingSkills(input.tool_name, input.tool_input, loadedSkills(input.session_id), input.cwd);
-  if (gap) decide(input, 'deny', denyReason(gap));
+  if (gap) return { decision: 'deny', reason: denyReason(gap) };
   const msg = input.tool_name === 'Bash' ? commitMessageProblem(input.tool_input?.command) : null;
-  decide(input, msg ? 'deny' : null, msg);
-});
+  return msg ? { decision: 'deny', reason: msg } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

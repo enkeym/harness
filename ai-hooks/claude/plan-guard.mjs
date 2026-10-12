@@ -6,16 +6,19 @@
 
 import fs from 'node:fs';
 import { oversizedPlan } from '../context-core.mjs';
-import { readInput, respond } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
 function planText(ti) {
   if (typeof ti.plan === 'string') return ti.plan;
   try { return fs.readFileSync(ti.planFilePath, 'utf8'); } catch { return ''; }
 }
 
-readInput((input) => {
+export function check(input) {
   const reason = input.tool_name === 'ExitPlanMode'
     ? oversizedPlan(planText(input.tool_input || {}))
     : null;
-  respond(input, reason);
-});
+  return reason ? { decision: 'deny', reason } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

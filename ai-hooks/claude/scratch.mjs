@@ -5,13 +5,16 @@
 // пропускает.
 
 import { recordScratch, removeScratch } from '../scratch-core.mjs';
-import { readInput } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
 const END_EVENTS = new Set(['Stop', 'SessionEnd']);
 
-readInput((input) => {
+export function check(input) {
   const sid = input.session_id;
   if (END_EVENTS.has(input.hook_event_name)) removeScratch(sid);
   else recordScratch(sid, input.tool_name, input.tool_input);
-  process.exit(0);
-});
+  return null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

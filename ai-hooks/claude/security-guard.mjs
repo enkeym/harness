@@ -7,9 +7,10 @@
 // повторный вызов значило бы отменять запрет вторым нажатием.
 
 import { securityGuard, DENY } from '../security-core.mjs';
-import { readInput, decide } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-readInput((input) => {
+export function check(input) {
   let verdict = null;
   try {
     // Корень сессии, а не текущий cwd: `cd ~/harness` из чужого проекта не
@@ -20,11 +21,11 @@ readInput((input) => {
     verdict = null; // fail-open: гард не должен ломать работу
   }
 
-  if (!verdict) decide(input, null);
+  if (!verdict) return null;
+  return {
+    decision: verdict.level,
+    reason: (verdict.level === DENY ? 'security-guard, запрет: ' : 'security-guard: ') + verdict.reason,
+  };
+}
 
-  decide(
-    input,
-    verdict.level,
-    (verdict.level === DENY ? 'security-guard, запрет: ' : 'security-guard: ') + verdict.reason,
-  );
-});
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

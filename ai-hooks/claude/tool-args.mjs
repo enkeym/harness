@@ -4,10 +4,13 @@
 // Адаптер: формат хука Claude ↔ ядро tool-args-core.mjs:normalizeToolInput.
 
 import { normalizeToolInput } from '../tool-args-core.mjs';
-import { readInput, rewrite, respond } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-readInput((input) => {
+export function check(input) {
   const fixed = normalizeToolInput(input.tool_name, input.tool_input);
-  if (fixed === input.tool_input) respond(input, null);
-  rewrite(input, fixed, 'имена параметров tokensave');
-});
+  if (fixed === input.tool_input) return null;
+  return { updatedInput: fixed, reason: 'имена параметров tokensave' };
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

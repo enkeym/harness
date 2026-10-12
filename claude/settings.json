@@ -59,88 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/ask-guard.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/security-guard.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/skill-track.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace|mcp__tokensave__tokensave_replace_lines|mcp__tokensave__tokensave_insert_at",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/skill-gate.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|mcp__ide__executeCode",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/bash-router.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/read-router.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__tokensave__tokensave_read|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/tool-args.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "ExitPlanMode",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/plan-guard.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/output-clip.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/scratch.mjs\""
+            "command": "node \"$HOME/.ai-hooks/claude/dispatch.mjs\" PreToolUse"
           }
         ]
       },
@@ -163,16 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/context-step.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|mcp__tokensave__tokensave_multi_str_replace|mcp__tokensave__tokensave_replace_lines|mcp__tokensave__tokensave_insert_at|mcp__tokensave__tokensave_insert_at_symbol|mcp__tokensave__tokensave_replace_symbol",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/claude/links-context.mjs\""
+            "command": "node \"$HOME/.ai-hooks/claude/dispatch.mjs\" PostToolUse"
           }
         ]
       }

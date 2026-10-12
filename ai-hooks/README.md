@@ -20,7 +20,7 @@ Shell-гард держит одно правило: **shell запускает 
 `os.tmpdir()` вне проекта (вывод тестов) вместе с чтением такого файла
 `cat`/`head`/`tail`; проект — индекс tokensave или
 `.git` вверх по дереву, клон в `/tmp` черновиком не считается, ссылка из `/tmp` судится
-по тому, куда ведёт. Созданное агентом в `/tmp` удаляется в конце сессии — см.
+по тому, куда ведёт. Созданное агентом в `/tmp` удаляется в конце хода — см.
 «Уборка». `cd` в `~/.claude/projects` — отказ: каталоги транскриптов
 начинаются с `-`, и относительный путь или glob `*/…` оттуда `ls`, `jq`, `xargs`
 читают как опцию; правило текстом в скилле doctor не держалось.
@@ -58,7 +58,8 @@ state-core.mjs             # единый корень рантайм-состо
                             # repoRoot / currentBranch / projectKey для всех хуков
 ask-core.mjs                # ask mode: состояние режима и что считается изменением
 hooklog-core.mjs                # журнал решений хуков → logs/hooks.jsonl, захват падений
-claude/hook-io.mjs              # общий ввод/вывод PreToolUse + журнал
+claude/hook-io.mjs              # общий ввод/вывод: runHook, ответ check → JSON события, журнал
+claude/dispatch.mjs             # один node на PreToolUse/PostToolUse: matcher'ы, check адаптеров, слияние ответов
 claude/bash-router.mjs          # адаптер Claude: PreToolUse(Bash|mcp__ide__executeCode)
 claude/read-router.mjs          # адаптер Claude: PreToolUse(Read) — файл из индекса читает tokensave
 tool-args-core.mjs              # угаданные имена параметров tokensave (path у read, file и old_string у правок) → настоящие
@@ -99,7 +100,8 @@ logs/errors.log                 # журнал отказов фоновых з�
 logs/hooks.jsonl                # решения хуков по сессиям: deny/ask, падения, медленные
 test/test-guards.mjs            # shell-гард: одни сценарии через оба адаптера
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
-test/test-hook-io.mjs           # ответ хука: битый stdin, respond, decide, журнал
+test/test-hook-io.mjs           # ответ хука: битый stdin, runHook deny/ask/null, журнал
+test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, регистрация
 test/test-tool-args.mjs         # имена параметров tokensave: алиасы, пары замен, ответ хука, гарды под угаданным именем
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
@@ -211,7 +213,8 @@ ANSI-последовательности и повторы `copying DB` чис�
 строку в hooks.jsonl и стек в errors.log (`exit=crash`, тот же формат, что у
 `log-error.sh`) и выходит с кодом 0 — вызов пропускается, как при любом другом
 отказе инфраструктуры (fail-open). Контекст (сессия, хук, инструмент) ставит
-`readInput`.
+`readInput`, диспетчер — перед каждой проверкой: в `hook` имя проверки, как у
+отдельного хука; `slow` за весь процесс — одна строка с `hook: "dispatch"`.
 
 Тесты, запускающие настоящие хук-скрипты, импортируют `test/env-isolate.mjs`
 первым: он уводит в temp `AI_HOOKS_HOOKS_LOG`, `AI_HOOKS_LOG_DIR` и
@@ -525,9 +528,17 @@ tokensave) в корне такого репозитория. Файл пров�
 
 ## Подключение
 
-**Claude Code** — `~/.claude/settings.json`, секция `hooks`:
-`node ~/.ai-hooks/claude/bash-router.mjs` (matcher `Bash|mcp__ide__executeCode`),
-`node ~/.ai-hooks/claude/read-router.mjs` (matcher `Read`): файл из таблицы
+**Claude Code** — `~/.claude/settings.json`, секция `hooks`. `PreToolUse` и
+`PostToolUse` — один `node ~/.ai-hooks/claude/dispatch.mjs <Event>` на matcher `*`:
+старт node ~100 мс, и Bash раньше поднимал шесть процессов. Matcher'ы проверок — в
+`TABLE` диспетчера, ниже они в скобках. Каждая проверка судит исходный вход,
+как параллельный хук: deny у кого-то — deny с причинами всех запретивших, правки входа
+отброшены; иначе ask (+ `updatedInput`); иначе `updatedInput`; additionalContext
+склеивается в порядке таблицы. Падение проверки — `crash` под её именем,
+остальные работают. Адаптеры экспортируют `check(input)` и остаются точками
+входа для тестов.
+`bash-router` (matcher `Bash|mcp__ide__executeCode`),
+`read-router` (matcher `Read`): файл из таблицы
 `files` индекса tokensave читают `tokensave_body`/`tokensave_read`, не `Read`
 целиком — после `a0ec8f2` доля tokensave в web_groza упала с 81% до 27%
 (`bin/tool-share.mjs`), и текст правил её не гарантирует. Правки не роутятся:
@@ -539,28 +550,28 @@ tokensave) в корне такого репозитория. Файл пров�
 не читает («resolves outside selected graph root»), поэтому отказ называет
 `graph_root` с корнем индекса файла, а в сессии вне проекта сервера нет и `Read`
 проходит.
-`node ~/.ai-hooks/claude/tool-args.mjs` (matcher `mcp__tokensave__tokensave_read|…_str_replace|…_multi_str_replace`):
+`tool-args` (matcher `mcp__tokensave__tokensave_read|…_str_replace|…_multi_str_replace`):
 схемы этих инструментов отложены, модель угадывает имена параметров, и сервер
 отвечал «missing required parameter» — 334 ошибки за 22.09–10.10.2026
 (`bin/tool-share.mjs --waste`). Хук отдаёт `updatedInput` с настоящими именами
-без решения о разрешении. Хуки идут параллельно и видят исходный вход, поэтому
+без решения о разрешении. Проверки видят исходный вход, поэтому
 security-guard и skill-gate сверяют путь через тот же `normalizeToolInput`.
 Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
-Карта связей: `node ~/.ai-hooks/claude/links-context.mjs` на `PostToolUse`
+Карта связей: `links-context` на `PostToolUse`
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
-Экономия контекста: `node ~/.ai-hooks/claude/output-clip.mjs` на `PreToolUse`
-(matcher `Bash`, последним в цепочке — гарды должны видеть исходную команду),
+Экономия контекста: `output-clip` на `PreToolUse`
+(matcher `Bash`; его правка входа без причины и в журнал не пишется), `context-step` на `PostToolUse`,
 `node ~/.ai-hooks/claude/context-meter.mjs` на `UserPromptSubmit`,
 `node ~/.ai-hooks/claude/paste-guard.mjs` на `UserPromptSubmit` первым в
 цепочке — заблокированный промпт остальным хукам не достаётся,
-`node ~/.ai-hooks/claude/plan-guard.mjs` на `PreToolUse` (matcher `ExitPlanMode`).
-Гейт скиллов: `node ~/.ai-hooks/claude/skill-track.mjs` на `PreToolUse`
-(matcher `Skill`) и на `UserPromptSubmit`, `node ~/.ai-hooks/claude/skill-gate.mjs`
+`plan-guard` на `PreToolUse` (matcher `ExitPlanMode`).
+Гейт скиллов: `skill-track` на `PreToolUse`
+(matcher `Skill`) и `node ~/.ai-hooks/claude/skill-track.mjs` на `UserPromptSubmit`, `skill-gate`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at`,
 после гардов и до shell-гарда).
 Вопрос только через меню: `node ~/.ai-hooks/claude/question-guard.mjs` на `Stop`.
-Черновики `/tmp`: `node ~/.ai-hooks/claude/scratch.mjs` на `PreToolUse`
-(matcher `Bash|Write`) и на `SessionEnd`.
+Черновики `/tmp`: `scratch` на `PreToolUse`
+(matcher `Bash|Write`), `node ~/.ai-hooks/claude/scratch.mjs` на `Stop` и `SessionEnd`.
 
 **OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
 `opencode/tokensave-guard.mjs` — в нём shell-гард и гард безопасности.
@@ -799,6 +810,7 @@ node ~/.ai-hooks/test/test-output-clip.mjs
 node ~/.ai-hooks/test/test-question-guard.mjs
 node ~/.ai-hooks/test/test-hooklog.mjs
 node ~/.ai-hooks/test/test-hook-io.mjs
+node ~/.ai-hooks/test/test-dispatch.mjs
 node ~/.ai-hooks/test/test-tool-args.mjs
 node ~/.ai-hooks/test/test-statusline.mjs
 ```

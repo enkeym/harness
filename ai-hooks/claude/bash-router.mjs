@@ -5,9 +5,10 @@
 // Срабатывает ТОЛЬКО когда команда обращается к файлу из индекса tokensave.
 
 import { guardBash, guardExec, CLAUDE_LABELS } from '../guard-core.mjs';
-import { readInput, respond } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-readInput((input) => {
+export function check(input) {
   const ti = input.tool_input || {};
   const cwd = input.cwd;
   let reason = null;
@@ -21,5 +22,7 @@ readInput((input) => {
       break;
   }
 
-  respond(input, reason);
-});
+  return reason ? { decision: 'deny', reason } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

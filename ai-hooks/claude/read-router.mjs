@@ -5,12 +5,15 @@
 // Срабатывает ТОЛЬКО для файлов, которые есть в индексе tokensave.
 
 import { guardRead, CLAUDE_LABELS } from '../guard-core.mjs';
-import { readInput, respond } from './hook-io.mjs';
+import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
-readInput((input) => {
+export function check(input) {
   const ti = input.tool_input || {};
   const reason = input.tool_name === 'Read'
     ? guardRead(ti.file_path || ti.path || '', input.cwd, CLAUDE_LABELS, input.session_id)
     : null;
-  respond(input, reason);
-});
+  return reason ? { decision: 'deny', reason } : null;
+}
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');

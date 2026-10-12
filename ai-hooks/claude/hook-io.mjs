@@ -1,17 +1,23 @@
-// Общий ввод/вывод PreToolUse-хуков Claude Code: разбор stdin, формат ответа,
-// журнал решений и захват падений. bash-router, ask-guard и security-guard
-// берут отсюда ввод и выход.
+// Общий ввод/вывод хуков Claude Code: разбор stdin, формат ответа, журнал
+// решений и захват падений. Адаптер экспортирует check(input) и отдаёт его
+// runHook, когда запущен сам; claude/dispatch.mjs зовёт те же check в одном
+// процессе на событие.
+//
+// Ответ check: null — молчит; { decision: 'deny'|'ask', reason } — решение о
+// вызове; { updatedInput, reason } — исправленный вход; { context } —
+// additionalContext; { block: reason } — промпт стёрт или ход не завершён.
 
 import { setHookContext, logDecision, logSlowIfNeeded, logCrash } from '../hooklog-core.mjs';
 
+// Ошибка разбора stdin → пропускаем вызов: хук не должен ломать работу агента.
 // Исключение внутри хука раньше роняло процесс с ненулевым кодом: Claude
 // показывал «hook error», шёл дальше, а причина не оставалась нигде. Теперь
 // падение уходит в журналы, а вызов пропускается — fail-open, как и у гардов.
-process.on('uncaughtException', (e) => { logCrash(e); process.exit(0); });
-process.on('unhandledRejection', (e) => { logCrash(e); process.exit(0); });
-
-// Ошибка разбора stdin → пропускаем вызов: хук не должен ломать работу агента.
+// Перехват ставится здесь, а не при импорте: тест, взявший из адаптера
+// функцию, иначе выходил бы с кодом 0 на любом своём исключении.
 export function readInput(cb) {
+  process.on('uncaughtException', (e) => { logCrash(e); process.exit(0); });
+  process.on('unhandledRejection', (e) => { logCrash(e); process.exit(0); });
   let raw = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (c) => { raw += c; });
@@ -23,25 +29,9 @@ export function readInput(cb) {
   });
 }
 
-function finish(payload) {
+export function finish(payload) {
   if (payload) process.stdout.write(JSON.stringify(payload));
   process.exit(0);
-}
-
-// Разрешённый вызов: в журнал попадает только медленный проход.
-function allow() {
-  logSlowIfNeeded();
-  finish(null);
-}
-
-function verdictPayload(decision, reason) {
-  return {
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: decision,
-      permissionDecisionReason: reason,
-    },
-  };
 }
 
 // Цель вызова для журнала: путь, команда, код или паттерн — что есть.
@@ -52,22 +42,40 @@ function targetOf(input) {
   return String(target).replace(/\s+/g, ' ').slice(0, 200);
 }
 
-// Единый выход: decision null → разрешено, иначе 'deny' | 'ask' с причиной.
-// Завершает процесс — управление вызывающему не возвращается.
-export function decide(input, decision, reason) {
-  if (!decision) allow();
-  logDecision(decision, { target: targetOf(input), reason });
-  finish(verdictPayload(decision, reason));
+// Строка журнала по ответу check; имя хука в контексте выставлено до вызова.
+// Исправленный вход пишется только с причиной: обёртка шумной команды
+// (output-clip) — штатный ход, а не решение.
+export function logVerdict(input, result) {
+  if (!result) return false;
+  if (result.decision) return logDecision(result.decision, { target: targetOf(input), reason: result.reason });
+  if (result.updatedInput && result.reason) return logDecision('rewrite', { target: targetOf(input), reason: result.reason });
+  if (result.block) return logDecision('block', { reason: result.block });
+  return false;
 }
 
-// Вызов с исправленным входом. Без permissionDecision: allow отсюда снял бы
-// вопрос о разрешении и plan mode, а решать их — не дело этого хука.
-export function rewrite(input, updatedInput, reason) {
-  logDecision('rewrite', { target: targetOf(input), reason });
-  finish({ hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput } });
+// Ответ check → JSON события. updatedInput без permissionDecision: allow
+// отсюда снял бы вопрос о разрешении и plan mode, а решать их — не дело хука,
+// который только правит вход.
+export function payloadOf(event, result) {
+  if (!result) return null;
+  if (result.block) return { decision: 'block', reason: result.block };
+  if (result.context) return { hookSpecificOutput: { hookEventName: event, additionalContext: result.context } };
+  const out = { hookEventName: event };
+  if (result.decision) {
+    out.permissionDecision = result.decision;
+    out.permissionDecisionReason = result.reason;
+  }
+  if (result.updatedInput) out.updatedInput = result.updatedInput;
+  return { hookSpecificOutput: out };
 }
 
-// reason === null → вызов разрешён, иначе запрет.
-export function respond(input, reason) {
-  decide(input, reason ? 'deny' : null, reason);
+// Точка входа одной проверки. Падение check → crash в журнал и молчание.
+// Медленный проход пишется, только если решения в журнале нет.
+export function runHook(check, event) {
+  readInput((input) => {
+    let result = null;
+    try { result = check(input); } catch (e) { logCrash(e); }
+    if (!logVerdict(input, result)) logSlowIfNeeded();
+    finish(payloadOf(event, result));
+  });
 }

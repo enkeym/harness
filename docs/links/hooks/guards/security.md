@@ -5,6 +5,7 @@ paths:
   - "ai-hooks/claude/security-guard.mjs"
   - "ai-hooks/claude/links-context.mjs"
   - "ai-hooks/claude/tool-args.mjs"
+  - "ai-hooks/claude/dispatch.mjs"
   - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
   - "claude/settings.json"
@@ -22,10 +23,10 @@ paths:
   `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
   такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
   `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
-- Инструменты правки — matcher `links-context` в `claude/settings.json` ↔
+- Инструменты правки — matcher `links-context` в `ai-hooks/claude/dispatch.mjs:TABLE` ↔
   `ai-hooks/claude/links-context.mjs:EDIT_TOOL_RE`. Новый инструмент правки только
   в одном месте — карта на нём молча не подключается. То же для skill-gate:
-  matcher в `claude/settings.json` ↔ `ai-hooks/skill-core.mjs:MCP_EDIT_RE` —
+  matcher в `dispatch.mjs:TABLE` ↔ `ai-hooks/skill-core.mjs:MCP_EDIT_RE` —
   правка SKILL.md через tokensave молча проходит мимо skill-authoring. Тот же
   `MCP_EDIT_RE` берёт `ai-hooks/security-core.mjs:securityGuard` (matcher `*`):
   новый инструмент правки tokensave, не вписанный туда, правит харнес из чужой
@@ -38,6 +39,6 @@ paths:
   `ai-hooks/security-core.mjs:securityGuard`, `ai-hooks/skill-core.mjs:editedFile` (хуки видят исходный
   вход): алиас мимо гардов — правка `.env` или SKILL.md под ним без проверки.
   Инструменты с алиасами — `ai-hooks/tool-args-core.mjs:TOOL_RE` ↔ matcher `tool-args` в
-  `claude/settings.json`: новый инструмент только в `TOOL_RE` — гарды сверяют
+  `ai-hooks/claude/dispatch.mjs:TABLE`: новый инструмент только в `TOOL_RE` — гарды сверяют
   исправленный путь, а сервер получает угаданное имя и отвечает ошибкой.
 - Текст отказа рекурсивного grep и формы коммита для `ask` — `hooks/guards/shell.md`.

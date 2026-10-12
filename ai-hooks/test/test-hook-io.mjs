@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Тесты общего ввода/вывода PreToolUse-хуков (claude/hook-io.mjs): битый stdin
-// пропускает вызов; respond отдаёт deny с причиной и повторяет его на повтор;
-// decide отдаёт ask/deny и молчит на null; решения попадают в журнал.
+// Тесты общего ввода/вывода хуков (claude/hook-io.mjs:runHook): битый stdin
+// пропускает вызов; deny с причиной повторяется на повтор; ask/deny отдаются,
+// null молчит; решения попадают в журнал.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';

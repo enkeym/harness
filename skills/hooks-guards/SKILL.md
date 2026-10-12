@@ -122,9 +122,9 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 ## When something is broken
 
-1. `~/.ai-hooks/logs/hooks.jsonl` — one line per hook decision (`deny`, `ask`,
-   `block`, `slow`, `crash`) with `sid`, `target`, `ms`; allowed calls are not written.
-   The per-session trace of "what blocked, what came next".
+1. `~/.ai-hooks/logs/hooks.jsonl` — one line per check decision (`deny`, `ask`, `block`, `slow`,
+   `crash`) with `sid`, `target`, `ms`; allowed calls are not written. The per-session trace of
+   "what blocked, what came next"; `slow` of the one-process `claude/dispatch.mjs` names `dispatch`.
 2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes
    (`exit=crash`); first read on any ragsave report. Marks live in `~/.claude/state/`.
 3. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:

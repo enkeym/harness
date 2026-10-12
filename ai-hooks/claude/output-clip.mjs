@@ -16,6 +16,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import { isEntryPoint } from '../state-core.mjs';
+import { runHook } from './hook-io.mjs';
 
 const HOME = process.env.HOME || os.homedir();
 const CLIP = path.join(HOME, '.ai-hooks', 'bin', 'clip-output.sh');
@@ -123,26 +124,12 @@ export function clipCommand(command, opts = {}) {
   return `${CLIP} ${label} -- ${shellQuote(cmd)}`;
 }
 
-if (isEntryPoint(import.meta.url)) {
-  let raw = '';
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (c) => { raw += c; });
-  process.stdin.on('end', () => {
-    try {
-      const input = JSON.parse(raw);
-      const ti = input.tool_input || {};
-      if (input.tool_name === 'Bash') {
-        const clipped = clipCommand(ti.command, { background: ti.run_in_background });
-        if (clipped) {
-          process.stdout.write(JSON.stringify({
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse',
-              updatedInput: { ...ti, command: clipped },
-            },
-          }));
-        }
-      }
-    } catch { /* ограничитель вывода не должен мешать команде выполниться */ }
-    process.exit(0);
-  });
+// Без причины: обёртка — штатный ход, в журнал решений она не пишется.
+export function check(input) {
+  const ti = input.tool_input || {};
+  if (input.tool_name !== 'Bash') return null;
+  const clipped = clipCommand(ti.command, { background: ti.run_in_background });
+  return clipped ? { updatedInput: { ...ti, command: clipped } } : null;
 }
+
+if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');
