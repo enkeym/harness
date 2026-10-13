@@ -85,12 +85,15 @@ user asks, not the only trigger.
 
 ## Two triggers that must not wait for a skill
 
-- **Commit and push.** A logical unit is done (a plan task, a verified edit, a
-  green fix) → impact pass, `review-standards`, `review-security`, fix
-  findings, commit, push — without asking. Only a restriction in the project's
-  own memory or rules file stops a step; then do the rest and report the
-  skipped step in one line. A found secret stops everything. Procedure: skill
-  `git-flow`.
+- **Commit and push.** A unit is done — the whole user request or an approved
+  plan step, every part applied, verified with real output (`tsc`, tests, the
+  reproduced case), no open question → impact pass, `review-standards`,
+  `review-security`, fix findings, commit, push — without asking. One edit of
+  an unfinished request, an unverified fix, or a change the user is still
+  steering is not done. In doubt → «Закоммитить» as an option in the closing
+  menu, not a commit. Only a restriction in the project's own memory or rules
+  file stops a step; then do the rest and report the skipped step in one line.
+  A found secret stops everything. Procedure: skill `git-flow`.
 - **Impact before the review skills.** Every symbol whose behaviour the diff
   changes goes through `tokensave_impact`/`callers` and the project's map of
   implicit links (`docs/links/`, or whatever map the project already keeps);
