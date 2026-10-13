@@ -11,6 +11,9 @@ Agent-specific tools and gates: `CLAUDE.md`, `AGENTS.md`.
   user says "покажи в чате", "не применяй", "только предложи".
 - Confirm only before: deleting files, deploy, destructive migration, force
   push, merge into a protected branch. Commit and push need no confirmation.
+- What you can run here, run yourself: editing a local `.env`, bringing up or
+  recreating containers, starting a neighbouring service. Hand the user only
+  what needs their hands: an interactive login, CI or Vault access, a decision.
 - A question to the user — a fork, a choice, an open point before a handoff —
   goes through the question tool (`AskUserQuestion` / `question`), options
   with the recommended one first; never left as prose at the end of a reply,
