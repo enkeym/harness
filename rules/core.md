@@ -93,7 +93,9 @@ user asks, not the only trigger.
   steering is not done. In doubt → «Закоммитить» as an option in the closing
   menu, not a commit. Only a restriction in the project's own memory or rules
   file stops a step; then do the rest and report the skipped step in one line.
-  A found secret stops everything. Procedure: skill `git-flow`.
+  A found secret stops everything. Procedure: skill `git-flow`. Outside a git
+  repository (`git rev-parse` fails) the trigger is off: no commit, no
+  «Закоммитить» option, no `git init` — the user says when.
 - **Impact before the review skills.** Every symbol whose behaviour the diff
   changes goes through `tokensave_impact`/`callers` and the project's map of
   implicit links (`docs/links/`, or whatever map the project already keeps);
