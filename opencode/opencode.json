@@ -1,6 +1,18 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "theme": "dracula",
+  "providers": {
+    "opencode": {
+      "models": {
+        "exo-free": { "disabled": true },
+        "ling-3.0-flash-fin-free": { "disabled": true },
+        "ling-3.1-flash-free": { "disabled": true },
+        "mimo-v2.6-flash-free": { "disabled": true },
+        "nemotron-3-ultra-free": { "disabled": true },
+        "cat-jam-free": { "disabled": true }
+      }
+    }
+  },
   "mcp": {
     "tokensave": {
       "type": "local",
