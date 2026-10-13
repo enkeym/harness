@@ -12,8 +12,23 @@
         "nemotron-3-ultra-free": { "disabled": true },
         "cat-jam-free": { "disabled": true }
       }
+    },
+    "anthropic": {
+      "models": {
+        "claude-fable-5-1": { "disabled": true },
+        "claude-haiku-4-5-20251001": { "disabled": true },
+        "claude-opus-4-5-20251101": { "disabled": true },
+        "claude-sonnet-4-5-20250929": { "disabled": true }
+      }
+    },
+    "zai-coding-plan": {
+      "models": {
+        "glm-5.2-highspeed": { "disabled": true },
+        "glm-5.3-highspeed": { "disabled": true }
+      }
     }
   },
+  "disabled_providers": ["google", "gitlab"],
   "mcp": {
     "tokensave": {
       "type": "local",
