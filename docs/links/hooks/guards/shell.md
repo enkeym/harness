@@ -38,7 +38,7 @@ paths:
   создают таблицу сами.
 - Имена файлов хуков — регистрация по путям `$HOME/.ai-hooks/…` в
   `claude/settings.json` (PreToolUse/PostToolUse/UserPromptSubmit/Stop — `dispatch.mjs <Event>`), имена проверок в
-  `ai-hooks/claude/dispatch.mjs:TABLE` → `./<имя>.mjs` (`cleanup` → `../bin/cleanup.mjs`) и имя `hook` в `hooks.jsonl`. Переименовал или перенёс хук — он
+  `ai-hooks/claude/dispatch.mjs:TABLE` → `./<имя>.mjs` (`cleanup` → `ai-hooks/bin/cleanup.mjs`) и имя `hook` в `hooks.jsonl`. Переименовал или перенёс хук — он
   перестаёт вызываться (из TABLE — с строкой `crash` на каждом вызове), doctor ищет
   старое имя; проверка регистрации только со следующей сессии.
 - Уборка черновиков — `scratch` в `ai-hooks/claude/dispatch.mjs:TABLE` (PreToolUse matcher

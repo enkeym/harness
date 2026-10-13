@@ -1033,6 +1033,16 @@
     "key": "ctrl+shift+x",
     "command": "workbench.action.terminal.clear"
   },
+  {
+    "key": "down",
+    "command": "-list.focusDown",
+    "when": "listFocus && !inputFocus && !treestickyScrollFocused"
+  },
+  {
+    "key": "up",
+    "command": "-list.focusUp",
+    "when": "listFocus && !inputFocus && !treestickyScrollFocused"
+  },
   { "key": "ctrl+с", "command": "workbench.action.terminal.sendSequence", "args": { "text": "\u0003" }, "when": "terminalFocus" }, // Ctrl+С на русской раскладке: терминал не шлёт ETX. Далее кастомные клавиши
   {
     "key": "ctrl+l",
