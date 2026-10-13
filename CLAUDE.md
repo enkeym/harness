@@ -17,7 +17,7 @@ Source of the global agent setup. Layout, install and the test list:
 ## Tests
 
 - Any edit in `ai-hooks/` → every `ai-hooks/test/test-*.mjs`; any edit in
-  `skills/`, `rules/core.md`, `claude/CLAUDE.md`, `opencode/` →
+  `skills/`, `rules/core.md`, `claude/CLAUDE.md` →
   `test-skills.mjs` too. `ragsave/` → `ragsave/tests/test_ragsave.py`.
 - Hook tests swap external binaries through `AI_HOOKS_*_CMD` fakes in
   `ai-hooks/test/fixtures/`; a new external call gets a fake, never the real
@@ -26,7 +26,7 @@ Source of the global agent setup. Layout, install and the test list:
 ## Hook code
 
 - Node ESM `.mjs`, no dependencies. Shared logic lives in `ai-hooks/*-core.mjs`;
-  `ai-hooks/claude/` and `ai-hooks/opencode/` are thin adapters over it.
+  `ai-hooks/claude/` is a thin adapter over it.
 - Comments and messages the agent reads are Russian, matching the file.
 - A hook's behaviour is also described in `skills/hooks-guards/SKILL.md` and
   `ai-hooks/README.md` — change them in the same commit.
@@ -35,6 +35,6 @@ Source of the global agent setup. Layout, install and the test list:
 
 - Base `main`, commit and push straight to it.
 - Header `type(scope): …` in English, scopes as in `git log`: `hooks`,
-  `skills`, `rules`, `opencode`, `config`, `harness`.
+  `skills`, `rules`, `config`, `harness`.
 - `claude/settings.json` is rewritten by Claude Code itself (`/config`): a
   diff there nobody asked for is left out of the commit.

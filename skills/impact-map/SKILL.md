@@ -28,7 +28,7 @@ empty → cwd.
    - `плоская` → stop. Splitting a flat map is an edit with the user, not a scan.
    - `создана` → steps 3–5.
 3. `node ~/.ai-hooks/bin/seed-impact-map.mjs <project>` in the background
-   (`run_in_background: true` in Claude Code; OpenCode waits) — 2–5 minutes
+   (`run_in_background: true`) — 2–5 minutes
    on a mid-size project, each ragsave query costs ~4 s. While it runs, list
    the domains from the feature folders on both sides of the tree (`src/<domain>`,
    `client/src/features/<domain>`) and draft one `paths:` list per domain.

@@ -1055,28 +1055,6 @@
     "args": {
       "text": "claude\n"
     }
-  },
-  {
-    "key": "ctrl+k",
-    "command": "runCommands",
-    "args": {
-      "commands": [
-        "workbench.action.terminal.new",
-        {
-          "command": "workbench.action.terminal.sendSequence",
-          "args": {
-            "text": "opencode\n"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "key": "ctrl+shift+k",
-    "command": "workbench.action.terminal.sendSequence",
-    "args": {
-      "text": "opencode\n"
-    }
   }
   // {
   //   "key": "ctrl+l",
@@ -1112,21 +1090,6 @@
   //   "command": "workbench.action.terminal.sendSequence",
   //   "args": {
   //     "text": "~/awg-stop.sh\n"
-  //   }
-  // },
-  // {
-  //   "key": "ctrl+j",
-  //   "command": "runCommands",
-  //   "args": {
-  //     "commands": [
-  //       "workbench.action.terminal.new",
-  //       {
-  //         "command": "workbench.action.terminal.sendSequence",
-  //         "args": {
-  //           "text": "opencode\n"
-  //         }
-  //       }
-  //     ]
   //   }
   // }
 ]

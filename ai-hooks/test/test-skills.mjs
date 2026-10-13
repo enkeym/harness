@@ -3,7 +3,7 @@
 // (name = каталог, описание в кавычках и ≤1024, командные скиллы с
 // argument-hint), тело ≤130 строк, живые относительные ссылки, таблица
 // core.md и строка user-invoked в CLAUDE.md сходятся с реальными скиллами,
-// OpenCode закрывает командные скиллы, test-browser не зовётся ниоткуда,
+// test-browser не зовётся ниоткуда,
 // кроме пользователя, и в скиллах нет фактов конкретного проекта.
 
 import fs from 'node:fs';
@@ -74,7 +74,7 @@ for (const [dir, s] of skills) {
 
   for (const [key, value] of Object.entries(fields)) {
     if (value.includes(': ') || value.startsWith('[')) {
-      check(`${dir}: ${key} в кавычках (строгий YAML OpenCode)`, /^".*"$/.test(value), value.slice(0, 60));
+      check(`${dir}: ${key} в кавычках (строгий YAML)`, /^".*"$/.test(value), value.slice(0, 60));
     }
   }
 
@@ -130,23 +130,11 @@ for (const [dir, s] of skills) {
   check(`${dir}: маршрут в core.md или CLAUDE.md`, routed.has(dir) || claudeMd.includes(`\`${dir}\``));
 }
 
-// --- командные скиллы: CLAUDE.md и OpenCode ---
+// --- командные скиллы: CLAUDE.md ---
 const userInvoked = claudeMd.slice(claudeMd.indexOf('## User-invoked'));
-const opencode = JSON.parse(read(path.join(HARNESS, 'opencode', 'opencode.json')));
-const skillPerm = opencode.permission?.skill || {};
-const ocCommands = path.join(HARNESS, 'opencode', 'command');
 for (const [dir, s] of skills) {
   if (!s.command) continue;
   check(`${dir}: в строке user-invoked CLAUDE.md`, userInvoked.includes(`/${dir}`));
-  const perm = skillPerm[dir];
-  const ocCommand = fs.existsSync(path.join(ocCommands, `${dir}.md`));
-  // Командный скилл в OpenCode либо закрыт, либо спрашивает и зовётся тонкой командой.
-  check(`${dir}: OpenCode deny или ask + команда`, perm === 'deny' || (perm === 'ask' && ocCommand), `perm=${perm}, command=${ocCommand}`);
-}
-for (const f of fs.readdirSync(ocCommands).filter((n) => n.endsWith('.md'))) {
-  for (const [, name] of read(path.join(ocCommands, f)).matchAll(/Load the `([a-z0-9-]+)` skill/g)) {
-    check(`opencode/command/${f}: скилл ${name} существует`, skills.has(name));
-  }
 }
 
 // --- test-browser только по команде пользователя ---

@@ -1,4 +1,4 @@
-// Общая логика shell-гарда — единая точка истины для Claude Code и OpenCode.
+// Общая логика shell-гарда — единая точка истины для хуков Claude Code.
 // Модуль чистый: не читает stdin, не пишет stdout, не знает про формат хуков.
 // Возвращает причину запрета (string) или null.
 //
@@ -20,10 +20,9 @@ import { statePath, readJSON, writeJSON, repoRoot, TMP_DIRS } from './state-core
 const HOME = process.env.HOME || os.homedir();
 const DB_REL = path.join('.tokensave', 'tokensave.db');
 
-// Конфиг/тулинг самих агентов (.claude/…, .opencode/…, ~/.config/opencode/…,
-// ~/.ai-hooks/…) — project-bootstrap не считает такие каталоги проектом.
-const HARNESS_CONFIG_RE =
-  /(^|[\\/])(\.claude|\.opencode|\.ai-hooks)([\\/]|$)|[\\/]\.config[\\/]opencode([\\/]|$)/;
+// Конфиг/тулинг самого агента (.claude/…, ~/.ai-hooks/…) — project-bootstrap
+// не считает такие каталоги проектом.
+const HARNESS_CONFIG_RE = /(^|[\\/])(\.claude|\.ai-hooks)([\\/]|$)/;
 
 export function isHarnessConfigPath(p) {
   return HARNESS_CONFIG_RE.test(String(p || ''));
@@ -63,10 +62,9 @@ export function projectRoot(cwd, filePath) {
   return findRoot(base);
 }
 
-// Имена инструментов различаются между агентами — подставляем их в текст
-// запрета, чтобы он указывал на реально доступный инструмент.
+// Имена инструментов агента — подставляем их в текст запрета, чтобы
+// он указывал на реально доступный инструмент.
 export const CLAUDE_LABELS = { read: 'Read', edit: 'Edit/Write' };
-export const OPENCODE_LABELS = { read: 'read', edit: 'edit/write' };
 
 // ---------------------------------------------------------------------------
 // Разбор нарочно грубый — не парсер shell, а распознавание форм. Всё, что не

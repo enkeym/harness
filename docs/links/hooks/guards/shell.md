@@ -8,7 +8,6 @@ paths:
   - "ai-hooks/claude/scratch.mjs"
   - "ai-hooks/claude/dispatch.mjs"
   - "ai-hooks/bin/mcp-serve.sh"
-  - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
   - "claude/settings.json"
 ---
@@ -39,17 +38,14 @@ paths:
   создают таблицу сами.
 - Имена файлов хуков — регистрация по путям `$HOME/.ai-hooks/…` в
   `claude/settings.json` (PreToolUse/PostToolUse/UserPromptSubmit/Stop — `dispatch.mjs <Event>`), имена проверок в
-  `ai-hooks/claude/dispatch.mjs:TABLE` → `./<имя>.mjs` (`cleanup` → `../bin/cleanup.mjs`) и имя `hook` в `hooks.jsonl`;
-  `opencode/plugin/tokensave-guard.js` импортирует
-  `~/.ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` по `os.homedir()`. Переименовал или перенёс хук — он
+  `ai-hooks/claude/dispatch.mjs:TABLE` → `./<имя>.mjs` (`cleanup` → `../bin/cleanup.mjs`) и имя `hook` в `hooks.jsonl`. Переименовал или перенёс хук — он
   перестаёт вызываться (из TABLE — с строкой `crash` на каждом вызове), doctor ищет
   старое имя; проверка регистрации только со следующей сессии.
 - Уборка черновиков — `scratch` в `ai-hooks/claude/dispatch.mjs:TABLE` (PreToolUse matcher
   `Bash|Write`; `Stop` — после `question-guard`, его блок уборку откладывает: переставил
   выше — черновики незавершённого хода удаляются) и `ai-hooks/claude/scratch.mjs` в `claude/settings.json`
   (`SessionEnd`) ↔ `ai-hooks/scratch-core.mjs:scratchCandidates`
-  (знает только `Write.file_path` и `Bash.command`) и события `tool.execute.before`/`session.idle`/`session.deleted`
-  в `ai-hooks/opencode/tokensave-guard.mjs:SCRATCH_CALLS`. Добавил в matcher инструмент без
+  (знает только `Write.file_path` и `Bash.command`). Добавил в matcher инструмент без
   ветки в `scratchCandidates` — его файлы в /tmp не убираются; убрал `Stop` — черновики живут
   до конца сессии, убрал и `SessionEnd` — список копится, файлы остаются.
 - Отказ `cd` в транскрипты — `ai-hooks/guard-core.mjs:TRANSCRIPTS_DIR` ↔ путь

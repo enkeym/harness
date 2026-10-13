@@ -1,8 +1,8 @@
 # Shared rules
 
-Stack: NestJS, Next.js, React, TypeScript. Shared by Claude Code and OpenCode.
+Stack: NestJS, Next.js, React, TypeScript.
 Only behaviour gates and routing rules here; procedure lives in skills.
-Agent-specific tools and gates: `CLAUDE.md`, `AGENTS.md`.
+Claude Code tools and gates: `CLAUDE.md`.
 
 ## Working style
 
@@ -12,7 +12,7 @@ Agent-specific tools and gates: `CLAUDE.md`, `AGENTS.md`.
 - Confirm only before: deleting files, deploy, destructive migration, force
   push, merge into a protected branch. Commit and push need no confirmation.
 - A question to the user — a fork, a choice, an open point before a handoff —
-  goes through the question tool (`AskUserQuestion` / `question`), options
+  goes through `AskUserQuestion`, options
   with the recommended one first; never left as prose at the end of a reply,
   where it hangs until the user notices it.
 - Re-check the diff before delivering. Found a mistake — fix it openly.

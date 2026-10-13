@@ -22,12 +22,11 @@ const STATE_FILE = statePath('skills-loaded.json');
 const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Файлы, которые правят только со скиллом skill-authoring: SKILL.md и его
-// reference/, командные файлы, агенты OpenCode, общие правила, любой CLAUDE.md
-// или AGENTS.md. Скиллы и команды — только под .claude/, .opencode/,
-// ~/.config/opencode/ или в харнесе: `src/commands/x.md` в проекте не файл
-// инструкций.
+// reference/, командные файлы, агенты, общие правила, любой CLAUDE.md или
+// AGENTS.md. Скиллы и команды — только под .claude/ или в харнесе:
+// `src/commands/x.md` в проекте не файл инструкций.
 const INSTRUCTION_FILE_RE =
-  /(^|[\\/])(\.claude|claude|harness|opencode|\.opencode)[\\/](skills[\\/][^\\/]+[\\/](SKILL\.md|reference[\\/][^\\/]+\.md)|commands[\\/][^\\/]+\.md|agents?[\\/][^\\/]+\.md|rules[\\/][^\\/]+\.md)$/;
+  /(^|[\\/])(\.claude|claude|harness)[\\/](skills[\\/][^\\/]+[\\/](SKILL\.md|reference[\\/][^\\/]+\.md)|commands[\\/][^\\/]+\.md|agents?[\\/][^\\/]+\.md|rules[\\/][^\\/]+\.md)$/;
 const CLAUDE_MD_RE = /(^|[\\/])(CLAUDE|AGENTS)\.md$/;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);

@@ -20,9 +20,9 @@ verified by code, docs or a run before it reaches the user.
 - Does not fire: a bug with an error and a location; a diff the user could
   describe in one line; a prompt that already has the sections below.
 - First line of the reply names why it fired, in Russian: `Задача крупная:
-  <причина> — собираю бриф.` The user can wave it off. Claude Code: then
+  <причина> — собираю бриф.` The user can wave it off. Then
   `EnterPlanMode`; the brief is the plan file it names
-  (`~/.claude/plans/<slug>.md`). OpenCode has no plan mode: brief in chat.
+  (`~/.claude/plans/<slug>.md`).
 - "поспорь", "мозговой штурм", "найди дыры", "что может пойти не так" about one
   decision, library, schema or idea → *Challenge*, not the brief.
 
@@ -73,7 +73,7 @@ verified by code, docs or a run before it reaches the user.
 
 - A real fork = two viable options whose consequences the code cannot settle.
   Not naming, style, what the neighbour decides or the rules files answer.
-- One question tool call (`AskUserQuestion` / `question`), at most three
+- One `AskUserQuestion` call, at most three
   questions, the recommended option first and marked. A second round only if
   an answer opened a new fork.
 - Zero forks → zero questions; the assumptions carry the decisions.
@@ -111,9 +111,8 @@ symbols and commands, not areas. Empty section = `нет`, never omitted.
 1. <единица размером с коммит>
 ```
 
-Claude Code: write the block to the plan file, then `ExitPlanMode` — it is
-the approval; no chat line. OpenCode: print the block, then one line:
-`Правки — по разделам; «да» — начинаю с шага 1.` Then stop.
+Write the block to the plan file, then `ExitPlanMode` — it is the approval;
+no chat line.
 
 ## After the answer
 
@@ -124,8 +123,7 @@ the approval; no chat line. OpenCode: print the block, then one line:
   only, reprint just them, wait again.
 - The brief is the spec: one step, one commit (`rules/core.md` commit trigger).
   A step that turns out different → one line saying so before continuing.
-- Claude Code: the plan file is the brief across sessions — a landed step
+- The plan file is the brief across sessions — a landed step
   becomes `1. [x] <title> — <hash>`, a changed one is rewritten; at `handoff`
   drop `Возражения` and each `Допущения` line no open step relies on — the
-  next session pays for every line. OpenCode: chat only — `handoff` copies
-  the remaining steps.
+  next session pays for every line.

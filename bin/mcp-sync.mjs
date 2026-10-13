@@ -1,12 +1,10 @@
 #!/usr/bin/env node
-// Единый список MCP-серверов (mcp/servers.json) → Claude Code и OpenCode.
+// Единый список MCP-серверов (mcp/servers.json) → Claude Code.
 //
 // Claude держит серверы в ~/.claude.json вперемешку с историей проектов, файл
 // в репозиторий не кладётся — туда пишем через `claude mcp add-json`.
-// OpenCode читает блок `mcp` из opencode/opencode.json — его переписываем здесь,
-// остальные поля файла не трогаем.
 //
-//   node bin/mcp-sync.mjs          привести оба агента к servers.json
+//   node bin/mcp-sync.mjs          привести Claude к servers.json
 //   node bin/mcp-sync.mjs --check  только отчёт; код выхода 1 при расхождении
 //
 // Серверы, которых нет в servers.json, не удаляются — только предупреждение:
@@ -20,7 +18,6 @@ import { fileURLToPath } from 'node:url';
 
 const HARNESS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
-const OPENCODE = path.join(HARNESS, 'opencode', 'opencode.json');
 const CLAUDE_JSON = path.join(os.homedir(), '.claude.json');
 const CHECK = process.argv.includes('--check');
 
@@ -33,17 +30,12 @@ const bad = (s) => console.log(`  \x1b[31m✗\x1b[0m ${s}`);
 // ~/.claude.json уходит уже абсолютный путь.
 const expand = (p) => (p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
 
-// opencode.json лежит в репозитории, поэтому машинных путей в нём нет: `~/`
-// → `{env:HOME}/` (OpenCode подставляет переменные в текст конфига), голое имя
-// остаётся как есть — OpenCode запускают из оболочки, где PATH уже с nvm.
-const forOpencode = (cmd) => (cmd.startsWith('~/') ? `{env:HOME}/${cmd.slice(2)}` : cmd);
-
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 // Голое имя (`foo-mcp`) ищется по PATH того, кто запускает синк, и в
 // Claude уходит найденный путь: так в servers.json не зашита версия node из
 // nvm, а после смены версии --check видит устаревший путь как расхождение.
-// Не нашлось — null: писать агентам команду, которая не стартует, нельзя.
+// Не нашлось — null: писать в Claude команду, которая не стартует, нельзя.
 function resolveCommand(cmd) {
   if (cmd.includes('/')) return expand(cmd);
   for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
@@ -65,50 +57,11 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
     unresolved.add(name);
     continue;
   }
-  servers[name] = { command, opencodeCommand: forOpencode(s.command), args: s.args ?? [], env: s.env ?? {} };
+  servers[name] = { command, args: s.args ?? [], env: s.env ?? {} };
 }
 const listed = (name) => name in servers || unresolved.has(name);
 
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
-function syncOpencode() {
-  console.log('OpenCode (opencode/opencode.json):');
-  const config = readJson(OPENCODE);
-  const current = config.mcp ?? {};
-
-  const wanted = Object.fromEntries(
-    Object.entries(servers).map(([name, s]) => [
-      name,
-      {
-        type: 'local',
-        command: [s.opencodeCommand, ...s.args],
-        ...(Object.keys(s.env).length ? { environment: s.env } : {}),
-      },
-    ]),
-  );
-
-  for (const name of Object.keys(current)) {
-    if (!listed(name)) warn(`${name} — есть в opencode.json, нет в servers.json`);
-  }
-
-  const stale = Object.keys(wanted).filter((name) => !sameJson(current[name], wanted[name]));
-  if (!stale.length) {
-    good(`совпадает: ${Object.keys(wanted).join(', ')}`);
-    return;
-  }
-
-  if (CHECK) {
-    for (const name of stale) warn(`${name} — отличается от servers.json`);
-    drift += stale.length;
-    return;
-  }
-
-  const extra = Object.fromEntries(Object.entries(current).filter(([name]) => !(name in wanted)));
-  // Порядок ключей сохраняется: mcp остаётся на своём месте в файле.
-  config.mcp = { ...wanted, ...extra };
-  fs.writeFileSync(OPENCODE, `${JSON.stringify(config, null, 2)}\n`);
-  for (const name of stale) good(`${name} — обновлён`);
-}
 
 function syncClaude() {
   console.log('Claude Code (~/.claude.json, scope user):');
@@ -148,7 +101,6 @@ function syncClaude() {
   }
 }
 
-syncOpencode();
 syncClaude();
-// Ненайденная команда — ошибка и при синке: сервер у агентов не обновлён.
+// Ненайденная команда — ошибка и при синке: сервер в Claude не обновлён.
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);

@@ -9,7 +9,7 @@
 # ещё раз; по коду 3 log-error.sh отказа не пишет.
 # Только sync --quiet существующей БД (доли секунды, модель не грузится,
 # если ни один файл не изменился); init — решение человека, см. ниже.
-# Каталог проекта: $1 (OpenCode) → CLAUDE_PROJECT_DIR (Claude) → PWD.
+# Каталог проекта: $1 → CLAUDE_PROJECT_DIR → PWD.
 set -u
 
 project_dir="${1:-${CLAUDE_PROJECT_DIR:-$PWD}}"

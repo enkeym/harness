@@ -6,7 +6,7 @@ description: "Which tokensave or ragsave tool answers a question — symbols, ca
 # tokensave and ragsave routing
 
 `rules/core.md` picks the family; this picks the tool inside it and says what
-to do when it answers nothing. Full tool names: `CLAUDE.md` or `AGENTS.md`.
+to do when it answers nothing. Full tool names: `CLAUDE.md`.
 Built-in `Read`, `Edit`, `Write`, grep take what the index cannot: a new
 file, a path outside the index, a string `search` missed.
 
@@ -23,11 +23,6 @@ file, a path outside the index, a string `search` missed.
 | Edit a symbol                         | `str_replace`, `multi_str_replace`, `replace_symbol`, `insert_at*` |
 | How/where/why with no name; docs, configs, yml, migrations, CI, infrastructure | `rag_search` (`only_outside_tokensave: true` when the answer is not code) |
 
-- OpenCode lists the core tools (`context`, `search`, `status`, `read`, `body`,
-  `files`, `callers`, `callees`, `impact`, `str_replace`, `multi_str_replace`)
-  plus `tokensave_more`; another (`signature`, `replace_symbol`, `affected`,
-  `similar`, `blame`…) → `tokensave_more` `area: "all"`
-  once per session first.
 - `read` `map`/`signatures` of a large file comes back cut at 15k characters —
   half a file at full price, then re-read in ranges. Large file → `search`
   with `path_include` for the names, `body` per symbol; a `lines` range only
@@ -38,7 +33,7 @@ file, a path outside the index, a string `search` missed.
   stack. A big area: several scoped `context` calls plus `rag_search`, not a
   subagent.
 - Not indexed (no `.tokensave/`) or agent config paths (`.claude/`,
-  `.opencode/`, `~/.ai-hooks/`) → built-in tools. `tokensave init` is the
+  `~/.ai-hooks/`) → built-in tools. `tokensave init` is the
   user's call — name it, don't run it.
 - Another project: `graph_root` (absolute path).
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Тест-харнес shell-гарда. Одни и те же сценарии через ДВА адаптера:
-//   - Claude Code: claude/bash-router.mjs (stdin JSON → deny/allow)
-//   - OpenCode:    ядро guard-core.mjs с OPENCODE_LABELS (reason → deny/allow)
-// Оба должны давать одинаковые вердикты — это и есть проверка паритета.
+// Тест-харнес shell-гарда. Одни и те же сценарии дважды:
+//   - хук:  claude/bash-router.mjs (stdin JSON → deny/allow)
+//   - ядро: guard-core.mjs напрямую (reason → deny/allow)
+// Вердикты должны совпадать: адаптер не теряет решение ядра.
 //
 // Правило одно: shell запускает команды; существующий файл через shell не
 // читают (Read) и не правят (Edit). Проект — песочница с файлами на диске.
@@ -14,7 +14,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { guardBash, guardExec, guardRead, isIndexed, breakerAllows, OPENCODE_LABELS } from '../guard-core.mjs';
+import { guardBash, guardExec, guardRead, isIndexed, breakerAllows, CLAUDE_LABELS } from '../guard-core.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const BASH = path.join(ROOT, 'claude', 'bash-router.mjs');
@@ -56,13 +56,13 @@ function claude(input) {
   }
 }
 
-// --- OpenCode: вызов ядра так же, как это делает плагин ---
-function opencode(tool, args, directory, sessionID) {
+// --- Ядро: прямой вызов guard-core ---
+function core(tool, args, directory, sessionID) {
   const reason = tool === 'exec'
-    ? guardExec(args.code, directory, OPENCODE_LABELS)
+    ? guardExec(args.code, directory, CLAUDE_LABELS)
     : tool === 'read'
-      ? guardRead(args.filePath, directory, OPENCODE_LABELS, sessionID)
-      : guardBash(args.command, directory, OPENCODE_LABELS);
+      ? guardRead(args.filePath, directory, CLAUDE_LABELS, sessionID)
+      : guardBash(args.command, directory, CLAUDE_LABELS);
   return reason ? 'deny' : 'allow';
 }
 
@@ -75,7 +75,7 @@ function check(desc, got, want) {
 
 function both(desc, want, cc, oc) {
   check(`[claude]   ${desc}`, claude(cc), want);
-  check(`[opencode] ${desc}`, opencode(oc.tool, oc.args, oc.directory, oc.sessionID), want);
+  check(`[core]     ${desc}`, core(oc.tool, oc.args, oc.directory, oc.sessionID), want);
 }
 
 const bash = (desc, want, command, cwd = PROJECT) =>
@@ -173,7 +173,7 @@ bash('jq по не-json файлу → deny', 'deny', 'jq -R . client/src/App.ts
 bash('jq -n без файлов → allow', 'allow', "jq -n '1 + 1'");
 
 // ---- текст отказа называет инструмент, который пройдёт ----
-const why = (command) => guardBash(command, PROJECT, OPENCODE_LABELS) || '';
+const why = (command) => guardBash(command, PROJECT, CLAUDE_LABELS) || '';
 check('cat файла из индекса → tokensave_read', /tokensave_read/.test(why('cat client/src/App.tsx')), true);
 check('> в файл из индекса → tokensave_str_replace', /tokensave_str_replace/.test(why('echo x > client/src/App.tsx')), true);
 check('git grep → rag_search для конфигов', /rag_search/.test(why('git grep -n foo')), true);
@@ -346,8 +346,8 @@ repo('git show <sha другого коммита>:<файл> → allow', 'allow
 repo('git show HEAD~1:<файл> → allow', 'allow', 'git show HEAD~1:client/src/App.tsx');
 repo('git show HEAD --stat → allow', 'allow', 'git show HEAD --stat');
 repo('git show HEAD:<каталог> → allow', 'allow', 'git show HEAD:client/src');
-check('отказ git show HEAD: называет tokensave_read', /tokensave_read/.test(guardBash('git show HEAD:client/src/App.tsx', REPO, OPENCODE_LABELS) || ''), true);
-check('отказ git grep называет ревизию', /<sha\|ветка>/.test(guardBash('git grep -n foo', REPO, OPENCODE_LABELS) || ''), true);
+check('отказ git show HEAD: называет tokensave_read', /tokensave_read/.test(guardBash('git show HEAD:client/src/App.tsx', REPO, CLAUDE_LABELS) || ''), true);
+check('отказ git grep называет ревизию', /<sha\|ветка>/.test(guardBash('git grep -n foo', REPO, CLAUDE_LABELS) || ''), true);
 fs.rmSync(REPO, { recursive: true, force: true });
 
 // ---- легитимные инструменты над теми же путями ----
@@ -369,10 +369,10 @@ both('executeCode без путей → allow', 'allow',
 
 // ---- причина называет замену ----
 {
-  const reason = guardBash('cat package.json', PROJECT, OPENCODE_LABELS);
-  check('[core] причина чтения вне индекса называет read', reason.includes('— read.'), true);
-  const edit = guardBash("sed -i 's/a/b/' package.json", PROJECT, OPENCODE_LABELS);
-  check('[core] причина правки вне индекса называет edit/write', edit.includes('edit/write'), true);
+  const reason = guardBash('cat package.json', PROJECT, CLAUDE_LABELS);
+  check('[core] причина чтения вне индекса называет Read', reason.includes('— Read.'), true);
+  const edit = guardBash("sed -i 's/a/b/' package.json", PROJECT, CLAUDE_LABELS);
+  check('[core] причина правки вне индекса называет Edit/Write', edit.includes('Edit/Write'), true);
 }
 
 // ---- роутер чтения: файл из индекса → tokensave, остальное проходит ----
@@ -381,7 +381,7 @@ let readSeq = 0;
 const read = (desc, want, file, cwd = PROJECT, sid = `read-${process.pid}-${readSeq++}`) =>
   both(desc, want,
     { tool_name: 'Read', tool_input: { file_path: path.join(cwd, file) }, cwd, session_id: sid },
-    { tool: 'read', args: { filePath: path.join(cwd, file) }, directory: cwd, sessionID: sid + '-oc' });
+    { tool: 'read', args: { filePath: path.join(cwd, file) }, directory: cwd, sessionID: sid + '-core' });
 
 read('Read файла из индекса → deny', 'deny', 'client/src/App.tsx');
 read('Read по относительному пути из подкаталога → deny', 'deny', 'App.tsx', path.join(PROJECT, 'client/src'));
@@ -399,8 +399,8 @@ read('Read конфига агента внутри проекта → allow', '
   check('[core] предохранитель: чужая сессия не задета', breakerAllows('other-' + sid, 'Read:/a/x.ts'), false);
   check('[core] isIndexed по файлу индекса', isIndexed(PROJECT, 'client/src/App.tsx'), true);
   check('[core] isIndexed по README', isIndexed(PROJECT, 'README.md'), false);
-  const reason = guardRead(path.join(PROJECT, 'client/src/lib/store/useMarkerStore.ts'), PROJECT, OPENCODE_LABELS, sid + '-r');
-  check('[core] причина называет tokensave_body и read', reason.includes('tokensave_body') && reason.includes('read'), true);
+  const reason = guardRead(path.join(PROJECT, 'client/src/lib/store/useMarkerStore.ts'), PROJECT, CLAUDE_LABELS, sid + '-r');
+  check('[core] причина называет tokensave_body и Read', reason.includes('tokensave_body') && reason.includes('Read'), true);
   check('[core] файл своего проекта — без graph_root', reason.includes('graph_root'), false);
 }
 
@@ -410,12 +410,12 @@ read('Read конфига агента внутри проекта → allow', '
   const sid = `read-foreign-${process.pid}`;
   const other = sandboxProject();
   const file = path.join(PROJECT, 'client/src/App.tsx');
-  const reason = guardRead(file, other, OPENCODE_LABELS, sid);
+  const reason = guardRead(file, other, CLAUDE_LABELS, sid);
   check('[core] файл чужого проекта — отказ с graph_root его корня',
     reason?.includes(`graph_root: "${PROJECT}"`), true);
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-guards-bare-'));
   check('[core] сессия вне проекта (tokensave не поднят) — Read проходит',
-    guardRead(file, bare, OPENCODE_LABELS, sid + '-bare'), null);
+    guardRead(file, bare, CLAUDE_LABELS, sid + '-bare'), null);
   fs.rmSync(other, { recursive: true, force: true });
   fs.rmSync(bare, { recursive: true, force: true });
 }

@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: "Format rules for this harness's instruction files — SKILL.md, command files, OpenCode agents, rules/core.md, CLAUDE.md, AGENTS.md. Load before creating, editing or reviewing any of them, or when a skill fails to trigger."
+description: "Format rules for this harness's instruction files — SKILL.md, command files, rules/core.md, CLAUDE.md, AGENTS.md. Load before creating, editing or reviewing any of them, or when a skill fails to trigger."
 ---
 
 # Skill authoring
@@ -12,11 +12,10 @@ loaded — this skill decides how one is written.
 
 ## Placement
 
-- Global: `~/harness/skills/<name>/SKILL.md` — one directory for both agents;
-  `~/.claude/skills` and `~/.config/opencode/skills` are symlinks, write the
-  harness path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
-- Description in double quotes whenever it contains `: ` — OpenCode parses
-  frontmatter as strict YAML and cuts an unquoted value there.
+- Global: `~/harness/skills/<name>/SKILL.md`; `~/.claude/skills` is a symlink,
+  write the harness path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
+- Description in double quotes whenever it contains `: ` — frontmatter is
+  YAML, an unquoted value is cut there.
 - One area per skill. `Grep` the existing descriptions first: an overlap is
   extended, not duplicated.
 - Extra files once the body would pass ~150 lines, or once a skill legitimately
@@ -76,10 +75,8 @@ loaded — this skill decides how one is written.
 - A command file (`claude/commands/*.md`) — no `name`, no
   `disable-model-invocation`, always user-invoked:
   [reference/commands.md](reference/commands.md).
-- An OpenCode agent (`opencode/agent/*.md`) — same body rules as a skill,
-  OpenCode frontmatter: [reference/agents.md](reference/agents.md).
-- Always-loaded rules — `rules/core.md` (both agents), `claude/CLAUDE.md`,
-  `opencode/AGENTS.md`: [reference/claude-md.md](reference/claude-md.md).
+- Always-loaded rules — `rules/core.md`, `claude/CLAUDE.md`, a project's
+  `CLAUDE.md`/`AGENTS.md`: [reference/claude-md.md](reference/claude-md.md).
 
 ## Procedure — new skill
 
@@ -89,9 +86,7 @@ loaded — this skill decides how one is written.
    sentence be picked out of thirty others?
 4. Body from the template below; run the checklist.
 5. Auto-loaded skill → add its row to the **Skills** table in
-   `~/harness/rules/core.md`; a skill only one agent can run → its row in
-   `CLAUDE.md` or `AGENTS.md` and a deny in the other. Command → the
-   user-invoked line in `CLAUDE.md`.
+   `~/harness/rules/core.md`. Command → the user-invoked line in `CLAUDE.md`.
 6. Commit in `~/harness`: `feat(skills): <what the skill adds>`.
 
 ## Checklist

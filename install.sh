@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Раскатка харнеса на машину: симлинки из этого репозитория в места, где их ждут
-# Claude Code, OpenCode и ragsave.
+# Claude Code и ragsave.
 #
 # Симлинки, а не копии: правка в рабочем каталоге сразу видна git'у, и не нужен
 # отдельный шаг «синхронизировать обратно» — именно он и разъезжается.
@@ -42,15 +42,6 @@ LINKS=(
   "$RAG_HOME/tests|ragsave/tests"
   "$RAG_HOME/README.md|ragsave/README.md"
   "$HOME/.local/bin/ragsave|bin/ragsave"
-  "$HOME/.config/opencode/AGENTS.md|opencode/AGENTS.md"
-  "$HOME/.config/opencode/agent|opencode/agent"
-  "$HOME/.config/opencode/command|opencode/command"
-  "$HOME/.config/opencode/skills|skills"
-  "$HOME/.config/opencode/rules/core.md|rules/core.md"
-  "$HOME/.config/opencode/plugin|opencode/plugin"
-  "$HOME/.config/opencode/themes|opencode/themes"
-  "$HOME/.config/opencode/opencode.json|opencode/opencode.json"
-  "$HOME/.config/opencode/tui.json|opencode/tui.json"
   "$HOME/.bashrc|shell/bashrc"
   "$HOME/.bash_env|shell/bash_env"
   "$HOME/.gitconfig|git/gitconfig"
@@ -220,7 +211,7 @@ build_venv() {
 
 # Источники симлинков читаются на любой машине как есть: абсолютный путь в
 # домашний каталог там — хук, команда или правило прав, которые у другого
-# пользователя молча не найдутся. Пути строятся через $HOME, ~ или {env:HOME}. Тесты
+# пользователя молча не найдутся. Пути строятся через $HOME или ~. Тесты
 # и логи не в счёт: фикстуры нарочно подставляют чужие домашние каталоги,
 # а ai-hooks/logs — рантайм этой машины вне git.
 machine_paths_check() {
@@ -244,7 +235,7 @@ machine_paths_check() {
     line="${line#"$HARNESS/"}"; rest="${line#*:}"
     warn "  ${line%%:*}:${rest%%:*}"
   done <<<"$hits"
-  warn "заменить на \$HOME, ~ или {env:HOME} (opencode.json)"
+  warn "заменить на \$HOME или ~"
   drift=$((drift + 1))
 }
 
@@ -264,29 +255,28 @@ tokensave_hook_check() {
 }
 
 # `tokensave install` пишет поверх харнеса: свою MCP-запись вместо mcp-serve.sh
-# (ловит mcp-sync --check), opencode.json через симлинк прямо в репозиторий,
-# файлы правил — и заносит агента в installed_agents. После смены версии любая
-# команда tokensave тихо переустанавливает этих агентов, и всё повторяется.
+# (ловит mcp-sync --check), файлы правил — и заносит агента в installed_agents.
+# После смены версии любая команда tokensave тихо переустанавливает этих
+# агентов, и всё повторяется.
 tokensave_install_check() {
   local f agents
-  for f in "$HOME/.claude/rules/tokensave.md" "$HOME/.config/opencode/tokensave.md"; do
-    [ -e "$f" ] || continue
+  f="$HOME/.claude/rules/tokensave.md"
+  if [ -e "$f" ]; then
     bad "$f — след tokensave install: правила tokensave уже в skills"
     drift=$((drift + 1))
-  done
+  fi
   agents="$(awk '/^installed_agents/ { f = 1 }
     f { while (match($0, /"[^"]+"/)) { s = s substr($0, RSTART + 1, RLENGTH - 2) " "; $0 = substr($0, RSTART + RLENGTH) } }
     f && /]/ { exit }
     END { printf "%s", s }' "$HOME/.tokensave/state.toml" 2>/dev/null)" || true
   [ -z "$agents" ] && return 0
   bad "tokensave install записал агентов: ${agents% } — после обновления tokensave перепишет их конфиги"
-  warn "откат: tokensave uninstall --agent <имя>, затем git checkout claude/settings.json opencode/opencode.json и ./install.sh"
+  warn "откат: tokensave uninstall --agent <имя>, затем git checkout claude/settings.json и ./install.sh"
   drift=$((drift + 1))
 }
 
-# MCP-серверы — один список mcp/servers.json на оба агента. Claude держит их в
-# ~/.claude.json (не симлинкуется), OpenCode — в opencode.json; bin/mcp-sync.mjs
-# сверяет или приводит оба к списку.
+# MCP-серверы — один список mcp/servers.json. Claude держит их в
+# ~/.claude.json (не симлинкуется); bin/mcp-sync.mjs сверяет или приводит его к списку.
 mcp_sync() {
   say
   if ! command -v node >/dev/null; then
@@ -308,15 +298,6 @@ externals() {
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
   command -v tokensave >/dev/null && tokensave_hook_check
   tokensave_install_check
-  command -v opencode  >/dev/null && good "opencode: $(command -v opencode)"                 || warn "opencode — не найден (агенты ask и @commit не будут доступны)"
-  # Модель @commit — из frontmatter opencode/agent/commit.md, единственное место, где она задана.
-  if command -v opencode >/dev/null; then
-    commit_model=$(awk -F': *' '/^model:/{print $2; exit}' "$HARNESS/opencode/agent/commit.md")
-    commit_provider=${commit_model%%/*}
-    opencode models "$commit_provider" 2>/dev/null | grep -qx "$commit_model" \
-      && good "модель @commit $commit_model доступна" \
-      || warn "$commit_model недоступна — opencode auth login ($commit_provider) или сменить model в opencode/agent/commit.md"
-  fi
   # Playwright MCP не глобальный: его регистрируют в отдельных проектах (README),
   # пакет и браузер ставятся руками. Ревизию chromium называет playwright внутри
   # @playwright/mcp — у `npx playwright` она может быть другой.

@@ -774,7 +774,7 @@ function mcpFileTarget(ti) {
 }
 
 // Браузер тоже читает с диска: `file://…/.env` в адресе и файл, выбранный для
-// загрузки на страницу. Имена — Playwright MCP в Claude и в OpenCode.
+// загрузки на страницу. Имена — Playwright MCP под любым именем сервера.
 const BROWSER_NAVIGATE_RE = /^mcp__\w+__\w*browser_navigate$/;
 const BROWSER_UPLOAD_RE = /^mcp__\w+__\w*browser_file_upload$/;
 

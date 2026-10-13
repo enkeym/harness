@@ -6,7 +6,6 @@ paths:
   - "ai-hooks/claude/links-context.mjs"
   - "ai-hooks/claude/tool-args.mjs"
   - "ai-hooks/claude/dispatch.mjs"
-  - "ai-hooks/opencode/**"
   - "ai-hooks/README.md"
   - "claude/settings.json"
 ---
@@ -17,12 +16,6 @@ paths:
 - Список хранилищ секретов — `ai-hooks/security-core.mjs:SECRET_FILE_RE` ↔
   `ragsave/ragsave/config.py:SECRET_NAME_RE` (+ `SECRET_IN_DIR`). Новый файл в одном
   месте — гард запрещает его чтение, а rag_search отдаёт содержимое из индекса.
-- Уровень `ask` гарда безопасности — `ai-hooks/security-core.mjs:guardBashSecurity`
-  ↔ `permission.bash` в `opencode/opencode.json` и `opencode/agent/commit.md`:
-  плагин `ai-hooks/opencode/tokensave-guard.mjs:TokensaveGuard` блокирует только
-  `deny`. Новое `ask`-правило в ядре — OpenCode пропускает команду молча, пока
-  такой же запрет не добавлен в `permission.bash`. Соответствие проверяет
-  `ai-hooks/test/test-opencode-plugin.mjs:CORE_ASK` — пример туда же.
 - Инструменты правки — matcher `links-context` в `ai-hooks/claude/dispatch.mjs:TABLE` ↔
   `ai-hooks/claude/links-context.mjs:EDIT_TOOL_RE`. Новый инструмент правки только
   в одном месте — карта на нём молча не подключается. То же для skill-gate:

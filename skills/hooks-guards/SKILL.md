@@ -26,8 +26,6 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.
-- OpenCode runs it from the plugin: only the hard block applies there, the
-  confirmations come from `permission.bash`.
 - Judges command **form**. Code *meaning* (auth, payments, secrets, outbound
   calls) still needs `review-security`.
 

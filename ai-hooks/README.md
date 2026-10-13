@@ -1,8 +1,7 @@
-# ~/.ai-hooks — общие хуки Claude Code и OpenCode
+# ~/.ai-hooks — хуки Claude Code
 
 Гарды безопасности, ask mode, гейт скиллов, shell-гард, учёт и уборка.
-Логика в `*-core.mjs`, адаптеры под формат каждого агента — в `claude/` и
-`opencode/`.
+Логика в `*-core.mjs`, адаптер под формат Claude Code — в `claude/`.
 
 Shell-гард держит одно правило: **shell запускает команды, файлы читает
 `Read`, правит `Edit`/`Write`.** `cat`/`head`/`sort`/`base64`, `sed -n`/`awk` по файлу,
@@ -47,7 +46,7 @@ Bash, результат тот же.
 tokensave и ragsave — MCP-серверы, а не гарды: агент зовёт их по своему выбору.
 tokensave синхронизирует индекс сам (при подключении и перед вызовами), у
 ragsave своей синхронизации нет — её делает `bin/ragsave-sync.sh` на
-SessionStart и Stop (в OpenCode — `session.created` и `session.idle`).
+SessionStart и Stop.
 
 ## Структура
 
@@ -87,7 +86,6 @@ bin/cleanup.mjs                 # уборка меток, кешей и жур�
 scratch-core.mjs                # черновики агента в /tmp: какие пути созданы сессией, их удаление
 claude/scratch.mjs              # адаптер Claude: PreToolUse(Bash|Write) запоминает, Stop и SessionEnd удаляют
 bin/ask-mode.mjs                # переключатель: on | off | toggle | reset | default
-opencode/tokensave-guard.mjs    # адаптер OpenCode: плагин (tool.execute.before и др.)
 bin/mcp-serve.sh                # запуск MCP tokensave/ragsave с явно выбранным проектом
 bin/ragsave-sync.sh             # смысловой (RAG) индекс: sync существующего
 claude/links-context.mjs        # файл домена карты связей в контекст, когда правка попала в его paths: (не гард)
@@ -98,7 +96,7 @@ bin/check-impact-map.mjs        # карта против дерева: ссыл
 bin/log-error.sh                # общая запись отказов фоновых задач
 logs/errors.log                 # журнал отказов фоновых задач (ротация 5 МБ)
 logs/hooks.jsonl                # решения хуков по сессиям: deny/ask, падения, медленные
-test/test-guards.mjs            # shell-гард: одни сценарии через оба адаптера
+test/test-guards.mjs            # shell-гард: одни сценарии через хук и напрямую через ядро
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, runHook deny/ask/null, журнал
 test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, block обрывает UPS и Stop, регистрация
@@ -119,7 +117,7 @@ test/test-usage-log.mjs         # дедуп сообщений, арифмет�
 test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам (git-корень), источники, --sessions, неверные аргументы
 test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент и <synthetic> мимо, порог размера, rest, неверный аргумент
 test/test-tool-share.mjs        # доля инструментов: граница делит сессии, <synthetic> не в turns, один message.id — один ход, отказ по toolDenialKind — deny, каталог HOME — ~, неверная граница или размер — использование; --waste: каждый класс потерь, сброс правкой и сегментом, недостающие вызовы
-test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, блок mcp в opencode.json, перерегистрация в Claude
+test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, перерегистрация в Claude
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, занятый замок не трогает sync.log, выбор каталога и бинаря, тихие выходы
 test/test-mcp-serve.mjs         # mcp-serve: выбор корня по индексу, отказ без индекса и в $HOME, argv и cwd сервера
@@ -162,12 +160,12 @@ ANSI-последовательности и повторы `copying DB` чис�
 `replace_symbol`/`insert_at_symbol` — поле `file`/`file_path` из ответа), сверяет с глобами через `path.matchesGlob` и добавляет тело совпавшего
 файла домена как `additionalContext`. Один домен — один раз на сессию (метки
 `~/.claude/state/links-context/`, ключ — сессия + проект + домен): второй показ —
-тот же текст в контексте дважды. `INDEX.md` хук не подключает — его читает impact-проход
-и OpenCode, у которого такого хука нет. Глоб без файлов (переехавший каталог) ловит
+тот же текст в контексте дважды. `INDEX.md` хук не подключает — его читает impact-проход.
+Глоб без файлов (переехавший каталог) ловит
 `bin/check-impact-map.mjs`, иначе домен молча перестал бы подключаться.
 
-Адаптеры не содержат логики — только перевод формата конкретного агента в вызов
-`guard-core`. Меняешь правило — меняешь `guard-core.mjs`, оба агента получают его сразу.
+Адаптеры не содержат логики — только перевод формата хука в вызов
+`guard-core`. Меняешь правило — меняешь `guard-core.mjs`.
 
 ## Индексация только ручная
 
@@ -239,7 +237,7 @@ CLAUDE.md велит грузить скилл до первого действ�
 
 | Действие | Требует |
 | --- | --- |
-| правка `skills/*/SKILL.md`, `skills/*/reference/*.md`, `commands/*.md`, `agent/*.md`, `rules/*.md` (под `.claude/`, `.opencode/`, `opencode/` или `harness/`), любого `CLAUDE.md` или `AGENTS.md` — и через Bash (`bashWrites`): назначение `cp`/`mv`/`ln`/`rsync`/`install`, `>`/`>>`, `tee`, `sed`/`perl -i`, `git checkout`/`restore` пути | `skill-authoring` |
+| правка `skills/*/SKILL.md`, `skills/*/reference/*.md`, `commands/*.md`, `agents/*.md`, `rules/*.md` (под `.claude/`, `claude/` или `harness/`), любого `CLAUDE.md` или `AGENTS.md` — и через Bash (`bashWrites`): назначение `cp`/`mv`/`ln`/`rsync`/`install`, `>`/`>>`, `tee`, `sed`/`perl -i`, `git checkout`/`restore` пути | `skill-authoring` |
 | `git … commit` в любом сегменте команды (пайп, `&&`, фоновый `&`, `$(…)`, `-C`, за `sudo`/`env X=1`); так же `commit-tree`, `am`, `merge -m`/`-F` и `merge`/`cherry-pick`/`revert`/`rebase --continue` (своё содержимое или сообщение); `pull` и перенос готовых коммитов — нет | `review-standards`, `review-security`, `git-flow` |
 
 `git-flow` в списке не ради стиля: без него в сообщение попадает
@@ -345,7 +343,7 @@ CLAUDE.md запрещает любой вызов `Agent`, включая вс�
 и `general-purpose`. Ask mode подстраховывает: `ask-guard.mjs` пропускает в
 режиме только встроенные читающие типы из `READONLY_AGENTS` в `ask-core.mjs`
 (`Explore`, `Plan`, `claude-code-guide`, `statusline-setup`), остальные —
-запрет. `opencode run` считается изменяющей командой (`MUTATING_SUBCMDS`).
+запрет.
 
 Worktree не создаются — CLAUDE.md объявляет предпочтение «ветка в том же
 checkout»: индексы `.tokensave/` и `.ragsave/` лежат в каталоге проекта, и
@@ -395,20 +393,6 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 в `permissions.allow` пускает такую правку молча, а она применяется сразу:
 prompt injection из файлов чужого проекта снимала бы гарды одной правкой
 `security-core.mjs`. Из сессии в `~/harness` правки идут как раньше.
-
-В OpenCode тот же гард вызывается из плагина (`opencode/tokensave-guard.mjs`,
-`tool.execute.before`) раньше гардов tokensave: `read`, `grep`, `edit`,
-`write`, `multiedit`, `bash` переводятся в `Read`/`Grep`/`Edit`/`Bash` ядра,
-`patch` — в `Edit` на каждый файл из `patchText`, остальные
-(MCP `tokensave_tokensave_read` и однотипные) — в `mcp__opencode__<имя>`, корень
-сессии — `directory`. Блокируется только `deny`: спросить человека из плагина нельзя,
-поэтому `ask` там держат правила `permission.bash` в `opencode.json` и агентах
-(у `@commit` — запреты force push, `+refspec`, удаления ветки, `--mirror`,
-`--all`, `commit-tree`). Шаблоны OpenCode не разбирают хосты и refspec, поэтому спрашивают
-грубее ядра (`psql* -h*` и на localhost, `git push*` и `git merge*` целиком); что каждое
-`ask` ядра накрыто шаблоном, проверяет `test-opencode-plugin.mjs` — новое
-`ask`-правило добавляется туда примером вместе с шаблоном. Ошибка самого гарда вызов не блокирует — fail-open, как в адаптере
-Claude.
 
 Гард закрывает и путь мимо `Read`: MCP-инструменты, отдающие содержимое файла
 (`tokensave_read`, `tokensave_body` и однотипные), проверяются тем же
@@ -514,19 +498,8 @@ diff`, показывающий строку с ключом, или чужой 
 tokensave) в корне такого репозитория. Файл проверяется раньше любой файловой
 операции индексатора.
 
-## Соответствие хуков
-
-| Что                          | Claude Code                         | OpenCode                        |
-| ---------------------------- | ----------------------------------- | ------------------------------- |
-| Блокировка вызова инструмента| `PreToolUse` → `permissionDecision: "deny"` | `tool.execute.before` → `throw` |
-| Shell / исполнение кода      | `Bash`, `mcp__ide__executeCode`     | `bash`                          |
-| Сессия началась              | `SessionStart`                      | `event` → `session.created`     |
-| Ответ завершён               | `Stop`                              | `event` → `session.idle`        |
-| Сессия завершена             | `SessionEnd`                        | `event` → `session.deleted`     |
-
-Имена инструментов различаются (Claude: `Read`, `Edit/Write`; OpenCode:
-`read`, `edit/write`) — они вынесены в `CLAUDE_LABELS` / `OPENCODE_LABELS` и
-подставляются в текст запрета.
+Имена инструментов в тексте запрета (`Read`, `Edit/Write`) берутся из `CLAUDE_LABELS`
+в `guard-core.mjs`.
 
 ## Подключение
 
@@ -578,11 +551,6 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 значит «ход не кончен», и черновики убирает повторный Stop.
 Черновики `/tmp`: `scratch` ещё на `PreToolUse`
 (matcher `Bash|Write`) и `node ~/.ai-hooks/claude/scratch.mjs` на `SessionEnd`.
-
-**OpenCode** — `~/.config/opencode/plugin/tokensave-guard.js` реэкспортирует
-`opencode/tokensave-guard.mjs` — в нём shell-гард и гард безопасности.
-Плагины OpenCode грузятся автоматически из
-`~/.config/opencode/plugin/` (глобально) и `.opencode/plugin/` (в проекте).
 
 Собственные хуки tokensave (`hook-pre-tool-use` на `Agent|Grep|Bash|Glob`,
 `hook-stop`, `hook-prompt-submit`) зарегистрированы как есть: они уводят
@@ -766,8 +734,7 @@ Claude Code, кеш вставок,
 `/tmp`. Уборка в конце хода, а не только сессии: отданный вердикт ревью или
 закоммиченная правка свои черновики больше не читает, а убитая сессия `SessionEnd`
 не получает — так в `/tmp` остаётся только прерванный ход; его список уходит
-со служебными метками через 7 дней. OpenCode — то же ядро на `tool.execute.before`,
-`session.idle` и `session.deleted`.
+со служебными метками через 7 дней.
 
 Транскрипты, историю правок и индексы уборщик не трогает: первыми управляет сам
 Claude Code через `cleanupPeriodDays`, на второй держится отмена правок, у
@@ -800,7 +767,6 @@ node ~/.ai-hooks/test/test-ask-mode.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
 node ~/.ai-hooks/test/test-security.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
-node ~/.ai-hooks/test/test-opencode-plugin.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-scratch.mjs
 node ~/.ai-hooks/test/test-usage-log.mjs
@@ -822,8 +788,8 @@ node ~/.ai-hooks/test/test-tool-args.mjs
 node ~/.ai-hooks/test/test-statusline.mjs
 ```
 
-Каждый сценарий `test-guards.mjs` проверяется в обоих адаптерах (Claude Code и
-OpenCode) — вердикты должны совпадать. Проект — временная песочница с файлами
+Каждый сценарий `test-guards.mjs` проверяется дважды — через хук
+`bash-router.mjs` и напрямую через `guard-core.mjs`, вердикты должны совпадать. Проект — временная песочница с файлами
 на диске: вердикт зависит от того, существует ли файл, поэтому выдуманный путь
 всегда даёт `allow`. Тест ask mode пишет состояние во временный каталог и
 глобальное умолчание не меняет.

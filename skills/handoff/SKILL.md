@@ -1,17 +1,17 @@
 ---
 name: handoff
-description: "Hands the thread to a fresh session — a snapshot of the task written into the plan file and `ExitPlanMode` in Claude Code, a pasted chat block in OpenCode. Load when the context meter names it, on /handoff, or when the user says \"передай в новую сессию\", \"контекст кончается\"."
+description: "Hands the thread to a fresh session — a snapshot of the task written into the plan file and `ExitPlanMode`. Load when the context meter names it, on /handoff, or when the user says \"передай в новую сессию\", \"контекст кончается\"."
 ---
 
 # Handoff
 
-Trigger: in Claude Code two hooks fire at the token thresholds in
+Trigger: two hooks fire at the token thresholds in
 `~/.ai-hooks/context-core.mjs` — `context-meter.mjs` between turns,
 `context-step.mjs` mid-turn. `SOFT` offers the move through the menu, `HAND`,
 `HARD` the handoff — only while work continues (a plan step, a check); a closed
-task or one small edit is finished here with a result line. OpenCode: only
-`/handoff` or the user's words. Don't raise context size yourself. Never start
-a new session; write only the `task-brief` plan file and plan mode's plan file.
+task or one small edit is finished here with a result line. Don't raise
+context size yourself. Never start a new session; write only the `task-brief`
+plan file and plan mode's plan file.
 
 Mid-turn the answer is never cut in half: finish the step in hand, then, while
 work continues, end the turn with the handoff, not a summary — also when the
@@ -26,16 +26,14 @@ next step needs. The hook says which case it is; follow its wording.
 
 1. Finish the unit of work, tests green. If finishing costs another ~30k
    tokens, hand off now with the unfinished state stated honestly.
-2. One question tool call (`AskUserQuestion` / `question`) before the
-   snapshot: the questions still waiting for the user, and, with uncommitted
-   changes, whether to commit and push the step or hand them off as they are
+2. One `AskUserQuestion` call before the snapshot: the questions still
+   waiting for the user, and, with uncommitted changes, whether to commit and
+   push the step or hand them off as they are
    — the user often runs `/handoff` mid-work they mean to finish themselves.
    Answers go under `Решения`, the tree state under `Состояние`. A question
    left only in the snapshot hangs unanswered.
-3. Pick the form: Claude Code → **plan form**, with or without a `task-brief`
-   plan; OpenCode → **chat form**.
-4. Plan form, in this order — plan mode allows one write, the new file it
-   names, so an old plan is edited before entering:
+3. In this order, with or without a `task-brief` plan — plan mode allows one
+   write, the new file it names, so an old plan is edited before entering:
    1. A `task-brief` plan exists → tick the steps whose commits landed,
       rewrite a step that changed (a user's correction too), no new sections.
    2. `EnterPlanMode`; write the snapshot below into the file its prompt
@@ -46,9 +44,8 @@ next step needs. The hook says which case it is; follow its wording.
       `Состояние (прежнее)`, `устарело`, `что сделано в N`.
    3. `ExitPlanMode` — its dialog is where the user clears the context and
       continues; print nothing after it.
-5. Chat form: print the snapshot as one fenced ```markdown block, then one
-   line: ready to copy into a new session (`/new`). Either form is stale
-   after the next commit — rerun `/handoff`, don't trust the old one.
+4. The snapshot is stale after the next commit — rerun `/handoff`, don't
+   trust the old one.
 
 ## Snapshot (Russian, only sections that apply)
 
@@ -102,7 +99,7 @@ project's `CLAUDE.md`, loaded every session.
 
 ## Receiving a handoff
 
-A plan file with `## Состояние`, or a pasted block — the same rules. Treat it
+A plan file with `## Состояние`, or a pasted block. Treat it
 as a snapshot: verify `git status`, branch, tests before relying on it. Don't
 echo it back. Repository beats snapshot — say so in one line, continue.
 
@@ -110,11 +107,11 @@ Start from the snapshot, not from a fresh survey — re-reading everything it
 already names is what makes a split session cost more than the long one it
 replaced:
 
-- Plan form → the snapshot is in context after the dialog; the old plan it
-  links under `Дальше` is `Read` only when a step in it is next (outside the
-  repository, no router applies). Chat form naming a plan file
-  → it is in context through the `@` in the first prompt; missing there →
-  `Read` it before anything else. Either way steps come from the plan, state
+- The snapshot is in context after the dialog; the old plan it links under
+  `Дальше` is `Read` only when a step in it is next (outside the
+  repository, no router applies). A pasted block naming a plan file → it is
+  in context through the `@` in the first prompt; missing there → `Read` it
+  before anything else. Either way steps come from the plan, state
   from the snapshot; the snapshot wins on state, the plan on steps.
 - `Дальше` inside a user-invoked command (`/review`, `/commit`) → `Read` its
   SKILL.md and continue; never ask the user to retype it — the Skill tool

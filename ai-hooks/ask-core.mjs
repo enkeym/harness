@@ -151,7 +151,6 @@ const MUTATING_SUBCMDS = {
   kubectl: new Set(['apply', 'delete', 'create', 'patch', 'scale', 'rollout', 'edit', 'exec']),
   systemctl: new Set(['start', 'stop', 'restart', 'reload', 'enable', 'disable', 'mask', 'unmask']),
   service: new Set(['start', 'stop', 'restart', 'reload']),
-  opencode: new Set(['run']),
 };
 
 const INPLACE_CMDS = new Set(['sed', 'perl', 'awk', 'gawk']);

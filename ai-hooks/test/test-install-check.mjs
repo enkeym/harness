@@ -3,7 +3,7 @@
 // install.sh находит харнесс по своему пути, поэтому в песочнице собран
 // мини-харнесс: симлинк на настоящий install.sh, пустые источники из LINKS и
 // fixtures/fake-indexer.mjs на месте bin/mcp-sync.mjs. HOME — та же песочница,
-// PATH — только нужные скрипту утилиты: настоящие claude, tokensave, opencode и
+// PATH — только нужные скрипту утилиты: настоящие claude, tokensave и
 // python3 не запускаются, а где они нужны, их заменяет тот же фейк.
 
 import './env-isolate.mjs';
@@ -108,7 +108,7 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
 
 const summary = (ok, drift, missing) => `на месте: ${ok}, требуют внимания: ${drift}, нет источника: ${missing}`;
 
-check('LINKS разобран из install.sh', LINKS.length > 20 && LINKS.some((l) => l.target === '.ai-hooks' && l.src === 'ai-hooks'), true);
+check('LINKS разобран из install.sh', LINKS.length > 10 && LINKS.some((l) => l.target === '.ai-hooks' && l.src === 'ai-hooks'), true);
 check('LINKS: $RAG_HOME — ~/.rag-mcp', LINKS.some((l) => l.target === '.rag-mcp/ragsave' && l.src === 'ragsave/ragsave'), true);
 check('LOCALS разобран и не смешан с LINKS',
   [LOCALS.map((l) => l.target), LINKS.some((l) => l.src.startsWith('local/'))],
@@ -138,9 +138,8 @@ check('LOCALS разобран и не смешан с LINKS',
   fs.rmSync(path.join(sb.harness, 'rules', 'core.md'));
   const before = sb.snap();
   const res = sb.run();
-  // rules/core.md — источник двух целей (Claude и OpenCode).
   check('расхождения — код 1', res.status, 1);
-  check('расхождения — итог', res.out.includes(summary(ALL - 5, 3, 2)), true);
+  check('расхождения — итог', res.out.includes(summary(ALL - 4, 3, 1)), true);
   check('симлинк мимо репозитория назван', res.out.includes(`${wrong} — симлинк ведёт мимо репозитория: ${elsewhere}`), true);
   check('обычный файл назван', res.out.includes(`${file} — обычный файл, а не симлинк`), true);
   check('нет цели — названа', res.out.includes(`${gone} — нет`), true);
@@ -234,14 +233,14 @@ check('LOCALS разобран и не смешан с LINKS',
     [res.status, res.out.includes('tokensave install'), res.out.includes(summary(ALL, 0, 0))], [0, false, true]);
 
   const sb = sandbox();
-  fs.writeFileSync(sb.target('.tokensave/state.toml'), state('[\n    "opencode",\n    "claude",\n]'));
-  const rules = [sb.target('.claude/rules/tokensave.md'), sb.target('.config/opencode/tokensave.md')];
-  for (const f of rules) fs.writeFileSync(f, '');
+  fs.writeFileSync(sb.target('.tokensave/state.toml'), state('[\n    "claude",\n]'));
+  const rules = sb.target('.claude/rules/tokensave.md');
+  fs.writeFileSync(rules, '');
   const after = sb.run();
-  check('следы tokensave install — ✗ на агентов и оба файла правил, код 1',
-    [after.status, after.out.includes('✗ tokensave install записал агентов: opencode claude —'),
-      ...rules.map((f) => after.out.includes(`✗ ${f} — след tokensave install`)), after.out.includes(summary(ALL, 3, 0))],
-    [1, true, true, true, true]);
+  check('следы tokensave install — ✗ на агента и файл правил, код 1',
+    [after.status, after.out.includes('✗ tokensave install записал агентов: claude —'),
+      after.out.includes(`✗ ${rules} — след tokensave install`), after.out.includes(summary(ALL, 2, 0))],
+    [1, true, true, true]);
 
   const one = sandbox();
   fs.writeFileSync(one.target('.tokensave/state.toml'), state('["claude"]'));

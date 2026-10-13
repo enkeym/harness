@@ -124,7 +124,7 @@ never `approved`.
 
 ## Menu
 
-One `AskUserQuestion` / `question` call after the summary, recommended first.
+One `AskUserQuestion` call after the summary, recommended first.
 
 The user's branch:
 

@@ -1,7 +1,7 @@
 # harness
 
 Один репозиторий на всю агентскую обвязку: правила и скиллы Claude Code, хуки и
-гарды, конфиг OpenCode, сервер ragsave. Раскатывается на новую машину одним
+гарды, сервер ragsave. Раскатывается на новую машину одним
 `git clone` и `./install.sh`.
 
 ## Почему одна репа, а не четыре
@@ -16,14 +16,13 @@
 
 | Каталог | Куда раскатывается | Что это |
 | --- | --- | --- |
-| `rules/` | `~/.claude/rules/core.md`, `~/.config/opencode/rules/core.md` | `core.md` — общие правила обоих агентов: гейты, выбор инструментов, таблица скиллов |
-| `skills/` | `~/.claude/skills`, `~/.config/opencode/skills` | скиллы — одна папка на оба агента |
+| `rules/` | `~/.claude/rules/core.md` | `core.md` — общие правила: гейты, выбор инструментов, таблица скиллов |
+| `skills/` | `~/.claude/skills` | скиллы |
 | `claude/` | `~/.claude/{CLAUDE.md,commands,settings*.json}` | только Claude Code: `CLAUDE.md`, слэш-команды, настройки и хуки; инструмент `Agent` запрещён |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, shell-гард, фоновая синхронизация ragsave, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
-| `opencode/` | `~/.config/opencode/{AGENTS.md,agent,plugin,themes,opencode.json,tui.json}` | только OpenCode: `AGENTS.md`, агенты `ask` и `@commit`, плагин tokensave-guard, тема; встроенные `general`/`explore` отключены |
 | `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
-| `mcp/` | `~/.claude.json` и `opencode/opencode.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов обоих агентов |
+| `mcp/` | `~/.claude.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов |
 | `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: `credential.helper store`, identity через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
@@ -52,12 +51,8 @@ node "$(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js" install chr
 claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless --browser chromium
 ```
 
-OpenCode — `opencode.json` в корне проекта с одним блоком
-`mcp.playwright` (`{"type": "local", "command": ["playwright-mcp", "--headless",
-"--browser", "chromium"]}`) и строкой `/opencode.json` в `.git/info/exclude`.
-
 В репозитории нет ни имени пользователя, ни путей этой машины: конфиги
-ссылаются на `$HOME`, `~` или `{env:HOME}` (OpenCode). Значения машины —
+ссылаются на `$HOME` или `~`. Значения машины —
 в двух файлах вне git, `install.sh` создаёт их из `local/*.example`, только если
 их ещё нет, и просит заполнить:
 
@@ -86,10 +81,7 @@ tokensave 7.12.1 в песочном HOME):
 - `--agent claude` — запись `tokensave` в `~/.claude.json` заменяется на `tokensave
   serve` мимо `mcp-serve.sh`, появляется `~/.claude/rules/tokensave.md` (дубль
   правил в каждой сессии);
-- `--agent opencode` — пишет через симлинк прямо в `opencode/opencode.json`
-  репозитория: свою MCP-команду и абсолютный путь в `instructions`, плюс
-  `~/.config/opencode/tokensave.md`;
-- оба заносят агента в `installed_agents` (`~/.tokensave/state.toml`), и после
+- агент заносится в `installed_agents` (`~/.tokensave/state.toml`), и после
   каждой смены версии любая команда tokensave тихо повторяет install для них
   (то же делает `tokensave reinstall`).
 
@@ -97,8 +89,8 @@ tokensave 7.12.1 в песочном HOME):
 
 1. Поставить бинарь tokensave (в `/usr/local/bin`, иначе поправить путь хуков).
    `tokensave install` и `reinstall` не запускать — агентам они запрещены
-   (`Bash(tokensave *install*)` в `permissions.deny`, то же в `permission.bash`
-   OpenCode), хотя `tokensave doctor` их советует.
+   (`Bash(tokensave *install*)` в `permissions.deny`), хотя `tokensave doctor` их
+   советует.
 2. `./install.sh` — хуки, права, MCP и правила придут из репозитория.
 3. `tokensave githooks on` — глобальные git-хуки в `~/.config/git/hooks` (куда уже
    смотрит `core.hooksPath` из `git/gitconfig`). Конфиги агентов он не трогает.
@@ -109,37 +101,16 @@ tokensave 7.12.1 в песочном HOME):
 `installed_agents`, чужая MCP-запись) ловит `./install.sh --check`. Откат:
 
 ```bash
-tokensave uninstall --agent claude     # и/или opencode: убирает правила и installed_agents
-git checkout claude/settings.json opencode/opencode.json   # uninstall вырезал из них хуки и права
+tokensave uninstall --agent claude     # убирает правила и installed_agents
+git checkout claude/settings.json      # uninstall вырезал из него хуки и права
 ./install.sh                           # вернуть MCP-запись tokensave
 ```
 
-Перед `git checkout` стоит смотреть `git diff` этих файлов: своя незакоммиченная
-правка там потеряется. `opencode.json.bak` и `tokensave.md.bak` в `~/.config/opencode/`
-— бэкапы tokensave, они не нужны.
+Перед `git checkout` стоит смотреть `git diff` этого файла: своя незакоммиченная
+правка там потеряется.
 
 MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), подробности — в
 [`mcp/servers.md`](mcp/servers.md).
-
-## Claude Code и OpenCode — что общее
-
-| Что | Claude Code | OpenCode |
-| --- | --- | --- |
-| Скиллы | `skills/` через `~/.claude/skills` | `skills/` через `~/.config/opencode/skills` (OpenCode видит и `~/.claude/skills`, дубли склеиваются по имени); `commit`, `doctor`, `optimize`, `usage`, `hooks-guards` закрыты в `permission.skill` |
-| Правила | `rules/core.md` (автозагрузка `~/.claude/rules/`) + `claude/CLAUDE.md` | `rules/core.md` (`instructions`) + `opencode/AGENTS.md` |
-| Субагенты | `permissions.deny: Agent` | `general`/`explore` отключены, `permission.task` — `deny` всем, кроме `commit` |
-| MCP | `~/.claude.json` | `opencode.json` → `mcp`; оба из `mcp/servers.json` |
-| Shell-гард | хук `ai-hooks/claude/bash-router.mjs` | плагин `opencode/plugin` → `ai-hooks/opencode/tokensave-guard.mjs`; логика одна — `ai-hooks/guard-core.mjs` |
-| Гард безопасности | хук `ai-hooks/claude/security-guard.mjs`: `deny` и `ask` | тот же плагин, перед shell-гардом: блокирует только `deny` (секреты); `ask` здесь держит `permission.bash`. Логика одна — `ai-hooks/security-core.mjs` |
-| Ask | `/ask`, `/ask-off` (ask-guard) | агент `ask`, включён при старте (`default_agent`), Tab — в `build`: правки, субагенты и запись через tokensave запрещены правами, bash — только чтение git |
-| Коммит | `/commit` | `@commit` — субагент со своей моделью и правами (`opencode/agent/commit.md`): коммит, пуш и GitLab API без подтверждений, правка файлов и переписывание истории запрещены; вся процедура из `git-flow`, MR — только по «сделай МР». Из основной сессии `git commit`/`git push` идут через `permission.bash` |
-
-Оба механизма загрузки правил вставляют текст целиком в контекст при старте
-сессии — это не ссылка, которую модели нужно открыть. Правило для обоих агентов
-пишется в `core.md`, в `CLAUDE.md`/`AGENTS.md` — только то, чего у другого нет.
-
-После правки агента, скилла или `opencode.json` OpenCode нужно перезапустить —
-конфиг читается один раз при старте.
 
 ## Раскатка агентом
 
@@ -157,7 +128,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 
 **Чего агент сделать не может, это к человеку:**
 
-- `claude` и `opencode` должны быть установлены и залогинены — учётных данных в
+- `claude` должен быть установлен и залогинен — учётных данных в
   репозитории нет и не будет;
 - `tokensave` — сторонний бинарь, ставится отдельно, без `tokensave install`; git-хуки —
   `tokensave githooks on`;
@@ -189,8 +160,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 
 Отчитывается по каждому симлинку и по внешним зависимостям. Нужна после того,
 как инструмент мог перезаписать файл целиком: Claude Code переписывает
-`settings.json` при смене темы или модели через `/config`, OpenCode —
-`opencode.json`. Атомарная запись заменяет симлинк обычным файлом, и правки
+`settings.json` при смене темы или модели через `/config`. Атомарная запись заменяет симлинк обычным файлом, и правки
 дальше идут мимо репозитория; `--check` это ловит, повторный `./install.sh`
 чинит, сохранив содержимое в бэкап.
 
@@ -200,7 +170,6 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | --- | --- | --- |
 | `~/.rag-mcp/models` (3.4 ГБ) | модель fastembed, качается сама | первый запуск `ragsave` |
 | `~/.rag-mcp/venv` (250 МБ) | воспроизводится из `ragsave/requirements.txt` | `./install.sh --venv` |
-| `~/.config/opencode/node_modules` | воспроизводится из `package.json` | `bun install` в каталоге |
 | `~/.claude.json` | регистрация MCP вперемешку с историей проектов | `./install.sh` (из `mcp/servers.json`) |
 | рантайм `~/.claude` (`projects/`, `sessions/`, `history.jsonl`, `state/`) | локальное состояние машины | создаётся само |
 | `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно, без `tokensave install` (см. «Раскатка на новой машине») |
@@ -217,13 +186,11 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 node ai-hooks/test/test-guards.mjs
 node ai-hooks/test/test-ask-mode.mjs
 node ai-hooks/test/test-security.mjs
-node ai-hooks/test/test-opencode-plugin.mjs
 node ai-hooks/test/test-skills.mjs
 node ai-hooks/test/test-mcp-sync.mjs
 node ai-hooks/test/test-install-check.mjs
 ```
 
 Прогонять после любой правки в `ai-hooks/`; `test-skills.mjs` — после любой
-правки в `skills/`, `rules/core.md`, `CLAUDE.md`, `AGENTS.md` или
-`opencode.json`; `test-mcp-sync.mjs` — после правки `bin/mcp-sync.mjs`;
+правки в `skills/`, `rules/core.md` или `claude/CLAUDE.md`; `test-mcp-sync.mjs` — после правки `bin/mcp-sync.mjs`;
 `test-install-check.mjs` — после правки `install.sh`. Красный тест — откат, а не дальнейшая правка.

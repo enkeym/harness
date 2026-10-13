@@ -151,9 +151,9 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 
 {
   const sb = sandbox();
-  const res = sb.run(['opencode']);
+  const res = sb.run(['nosuch']);
   check('неизвестный сервер — код 2, без запуска', [res.status, res.calls], [2, []]);
-  check('неизвестный сервер — сообщение', res.stderr.includes('неизвестный сервер: opencode'), true);
+  check('неизвестный сервер — сообщение', res.stderr.includes('неизвестный сервер: nosuch'), true);
 }
 
 {
