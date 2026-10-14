@@ -48,6 +48,7 @@ const TABLE = {
     // Первым: стёртый промпт не помечает скилл и не несёт контекст.
     ['paste-guard', ALL],
     ['skill-track', ALL],
+    ['prompt-shape', ALL],
     ['ask-reminder', ALL],
     ['context-meter', ALL],
   ],

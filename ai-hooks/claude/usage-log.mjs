@@ -11,12 +11,16 @@
 // Источники контекста: размер каждого tool_result (символы) привязывается к
 // tool_use по id и суммируется по инструменту, для Read — ещё и по файлу.
 // Это то, что реально попадает в окно; токены оценивает отчёт.
+//
+// Скиллы: загрузки моделью (tool_use Skill) по имени. Пользовательский `/name`
+// не считается — мерка в том, замечает ли модель триггер скилла сама.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { isEntryPoint, writeAtomic } from '../state-core.mjs';
 import { LOG_DIR } from '../hooklog-core.mjs';
 import { transcriptLines } from '../context-core.mjs';
+import { skillName } from '../skill-core.mjs';
 import { runHook } from './hook-io.mjs';
 
 export const USAGE_FILE = path.join(LOG_DIR, 'usage.jsonl');
@@ -84,6 +88,8 @@ function collect(file, acc) {
     for (const block of rec.message.content || []) {
       if (block?.type !== 'tool_use' || !block.name) continue;
       acc.tools[block.name] = (acc.tools[block.name] || 0) + 1;
+      const skill = block.name === 'Skill' ? skillName(block.input?.skill) : '';
+      if (skill) acc.skills[skill] = (acc.skills[skill] || 0) + 1;
       if (block.id) uses.set(block.id, { name: block.name, file: block.input?.file_path });
     }
     if (rec.timestamp) {
@@ -123,7 +129,7 @@ function price(acc) {
 export function summarize({ session_id, transcript_path, cwd }) {
   if (!session_id || !transcript_path) return null;
   const acc = {
-    session_id, project: cwd || '', started: null, ended: null, models: {}, tools: {},
+    session_id, project: cwd || '', started: null, ended: null, models: {}, tools: {}, skills: {},
     context_sources: { tools: {}, files: {} }, subagents: 0, cost: 0,
   };
   const main = collect(transcript_path, acc);

@@ -115,10 +115,10 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   per session per domain. Treat the text as the map's lines for this change: check them, add
   the missing link to that file. Silent ≠ no links: a domain without `paths:` is reached only
   through `INDEX.md`, so the impact pass still reads the index.
-- `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI,
-  dependabot, or an impact map in an indexed project: offer
-  in one line in the first reply (`/impact-map` for the map). Silent hook =
-  deliberate skip (`<project>/.claude/bootstrap-ignore`).
+- `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI, dependabot, or an impact
+  map in an indexed project: offer in one line in the first reply (`/impact-map` for the map).
+  Silent hook = deliberate skip (`<project>/.claude/bootstrap-ignore`).
+- `prompt-shape:` in context — a long prompt with no anchor: load `task-brief` first; a plain question → answer.
 
 ## When something is broken
 

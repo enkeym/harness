@@ -140,6 +140,17 @@ function records(sb) {
   check('длинная вставка в ask mode: только block', [out?.decision, out?.hookSpecificOutput], ['block', undefined]);
 }
 
+// --- UserPromptSubmit: размытый промпт — напоминание prompt-shape, с путём — молчание ---
+{
+  const sb = sandbox();
+  const ups = (prompt) => run(sb, 'UserPromptSubmit', { session_id: 'sid-d', prompt });
+  const loose = Array(4).fill('Хочу, чтобы всё работало лучше и пользователям было удобнее, а не как сейчас. '
+    + 'Подумай, что тут можно поменять в первую очередь и как это сделать аккуратно.').join(' ');
+  check('размытый промпт: prompt-shape в additionalContext',
+    String(ups(loose)?.hookSpecificOutput?.additionalContext).startsWith('prompt-shape:'), true);
+  check('почини src/a.ts: молчание', ups('почини src/a.ts'), null);
+}
+
 // --- Stop: блок question-guard — ход не кончен, черновики целы ---
 {
   const sb = sandbox();

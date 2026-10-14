@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Отчёт по logs/usage.jsonl: токены, стоимость, инструменты, субагенты.
+// Отчёт по logs/usage.jsonl: токены, стоимость, инструменты, скиллы, субагенты.
 // Запуск — USAGE ниже.
 
 import fs from 'node:fs';
@@ -71,6 +71,7 @@ const rpad = (s, w) => String(s).padStart(w);
 const byProject = {};
 const byModel = {};
 const tools = {};
+const skills = {}; // скилл → { sessions, calls }; записи до поля skills его не несут
 const sourceTools = {}; // инструмент → { calls, chars } из tool_result
 const sourceFiles = {}; // файл → символы, отданные Read
 let total = 0;
@@ -91,6 +92,11 @@ for (const r of records) {
     if (m.priced === false) acc.priced = false;
   }
   for (const [name, n] of Object.entries(r.tools || {})) tools[name] = (tools[name] || 0) + n;
+  for (const [name, n] of Object.entries(r.skills || {})) {
+    const acc = skills[name] || (skills[name] = { sessions: 0, calls: 0 });
+    acc.sessions += 1;
+    acc.calls += n;
+  }
   for (const [name, s] of Object.entries(r.context_sources?.tools || {})) {
     const acc = sourceTools[name] || (sourceTools[name] = { calls: 0, chars: 0 });
     acc.calls += s.calls || 0;
@@ -121,6 +127,14 @@ for (const [p, v] of Object.entries(byProject).sort((a, b) => b[1].cost - a[1].c
 out += '\nИнструменты (топ-12):\n';
 for (const [name, n] of Object.entries(tools).sort((a, b) => b[1] - a[1]).slice(0, 12)) {
   out += `  ${pad(name, 44)} ${rpad(n, 5)}\n`;
+}
+
+const topSkills = Object.entries(skills).sort((a, b) => b[1].sessions - a[1].sessions);
+if (topSkills.length > 0) {
+  out += '\nСкиллы — загрузки моделью (сессий / вызовов):\n';
+  for (const [name, s] of topSkills) {
+    out += `  ${pad(name, 44)} ${rpad(s.sessions, 5)} ${rpad(s.calls, 5)}\n`;
+  }
 }
 
 const topSources = Object.entries(sourceTools).sort((a, b) => b[1].chars - a[1].chars).slice(0, 10);

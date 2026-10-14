@@ -3,8 +3,8 @@
 // (--days, --today) и фильтр --project отбирают сессии; суммы по моделям и
 // проектам складываются (подкаталоги одного git-репозитория — один
 // проект), cache write — из обоих кэшей, модель без цены
-// помечена; источники контекста — в ~токенах; без файла и без сессий за
-// период — понятная строка, а не падение.
+// помечена; скиллы — сессии и вызовы; источники контекста — в ~токенах;
+// без файла и без сессий за период — понятная строка, а не падение.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -69,12 +69,14 @@ const records = [
     ended: ago(0), cost: 1.5, subagents: 2,
     models: { 'claude-opus-5': model({ input: 1000, cacheRead: 2000, cacheWrite5m: 300, cacheWrite1h: 200, output: 500, cost: 1.5 }) },
     tools: { Read: 5, Bash: 2 },
+    skills: { 'task-brief': 2, 'git-flow': 1 },
     context_sources: { tools: { Read: { calls: 5, chars: 40_000 } }, files: { [path.join(home, 'work', 'alpha', 'big.ts')]: 40_000 } },
   }),
   session({
     ended: ago(2 * DAY), cost: 0.5, project: path.join(home, 'work', 'alpha', 'packages', 'api'),
     models: { 'claude-opus-5': model({ input: 1000, output: 500, cost: 0.5 }), 'mystery-model': model({ input: 10, priced: false }) },
     tools: { Read: 1, Edit: 3 },
+    skills: { 'git-flow': 1 },
   }),
   session({ ended: ago(2 * DAY), cost: 3, project: path.join(home, 'work', 'beta') }),
   session({ ended: ago(10 * DAY), cost: 100 }),
@@ -109,6 +111,13 @@ check('инструменты сложены и отсортированы', too
 check('источник: вызовы и ~токены (символы / 4)',
   week.split('\n').find((l) => l.includes('Read') && l.includes('10.0k')).trim().split(/\s+/), ['Read', '5', '10.0k']);
 check('тяжёлый файл показан от ~', week.includes('~/work/alpha/big.ts'), true);
+
+// --- скиллы: сессии и вызовы, чаще загружаемый первым; запись без skills не ломает ---
+{
+  const skillLines = week.split('Скиллы')[1].split('\n\n')[0].split('\n').slice(1).map((l) => l.trim().split(/\s+/));
+  check('скиллы: сессий / вызовов', skillLines, [['git-flow', '2', '2'], ['task-brief', '1', '2']]);
+  check('без скиллов за период — без раздела', report('--project', 'beta').includes('Скиллы'), false);
+}
 
 // --- по сессиям ---
 check('без --sessions списка нет', week.includes('Сессии:'), false);

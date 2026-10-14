@@ -53,5 +53,9 @@ paths:
   список в `ai-hooks/README.md` и файлы `.claude/bootstrap-ignore` в чужих
   проектах. Переименовал пункт — отключённое напоминание снова приходит везде,
   README учит старому имени.
+- Напоминание о брифе — `ai-hooks/prompt-core.mjs:LOOSE_PROMPT_HINT` и проверка
+  `loadedSkills(…).has('task-brief')` в `ai-hooks/claude/prompt-shape.mjs:check` ↔ имя
+  `skills/task-brief/` и его раздел Challenge. Переименовал скилл или раздел — хук шлёт
+  к несуществующему и не замолкает после загрузки.
 - Списки инструментов правки tokensave в `ask-core`/`skill-core` — `hooks/guards/security.md`;
   формы коммита и `keepHeredoc` — `hooks/guards/shell.md`.

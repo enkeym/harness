@@ -169,6 +169,20 @@ const usage = (o = {}) => ({
   check('источники: вызовы инструментов не задеты', r.tools, { Read: 2, Bash: 1 });
 }
 
+// --- 10. Скиллы: загрузки моделью по имени, `plugin:x` — как `x`; без имени
+// и другие инструменты не считаются.
+{
+  const skill = (name) => ({ type: 'tool_use', name: 'Skill', input: name === undefined ? {} : { skill: name } });
+  const file = transcript('skills', [
+    line('claude-sonnet-5', 'm1', usage(), [skill('task-brief'), skill('git-flow')]),
+    line('claude-sonnet-5', 'm2', usage(), [skill('plugins:task-brief'), skill(undefined)]),
+    line('claude-sonnet-5', 'm3', usage(), [{ type: 'tool_use', name: 'Bash', input: { skill: 'x' } }]),
+  ]);
+  const r = summarize({ session_id: 'skills', transcript_path: file, cwd: '/p' });
+  check('скиллы: по имени', r.skills, { 'task-brief': 2, 'git-flow': 1 });
+  check('скиллы: вызовы Skill в tools все', r.tools.Skill, 4);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 process.stdout.write(failed ? `\n=== ${failed} FAIL ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);
