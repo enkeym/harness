@@ -164,6 +164,12 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 дальше идут мимо репозитория; `--check` это ловит, повторный `./install.sh`
 чинит, сохранив содержимое в бэкап.
 
+Ключ `model` в `claude/settings.json` в git не попадает: clean-фильтр `nomodel`
+(`.gitattributes`, команда `jq 'del(.model)'` в `.git/config` — её задаёт
+`./install.sh`) вырезает его при `add`/`diff`/`status`. Переключение модели
+оставляет дерево чистым; на свежей машине модель — по умолчанию Claude Code
+или `ANTHROPIC_MODEL` из `~/.config/harness/env`.
+
 ## Чего в репозитории нет
 
 | Что | Почему | Как получить |

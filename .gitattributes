@@ -1,0 +1,3 @@
+# /model пишет "model" в settings.json через симлинк ~/.claude; фильтр nomodel
+# (задаёт install.sh) вырезает ключ, и смена модели не видна git.
+claude/settings.json filter=nomodel

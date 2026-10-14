@@ -36,5 +36,7 @@ Source of the global agent setup. Layout, install and the test list:
 - Base `main`, commit and push straight to it.
 - Header `type(scope): …` in English, scopes as in `git log`: `hooks`,
   `skills`, `rules`, `config`, `harness`.
-- `claude/settings.json` is rewritten by Claude Code itself (`/config`): a
-  diff there nobody asked for is left out of the commit.
+- `claude/settings.json` is rewritten by Claude Code itself (`/config`,
+  `/model`). `model` never reaches git — the `nomodel` clean filter
+  (`.gitattributes`, set by `install.sh`) strips it: a model switch is not a
+  change, don't mention it. Any other diff there → its own `chore(config)`.

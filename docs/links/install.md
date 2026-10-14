@@ -50,6 +50,9 @@ paths:
   в `mcp/servers.json` не входит: `claude mcp add -s local` в проекте (README).
   Синк local scope не видит — сменилась версия node, путь у
   Claude в проекте устарел, перерегистрировать руками.
+- Фильтр `nomodel` — имя в `.gitattributes` ↔ `install.sh:git_filter` (`FILTER_CLEAN` в
+  `.git/config`). Переименовал в одном месте или машина без `./install.sh` — git молча
+  берёт файл как есть, и каждое `/model` снова висит в `git status`.
 - `mcp/servers.json` → `ai-hooks/bin/mcp-serve.sh` (аргумент — имя сервера);
   регистрирует в Claude `bin/mcp-sync.mjs`. Новый сервер в JSON без ветки
   `case "$kind"` в `mcp-serve.sh` не стартует.

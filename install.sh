@@ -274,6 +274,28 @@ tokensave_install_check() {
   drift=$((drift + 1))
 }
 
+# /model и /config пишут "model" в claude/settings.json через симлинк, и каждое
+# переключение модели выглядело правкой харнеса. Clean-фильтр вырезает ключ при
+# add/diff/status, файл на диске не трогает. .gitattributes только называет
+# фильтр, команда живёт в .git/config — без неё смена модели снова в git status.
+FILTER_CLEAN="jq --indent 2 'del(.model)'"
+git_filter() {
+  local have
+  have="$(git -C "$HARNESS" config --get filter.nomodel.clean 2>/dev/null)" || true
+  if [ "$have" = "$FILTER_CLEAN" ]; then
+    good "git-фильтр nomodel: model из settings.json не попадает в git"; ok=$((ok + 1)); return
+  fi
+  if [ "$MODE" = "--check" ]; then
+    warn "git-фильтр nomodel не задан — смена модели видна в git status, ./install.sh его задаст"
+    drift=$((drift + 1)); return
+  fi
+  if ! command -v jq >/dev/null; then
+    bad "jq не найден — git-фильтр nomodel не задать"; missing=$((missing + 1)); return
+  fi
+  git -C "$HARNESS" config filter.nomodel.clean "$FILTER_CLEAN"
+  good "git-фильтр nomodel задан"; fixed=$((fixed + 1))
+}
+
 # MCP-серверы — один список mcp/servers.json. Claude держит их в
 # ~/.claude.json (не симлинкуется); bin/mcp-sync.mjs сверяет или приводит его к списку.
 mcp_sync() {
@@ -323,6 +345,7 @@ case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS):"
     for pair in "${LINKS[@]}"; do check_one "${pair%%|*}" "${pair##*|}"; done
+    git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync --check
@@ -337,6 +360,7 @@ case "$MODE" in
   install)
     say "Раскатка харнеса из $HARNESS:"
     for pair in "${LINKS[@]}"; do link_one "${pair%%|*}" "${pair##*|}"; done
+    git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     mcp_sync

@@ -51,7 +51,6 @@
     ],
     "defaultMode": "default"
   },
-  "model": "opus",
   "disableClaudeAiConnectors": true,
   "hooks": {
     "PreToolUse": [
