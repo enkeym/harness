@@ -72,8 +72,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 ## question-guard
 
-- Stop hook blocks once a turn without `AskUserQuestion`/`ExitPlanMode`: past
-  the meter's threshold (do what its text says); after a repo edit or commit
+- Stop hook blocks once a turn without `AskUserQuestion`/`ExitPlanMode`: HAND once,
+  HARD every turn (do what the meter's text says); after a repo edit or commit
   (next step via menu; task closed → one-line result; not a reason to commit);
   last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite).
 - `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a

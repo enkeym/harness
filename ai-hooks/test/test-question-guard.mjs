@@ -18,7 +18,7 @@ const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'question-guard-test-'));
 // Работа — правка внутри git-корня сессии; песочница — свой репозиторий.
 const REPO = path.join(DIR, 'repo');
 fs.mkdirSync(path.join(REPO, '.git'), { recursive: true });
-const { noteWork, HAND } = await import('../context-core.mjs');
+const { noteWork, HAND, HARD } = await import('../context-core.mjs');
 
 let failed = 0;
 function check(name, ok, detail = '') {
@@ -168,9 +168,30 @@ check('HAND без работы — block с вопросом о перенос�
   sayAt(HAND + 20_000, 'Вывод: кэш не сбрасывается.')], { session_id: 'q-idle' }), 'Перенести в новую сессию'));
 check('SOFT без работы — пропуск', run([prompt('x'), sayAt(100_000, 'Вывод готов.')],
   { session_id: 'q-idle-soft' }) === null);
-noteWork({ session_id: 'q-worked', cwd: REPO, tool_name: 'Edit', tool_input: { file_path: path.join(REPO, 'a.ts') } });
-check('SOFT и работа в прошлых ходах — block', ctxBlocked(run([prompt('x'),
-  sayAt(100_000, 'Вывод готов.')], { session_id: 'q-worked' }), 'Перенести в новую сессию'));
+const worked = (sid) => noteWork({ session_id: sid, cwd: REPO, tool_name: 'Edit', tool_input: { file_path: path.join(REPO, 'a.ts') } });
+// SOFT уже объявил context-meter; меню на каждом ходе после 90k — шум
+// (b231f3ab, 9bec0229: ответ на вопрос «установлена сборка?» уводил в перенос).
+worked('q-worked');
+check('SOFT и работа в прошлых ходах — пропуск', run([prompt('x'),
+  sayAt(100_000, 'Вывод готов.')], { session_id: 'q-worked' }) === null);
+check('SOFT и правка в ходе — block работы, не порога', workBlocked(run([prompt('x'),
+  edit(path.join(REPO, 'a.ts')), result('Edit'), sayAt(100_000, 'Готово.')], { session_id: 'q-soft-edit' })));
+// HAND — один раз за сессию (9f2feff0 получил его четыре раза подряд).
+worked('q-hand');
+check('HAND первый раз — block', ctxBlocked(run([prompt('x'),
+  sayAt(HAND + 1_000, 'Вывод готов.')], { session_id: 'q-hand' }), 'handoff'));
+check('HAND второй раз — пропуск', run([prompt('y'),
+  sayAt(HAND + 5_000, 'Там фикс кэша.')], { session_id: 'q-hand' }) === null);
+// HAND без работы, потом правка — блок ещё раз, уже с передачей, как у meter'а.
+run([prompt('x'), sayAt(HAND + 1_000, 'Вывод готов.')], { session_id: 'q-hand-idle' });
+worked('q-hand-idle');
+check('HAND после idle-блока и первой правки — block снова', ctxBlocked(run([prompt('y'),
+  sayAt(HAND + 5_000, 'Вывод готов.')], { session_id: 'q-hand-idle' }), 'handoff'));
+// HARD — каждый ход.
+worked('q-hard');
+run([prompt('x'), sayAt(HARD + 1_000, 'Вывод готов.')], { session_id: 'q-hard' });
+check('HARD второй раз — block', ctxBlocked(run([prompt('y'),
+  sayAt(HARD + 5_000, 'Вывод готов.')], { session_id: 'q-hard' }), 'handoff'));
 check('HAND и ExitPlanMode — пропуск', run([prompt('x'), commit(), result('Bash'), call('ExitPlanMode'),
   result('ExitPlanMode'), sayAt(HAND + 20_000, 'Передача готова.')]) === null);
 

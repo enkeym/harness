@@ -208,6 +208,21 @@ function mayRepeat(phase, stage, tokens, seen) {
   return tokens - (seen.tokens || 0) >= STEP_REPEAT;
 }
 
+// Блок конца хода за порогом (question-guard) — по мерке объявления: SOFT не
+// блокирует, его текст уже доехал от context-meter, а меню на каждом ходе после
+// 90k уводило в перенос ответ на простой вопрос. HAND — один раз за сессию и ещё
+// раз, если после блока без правок появилась работа; HARD — каждый ход. Отметка
+// ставится здесь же: вызов и есть выданный блок.
+export function stopNoticeDue(sessionId, stage, worked) {
+  if (stage === 'hard') return true;
+  if (stage !== 'hand') return false;
+  if (!sessionId) return true;
+  const given = record(sessionId)?.stopHand;
+  if (given === 'worked' || (given === 'idle' && !worked)) return false;
+  update(sessionId, { stopHand: worked ? 'worked' : 'idle' });
+  return true;
+}
+
 // HAND или HARD, объявленный сессии без правок, передачу не просил: передавать
 // было нечего. Первая правка это меняет, и тот же порог звучит ещё раз — уже с
 // передачей. Без этого следующим сигналом был бы только HARD: по транскриптам

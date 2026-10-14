@@ -29,9 +29,10 @@ paths:
 ## Контракты и доки
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
-- Конец хода по порогу — `ai-hooks/question-core.mjs:questionVerdict` (условие
-  `stage !== 'soft'` для сессии без работы) ↔ `ai-hooks/context-core.mjs:TEXTS`
-  (`idle.soft` снимок не собирает, но при оставшихся шагах просит меню о переносе; остальные велят меню или `handoff`). Сменил,
+- Конец хода по порогу — `ai-hooks/context-core.mjs:stopNoticeDue` (SOFT не блокирует,
+  HAND — раз за сессию по отметке `stopHand`, HARD — каждый ход) ↔ дедупликация
+  объявлений в `ai-hooks/context-core.mjs:contextNotice` и тексты `TEXTS` (SOFT просит
+  меню о переносе только при оставшихся шагах, HAND/HARD — меню или `handoff`). Сменил,
   какой порог требует меню, в одном месте — Stop блокирует ход, которому meter
   велел продолжать, или пропускает ход, которому велел передачу.
 - Форма снимка передачи — `ai-hooks/context-core.mjs:oversizedPlan` (`## Состояние`,

@@ -15,10 +15,11 @@
 // Словарь формулировок не закрывается никогда: «начну по вашему слову» в
 // предпоследнем абзаце прошло мимо него после коммита на 173k, хотя context-meter
 // велел передачу. Поэтому раньше текста судится структура хода, без разбора слов:
-// ход с правкой или коммитом и любой ход за порогом контекста кончаются меню.
+// ход с правкой или коммитом кончается меню, ход за порогом контекста — по мерке
+// context-core:stopNoticeDue (HAND один раз, HARD каждый ход).
 // Регэкспы остаются только для хода без работы — ответа на вопрос.
 
-import { contextUsed, level, noticeText, isWork, sessionWorked, transcriptLines } from './context-core.mjs';
+import { contextUsed, level, noticeText, isWork, sessionWorked, stopNoticeDue, transcriptLines } from './context-core.mjs';
 
 // Инструменты, которые сами задают вопрос человеку.
 const MENU_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
@@ -132,8 +133,8 @@ export function pendingQuestion(text) {
 // пропускается: модель уже получила причину, второй блок — это петля; он же
 // выход, когда работа закрыта целиком и спрашивать нечего.
 //
-// Порядок: порог контекста (сессия с работой — с SOFT, без неё — с HAND, как
-// велят тексты context-meter), затем работа в ходе, затем текст.
+// Порядок: порог контекста (HAND один раз за сессию, HARD каждый ход; SOFT
+// не блокирует), затем работа в ходе, затем текст.
 export function questionVerdict(input) {
   if (!input || input.stop_hook_active || !input.transcript_path) return null;
   const { text, menu, worked } = lastTurn(transcriptLines(input.transcript_path), input.cwd);
@@ -141,7 +142,7 @@ export function questionVerdict(input) {
   const used = contextUsed(input.transcript_path);
   const stage = level(used?.tokens);
   const didWork = worked || sessionWorked(input.session_id);
-  if (stage && (didWork || stage !== 'soft')) {
+  if (stage && stopNoticeDue(input.session_id, stage, didWork)) {
     return `${CONTEXT_REASON} ${noticeText(stage, used.tokens, { worked: didWork })}`;
   }
   if (worked) return WORK_REASON;
