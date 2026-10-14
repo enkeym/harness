@@ -3,10 +3,7 @@
 //
 // Смотрит корень git-репозитория текущего каталога и кладёт в контекст список
 // пропусков: нет CLAUDE.md, нет husky, нет CI для GitHub-remote, нет
-// примера env при наличии .env, нет карты неявных связей в проекте с индексом
-// tokensave/ragsave. Пример env ищется по маске `.env*.example`
-// (`.env.dev.example` тоже считается) и отдельно в каждом каталоге со своим
-// package.json — иначе монорепо ругается на пропуск, которого нет.
+// карты неявных связей в проекте с индексом tokensave/ragsave.
 // Что с этим делать — решает скилл hooks-guards, хук только сообщает факты.
 // Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI, husky и карту
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
@@ -14,7 +11,7 @@
 //
 // Отсутствие бывает осознанным: проект может не хотеть CLAUDE.md или husky.
 // Тогда `.claude/bootstrap-ignore` в корне перечисляет по строке на пункт
-// (`claude-md`, `husky`, `ci`, `dependabot`, `env-example`, `impact-map`),
+// (`claude-md`, `husky`, `ci`, `dependabot`, `impact-map`),
 // и о них хук молчит. Без этого напоминание про намеренно удалённый файл
 // превращается в постоянный шум, ради устранения которого хук и писался.
 
@@ -47,33 +44,6 @@ function remoteUrl(root) {
 }
 
 const exists = (...p) => fs.existsSync(path.join(...p));
-
-const ENV_EXAMPLE = /^\.env.*\.example$/;
-const ENV_FILE = /^\.env(\..+)?$/;
-
-// Не workspaces: каталоги с собственным package.json держат свои .env.
-function envDirs(root) {
-  const dirs = [root];
-  let entries = [];
-  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return dirs; }
-  for (const e of entries) {
-    if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
-    if (exists(root, e.name, 'package.json')) dirs.push(path.join(root, e.name));
-  }
-  return dirs;
-}
-
-function envGaps(root) {
-  const gaps = [];
-  for (const dir of envDirs(root)) {
-    let names = [];
-    try { names = fs.readdirSync(dir); } catch { continue; }
-    const hasEnv = names.some((n) => ENV_FILE.test(n) && !ENV_EXAMPLE.test(n));
-    if (!hasEnv || names.some((n) => ENV_EXAMPLE.test(n))) continue;
-    gaps.push(dir === root ? '.' : path.relative(root, dir));
-  }
-  return gaps;
-}
 
 // Пункты, которые проект объявил осознанно ненужными.
 function ignoredItems(root) {
@@ -110,10 +80,6 @@ export function bootstrapContext(cwd) {
   const weekly = [];
 
   if (!ignored.has('claude-md') && !exists(root, 'CLAUDE.md')) always.push('нет CLAUDE.md проекта');
-  if (!ignored.has('env-example')) {
-    const gaps = envGaps(root);
-    if (gaps.length) always.push(`есть .env без .env.example (${gaps.join(', ')})`);
-  }
 
   if (isNode) {
     if (!ignored.has('husky') && !exists(root, '.husky')) weekly.push('нет husky (pre-commit: lint-staged + tsc)');

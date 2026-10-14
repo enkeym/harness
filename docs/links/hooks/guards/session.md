@@ -48,7 +48,7 @@ paths:
   числа в `ai-hooks/README.md` (оба) и `OVERVIEW.md` (вставка). Сменил константу — доки обещают
   старый порог отказа.
 - Пункты `.claude/bootstrap-ignore` (`claude-md`, `husky`, `ci`, `dependabot`,
-  `env-example`, `impact-map`) — `ai-hooks/claude/project-bootstrap.mjs:bootstrapContext` ↔
+  `impact-map`) — `ai-hooks/claude/project-bootstrap.mjs:bootstrapContext` ↔
   список в `ai-hooks/README.md` и файлы `.claude/bootstrap-ignore` в чужих
   проектах. Переименовал пункт — отключённое напоминание снова приходит везде,
   README учит старому имени.

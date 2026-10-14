@@ -455,7 +455,7 @@ diff`, показывающий строку с ключом, или чужой 
 
 `claude/project-bootstrap.mjs` на `SessionStart` (`startup|clear`) смотрит
 корень репозитория и сообщает в контекст, чего нет: CLAUDE.md проекта,
-`.env.example` при наличии `.env`, husky, CI и dependabot для GitHub-remote,
+husky, CI и dependabot для GitHub-remote,
 `.gitlab-ci.yml` для GitLab, карты неявных связей (`docs/links/`) в проекте
 с индексом tokensave или ragsave. Что делать —
 скилл `hooks-guards`: каждый пропуск предлагается одной строкой в первом
@@ -464,7 +464,7 @@ diff`, показывающий строку с ключом, или чужой 
 `~/.claude/state/bootstrap/`), про CLAUDE.md — пока файла нет.
 
 Отсутствие бывает осознанным. `<проект>/.claude/bootstrap-ignore` перечисляет
-по строке на пункт (`claude-md`, `husky`, `ci`, `dependabot`, `env-example`,
+по строке на пункт (`claude-md`, `husky`, `ci`, `dependabot`,
 `impact-map`, `#` — комментарий), и о перечисленном хук молчит. Без этого
 намеренно удалённый файл давал бы напоминание на каждом старте сессии — тот
 самый шум, против которого недельный дроссель и вводился.

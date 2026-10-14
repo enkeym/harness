@@ -42,7 +42,7 @@ const resetWeekly = () => fs.rmSync(path.join(tmp, '.claude', 'state', 'bootstra
 const first = run(repo) || '';
 check('нет CLAUDE.md', /CLAUDE\.md/.test(first), first);
 check('без индекса: про карту связей молчит', !/impact-map/.test(first));
-check('нет .env.example', /\.env\.example/.test(first));
+check('.env без примера не упоминается', !/\.env/.test(first), first);
 check('нет husky', /husky/.test(first));
 check('нет CI для GitHub', /workflows/.test(first));
 check('нет dependabot', /dependabot/.test(first));
@@ -52,16 +52,6 @@ check('повтор: CLAUDE.md напоминается снова', /CLAUDE\.md
 check('повтор: husky/CI молчат неделю', !/husky|workflows/.test(second), second);
 
 fs.writeFileSync(path.join(repo, 'CLAUDE.md'), '# x');
-fs.writeFileSync(path.join(repo, '.env.dev.example'), 'A=\n');
-check('пример по маске .env*.example засчитан', run(repo) === null);
-
-const pkg = path.join(repo, 'server');
-fs.mkdirSync(pkg);
-fs.writeFileSync(path.join(pkg, 'package.json'), '{}');
-fs.writeFileSync(path.join(pkg, '.env'), 'A=1\n');
-check('.env в подпакете без примера — пропуск', /server/.test(run(repo) || ''));
-
-fs.writeFileSync(path.join(pkg, '.env.example'), 'A=\n');
 check('всё на месте: хук молчит', run(repo) === null);
 
 // Осознанный отказ: удалённый CLAUDE.md не должен напоминать о себе вечно.
@@ -71,13 +61,6 @@ check('CLAUDE.md удалён — хук говорит', /CLAUDE\.md/.test(run(
 fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
 fs.writeFileSync(path.join(repo, '.claude', 'bootstrap-ignore'), '# осознанно\nclaude-md\n');
 check('bootstrap-ignore: про CLAUDE.md молчит', run(repo) === null);
-
-fs.writeFileSync(path.join(repo, '.env.extra'), 'B=1\n');
-fs.rmSync(path.join(repo, '.env.dev.example'));
-check('игнор точечный: env-example всё ещё сообщается', /env/.test(run(repo) || ''));
-
-fs.writeFileSync(path.join(repo, '.claude', 'bootstrap-ignore'), 'claude-md\nenv-example\n');
-check('два пункта в игноре: хук молчит', run(repo) === null);
 
 check('вне репозитория: молчит', run(tmp) === null);
 
