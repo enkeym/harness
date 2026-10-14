@@ -281,6 +281,8 @@ tokensave_install_check() {
 FILTER_CLEAN="jq --indent 2 'del(.model)'"
 git_filter() {
   local have
+  # Не git-копия харнеса (или git нет) — фильтровать нечего.
+  git -C "$HARNESS" rev-parse --git-dir >/dev/null 2>&1 || return 0
   have="$(git -C "$HARNESS" config --get filter.nomodel.clean 2>/dev/null)" || true
   if [ "$have" = "$FILTER_CLEAN" ]; then
     good "git-фильтр nomodel: model из settings.json не попадает в git"; ok=$((ok + 1)); return
