@@ -73,6 +73,8 @@ claude/context-meter.mjs        # порог на ходу пользовате�
 claude/context-step.mjs         # порог посреди хода, между вызовами (PostToolUse)
 claude/paste-guard.mjs          # промпт длиннее предела — не в контекст (UserPromptSubmit, block)
 claude/plan-guard.mjs           # план длиннее предела или с наслоенным снимком — не выходит (PreToolUse: ExitPlanMode)
+handoff-core.mjs                # цепочка передач handoff между транскриптами: последнее звено
+claude/resume-hint.mjs          # открыли звено цепочки — команда /resume последнего (SessionStart: resume)
 question-core.mjs               # конец хода без меню: работа, порог контекста, вопрос текстом
 claude/question-guard.mjs       # адаптер Claude: Stop — такой ход не завершается (block)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
@@ -106,6 +108,7 @@ test/env-isolate.mjs            # первым импортом в тестах 
 test/test-links-context.mjs     # домен карты подключается по paths: один раз на сессию, любой правкой; чтение молчит
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
+test/test-resume-hint.mjs       # цепочка передач до последнего звена; последнее звено, отказ без звена, промпт после передачи, чужой slug — молчат
 test/test-security.mjs          # что deny, что ask, что проходит молча
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
@@ -541,7 +544,8 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 `context-meter` на `UserPromptSubmit`,
 `paste-guard` на `UserPromptSubmit` первым в таблице — заблокированный промпт
 остальные проверки не видят (у `tokensave hook-prompt-submit` свой процесс),
-`plan-guard` на `PreToolUse` (matcher `ExitPlanMode`).
+`plan-guard` на `PreToolUse` (matcher `ExitPlanMode`), `resume-hint` на
+`SessionStart` (matcher `resume`).
 Гейт скиллов: `skill-track` на `PreToolUse`
 (matcher `Skill`) и `skill-track` на `UserPromptSubmit`, `skill-gate`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at`,
@@ -663,6 +667,18 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 `tool_input.plan`, без него — файл `planFilePath`; агент переписывает файл и
 выходит снова.
 
+Каждая передача — новый транскрипт, который начинается с плана; прежняя
+переписка остаётся в старом. После перезагрузки `/resume` открывал звено
+цепочки, а не последнее (dual-vpn, 14.10.2026: восемь звеньев за день,
+заголовки почти одинаковые), и модель отрицала работу, сделанную после
+передачи. Ссылок между файлами Claude Code не пишет, а отказ от `ExitPlanMode`
+при очистке контекста неотличим от отклонённого плана. Связь одна: первая
+запись нового транскрипта — `planContent` с тем же `slug` в пределах 10 секунд
+от отказа в старом. `claude/resume-hint.mjs` на `SessionStart(resume)` идёт по
+этим связям (`handoff-core.mjs:successorOf`) до последнего звена и отдаёт
+пользователю `systemMessage` с `/resume <id>`, модели — то же в контексте.
+Промпт пользователя после передачи — работа продолжена здесь, хук молчит.
+
 **Ограничитель вывода.** `claude/output-clip.mjs` на `PreToolUse(Bash)` заменяет
 команду на `bin/clip-output.sh <метка> -- '<команда>'`, если она из шумных
 (`npm`, `tsc`, `docker`, `cargo`, `make`, `find` и подобные). Скрипт печатает
@@ -765,6 +781,7 @@ Claude Code через `cleanupPeriodDays`, на второй держится �
 node ~/.ai-hooks/test/test-guards.mjs
 node ~/.ai-hooks/test/test-ask-mode.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
+node ~/.ai-hooks/test/test-resume-hint.mjs
 node ~/.ai-hooks/test/test-security.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs

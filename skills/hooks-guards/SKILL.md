@@ -78,6 +78,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite).
 - `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a
   stacked snapshot: rewrite the plan file per `handoff`, then exit again.
+- `resume-hint` on resume: work moved through handoff to the named session — changes after
+  the handoff are its, not unknown; user writes here → repeat its `/resume <id>` in one line.
 
 ## Shell guard
 

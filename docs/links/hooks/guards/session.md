@@ -39,6 +39,11 @@ paths:
   `skills/handoff/SKILL.md`. Переименовал раздел или поднял лимит снимка в скилле
   без хука — `ExitPlanMode` отказывает плану, собранному по скиллу, или
   пропускает наслоенный.
+- Звено цепочки передач — `ai-hooks/handoff-core.mjs:lastExit`/`childOf` ↔ формат
+  транскрипта Claude Code: отказ `ExitPlanMode` (`tool_result` с `is_error`, `slug`) в
+  старом, первая запись пользователя с `planContent` и тем же `slug` в новом. Claude Code
+  переименовал поле или стал писать ссылку на прежнюю сессию — `resume-hint` молча
+  замолкает; `test-resume-hint.mjs` не заметит: транскрипты в нём собраны тестом.
 - Лимиты — `ai-hooks/context-core.mjs:PASTE_LIMIT` (40k) и `PLAN_LIMIT` (12k) ↔ те же
   числа в `ai-hooks/README.md` (оба) и `OVERVIEW.md` (вставка). Сменил константу — доки обещают
   старый порог отказа.

@@ -159,6 +159,15 @@
         ]
       },
       {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/resume-hint.mjs\""
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",
