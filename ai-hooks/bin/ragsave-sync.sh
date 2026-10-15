@@ -39,9 +39,13 @@ find "$repo_root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>
 # проверки замка. Занятый замок (код 3) — лог удаляется, ragsave сам оставил
 # держателю отметку на повторный проход; иначе итог становится sync.log,
 # из которого rag_status берёт last_sync.
+# Фоновый синк не должен душить IDE и dev-сервер: низший приоритет CPU и IO,
+# потоков ONNX — не больше 6 (без лимита onnxruntime берёт все ядра на час
+# при переиндексации после смены ветки). RAGSAVE_THREADS из окружения главнее.
+export RAGSAVE_THREADS="${RAGSAVE_THREADS:-6}"
 setsid bash -c '
   root="$1"; bin="$2"; log="$3"; tmp="$log.$$"
-  "$bin" sync "$root" --quiet >"$tmp" 2>&1
+  nice -n 19 ionice -c 3 "$bin" sync "$root" --quiet >"$tmp" 2>&1
   code=$?
   [ "$code" = 3 ] && { rm -f "$tmp"; exit 0; }
   [ "$code" = 0 ] || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"

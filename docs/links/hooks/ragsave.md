@@ -18,6 +18,9 @@ paths:
   по ним `ragsave/ragsave/indexer.py:sync_state` строит `autosync`/`last_sync` в
   `rag_status`. Переименовал в одном месте — статус снова показывает живой
   автосинк, которого нет.
+- Лимит потоков фонового синка — `RAGSAVE_THREADS` (по умолчанию 6) в
+  `ai-hooks/bin/ragsave-sync.sh` ↔ `ragsave/ragsave/config.py:EMBED_THREADS`.
+  Переименовал переменную в одном месте — синк снова занимает все ядра.
 - Список хранилищ секретов `ragsave/ragsave/config.py:SECRET_NAME_RE` — пара к
   гарду, строка в `hooks/guards/security.md`.
 - Каталог логов `ragsave/ragsave/server.py:_log_failure` — строка
