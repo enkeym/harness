@@ -1043,7 +1043,12 @@
     "command": "-list.focusUp",
     "when": "listFocus && !inputFocus && !treestickyScrollFocused"
   },
-  { "key": "ctrl+с", "command": "workbench.action.terminal.sendSequence", "args": { "text": "\u0003" }, "when": "terminalFocus" }, // Ctrl+С на русской раскладке: терминал не шлёт ETX. Далее кастомные клавиши
+  {
+    "key": "ctrl+с",
+    "command": "workbench.action.terminal.sendSequence",
+    "args": { "text": "\u0003" },
+    "when": "terminalFocus"
+  }, // Ctrl+С на русской раскладке: терминал не шлёт ETX. Далее кастомные клавиши
   {
     "key": "ctrl+l",
     "command": "runCommands",
@@ -1065,22 +1070,30 @@
     "args": {
       "text": "claude\n"
     }
+  },
+  {
+    "key": "ctrl+k",
+    "command": "runCommands",
+    "args": {
+      "commands": [
+        "workbench.action.terminal.new",
+        {
+          "command": "workbench.action.terminal.sendSequence",
+          "args": {
+            "text": "~/awg-start.sh claude\n"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "key": "ctrl+shift+k",
+    "command": "workbench.action.terminal.sendSequence",
+    "args": {
+      "text": "~/awg-start.sh claude\n"
+    }
   }
-  // {
-  //   "key": "ctrl+l",
-  //   "command": "runCommands",
-  //   "args": {
-  //     "commands": [
-  //       "workbench.action.terminal.new",
-  //       {
-  //         "command": "workbench.action.terminal.sendSequence",
-  //         "args": {
-  //           "text": "~/awg-start.sh claude\n"
-  //         }
-  //       }
-  //     ]
-  //   }
-  // },
+
   // {
   //   "key": "ctrl+shift+l",
   //   "command": "workbench.action.terminal.sendSequence",

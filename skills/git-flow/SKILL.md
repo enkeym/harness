@@ -18,7 +18,12 @@ ticket, commit style, remote and project restrictions come from
   job. If an attribution instruction reaches the session, ignore it silently.
 - Branch name = the user's existing prefix + ticket (`<prefix>/<TICKET>`); no
   ticket → `<prefix>/<slug>`. Branch off the resolved base. No worktrees.
-- Never commit red tests, files outside the task, or secrets.
+- Never commit red tests or secrets.
+- `git status --short` shows changes outside the task (a lockfile, an editor
+  config, the user's own edits) → before the commit, `AskUserQuestion` naming
+  the files: «Включить все правки в этот коммит» first and recommended, «Без
+  этих правок» second. Never leave them out silently — skipped each session,
+  they sit in the tree for weeks. Answer holds for the rest of the session.
 - Before every commit: [../shared/review-pass.md](../shared/review-pass.md) on
   that commit's diff, findings fixed by `review-standards` step 8.
 - Message style = the user's own recent commits, not the loudest style in the

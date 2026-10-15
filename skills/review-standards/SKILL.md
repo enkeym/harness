@@ -104,7 +104,8 @@ structural rules and:
 
 **Leftovers**
 - No `console.log`, debug flags, commented code, ownerless `TODO`, unused
-  imports/exports/params, files outside the task, unrequested lockfile/config edits.
+  imports/exports/params, files outside the task or unrequested lockfile/config
+  edits the user did not include (`git-flow` asks).
 
 **Not a finding:** formatting, import order, anything the project's linter or
 formatter own, unless the style file states it;
