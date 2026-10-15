@@ -19,8 +19,9 @@ conventions are `test-conventions`.
    `~/harness/README.md` (*Раскатка*) and a session restart.
 2. Resolve the base branch by [../shared/project-facts.md](../shared/project-facts.md).
 3. App running? Dev port from `package.json` scripts or `playwright.config.*`
-   (`webServer.url`). Not running → start it the project's way in the
-   background; none found → ask for the URL.
+   (`webServer.url`). Not running → `build`, then `start` in the background
+   when both scripts exist (a dev server compiles each route on first visit);
+   otherwise the project's dev script; none found → ask for the URL.
 4. Login and data: the seed or test account the project documents
    (`.env.example`, e2e fixtures, README). Never a real user's credentials,
    never production.
@@ -65,8 +66,10 @@ Only the rows the screen has:
 
 ## Procedure
 
-1. `browser_navigate` → `browser_snapshot`; act by the `ref` of the latest
-   snapshot, a new snapshot after every navigation or DOM change.
+1. Act by the `ref` of the snapshot the last action returned — every action
+   returns one. `browser_snapshot` only after a change no action of yours
+   caused (timer, push); one element on a long page → `browser_find`. A form →
+   one `browser_fill_form`, not a `browser_type` per field.
 2. After each scenario: `browser_console_messages` (errors, warnings) and
    `browser_network_requests` (4xx/5xx, duplicate calls).
 3. `browser_take_screenshot` only as evidence of a visual bug.

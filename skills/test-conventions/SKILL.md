@@ -55,7 +55,8 @@ or branch still needs: `test-coverage`.
 
 ## Running
 - While writing: only the touched file with the package's runner (Jest:
-  `path -t 'name'`, Vitest: `run path`). Full suite once before the commit.
+  `path -t 'name'`, Vitest: `run path`, Playwright: `path -g 'name'
+  --project=<one>`). Full suite once before the commit.
 - Clean output: no `console.error`, no `act` warnings, no open handles.
 - Flakiness fixed with determinism (fake timers, explicit `await`), never retries.
 
