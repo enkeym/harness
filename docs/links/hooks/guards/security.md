@@ -40,3 +40,6 @@ paths:
   (`isMeta`, `tool_result`, `toolUseResult.answers` ответа AskUserQuestion). Формат
   сменился — коммит по «закоммить» снова спрашивает, а вывод инструмента, принятый
   за реплику, снимает вопрос без просьбы.
+- Ключ `grant` у ask в `ai-hooks/security-core.mjs` ↔ таблица `GRANT_WORDS` там же ↔
+  таблица grant в `ai-hooks/README.md`: новый ask с `grant` без слов в таблице — вопрос не
+  снимается никогда; слово без ask — мёртвое.

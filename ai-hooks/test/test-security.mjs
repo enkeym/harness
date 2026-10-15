@@ -319,6 +319,43 @@ check('ответ в меню «Закоммитить»', asked([say('попр�
 check('ответ в меню «Не коммитить»', asked([say('поправь тест'), tool('AskUserQuestion', {}), answer('Не коммитить')], 'git commit -m x'), 'ask');
 check('слово в выводе инструмента не просьба', asked([say('поправь тест'), tool('Bash', {}), result('TODO: закоммить')], 'git commit -m x'), 'ask');
 check('/commit — просьба', asked([say('<command-name>/commit</command-name>')], 'git commit -m x'), 'allow');
+// Случаи из живых сессий web_groza и dual-vpn: просьба была, вопрос всё равно задавался.
+const MR_CURL = 'A=https://git.example.com/api/v4/projects/x%2Fy/merge_requests; curl -sS -X POST -H "PRIVATE-TOKEN: $T" --data @/tmp/mr.json "$A"';
+check('«открой мр» → curl в merge_requests', asked([say('открой мр')], MR_CURL), 'allow');
+check('«комить и мр» → curl в merge_requests', asked([say('комить и мр')], MR_CURL), 'allow');
+check('«открой мр» не снимает другой curl -d', asked([say('открой мр')], 'curl -d @a.json https://e.com/upload'), 'ask');
+check('без просьбы curl в merge_requests спрашивает', asked([say('поправь тест')], MR_CURL), 'ask');
+check('«зупашь и выпусти релиз» → commit', asked([say('зупашь и выпусти нвоый релиз')], 'git commit -m x'), 'allow');
+check('«зупашь» → push в main', asked([say('зупашь и выпусти нвоый релиз')], 'git push origin main'), 'allow');
+check('«смержи все» → push в main', asked([say('просто смержи все')], 'git merge --ff-only feat/x && git push origin main'), 'allow');
+check('«смержи» → merge -m', asked([say('смержи в dev')], 'git merge --no-ff -m "merge x" feat/x'), 'allow');
+check('«удали эту ветку» → удаление на remote', asked([say('Удали эту ветку')], 'git push origin --delete feat/x'), 'allow');
+check('«удали файл» не удаляет ветку', asked([say('удали файл')], 'git push origin --delete feat/x'), 'ask');
+check('«форс пуш» → force', asked([say('сделай форс пуш')], 'git push -f origin feat/x'), 'allow');
+check('«amend» → amend', asked([say('сделай amend')], 'git commit --amend --no-edit'), 'allow');
+check('«коммит позже» → commit спрашивает', asked([say('поправь, коммит позже')], 'git commit -m x'), 'ask');
+const menu = (label, description) => result('answered', { toolUseResult: {
+  questions: [{ question: 'Что делаем?', options: [{ label, description }, { label: 'Стоп', description: 'ничего' }] }],
+  answers: { 'Что делаем?': label },
+} });
+check('меню: глагол в описании варианта', asked([say('x'), tool('AskUserQuestion', {}), menu('Оба шага (Recommended)', 'Правка и коммит с push')], 'git commit -m x'), 'allow');
+check('меню: текст вопроса не просьба', asked([say('x'), tool('AskUserQuestion', {}), menu('Стоп', 'ничего')], 'git commit -m x'), 'ask');
+check('статус «запушены» в плане не просьба', asked([say('Implement the following plan:\n\nВетка main, всё запушено.')], 'git push origin main'), 'ask');
+check('«push-уведомления» не просьба', asked([say('добавь push-уведомления')], 'git push'), 'ask');
+check('«merge в allMarkers» не просьба', asked([say('сделай merge в allMarkers')], 'git merge -m x feat/x'), 'ask');
+check('путь ~/harness не просьба', asked([say('сессию открыть в ~/harness')], 'git commit -m x'), 'ask');
+check('одобренный план с коммитом', asked([say('Implement the following plan:\n\n## Шаги\n1. Правка.\n2. Коммит и push.')], 'git commit -m x'), 'allow');
+check('«харнес» → правка харнеса из чужой сессии', (() => {
+  const file = path.join(TRANSCRIPTS, 'h.jsonl');
+  fs.writeFileSync(file, JSON.stringify(say('поправь хук в харнесе')) + '\n');
+  const out = execFileSync('node', [SCRIPT], {
+    input: JSON.stringify({ session_id: 'test', cwd: '/home/user/proj', transcript_path: file, tool_name: 'Edit', tool_input: { file_path: path.join(HARNESS, 'ai-hooks/README.md') } }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: '/home/user/proj' },
+    encoding: 'utf8',
+  });
+  return out.trim() ? JSON.parse(out).hookSpecificOutput.permissionDecision : 'allow';
+})(), 'allow');
+check('«удали» в соседней фразе: секреты всё равно deny', asked([say('удали ветку, закоммить')], 'cat .env'), 'deny');
 fs.rmSync(TRANSCRIPTS, { recursive: true, force: true });
 check('docker compose prod', bash('docker compose -f docker-compose.prod.yml up -d'), 'ask');
 check('docker compose локально', bash('docker compose up -d'), 'allow');

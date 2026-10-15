@@ -17,13 +17,13 @@ export function check(input) {
     // Корень сессии, а не текущий cwd: `cd ~/harness` из чужого проекта не
     // должен делать правку харнеса «своей».
     const cwd = process.env.CLAUDE_PROJECT_DIR || input.cwd;
-    // Транскрипт читаем только ради git: просьба человека снимает лишь вопрос
-    // о коммите и push, остальным проверкам она не нужна.
-    const command = String(input.tool_input?.command ?? input.tool_input?.code ?? '');
-    const allow = input.transcript_path && /\bgit\b[\s\S]*\b(?:commit|push)\b/.test(command)
-      ? grantsInTranscript(transcriptLines(input.transcript_path))
-      : undefined;
-    verdict = securityGuard(input.tool_name, input.tool_input, { cwd, allow });
+    verdict = securityGuard(input.tool_name, input.tool_input, { cwd });
+    // ask, который снимает просьба человека (grant), — тогда и только тогда
+    // читаем транскрипт и судим заново с разрешениями последнего хода.
+    if (verdict?.grant && input.transcript_path) {
+      const allow = grantsInTranscript(transcriptLines(input.transcript_path));
+      verdict = securityGuard(input.tool_name, input.tool_input, { cwd, allow });
+    }
   } catch {
     verdict = null; // fail-open: гард не должен ломать работу
   }
