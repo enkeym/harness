@@ -24,6 +24,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   `+refspec`), branch deletion, push to the current branch (no refspec, `HEAD`, `@`, a
   `$…` name), deploy, remote-host commands, outbound data, the whole environment (`env`,
   `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
+- Plain commit and non-destructive push pass when the user's last prompt or menu answer
+  asked («коммить», «пушь», «мр»); amend, `--no-verify`, force, deletion, `$…` still ask.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.
 - Judges command **form**. Code *meaning* (auth, payments, secrets, outbound

