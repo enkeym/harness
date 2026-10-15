@@ -12,12 +12,10 @@
 // как «Коммитить?», и висит так же. Такой случай прошёл мимо хука — отсюда
 // AWAIT_RE и OPTIONS_HEAD_RE.
 //
-// Словарь формулировок не закрывается никогда: «начну по вашему слову» в
-// предпоследнем абзаце прошло мимо него после коммита на 173k, хотя context-meter
-// велел передачу. Поэтому раньше текста судится структура хода, без разбора слов:
-// ход с правкой или коммитом кончается меню, ход за порогом контекста — по мерке
-// context-core:stopNoticeDue (HAND один раз, HARD каждый ход).
-// Регэкспы остаются только для хода без работы — ответа на вопрос.
+// Раньше текста судится порог контекста — по мерке context-core:stopNoticeDue
+// (HAND один раз, HARD каждый ход): совет о передаче модель пропускала.
+// Ход с правкой без вопроса не блокируется: блок на каждой правке держал ходы,
+// где спрашивать было нечего, — вопрос ищут только регэкспы.
 
 import { contextUsed, level, noticeText, isWork, sessionWorked, stopNoticeDue, transcriptLines } from './context-core.mjs';
 
@@ -53,12 +51,6 @@ export const REASON = 'Ответ кончается вопросом польз
   + 'Правило core.md: вопрос — только через AskUserQuestion, варианты — в options, '
   + 'рекомендуемый первым. Задай его сейчас через AskUserQuestion. Вопрос риторический '
   + 'и ответа не ждёт — перепиши концовку без него.';
-
-export const WORK_REASON = 'Ход с правкой или коммитом кончился без меню. Правило core.md: '
-  + 'следующий шаг и решение пользователя — только через AskUserQuestion. Остался шаг, '
-  + 'проверка или решение — задай его сейчас, следующий шаг первым вариантом. Задача закрыта '
-  + 'целиком и решать нечего — закончи ход строкой итога без вопроса. Этот блок не повод '
-  + 'коммитить: готовность — по core.md, сомнение — «Закоммитить» вариантом в меню.';
 
 export const CONTEXT_REASON = 'Ход кончился без меню, а контекст за порогом.';
 
@@ -130,11 +122,10 @@ export function pendingQuestion(text) {
 }
 
 // Вход Stop → причина блока или null. Второй Stop подряд (stop_hook_active)
-// пропускается: модель уже получила причину, второй блок — это петля; он же
-// выход, когда работа закрыта целиком и спрашивать нечего.
+// пропускается: модель уже получила причину, второй блок — это петля.
 //
 // Порядок: порог контекста (HAND один раз за сессию, HARD каждый ход; SOFT
-// не блокирует), затем работа в ходе, затем текст.
+// не блокирует), затем текст.
 export function questionVerdict(input) {
   if (!input || input.stop_hook_active || !input.transcript_path) return null;
   const { text, menu, worked } = lastTurn(transcriptLines(input.transcript_path), input.cwd);
@@ -145,7 +136,6 @@ export function questionVerdict(input) {
   if (stage && stopNoticeDue(input.session_id, stage, didWork)) {
     return `${CONTEXT_REASON} ${noticeText(stage, used.tokens, { worked: didWork })}`;
   }
-  if (worked) return WORK_REASON;
   // last_assistant_message свежее транскрипта: последняя запись может не успеть на диск.
   const last = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : text;
   const line = last ? pendingQuestion(last) : null;

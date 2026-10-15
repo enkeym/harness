@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Тесты question-guard: ответ, который кончается вопросом или ожиданием
 // решения пользователя текстом, блокирует Stop; вопрос через меню, код, цитата,
-// заголовок, условие без просьбы решения, повторный Stop — нет. Ход с правкой
-// или коммитом и ход за порогом контекста без меню блокируются при любом тексте.
+// заголовок, условие без просьбы решения, повторный Stop, правка без вопроса — нет.
+// Ход за порогом контекста без меню блокируется при любом тексте.
 // Хук гоняется настоящим процессом на временном транскрипте.
 
 import { ISOLATED_HOOKS_LOG } from './env-isolate.mjs';
@@ -143,21 +143,12 @@ check('вопрос в середине — пропуск', run([prompt('x'), s
 check('last_assistant_message — block',
   blocked(run([prompt('x'), say('Готово.')], { last_assistant_message: 'Готово. Пушить?' })));
 
-// Ход с работой без меню — block при любом тексте. Случай из жизни: ожидание
-// решения в предпоследнем абзаце и словами, которых нет в AWAIT_RE.
-const workBlocked = (out) => out?.decision === 'block' && out.reason.startsWith('Ход с правкой или коммитом');
-check('коммит и «начну по вашему слову» не в конце — block', workBlocked(run([prompt('x'), commit(), result('Bash'),
-  say('Шаг закоммичен.\n\nОбновление остановит службу, поэтому начну его только по вашему слову.\n\nРешения записаны.')])));
-check('правка в репозитории и «Готово.» — block', workBlocked(run([prompt('x'),
-  edit(path.join(REPO, 'a.ts')), result('Edit'), say('Готово.')])));
-check('правка и AskUserQuestion — пропуск', run([prompt('x'), edit(path.join(REPO, 'a.ts')), result('Edit'),
-  call('AskUserQuestion'), result('AskUserQuestion'), say('Делаю первый.')]) === null);
-check('запись вне репозитория — пропуск', run([prompt('x'),
-  call('Write', { file_path: path.join(DIR, 'note.md') }), result('Write'), say('Записал.')]) === null);
-check('коммит в прошлом ходе, сейчас ответ — пропуск', run([prompt('a'), commit(), result('Bash'),
-  say('Закоммитил.'), prompt('что там?'), say('Там фикс кэша.')]) === null);
-check('работа и stop_hook_active — пропуск', run([prompt('x'), commit(), result('Bash'), say('Готово.')],
-  { stop_hook_active: true }) === null);
+// Правка или коммит без вопроса — не повод держать ход; вопрос после правки — block.
+check('правка в репозитории и «Готово.» — пропуск', run([prompt('x'),
+  edit(path.join(REPO, 'a.ts')), result('Edit'), say('Готово.')]) === null);
+check('коммит и итог — пропуск', run([prompt('x'), commit(), result('Bash'), say('Закоммичено и запушено.')]) === null);
+check('правка и вопрос текстом — block', blocked(run([prompt('x'),
+  edit(path.join(REPO, 'a.ts')), result('Edit'), say('Поправил.\n\nПушить?')])));
 
 // Ход за порогом контекста без меню: причина — текст context-meter для этого порога.
 const ctxBlocked = (out, word) => out?.decision === 'block' && out.reason.startsWith('Ход кончился без меню')
@@ -174,8 +165,8 @@ const worked = (sid) => noteWork({ session_id: sid, cwd: REPO, tool_name: 'Edit'
 worked('q-worked');
 check('SOFT и работа в прошлых ходах — пропуск', run([prompt('x'),
   sayAt(100_000, 'Вывод готов.')], { session_id: 'q-worked' }) === null);
-check('SOFT и правка в ходе — block работы, не порога', workBlocked(run([prompt('x'),
-  edit(path.join(REPO, 'a.ts')), result('Edit'), sayAt(100_000, 'Готово.')], { session_id: 'q-soft-edit' })));
+check('SOFT и правка в ходе — пропуск', run([prompt('x'),
+  edit(path.join(REPO, 'a.ts')), result('Edit'), sayAt(100_000, 'Готово.')], { session_id: 'q-soft-edit' }) === null);
 // HAND — один раз за сессию (9f2feff0 получил его четыре раза подряд).
 worked('q-hand');
 check('HAND первый раз — block', ctxBlocked(run([prompt('x'),
