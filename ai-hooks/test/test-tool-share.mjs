@@ -178,7 +178,7 @@ const rows = (out) => {
   // Пропущенный rag: цепочка grep после пустого поиска по имени — один случай;
   // rag_search сбрасывает; после пустого literal grep по коду в правилах, по докам — нет;
   // после непустого search grep не в счёте, grep-фильтр после `|`
-  // и grep по /tmp/ — не поиск по проекту.
+  // и grep по /tmp/ — не поиск по проекту. Там же rag_search точной строки без path_include.
   const ragBox = sandbox();
   const empty = { content: [{ type: 'text', text: 'count: 0\n\n' }] };
   write(ragBox.projDir, 'gggggggg-7.jsonl', [
@@ -207,12 +207,21 @@ const rows = (out) => {
     result('g12', 4000),
     call('r12', 1000, use('g13', 'Bash', { command: 'grep -c FAIL /tmp/t.out' })),
     result('g13', 4000),
+    call('r13', 1000, use('g14', 'mcp__ragsave__rag_search', { query: 'retryPolicy' }),
+      use('g15', 'mcp__ragsave__rag_search', { query: 'RETRY_MAX', path_include: ['docs'] }),
+      use('g16', 'mcp__ragsave__rag_search', { query: 'retry policy' })),
+    result('g14', 400),
+    result('g15', 400),
+    result('g16', 400),
     call('r9', 1000, { type: 'text', text: 'конец' }),
   ]);
   const ragOut = runIn(ragBox.home, '--waste', '2026-09-15', '0').stdout;
   const noRag = table(ragOut.trim().split('\n\n')[3])['rag_search после пустого search'];
   check('пропущенный rag — цепочки grep после пустого search, literal — только доки',
     [noRag?.['случаи'], noRag?.['сессии'], noRag?.['ток.']], ['2', '1', '3.0k']);
+  const ragExact = table(ragOut.trim().split('\n\n')[3])['rag_search строки без path_include'];
+  check('rag_search точной строки без path_include — с фильтром и фраза не в счёте',
+    [ragExact?.['случаи'], ragExact?.['сессии']], ['1', '1']);
 
   const bad = runIn(box.home, '--waste', 'yesterday');
   check('--waste с неверной границей — использование, код 1', [bad.status, bad.stderr.startsWith('Запуск:')], [1, true]);

@@ -43,7 +43,8 @@
 // пропущенный rag_search — grep по файлам (не фильтр после `|`) после пустого
 // tokensave_search (count: 0) до rag_search или непустого search в сегменте:
 // после поиска по имени — любой, после literal — только по докам и конфигам (точную строку в коде правила отдают grep). Случай —
-// цепочка grep после одного пустого поиска, ток. — их вывод.
+// цепочка grep после одного пустого поиска, ток. — их вывод; rag_search точной строки
+// (одно слово с _ или camelCase) без path_include — без фильтра код вытесняет доку.
 //
 // Запуск — USAGE ниже. Граница по умолчанию — a0ec8f2 (снятие принуждения к
 // tokensave, 22.09.2026).
@@ -155,6 +156,7 @@ const TS_SEARCH = 'mcp__tokensave__tokensave_search';
 const TS_CONTEXT = 'mcp__tokensave__tokensave_context';
 const RAG_SEARCH = 'mcp__ragsave__rag_search';
 const EMPTY_SEARCH_RE = /(^|\n)count: 0\n/;
+const isExactQuery = (q) => !/\s/.test(q) && /_|[a-z][A-Z]/.test(q);
 // grep по файлам — в начале команды, не фильтр после `|` (`npm test | grep FAIL`);
 // вывод команд в /tmp/ — не файлы проекта.
 const FILE_GREP_RE = /(^|[;&(]|\|\|)\s*(\w+=\S*\s+)*(git\s+grep|grep|rg|ag|find)(\s|$)/;
@@ -178,7 +180,7 @@ function waste(file) {
   const events = []; // { cls, at: индекс вызова, после которого текст вошёл в окно, tok, kind }
   const uses = new Map(); // tool_use.id → { name, input, at, path }
   const answered = new Set();
-  const r = { usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, wide: 0, wideTok: 0, context: 0, noRag: 0, noRagTok: 0 };
+  const r = { usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, wide: 0, wideTok: 0, context: 0, noRag: 0, noRagTok: 0, ragExact: 0 };
   // gap — пустой tokensave_search без rag_search после него: { literal, hit }.
   const fresh = () => ({ reads: new Map(), full: new Map(), names: new Set(), skills: new Set(), handed: false, gap: null });
   let state = fresh();
@@ -214,7 +216,10 @@ function waste(file) {
     if (path && isEdit(b.name)) { state.reads.delete(path); state.full.delete(path); }
     if (b.name === 'Skill' && input.skill === 'handoff') state.handed = true;
     if (b.name === TS_CONTEXT) r.context += 1;
-    if (b.name === RAG_SEARCH) state.gap = null;
+    if (b.name === RAG_SEARCH) {
+      state.gap = null;
+      if (isExactQuery(String(input.query ?? '')) && !input.path_include?.length) r.ragExact += 1;
+    }
     const { gap } = state;
     const fileGrep = group(b) === 'grep' && (b.name !== 'Bash' || (FILE_GREP_RE.test(input.command ?? '') && !/\s\/tmp\//.test(input.command)));
     if (gap && fileGrep && (!gap.literal || DOCS_RE.test(JSON.stringify(input)))) {
@@ -351,16 +356,17 @@ const usd = (n) => n.toFixed(2);
 // Отчёт --waste: классы по убыванию $, топ-10 сессий, недостающие вызовы.
 function printWaste(list) {
   const all = Object.fromEntries(WASTE_CLASSES.map((c) => [c, { n: 0, tok: 0, usd: 0, top: null }]));
-  const t = { turns: 0, ctx: 0, usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, noDigestS: 0, wide: 0, wideTok: 0, wideS: 0, context: 0, contextS: 0, noRag: 0, noRagTok: 0, noRagS: 0 };
+  const t = { turns: 0, ctx: 0, usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, noDigestS: 0, wide: 0, wideTok: 0, wideS: 0, context: 0, contextS: 0, noRag: 0, noRagTok: 0, noRagS: 0, ragExact: 0, ragExactS: 0 };
   for (const r of list) {
     const w = r.waste;
     t.turns += r.turns;
     t.ctx += r.ctx;
-    for (const key of ['usd', 'repeat', 'noDigest', 'noDigestTok', 'wide', 'wideTok', 'context', 'noRag', 'noRagTok']) t[key] += w[key];
+    for (const key of ['usd', 'repeat', 'noDigest', 'noDigestTok', 'wide', 'wideTok', 'context', 'noRag', 'noRagTok', 'ragExact']) t[key] += w[key];
     if (w.noDigest) t.noDigestS += 1;
     if (w.wide) t.wideS += 1;
     if (w.context) t.contextS += 1;
     if (w.noRag) t.noRagS += 1;
+    if (w.ragExact) t.ragExactS += 1;
     r.lost = { tok: 0, usd: 0, top: '' };
     for (const [cls, c] of Object.entries(w.classes)) {
       const a = all[cls];
@@ -393,6 +399,7 @@ function printWaste(list) {
   console.log(['search без path_include', t.wide, t.wideS, k1(t.wideTok)].join('\t'));
   console.log(['tokensave_context', t.context, t.contextS, '—'].join('\t'));
   console.log(['rag_search после пустого search', t.noRag, t.noRagS, k1(t.noRagTok)].join('\t'));
+  console.log(['rag_search строки без path_include', t.ragExact, t.ragExactS, '—'].join('\t'));
 }
 
 if (WASTE) {
