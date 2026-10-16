@@ -136,28 +136,20 @@ const PROD_TOKEN_RE = /(^|[^a-z])prod(uction)?([^a-z]|$)/i;
 // remote-ом `ci.skip`, а `origin` — веткой.
 const PUSH_ARG_OPTS = ['-o', '--push-option', '--repo', '--receive-pack', '--exec'];
 
-// ask с ключом разрешения: grant — что человек должен был попросить сам, чтобы
-// вопрос стал лишним (см. «Явная просьба человека»). Без grant — спрашивает всегда.
-const askFor = (reason, grant) => ({ level: ASK, reason, grant });
-
-// at — индекс подкоманды `push` в токенах. Все находки по порядку: первая, которую
-// просьба человека не покрывает, и есть ответ (firstUngranted).
-function gitPushVerdicts(toks, at) {
+// at — индекс подкоманды `push` в токенах.
+function gitPushReason(toks, at) {
   const args = toks.slice(at + 1);
-  const out = [];
   // `-f` бывает и в склейке с другими короткими флагами: `-uf`.
   if (args.some((t) => /^(-[a-z]*f[a-z]*|--force|--force-with-lease.*)$/.test(t))) {
-    out.push(askFor('force push переписывает историю', 'force'));
+    return 'force push переписывает историю';
   }
   if (args.some((t) => ['--all', '--mirror', '--branches'].includes(t))) {
-    out.push(askFor('push всех веток, включая защищённые'));
+    return 'push всех веток, включая защищённые';
   }
-  if (args.some((t) => t === '-d' || t === '--delete')) out.push(askFor('удаление ветки на remote', 'delete'));
+  if (args.some((t) => t === '-d' || t === '--delete')) return 'удаление ветки на remote';
   // Цель вычисляется при запуске — `$(git branch --show-current)`, `$BRANCH`:
   // в команде её имени нет, решает человек.
-  if (args.some((t) => /[$`]/.test(t))) {
-    return [...out, askFor('push: цель вычисляется при запуске, в команде её не видно')];
-  }
+  if (args.some((t) => /[$`]/.test(t))) return 'push: цель вычисляется при запуске, в команде её не видно';
 
   const free = [];
   for (let i = 0; i < args.length; i++) {
@@ -168,140 +160,27 @@ function gitPushVerdicts(toks, at) {
   const refspecs = free.slice(1);
   if (refspecs.length === 0) {
     // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
-    if (!args.some((t) => t === '--dry-run' || t === '-n')) out.push(askFor('push в текущую ветку (refspec не указан)', 'push'));
-    return out;
+    return args.some((t) => t === '--dry-run' || t === '-n') ? null : 'push в текущую ветку (refspec не указан)';
   }
   for (const spec of refspecs) {
     // `+` перед refspec — тот же force push, только для одной ветки.
-    if (spec.startsWith('+')) out.push(askFor('force push (+refspec) переписывает историю', 'force'));
-    if (spec.startsWith(':')) { out.push(askFor(`удаление ветки «${spec.slice(1)}» на remote`, 'delete')); continue; }
+    if (spec.startsWith('+')) return 'force push (+refspec) переписывает историю';
+    if (spec.startsWith(':')) return `удаление ветки «${spec.slice(1)}» на remote`;
     const branch = spec.split(':').pop().replace(/^refs\/heads\//, '');
-    if (branch === 'HEAD' || branch === '@') out.push(askFor('push в текущую ветку (HEAD)', 'push'));
-    else if (branch.includes('*')) out.push(askFor(`push по шаблону «${spec}» задевает все ветки`));
-    else if (PROTECTED_BRANCH_RE.test(branch)) out.push(askFor(`push в защищённую ветку «${branch}»`, 'push'));
+    if (branch === 'HEAD' || branch === '@') return 'push в текущую ветку (HEAD)';
+    if (branch.includes('*')) return `push по шаблону «${spec}» задевает все ветки`;
+    if (PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
   }
-  return out;
+  return null;
 }
 
 // Коммит — точка, где человек проверяет, что именно уходит в историю. У merge
 // `-n` — не --no-verify, поэтому флаги разбираются только у самого commit.
-// Просьба «закоммить» покрывает обычный коммит, но не amend и не --no-verify.
-function gitCommitVerdict(toks, at) {
-  if (toks[at] === 'merge') return askFor('`git merge` создаёт коммит', 'merge');
-  if (toks[at] !== 'commit') return askFor(`\`git ${toks[at]}\` создаёт коммит`);
-  if (toks.includes('--amend')) return askFor('amend переписывает последний коммит', 'amend');
-  if (toks.includes('--no-verify') || toks.includes('-n')) return askFor('коммит с --no-verify обходит git-хуки');
-  return askFor('создание коммита', 'commit');
-}
-
-// ---------------------------------------------------------------------------
-// Явная просьба человека. ask — точка, где человек решает; когда он сам написал
-// «коммить и мр», второй вопрос о том же — шум. Каждый ask, который просьба может
-// снять, несёт grant; слова просьбы для каждого grant — в GRANT_WORDS, одна
-// таблица на все проверки. Источник — последний ход основной нити транскрипта:
-// реплика человека (и одобренный им план) и выбранные им варианты меню
-// AskUserQuestion с их описанием. Вывод инструментов не считается: файл со
-// словом «закоммить» не даёт права коммитить.
-
-const NO_GRANTS = new Set();
-
-// Граница слова для кириллицы: \b в JS её не видит. Дефис — часть слова:
-// «push-уведомления» — не push.
-const word = (body) => new RegExp(`(?<![\\p{L}\\p{N}-])(?:${body})(?![\\p{L}\\p{N}-])`, 'iu');
-
-// Только просьба: повелительное, инфинитив, «закоммичу» из описания варианта —
-// не отчёт. «Запушены 786a1aa», «после релиза», «merge в allMarkers» в
-// одобренном плане — статус, не разрешение. Опечатки из живых сессий
-// («комить», «зупашь») — тоже просьба.
-const COMMIT_WORDS = '(?:за)?ком+ит(?:ь|ьте|ни|ните|нуть|ить|им)?|(?:за)?ком+ичу|commit';
-const PUSH_WORDS = 'з[ау]п[уа]ш(?:ь|ьте|и|ите|ить|им|у|ни|ните|нуть)?|пуш(?:ь|ьте|и|ни|ните|нуть|ить|им)?|push';
-const MR_WORDS = 'мр|mr|pr|merge request|мерж реквест|pull request';
-const MERGE_WORDS = '(?:с|в)мерж(?:и|ите|ить|ь|у|ни|нуть)?|мерж(?:и|ни|ить)|влей|влейте|влить';
-const RELEASE_WORDS = 'релиз|release';
-
-// Просьба доставить работу — push, MR, влить, релиз. При незакоммиченной правке
-// она велит и коммит: «запушь и мр» не должно спрашивать коммит.
-const DELIVER_WORDS = `${PUSH_WORDS}|${MR_WORDS}|${MERGE_WORDS}|${RELEASE_WORDS}`;
-
-const GRANT_WORDS = [
-  ['commit', word(`${COMMIT_WORDS}|${DELIVER_WORDS}`)],
-  ['push', word(DELIVER_WORDS)],
-  ['mr', word(MR_WORDS)],
-  ['merge', word(MERGE_WORDS)],
-  ['delete', /(?<![\p{L}\p{N}])(?:удали|удалить|снеси|delete|remove)(?![\p{L}\p{N}]).*(?:ветк|branch)/iu],
-  ['force', word('форс\\p{L}*|force\\p{L}*')],
-  ['amend', word('аменд\\p{L}*|amend\\p{L}*')],
-  // Путь `~/harness` в тексте — не просьба править харнес.
-  ['harness', /(?<![\p{L}\p{N}/-])(?:харнес\p{L}*|harness)(?![\p{L}\p{N}/-])/iu],
-];
-// Отрицание раньше слова в той же части фразы: «закоммить, но не пушь»;
-// отсрочка после него: «коммит позже».
-const NEGATION_RE = word('не|без|нельзя|рано|no|not|don\'t|dont|without');
-const LATER_RE = word('позже|потом|отложи\\p{L}*|later');
-
-// Текст просьбы → набор разрешений. Вопрос — не просьба: «какой коммит сломал
-// тест?» коммитить не велит.
-export function grantsInText(text) {
-  const grants = new Set();
-  for (const sentence of String(text || '').split(/(?<=[.!?\n])/)) {
-    if (sentence.trim().endsWith('?')) continue;
-    for (const part of sentence.split(/[.,;:!\n()—–]+|\s-\s|\s(?:но|а|but)\s/iu)) {
-      for (const [grant, re] of GRANT_WORDS) {
-        const m = re.exec(part);
-        if (!m || NEGATION_RE.test(part.slice(0, m.index))) continue;
-        if (LATER_RE.test(part.slice(m.index + m[0].length))) continue;
-        grants.add(grant);
-      }
-    }
-  }
-  return grants;
-}
-
-// Первая находка, которую просьба не покрывает, или null.
-export function firstUngranted(verdicts, allow = NO_GRANTS) {
-  return verdicts.find((v) => v && !(v.level === ASK && v.grant && allow.has(v.grant))) || null;
-}
-
-// Выбранные в меню варианты с описанием: «Оба шага (Recommended)» без описания
-// не говорит, что за ним коммит. Текст самого вопроса не берётся — его писал агент.
-function menuAnswers(result) {
-  const texts = [];
-  for (const [question, answer] of Object.entries(result.answers)) {
-    texts.push(String(answer));
-    const q = (result.questions || []).find((x) => x?.question === question);
-    for (const opt of q?.options || []) {
-      if (opt?.label && String(answer).includes(opt.label) && opt.description) texts.push(opt.description);
-    }
-  }
-  return texts;
-}
-
-function promptText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content) || content.some((b) => b?.type === 'tool_result')) return null;
-  return content.filter((b) => b?.type === 'text').map((b) => b.text).join('\n');
-}
-
-// Строки транскрипта → разрешения последнего хода.
-export function grantsInTranscript(lines) {
-  const texts = [];
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let rec;
-    try { rec = JSON.parse(lines[i]); } catch { continue; }
-    if (rec.type !== 'user' || rec.isMeta || rec.isSidechain) continue;
-    if (rec.toolUseResult?.answers && typeof rec.toolUseResult.answers === 'object') {
-      texts.push(...menuAnswers(rec.toolUseResult));
-      continue;
-    }
-    const prompt = promptText(rec.message?.content);
-    if (prompt !== null) {
-      texts.push(prompt);
-      break;
-    }
-  }
-  const grants = new Set();
-  for (const t of texts) for (const g of grantsInText(t)) grants.add(g);
-  return grants;
+function gitCommitReason(toks, at) {
+  if (toks[at] !== 'commit') return `\`git ${toks[at]}\` создаёт коммит`;
+  if (toks.includes('--amend')) return 'amend переписывает последний коммит';
+  if (toks.includes('--no-verify') || toks.includes('-n')) return 'коммит с --no-verify обходит git-хуки';
+  return 'создание коммита';
 }
 
 // ---------------------------------------------------------------------------
@@ -337,18 +216,13 @@ function bareHosts(toks) {
   return hosts;
 }
 
-// Создание или правка MR/PR через API — адрес бывает в переменной из соседнего
-// сегмента (`A=https://…/merge_requests; curl … "$A"`), поэтому смотрим всю команду.
-const MR_API_RE = /\/merge_requests\b|\/pulls\b/;
-
-function outboundVerdict(toks, seg, raw) {
+function outboundReason(toks, seg) {
   if (!hasUploadFlag(toks)) return null;
   const hosts = [...hostsIn(seg, toks), ...bareHosts(toks)];
   const external = hosts.filter((h) => h && !LOCAL_HOST_RE.test(h));
   if (external.length === 0) return null;
   const fromFile = /[@<]\s*[\w./-]+/.test(seg) || toks.some((t) => FROM_FILE_FLAG_RE.test(t));
-  return askFor(`отправка данных на ${external[0]}${fromFile ? ' с содержимым файла' : ''}`,
-    MR_API_RE.test(raw) ? 'mr' : undefined);
+  return `отправка данных на ${external[0]}${fromFile ? ' с содержимым файла' : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -746,7 +620,7 @@ function printsEnv(toks) {
   return null;
 }
 
-export function guardBashSecurity(command, depth = 0, allow = NO_GRANTS) {
+export function guardBashSecurity(command, depth = 0) {
   const raw = String(command || '');
   if (!raw.trim() || depth > 3) return null;
 
@@ -769,7 +643,7 @@ export function guardBashSecurity(command, depth = 0, allow = NO_GRANTS) {
     // безобидна, опасно то, что она запускает.
     const nested = nestedCommands(toks, cmd);
     for (const inner of nested) {
-      const verdict = guardBashSecurity(inner, depth + 1, allow);
+      const verdict = guardBashSecurity(inner, depth + 1);
       if (verdict) return verdict;
     }
 
@@ -846,11 +720,11 @@ export function guardBashSecurity(command, depth = 0, allow = NO_GRANTS) {
 
     if (cmd === 'git') {
       const at = gitSubcommandAt(toks);
-      const verdict = firstUngranted([
-        makesCommit(toks, at) && gitCommitVerdict(toks, at),
-        ...(toks[at] === 'push' ? gitPushVerdicts(toks, at) : []),
-      ], allow);
-      if (verdict) return verdict;
+      if (makesCommit(toks, at)) return { level: ASK, reason: gitCommitReason(toks, at) };
+      if (toks[at] === 'push') {
+        const reason = gitPushReason(toks, at);
+        if (reason) return { level: ASK, reason };
+      }
     }
 
     if (cmd === 'docker' || cmd === 'docker-compose') {
@@ -869,8 +743,8 @@ export function guardBashSecurity(command, depth = 0, allow = NO_GRANTS) {
     }
 
     if (cmd === 'curl' || cmd === 'wget' || cmd === 'http' || cmd === 'httpie') {
-      const verdict = firstUngranted([outboundVerdict(toks, seg, raw)], allow);
-      if (verdict) return verdict;
+      const reason = outboundReason(toks, seg);
+      if (reason) return { level: ASK, reason };
     }
 
   }
@@ -953,18 +827,16 @@ function guardHarnessEdit(filePath, cwd) {
   if (insideHarness(base)) return null;
   const target = resolveReal(path.resolve(base, String(filePath)));
   if (!insideHarness(target)) return null;
-  return askFor(`правка харнеса (${path.relative(HARNESS_ROOT, target)}) из сессии в ${cwd}: ` +
-    'гарды, хуки и правила меняются сразу и для всех сессий. Подтверди, что это просил человек.', 'harness');
+  return {
+    level: ASK,
+    reason: `правка харнеса (${path.relative(HARNESS_ROOT, target)}) из сессии в ${cwd}: ` +
+      'гарды, хуки и правила меняются сразу и для всех сессий. Подтверди, что это просил человек.',
+  };
 }
 
 // Единая точка для адаптера хука. ctx.cwd — каталог сессии: от него зависит,
-// своя ли правка харнеса. ctx.allow — разрешения из просьбы человека
-// (grantsInTranscript): снимают только ask со своим grant, deny — никогда.
+// своя ли правка харнеса.
 export function securityGuard(toolName, toolInput = {}, ctx = {}) {
-  return firstUngranted([rawSecurityGuard(toolName, toolInput, ctx)], ctx.allow);
-}
-
-function rawSecurityGuard(toolName, toolInput, ctx) {
   const name = String(toolName || '');
   // Имена tokensave — настоящие: хук tool-args переименует `file` в `path` уже
   // после гарда, и правка `.env` по `file` иначе прошла бы без проверки.
@@ -982,8 +854,8 @@ function rawSecurityGuard(toolName, toolInput, ctx) {
     const file = base ? path.resolve(String(base), String(ti.path)) : String(ti.path);
     return guardReadSecurity(file) || guardHarnessEdit(file, ctx.cwd);
   }
-  if (name === 'Bash') return guardBashSecurity(ti.command, 0, ctx.allow);
-  if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code, 0, ctx.allow);
+  if (name === 'Bash') return guardBashSecurity(ti.command);
+  if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code);
   if (name === 'Grep') {
     // glob проверяется и как имя, и как шаблон: `.env*` захватывает `.env`,
     // `.env.*` — `.env.local`.

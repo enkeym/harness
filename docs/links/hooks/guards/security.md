@@ -35,12 +35,3 @@ paths:
   `ai-hooks/claude/dispatch.mjs:TABLE`: новый инструмент только в `TOOL_RE` — гарды сверяют
   исправленный путь, а сервер получает угаданное имя и отвечает ошибкой.
 - Текст отказа рекурсивного grep и формы коммита для `ask` — `hooks/guards/shell.md`.
-- Просьба человека — `ai-hooks/security-core.mjs:grantsInTranscript` ↔
-  `ai-hooks/question-core.mjs:isPrompt`: обе читают формат транскрипта Claude Code
-  (`isMeta`, `tool_result`, `toolUseResult.answers` ответа AskUserQuestion). Формат
-  сменился — коммит по «закоммить» снова спрашивает, а вывод инструмента, принятый
-  за реплику, снимает вопрос без просьбы.
-- Ключ `grant` у ask в `ai-hooks/security-core.mjs` ↔ таблица `GRANT_WORDS` там же ↔
-  таблица grant в `ai-hooks/README.md`: новый ask с `grant` без слов в таблице — вопрос не
-  снимается никогда; слово без ask — мёртвое. Строка `commit` включает слова `push`, `mr`,
-  `merge`: новое слово пуша или MR только в своей строке — «запушь и мр» снова спрашивает коммит.
