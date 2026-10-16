@@ -158,10 +158,10 @@ function gitPushReason(toks, at) {
   }
   // git push [remote] [refspec…] — проверяется каждый refspec, не только последний.
   const refspecs = free.slice(1);
-  if (refspecs.length === 0) {
-    // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
-    return args.some((t) => t === '--dry-run' || t === '-n') ? null : 'push в текущую ветку (refspec не указан)';
-  }
+  // `--dry-run` ничего не публикует.
+  if (args.some((t) => t === '--dry-run' || t === '-n')) return null;
+  // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
+  if (refspecs.length === 0) return 'push в текущую ветку (refspec не указан)';
   for (const spec of refspecs) {
     // `+` перед refspec — тот же force push, только для одной ветки.
     if (spec.startsWith('+')) return 'force push (+refspec) переписывает историю';
@@ -171,16 +171,18 @@ function gitPushReason(toks, at) {
     if (branch.includes('*')) return `push по шаблону «${spec}» задевает все ветки`;
     if (PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
   }
-  return null;
+  // Push — точка, где человек проверяет, что уходит наружу: спрашивается любой.
+  return `push в «${refspecs.map((s) => s.split(':').pop()).join('», «')}»`;
 }
 
-// Коммит — точка, где человек проверяет, что именно уходит в историю. У merge
-// `-n` — не --no-verify, поэтому флаги разбираются только у самого commit.
+// Коммит локален и идёт без вопроса — человек смотрит историю на push.
+// Спрашиваются только формы, что переписывают историю или обходят git-хуки.
+// У merge `-n` — не --no-verify, поэтому флаги разбираются только у самого commit.
 function gitCommitReason(toks, at) {
-  if (toks[at] !== 'commit') return `\`git ${toks[at]}\` создаёт коммит`;
+  if (toks[at] !== 'commit') return null;
   if (toks.includes('--amend')) return 'amend переписывает последний коммит';
   if (toks.includes('--no-verify') || toks.includes('-n')) return 'коммит с --no-verify обходит git-хуки';
-  return 'создание коммита';
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -720,7 +722,10 @@ export function guardBashSecurity(command, depth = 0) {
 
     if (cmd === 'git') {
       const at = gitSubcommandAt(toks);
-      if (makesCommit(toks, at)) return { level: ASK, reason: gitCommitReason(toks, at) };
+      if (makesCommit(toks, at)) {
+        const reason = gitCommitReason(toks, at);
+        if (reason) return { level: ASK, reason };
+      }
       if (toks[at] === 'push') {
         const reason = gitPushReason(toks, at);
         if (reason) return { level: ASK, reason };

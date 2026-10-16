@@ -67,7 +67,7 @@ function records(sb) {
 {
   const sb = sandbox();
   askOn(sb, 'sid-d');
-  const out = bash(sb, 'git commit -m x')?.hookSpecificOutput || {};
+  const out = bash(sb, 'git commit --amend -m x')?.hookSpecificOutput || {};
   check('commit в ask mode: deny', out.permissionDecision, 'deny');
   const reasons = String(out.permissionDecisionReason).split('\n');
   check('причины ask-guard и skill-gate по порядку таблицы',

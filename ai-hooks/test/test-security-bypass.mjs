@@ -149,9 +149,8 @@ check('docker run обычный', `docker run --rm -v $PWD:/w alpine ls /w`, 'a
 check('подстановка ветки', `echo $(git branch --show-current)`, 'allow');
 
 process.stdout.write('\n--- ложные срабатывания недопустимы ---\n');
-// Коммит спрашивает по своей причине (создание коммита), но не запрещает:
-// `.env` в тексте сообщения — не чтение секрета.
-check('упоминание в сообщении коммита', `git commit -m "добавил .env.example"`, 'ask');
+// `.env` в тексте сообщения коммита — не чтение секрета.
+check('упоминание в сообщении коммита', `git commit -m "добавил .env.example"`, 'allow');
 check('создание из примера', `cp .env.example .env`, 'allow');
 check('проверка существования', `test -f .env && echo есть`, 'allow');
 check('добавление переменной', `echo "PORT=3000" >> .env`, 'allow');
@@ -164,7 +163,7 @@ process.stdout.write('\n--- длинная команда ---\n');
   const t0 = Date.now();
   const got = verdict(`git commit -m "${'a'.repeat(200000)}"`);
   const ms = Date.now() - t0;
-  const ok = got === 'ask' && ms < 2000;
+  const ok = got === 'allow' && ms < 2000;
   process.stdout.write(`${ok ? 'ok  ' : 'FAIL'} коммит в 200 КБ: ${got}, ${ms} мс\n`);
   if (!ok) failed++;
 }

@@ -383,9 +383,9 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 `ask` — там, где операция законная, но нужен человек: `pg_dump` и другие
 выгрузки, клиент БД на неместном хосте (`-h`, слитный `-hHOST`, `--host`, URL,
 строка подключения `host=…`, `PGHOST=`/`MYSQL_HOST=` в любом месте команды),
-коммит — `git commit` и те же формы, что ловит гейт скиллов (`commit-tree`, `am`,
-`merge -m`/`-F`, `merge`/`cherry-pick`/`revert`/`rebase --continue`; общий
-`shell-core.mjs:makesCommit`), `git push` в main/dev/prod (в том числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
+`git commit --amend` и `--no-verify` (обычный коммит и прочие формы
+`shell-core.mjs:makesCommit` локальны и идут сами — человек смотрит историю на
+push), любой `git push`, кроме `--dry-run`; у опасных форм своя причина: main/dev/prod (в том числе `HEAD:refs/heads/main` и любым из нескольких refspec), force push (`-f`,
 `-uf`, `+refspec`), удаление ветки (`--delete`, `:ветка`), `--all`/`--mirror`,
 шаблон `*`, push без явной ветки, в `HEAD`/`@` или в ветку из `$…`/`` `…` ``,
 `docker compose` с прод-конфигом, `kubectl apply`, команды через

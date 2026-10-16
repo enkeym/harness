@@ -53,7 +53,9 @@ ticket, commit style, remote and project restrictions come from
   kept, the file stays out of the commit and is named in the report.
   Anything else → question tool with the hook's output.
 - Push right after the commit: `git push origin <branch>` (`-u` the first
-  time). Only the project's own memory or rules file can restrict it; then say
+  time). security-guard asks the user on every push — that dialog is the
+  confirmation; declined → the commit stays local, say so in one line, no
+  retry. Only the project's own memory or rules file can restrict it; then say
   in one line that the push is left to the user.
 
 ## Merge request and Jira text — only on explicit request
