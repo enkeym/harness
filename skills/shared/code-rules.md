@@ -1,8 +1,9 @@
 # Code rules — TypeScript, both stacks
 
-Read by `nestjs-backend` and `react-frontend` before the first edit and by
-`review-standards` as its checklist: the stack skill adds structure, the
-review adds only what a diff can show. The project's own code outranks any
+Read by `nestjs-backend` and `react-frontend` before the first edit, by
+`python` for its language-neutral sections and by `review-standards` as its
+checklist: the stack skill adds structure, the review adds only what a diff
+can show. The project's own code outranks any
 line here; facts about one project live in its memory, never in this file.
 
 ## Types

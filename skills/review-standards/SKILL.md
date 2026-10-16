@@ -1,6 +1,6 @@
 ---
 name: review-standards
-description: "Cross-stack TypeScript review of a diff — broken callers, edge cases, architecture drift, types, reuse, naming, duplication, error handling, leftovers. Load on the diff before every commit and when asked to review code, a branch or an MR."
+description: "Cross-stack TypeScript and Python review of a diff — broken callers, edge cases, architecture drift, types, reuse, naming, duplication, error handling, leftovers. Load on the diff before every commit and when asked to review code, a branch or an MR."
 ---
 
 # Standards review
@@ -71,7 +71,7 @@ are run, not re-done by hand; a finding is what they cannot see.
    - Nothing found → no edit, one line saying the diff is clean.
    - Lines changed by a fix go through steps 3–4 and 7 again before step 9.
 9. Machines last: `tsc --noEmit`, linter, tests of the touched module — real
-   output. Red = no commit.
+   output; Python: the checks of `python`. Red = no commit.
 
 ## Checklist
 
@@ -103,9 +103,9 @@ structural rules and:
   the README, `.env.example` or doc describing it changes in the same diff.
 
 **Leftovers**
-- No `console.log`, debug flags, commented code, ownerless `TODO`, unused
-  imports/exports/params, files outside the task or unrequested lockfile/config
-  edits the user did not include (`git-flow` asks).
+- No `console.log` or debug `print`, debug flags, commented code, ownerless
+  `TODO`, unused imports/exports/params, files outside the task or unrequested
+  lockfile/config edits the user did not include (`git-flow` asks).
 
 **Not a finding:** formatting, import order, anything the project's linter or
 formatter own, unless the style file states it;

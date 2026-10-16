@@ -74,6 +74,7 @@ user asks, not the only trigger.
 | Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
 | Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
 | Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
+| Touch Python code: module, script, test, conftest, requirements                   | `python`            |
 | Write, fix or review tests in any stack, one test on a named symbol included       | `test-conventions`  |
 | Cover a whole branch or diff with tests, test a change with no object named, or prepare an MR | `test-coverage` |
 | Set up or audit SEO — only when the user asks for it                               | `seo`               |

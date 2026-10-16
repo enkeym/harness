@@ -6,7 +6,8 @@ description: "Test conventions for TypeScript projects — Jest/Vitest, NestJS T
 # TypeScript test conventions
 
 Cross-stack rules with the stack specifics inline; `nestjs-backend` and
-`react-frontend` point here and add nothing of their own. Which tests a diff
+`react-frontend` point here and add nothing of their own. pytest: *What to
+test*, *Running* and *Never* hold, the rest is in `python`. Which tests a diff
 or branch still needs: `test-coverage`.
 
 ## What to test
