@@ -27,8 +27,8 @@ next step needs. The hook says which case it is; follow its wording.
 1. Finish the unit of work, tests green. If finishing costs another ~30k
    tokens, hand off now with the unfinished state stated honestly.
 2. One `AskUserQuestion` call before the snapshot: the questions still
-   waiting for the user, and, with uncommitted changes, whether to commit and
-   push the step or hand them off as they are
+   waiting for the user, and, with uncommitted changes, whether to commit the
+   step or hand them off as they are (the push waits for the request's end, `git-flow`)
    — the user often runs `/handoff` mid-work they mean to finish themselves.
    Answers go under `Решения`, the tree state under `Состояние`. A question
    left only in the snapshot hangs unanswered.

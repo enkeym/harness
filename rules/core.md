@@ -91,7 +91,8 @@ user asks, not the only trigger.
 - **Commit and push.** A unit is done — the whole user request or an approved
   plan step, every part applied, verified with real output (`tsc`, tests, the
   reproduced case), no open question → impact pass, `review-standards`,
-  `review-security`, fix findings, commit, push — without asking in chat (the
+  `review-security`, fix findings, commit — without asking in chat. Push once,
+  after the last commit of the whole request, not after each plan step (the
   push itself asks through security-guard). One edit of
   an unfinished request, an unverified fix, or a change the user is still
   steering is not done. In doubt → «Закоммитить» as an option in the closing
