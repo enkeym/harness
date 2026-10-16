@@ -10,11 +10,36 @@ from __future__ import annotations
 
 import ctypes
 import gc
+import os
+import sys
+import warnings
 from importlib.metadata import version
 from itertools import chain, islice
 from typing import Iterable, Iterator, Sequence
 
 from . import config, daemon
+
+
+def _import_onnxruntime_quietly() -> None:
+    """Импорт onnxruntime без его шума в stderr (daemon.log, sync.log).
+
+    Уже на импорте C++-часть ищет GPU и в WSL печатает warning мимо Python —
+    настройка логгера после импорта опаздывает, поэтому fd 2 на время импорта
+    уходит в /dev/null. Ошибка импорта всё равно придёт исключением; дальше
+    onnxruntime пишет только ошибки (severity 3).
+    """
+    if "onnxruntime" in sys.modules:
+        return
+    sys.stderr.flush()
+    saved, devnull = os.dup(2), os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 2)
+        import onnxruntime
+    finally:
+        os.dup2(saved, 2)
+        os.close(saved)
+        os.close(devnull)
+    onnxruntime.set_default_logger_severity(3)
 
 
 class Embedder:
@@ -48,13 +73,19 @@ class Embedder:
         return self._engine
 
     def _load(self):
+        _import_onnxruntime_quietly()
         from fastembed import TextEmbedding
 
-        return TextEmbedding(
-            model_name=self._model_name,
-            cache_dir=config.MODEL_CACHE,
-            threads=config.EMBED_THREADS,
-        )
+        # fastembed предупреждает о смене pooling e5 на каждой загрузке — её и
+        # так ловит engine_version.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=r".*now uses mean pooling",
+                                    category=UserWarning)
+            return TextEmbedding(
+                model_name=self._model_name,
+                cache_dir=config.MODEL_CACHE,
+                threads=config.EMBED_THREADS,
+            )
 
     def _ensure(self):
         if self._model is None:

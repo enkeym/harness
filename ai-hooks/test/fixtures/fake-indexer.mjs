@@ -4,10 +4,11 @@
 // по этому файлу тест дожидается фонового setsid, — печатает строку в лог
 // синка и выходит с кодом FAKE_INDEXER_EXIT (по умолчанию 0). С FAKE_INDEXER_CWD
 // ещё дописывает туда свой рабочий каталог — так bin/mcp-serve.sh проверяет,
-// в каком корне поднят сервер.
+// в каком корне поднят сервер. С FAKE_INDEXER_ENV — свой RAGSAVE_THREADS (null — не задан).
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);
+if (process.env.FAKE_INDEXER_ENV) fs.appendFileSync(process.env.FAKE_INDEXER_ENV, `${JSON.stringify([process.env.RAGSAVE_THREADS ?? null])}\n`);
 fs.appendFileSync(process.env.FAKE_INDEXER_CALLS, `${JSON.stringify(args)}\n`);
 if (process.env.FAKE_INDEXER_CWD) fs.appendFileSync(process.env.FAKE_INDEXER_CWD, `${process.cwd()}\n`);
 process.stdout.write(`fake ${args.join(' ')}\n`);

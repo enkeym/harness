@@ -1101,7 +1101,7 @@ def test_daemon() -> None:
         config.DAEMON, config.DAEMON_SOCKET = True, str(sock)
         config.DAEMON_START_WAIT = 0.3
         # Настоящий демон с настоящей моделью тест не поднимает никогда.
-        daemon._spawn = lambda: None
+        daemon._spawn = lambda warm=False: None
         os.environ["AI_HOOKS_LOG_DIR"] = str(errors.parent)
 
         def logged() -> str:
@@ -1131,10 +1131,11 @@ def test_daemon() -> None:
             threading.Thread(target=loop, daemon=True).start()
             return held
 
-        def run_daemon(idle: float, kind: type = Counted) -> tuple[Counted, threading.Thread]:
+        def run_daemon(idle: float, kind: type = Counted,
+                       warm: bool = False) -> tuple[Counted, threading.Thread]:
             model = kind(use_daemon=False)
-            thread = threading.Thread(target=daemon.serve,
-                                      kwargs={"embedder": model, "idle": idle}, daemon=True)
+            thread = threading.Thread(target=daemon.serve, daemon=True,
+                                      kwargs={"embedder": model, "idle": idle, "warm": warm})
             thread.start()
             deadline = time.monotonic() + 3
             while not sock.exists() and time.monotonic() < deadline:
@@ -1176,7 +1177,7 @@ def test_daemon() -> None:
                        not thread.is_alive() and not sock.exists())
 
             spawns = []
-            daemon._spawn = lambda: spawns.append(1)
+            daemon._spawn = lambda warm=False: spawns.append(warm)
             quiet = Counted()
             list(quiet.embed_stream(texts))
             check("синк без демона — не поднимает его, своя модель, лог не растёт",
@@ -1196,7 +1197,7 @@ def test_daemon() -> None:
             stale.bind(str(sock))
             stale.close()
             started = []
-            daemon._spawn = lambda: started.append(run_daemon(idle=0.3))
+            daemon._spawn = lambda warm=False: started.append(run_daemon(idle=0.3, warm=warm))
             revived = Counted()
             revived.embed_query("деплой")
             check("устаревший сокет — демон поднимается и отвечает",
@@ -1221,6 +1222,45 @@ def test_daemon() -> None:
                   (local.embed_query("деплой"), 0, 1))
             if started:
                 started[0][1].join(timeout=5)
+
+            # Прогрев: демона нет — поднять с моделью сразу; жив — не трогать.
+            config.DAEMON_START_WAIT = 2.0
+            started.clear()
+            warmed = daemon.warm()
+            deadline = time.monotonic() + 3
+            while started and started[0][0].loads == 0 and time.monotonic() < deadline:
+                time.sleep(0.02)
+            check("warm без демона — демон поднят и грузит модель до запроса",
+                  (warmed, len(started), started[0][0].loads if started else None),
+                  (True, 1, 1))
+            again = daemon.warm()
+            client = Counted()
+            client.embed_query("деплой")
+            check("warm при живом демоне — второго не поднимает; запрос без новой загрузки",
+                  (again, len(started), started[0][0].loads, client.loads), (True, 1, 1, 0))
+            if started:
+                started[0][1].join(timeout=5)
+
+            # Правка кода пакета: демон выходит при первой паузе, а не держит старый код.
+            real_stamp, stamps = daemon._code_stamp, iter([1.0])
+            daemon._code_stamp = lambda: next(stamps, 2.0)
+            try:
+                served, thread = run_daemon(idle=0)
+                thread.join(timeout=5)
+                check_true("код пакета обновился — демон вышел и убрал сокет",
+                           not thread.is_alive() and not sock.exists())
+            finally:
+                daemon._code_stamp = real_stamp
+
+            # Ротация daemon.log: крупный уходит в .1, мелкий остаётся.
+            log = Path(tmp) / "daemon.log"
+            log.write_bytes(b"x" * (config.DAEMON_LOG_LIMIT + 1))
+            daemon._rotate_log(log)
+            rotated = (log.exists(), log.with_name("daemon.log.1").exists())
+            log.write_bytes(b"x")
+            daemon._rotate_log(log)
+            check("daemon.log больше лимита — в .1, меньше — на месте",
+                  (rotated, log.exists()), ((False, True), True))
 
             # Демон молчит: поиск и синк падают после одного повтора, модель не грузят.
             config.DAEMON_QUERY_TIMEOUT = config.DAEMON_IDLE_TIMEOUT = 0.2

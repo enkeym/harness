@@ -98,6 +98,8 @@ DAEMON_BATCH = EMBED_BATCH
 # Замер на e5-large, 64 коротких фрагмента: по 8 — демон 2,2 ГБ и 29 с, по 32 —
 # 3,8 ГБ и 62 с. Поиск ждёт синк не дольше одного куска.
 DAEMON_INFER_BATCH = 8
+# daemon.log крупнее — при подъёме демона уходит в daemon.log.1.
+DAEMON_LOG_LIMIT = 1024 * 1024
 
 
 def errors_log() -> Path:

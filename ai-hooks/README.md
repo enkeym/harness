@@ -154,7 +154,10 @@ ANSI-последовательности и повторы `copying DB` чис�
 занимал все ядра WSL на час переиндексации после смены ветки, и IDE вставала.
 Если общий демон модели (`ragsave daemon`, его поднимает поиск) уже жив, синк
 считает в нём — на всех ядрах и без второй копии модели; сам синк демон не
-поднимает, иначе тот унаследовал бы `nice`. Живой демон замолчал дольше 60 с
+поднимает, иначе тот унаследовал бы `nice`. На SessionStart (`--warm`) скрипт
+до синка зовёт `ragsave warm` — без `nice` и без лимита потоков: демон
+грузит модель сразу, и первый поиск сессии её не ждёт; отказ — запись
+`ragsave warm` в `errors.log`, синк идёт всё равно. Живой демон замолчал дольше 60 с
 и после повтора — синк падает с кодом 1 (строка в `errors.log`), а не грузит
 свою модель: правки догонит следующий синк.
 tokensave такого скрипта не требует: его сервер
@@ -541,7 +544,7 @@ tokensave) в корне такого репозитория. Файл пров�
 (`bin/tool-share.mjs --waste`). Хук отдаёт `updatedInput` с настоящими именами
 без решения о разрешении. Проверки видят исходный вход, поэтому
 security-guard и skill-gate сверяют путь через тот же `normalizeToolInput`.
-Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
+Ragsave: `bin/ragsave-sync.sh` на `SessionStart` (с `--warm`) и `Stop`.
 Карта связей: `links-context` на `PostToolUse`
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).
 Экономия контекста: `output-clip` на `PreToolUse`

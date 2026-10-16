@@ -26,6 +26,11 @@ paths:
 - Демон поднимает только `ragsave/ragsave/embedder.py:Embedder.embed_query`
   (`start=True`), поток синка — нет ↔ `nice -n 19` в `ai-hooks/bin/ragsave-sync.sh`.
   Дал синку поднимать демон — демон и весь поиск живут под `nice 19`.
+- Прогрев — `--warm` у SessionStart-регистрации `ragsave-sync.sh` в
+  `claude/settings.json` ↔ `ragsave warm` (`ragsave/ragsave/daemon.py:warm`) в
+  `ai-hooks/bin/ragsave-sync.sh` до `nice`, а `RAGSAVE_THREADS` — только синку.
+  Перенёс warm под `nice` или под экспорт лимита — демон и поиск всех сессий
+  живут под ним; снял `--warm` — первый поиск сессии снова ждёт загрузку модели.
 - Список хранилищ секретов `ragsave/ragsave/config.py:SECRET_NAME_RE` — пара к
   гарду, строка в `hooks/guards/security.md`.
 - Каталог логов `ragsave/ragsave/config.py:errors_log` — строка

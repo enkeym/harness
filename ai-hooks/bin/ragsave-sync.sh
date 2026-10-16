@@ -10,7 +10,13 @@
 # Только sync --quiet существующей БД (доли секунды, модель не грузится,
 # если ни один файл не изменился); init — решение человека, см. ниже.
 # Каталог проекта: $1 → CLAUDE_PROJECT_DIR → PWD.
+# --warm первым аргументом (только SessionStart) — до синка `ragsave warm`:
+# демон модели с обычным приоритетом и без лимита потоков, чтобы первый поиск
+# сессии не ждал загрузку модели. Демон уже жив — warm ничего не делает.
 set -u
+
+warm=0
+[ "${1:-}" = "--warm" ] && { warm=1; shift; }
 
 project_dir="${1:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 [ "$project_dir" = "$HOME" ] && exit 0
@@ -42,14 +48,18 @@ find "$repo_root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>
 # Фоновый синк не должен душить IDE и dev-сервер: низший приоритет CPU и IO,
 # потоков ONNX — не больше 6 (без лимита onnxruntime берёт все ядра на час
 # при переиндексации после смены ветки). RAGSAVE_THREADS из окружения главнее.
-export RAGSAVE_THREADS="${RAGSAVE_THREADS:-6}"
+# Лимит и nice — только синку: демон, поднятый warm, живёт дольше синка и
+# считает поиск всех сессий.
 setsid bash -c '
-  root="$1"; bin="$2"; log="$3"; tmp="$log.$$"
-  nice -n 19 ionice -c 3 "$bin" sync "$root" --quiet >"$tmp" 2>&1
+  root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; tmp="$log.$$"
+  if [ "$warm" = 1 ]; then
+    "$bin" warm >"$tmp" 2>&1 || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave warm" "$root" "$tmp" "$?"
+  fi
+  RAGSAVE_THREADS="$threads" nice -n 19 ionice -c 3 "$bin" sync "$root" --quiet >"$tmp" 2>&1
   code=$?
   [ "$code" = 3 ] && { rm -f "$tmp"; exit 0; }
   [ "$code" = 0 ] || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"
   mv -f "$tmp" "$log"
-' _ "$repo_root" "$rag_bin" "$log" </dev/null >/dev/null 2>&1 &
+' _ "$repo_root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" </dev/null >/dev/null 2>&1 &
 
 exit 0

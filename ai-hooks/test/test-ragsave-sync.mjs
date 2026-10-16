@@ -155,6 +155,34 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
 }
 
 {
+  const sb = sandbox();
+  sb.run({}, ['--warm', sb.root]);
+  check('--warm — сначала `warm`, потом sync', sb.waitCalls(2), [['warm'], ['sync', sb.root, '--quiet']]);
+}
+
+{
+  const sb = sandbox();
+  const env = path.join(sb.home, 'env.jsonl');
+  sb.run({ FAKE_INDEXER_ENV: env, RAGSAVE_THREADS: undefined }, ['--warm', sb.root]);
+  sb.waitCalls(2);
+  check('--warm — лимит потоков только у синка, демону нет',
+    read(env).split('\n').filter(Boolean).map((l) => JSON.parse(l)), [[null], ['6']]);
+}
+
+{
+  const sb = sandbox();
+  sb.run({ FAKE_INDEXER_EXIT: '1' }, ['--warm', sb.root]);
+  check('отказ warm — запись в errors.log, sync всё равно идёт',
+    waitFor(() => sb.errors().includes(`] ragsave warm | ${sb.root} | exit=1`)
+      && sb.readCalls().length === 2), true);
+}
+
+{
+  const sb = sandbox({ db: false });
+  expectSilent('--warm без .ragsave/rag.db — ни прогрева, ни синка', sb, sb.run({}, ['--warm', sb.root]));
+}
+
+{
   const sb = sandbox({ db: false });
   expectSilent('без .ragsave/rag.db — ни вызова, ни sync.log', sb, sb.run(),
     { got: () => [fs.existsSync(path.join(sb.dir, 'sync.log'))], want: [false] });

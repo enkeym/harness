@@ -170,7 +170,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.ai-hooks/bin/ragsave-sync.sh\""
+            "command": "\"$HOME/.ai-hooks/bin/ragsave-sync.sh\" --warm"
           }
         ]
       }

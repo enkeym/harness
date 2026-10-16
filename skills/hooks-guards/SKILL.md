@@ -104,7 +104,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 - `ragsave-sync` syncs an **existing** ragsave index at session start and turn
   end unless the repo root has `.ragsave-disable` (`rag_status`: `autosync`,
-  `last_sync`), niced, 6 ONNX threads; tokensave syncs itself. Creating an index is the user's call —
+  `last_sync`), niced, 6 ONNX threads; at session start it first runs `ragsave warm`
+  (model daemon up and loaded, not niced); tokensave syncs itself. Creating an index is the user's call —
   say `tokensave init <path>` / `ragsave init` is needed, don't run either.
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the session
   directory. Outside a project the server doesn't come up — tools are absent, not wrong.

@@ -11,8 +11,12 @@ Embedder: демона нет — синк считает сам, поиск п�
 затем {"vectors":[…]} или {"error":…} (с "refused": true — демон держит
 другую модель или версию fastembed).
 
-Демон поднимают только процессы с обычным приоритетом — поиск (embed_query).
-Синк из хука идёт под nice 19, и поднятый им демон унаследовал бы приоритет.
+Демон поднимают только процессы с обычным приоритетом — поиск (embed_query)
+и прогрев `ragsave warm` из хука SessionStart (до nice). Синк из хука идёт
+под nice 19, и поднятый им демон унаследовал бы приоритет.
+
+Код пакета живой (симлинк в дерево harness): демон, заметив правку своих
+.py, выходит при первой паузе — следующий запрос поднимет демон со свежим кодом.
 """
 
 from __future__ import annotations
@@ -111,7 +115,16 @@ def request(kind: str, texts: list[str], model: str, engine: str) -> list[list[f
     return vectors
 
 
-def _spawn() -> None:
+def _rotate_log(log: Path) -> None:
+    """Лог крупнее DAEMON_LOG_LIMIT — в log.1 (прежний .1 теряется)."""
+    try:
+        if log.stat().st_size > config.DAEMON_LOG_LIMIT:
+            log.replace(log.with_name(log.name + ".1"))
+    except OSError:
+        pass  # лога нет или не переименовать — пишем в тот, что есть
+
+
+def _spawn(warm: bool = False) -> None:
     """Запустить `python -m ragsave daemon` отдельной сессией, вывод — в daemon.log."""
     sock = Path(config.DAEMON_SOCKET)
     sock.parent.mkdir(parents=True, exist_ok=True)
@@ -119,18 +132,23 @@ def _spawn() -> None:
     package_root = str(Path(__file__).resolve().parents[1])
     env["PYTHONPATH"] = os.pathsep.join(filter(None, [package_root, env.get("PYTHONPATH")]))
     env["RAGSAVE_DAEMON_SOCKET"] = str(sock)
-    with _log_path(sock).open("ab") as log:
+    log_file = _log_path(sock)
+    _rotate_log(log_file)
+    with log_file.open("ab") as log:
         subprocess.Popen(
-            [sys.executable, "-m", "ragsave", "daemon"],
+            [sys.executable, "-m", "ragsave", "daemon", *(["--warm"] if warm else [])],
             cwd=str(sock.parent), env=env, stdin=subprocess.DEVNULL,
             stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
         )
 
 
-def start() -> bool:
-    """Поднять демон и дождаться его сокета. False — не дождались."""
+def start(warm: bool = False) -> bool:
+    """Поднять демон и дождаться его сокета. False — не дождались.
+
+    warm — демон грузит модель сразу, не дожидаясь первого запроса.
+    """
     try:
-        _spawn()
+        _spawn(warm)
     except OSError:
         return False
     deadline = time.monotonic() + config.DAEMON_START_WAIT
@@ -141,6 +159,19 @@ def start() -> bool:
         except DaemonDown:
             time.sleep(0.05)
     return False
+
+
+def warm() -> bool:
+    """Прогрев: демон жив — ничего не делать, нет — поднять его с моделью.
+
+    Зовёт хук SessionStart с обычным приоритетом, до синка под nice: первый
+    поиск сессии не ждёт загрузку модели (5–45 с). False — сокет не поднялся.
+    """
+    try:
+        _connect(1.0).close()
+        return True
+    except DaemonDown:
+        return start(warm=True)
 
 
 def log_fallback(reason: str) -> None:
@@ -243,6 +274,17 @@ class _Engine:
             traceback.print_exc()
             return {"error": f"{type(exc).__name__}: {exc}"}
 
+    def warm(self) -> None:
+        """Загрузить модель до первого запроса. Под замком инференции: поиск,
+        пришедший во время загрузки, ждёт её, а не грузит вторую копию.
+        Пока грузится, демон не простаивает — простой считается от конца загрузки.
+        """
+        self.enter()
+        try:
+            self._run(False, lambda: self.embedder.warmup() or [])
+        finally:
+            self.leave()
+
     def enter(self) -> None:
         with self._clock:
             self._active += 1
@@ -299,11 +341,24 @@ def _take_lock(lock: Any) -> bool:
             time.sleep(0.05)
 
 
-def serve(embedder: Any = None, idle: float | None = None) -> int:
-    """Слушать сокет до простоя в idle секунд (0 — всегда); второй экземпляр выходит сразу.
+def _code_stamp() -> float:
+    """Свежайшая правка .py пакета: изменилась — демон держит устаревший код."""
+    stamps = [0.0]
+    for path in Path(__file__).resolve().parent.glob("*.py"):
+        try:
+            stamps.append(path.stat().st_mtime)
+        except OSError:
+            pass
+    return max(stamps)
 
-    Модель грузится первым запросом: сокет поднят сразу, и клиент, поднявший
-    демон, ждёт загрузку здесь, а не грузит вторую копию у себя.
+
+def serve(embedder: Any = None, idle: float | None = None, warm: bool = False) -> int:
+    """Слушать сокет до простоя в idle секунд (0 — всегда) или до правки кода
+    пакета; второй экземпляр выходит сразу.
+
+    Модель грузится первым запросом (warm — сразу после подъёма сокета): сокет
+    поднят сразу, и клиент, поднявший демон, ждёт загрузку здесь, а не грузит
+    вторую копию у себя.
     """
     sock = Path(config.DAEMON_SOCKET)
     sock.parent.mkdir(parents=True, exist_ok=True)
@@ -324,15 +379,31 @@ def serve(embedder: Any = None, idle: float | None = None) -> int:
         os.chmod(sock, 0o600)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         _say(f"слушаю {sock}: {embedder.model_name}, простой до выхода {idle or '∞'} с")
-        while not idle or server.engine.idle_for() < idle:  # type: ignore[attr-defined]
-            time.sleep(min(1.0, idle / 4) if idle else 3600)
+        engine: _Engine = server.engine  # type: ignore[attr-defined]
+        stamp = _code_stamp()
+        if warm:
+            begun = time.monotonic()
+            try:
+                engine.warm()
+                _say(f"модель загружена за {time.monotonic() - begun:.0f} с")
+            except Exception:  # noqa: BLE001 — не прогрелись: модель загрузит первый запрос
+                traceback.print_exc()
+        while True:
+            time.sleep(min(1.0, idle / 4) if idle else 1.0)
+            quiet = engine.idle_for()
+            if idle and quiet >= idle:
+                reason = "простой — выход"
+                break
+            if quiet > 0 and _code_stamp() != stamp:
+                reason = "код ragsave обновился — выход, следующий запрос поднимет свежий демон"
+                break
         # Сначала сокет, потом shutdown: новый клиент получает DaemonDown и поднимает
         # свежий демон (тот ждёт замок в _take_lock), а не пустой ответ из backlog.
         # Уже стоящие в backlog получат обрыв и повторят запрос уже без сокета.
         sock.unlink(missing_ok=True)
         server.shutdown()
         server.server_close()
-        _say("простой — выход")
+        _say(reason)
         return 0
     finally:
         lock.close()

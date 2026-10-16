@@ -1,4 +1,4 @@
-"""CLI ragsave: init / sync / reindex / search / status / serve / daemon.
+"""CLI ragsave: init / sync / reindex / search / status / serve / daemon / warm.
 
 Тот же код, что и у MCP-сервера — терминал нужен для первичной индексации,
 диагностики и хуков, которым MCP недоступен.
@@ -354,10 +354,22 @@ def _cmd_serve(_: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_daemon(_: argparse.Namespace) -> int:
+def _cmd_daemon(args: argparse.Namespace) -> int:
     from .daemon import serve
 
-    return serve()
+    return serve(warm=args.warm)
+
+
+def _cmd_warm(_: argparse.Namespace) -> int:
+    from . import daemon
+
+    if not config.DAEMON:
+        return 0
+    if daemon.warm():
+        return 0
+    print(f"ragsave: демон модели не поднялся за {config.DAEMON_START_WAIT:.0f} с; "
+          f"лог — {daemon.log_path()}", file=sys.stderr)
+    return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -395,8 +407,12 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("path", nargs="?", help="путь к проекту")
 
     sub.add_parser("serve", help="запустить MCP-сервер (stdio)")
-    sub.add_parser("daemon", help="общий демон модели; поднимается поиском сам, "
-                                  "выходит после простоя RAGSAVE_IDLE_UNLOAD")
+    node = sub.add_parser("daemon", help="общий демон модели; поднимается поиском сам, "
+                                         "выходит после простоя RAGSAVE_IDLE_UNLOAD")
+    node.add_argument("--warm", action="store_true",
+                      help="загрузить модель сразу, не дожидаясь первого запроса")
+    sub.add_parser("warm", help="поднять демон с моделью, если он не запущен "
+                                "(хук SessionStart)")
     return parser
 
 
@@ -415,6 +431,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_serve(args)
         case "daemon":
             return _cmd_daemon(args)
+        case "warm":
+            return _cmd_warm(args)
     return 2
 
 
