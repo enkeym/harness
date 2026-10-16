@@ -243,6 +243,19 @@ def test_store_search() -> None:
                 all("config/" not in h.path for h in excluded),
             )
 
+            # Фильтр внутри поиска: ближайший фрагмент — src/app.ts, но и одного
+            # кандидата хватает, чтобы найти подходящий под фильтр.
+            narrow = [
+                [h.path for h in store.search(
+                    query_vector=fake_vector(3, dim), query_text="AppModule",
+                    limit=5, candidates=1, **filters)]
+                for filters in ({"path_include": ["docs/"]},
+                                {"only_outside_tokensave": True,
+                                 "path_exclude": ["docs/"]})
+            ]
+            check("фильтр отбирает до candidates, а не из них",
+                  narrow, [["docs/deploy.md"], ["config/mail.yaml"]])
+
             # Путь подмешан в полнотекстовый индекс: имя файла должно искаться,
             # даже когда внутри такого слова нет. Для конфигов это основной
             # способ попасть в выдачу — прозы в них нет.

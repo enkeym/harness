@@ -456,9 +456,15 @@ class Store:
         path_exclude: list[str] | None = None,
         only_outside_tokensave: bool = False,
     ) -> list[SearchHit]:
-        """Гибридный поиск: вектор + FTS, слияние по RRF."""
-        vector_ranks = self._vector_ranks(query_vector, candidates)
-        text_ranks = self._fts_ranks(query_text, candidates)
+        """Гибридный поиск: вектор + FTS, слияние по RRF.
+
+        Фильтры — внутри обоих поисков, а не после них: иначе узкий
+        path_include отсекал бы все candidates и выдача была бы пустой при
+        подходящих фрагментах ниже по списку.
+        """
+        allowed = _filter_sql(path_include, path_exclude, only_outside_tokensave)
+        vector_ranks = self._vector_ranks(query_vector, candidates, allowed)
+        text_ranks = self._fts_ranks(query_text, candidates, allowed)
 
         fused: dict[int, float] = {}
         for ranking in (vector_ranks, text_ranks):
@@ -478,11 +484,6 @@ class Store:
             ).fetchone()
             if row is None:
                 continue
-            if not _passes_filters(
-                row["path"], path_include, path_exclude,
-                bool(row["in_tokensave"]), only_outside_tokensave,
-            ):
-                continue
             hits.append(
                 SearchHit(
                     path=row["path"],
@@ -497,23 +498,31 @@ class Store:
                 break
         return hits
 
-    def _vector_ranks(self, vector: list[float], k: int) -> list[int]:
+    def _vector_ranks(
+        self, vector: list[float], k: int, allowed: tuple[str, list[object]] | None
+    ) -> list[int]:
+        # vec0 сам применяет `chunk_id IN (…)` внутри KNN — k ближайших среди
+        # допущенных, а не среди всех.
+        where, args = (f" AND chunk_id IN ({allowed[0]})", allowed[1]) if allowed else ("", [])
         rows = self.conn.execute(
             "SELECT chunk_id FROM vec_chunks "
-            "WHERE embedding MATCH ? AND k = ? ORDER BY distance",
-            (sqlite_vec.serialize_float32(vector), k),
+            f"WHERE embedding MATCH ? AND k = ?{where} ORDER BY distance",
+            (sqlite_vec.serialize_float32(vector), k, *args),
         ).fetchall()
         return [row["chunk_id"] for row in rows]
 
-    def _fts_ranks(self, query_text: str, k: int) -> list[int]:
+    def _fts_ranks(
+        self, query_text: str, k: int, allowed: tuple[str, list[object]] | None
+    ) -> list[int]:
         expression = _fts_query(query_text)
         if not expression:
             return []
+        where, args = (f" AND rowid IN ({allowed[0]})", allowed[1]) if allowed else ("", [])
         try:
             rows = self.conn.execute(
-                "SELECT rowid FROM fts_chunks WHERE fts_chunks MATCH ? "
+                f"SELECT rowid FROM fts_chunks WHERE fts_chunks MATCH ?{where} "
                 "ORDER BY rank LIMIT ?",
-                (expression, k),
+                (expression, *args, k),
             ).fetchall()
         except sqlite3.OperationalError:
             # Нераспарсенный запрос не должен ронять поиск — вектор отработает сам.
@@ -566,17 +575,26 @@ def _fts_query(text: str) -> str:
     return " OR ".join(f'"{word}"' for word in words[:24])
 
 
-def _passes_filters(
-    path: str,
+def _filter_sql(
     include: list[str] | None,
     exclude: list[str] | None,
-    in_tokensave: bool,
     only_outside: bool,
-) -> bool:
-    if only_outside and in_tokensave:
-        return False
-    if exclude and any(fragment in path for fragment in exclude):
-        return False
-    if include and not any(fragment in path for fragment in include):
-        return False
-    return True
+) -> tuple[str, list[object]] | None:
+    """Подзапрос id допущенных фрагментов; None — фильтров нет.
+
+    Фрагменты пути — подстроки с учётом регистра, как `in` в Python: instr, а не
+    LIKE, у которого `_` и `%` — шаблон, а регистр латиницы не важен.
+    """
+    clauses: list[str] = []
+    args: list[object] = []
+    if only_outside:
+        clauses.append("in_tokensave = 0")
+    if include:
+        clauses.append("(" + " OR ".join("instr(path, ?) > 0" for _ in include) + ")")
+        args += include
+    for fragment in exclude or []:
+        clauses.append("instr(path, ?) = 0")
+        args.append(fragment)
+    if not clauses:
+        return None
+    return "SELECT id FROM chunks WHERE " + " AND ".join(clauses), args
