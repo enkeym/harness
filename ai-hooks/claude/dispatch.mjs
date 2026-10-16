@@ -16,12 +16,36 @@
 //   context          → через пустую строку в порядке таблицы;
 //   block            → ответ, остальные проверки события не идут.
 // Падение проверки → crash в журнал под её именем, остальные работают.
+//
+// Проект со своим ядром гардов (ai-kit: `.claude/settings.json` зовёт
+// `ai/hooks/run.mjs`) сам запрещает чтение секретов и выдаёт карту связей: здесь links-context молчит, у security-guard
+// отбрасывается deny (секреты), ask остаётся. Иначе один отказ и один блок
+// карты приходили бы дважды. Файла без подключённого хука мало: иначе проект
+// до `link` оставался бы без гарда секретов вовсе.
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { setHookContext, logSlowIfNeeded, logCrash } from '../hooklog-core.mjs';
 import { readInput, finish, logVerdict, payloadOf } from './hook-io.mjs';
 
 const ALL = null;
 const EDIT_MCP = 'mcp__tokensave__tokensave_';
+const PROJECT_GUARDS = 'ai/hooks/run.mjs';
+
+const PROJECT_SKIP = new Set(['links-context']);
+const PROJECT_FILTER = {
+  'security-guard': (result) => (result?.decision === 'deny' ? null : result),
+};
+
+function projectOwnsGuards(input) {
+  const root = process.env.CLAUDE_PROJECT_DIR || input.cwd;
+  if (!root || !fs.existsSync(path.join(root, PROJECT_GUARDS))) return false;
+  try {
+    return fs.readFileSync(path.join(root, '.claude', 'settings.json'), 'utf8').includes(PROJECT_GUARDS);
+  } catch {
+    return false;
+  }
+}
 
 // [имя, matcher | ALL, модуль]. Имя уходит в hooks.jsonl — то же, что у
 // отдельного хука; модуль по умолчанию — ./<имя>.mjs. У UserPromptSubmit и Stop
@@ -73,12 +97,15 @@ function merge(results) {
 
 async function dispatch(event, input) {
   const results = [];
+  const projectGuards = projectOwnsGuards(input);
   for (const [name, matcher, file = `./${name}.mjs`] of TABLE[event] || []) {
     if (matcher && !matcher.test(String(input.tool_name || ''))) continue;
+    if (projectGuards && PROJECT_SKIP.has(name)) continue;
     setHookContext(input, name);
     try {
       const { check } = await import(new URL(file, import.meta.url));
-      const result = check(input);
+      const filter = projectGuards && PROJECT_FILTER[name];
+      const result = filter ? filter(check(input)) : check(input);
       if (!result) continue;
       logVerdict(input, result);
       if (result.block) return result;

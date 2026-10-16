@@ -162,6 +162,31 @@ function records(sb) {
     records(sb).map((r) => [r.hook, r.decision]), [['question-guard', 'block']]);
 }
 
+// --- проект со своим ядром гардов: без links-context и deny security-guard ---
+{
+  const sb = sandbox();
+  const domain = path.join(sb.cwd, 'docs', 'links');
+  fs.mkdirSync(domain, { recursive: true });
+  fs.writeFileSync(path.join(domain, 'INDEX.md'), '- x — `x.md` — x\n');
+  fs.writeFileSync(path.join(domain, 'x.md'), '---\npaths:\n  - src/**\n---\n\n## События\n\n- `src/a.ts` ↔ `src/b.ts` — x\n');
+  const edit = () => run(sb, 'PostToolUse', {
+    session_id: 'sid-p', tool_name: 'Edit', tool_input: { file_path: path.join(sb.cwd, 'src', 'a.ts') },
+  });
+  const env = () => bash(sb, 'cat .env', 'sid-p')?.hookSpecificOutput?.permissionDecision;
+  const push = () => bash(sb, 'git push --force origin main', 'sid-p')?.hookSpecificOutput?.permissionDecision;
+  check('без ai/hooks/run.mjs: карта связей в контексте', Boolean(edit()?.hookSpecificOutput?.additionalContext), true);
+  check('без ai/hooks/run.mjs: cat .env — deny', env(), 'deny');
+
+  fs.mkdirSync(path.join(sb.cwd, 'ai', 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(sb.cwd, 'ai', 'hooks', 'run.mjs'), '');
+  check('run.mjs без подключённого хука: cat .env — deny', env(), 'deny');
+  fs.mkdirSync(path.join(sb.cwd, '.claude'));
+  fs.writeFileSync(path.join(sb.cwd, '.claude', 'settings.json'), '{"hooks":{"PreToolUse":[{"hooks":[{"command":"node ai/hooks/run.mjs claude pre"}]}]}}');
+  check('с ai/hooks/run.mjs: карты связей нет', edit(), null);
+  check('с ai/hooks/run.mjs: cat .env — решает проект', env(), undefined);
+  check('с ai/hooks/run.mjs: ask на push остаётся', push(), 'ask');
+}
+
 // --- регистрация: наши хуки события — один вызов диспетчера ---
 {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'claude', 'settings.json'), 'utf8'));

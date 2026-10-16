@@ -101,7 +101,7 @@ logs/hooks.jsonl                # решения хуков по сессиям:
 test/test-guards.mjs            # shell-гард: одни сценарии через хук и напрямую через ядро
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, runHook deny/ask/null, журнал
-test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, block обрывает UPS и Stop, регистрация
+test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, block обрывает UPS и Stop, проект со своим ядром, регистрация
 test/test-tool-args.mjs         # имена параметров tokensave: алиасы, пары замен, ответ хука, гарды под угаданным именем
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
@@ -528,6 +528,10 @@ tokensave) в корне такого репозитория. Файл пров�
 ответ сразу, проверки ниже по таблице не идут. Падение проверки — `crash` под её именем,
 остальные работают. Адаптеры экспортируют `check(input)` и остаются точками
 входа для тестов; `bin/cleanup.mjs` — ещё и CLI (`--force`, `--dry-run`).
+В проекте со своим ядром гардов (ai-kit: в корне `ai/hooks/run.mjs`, и `.claude/settings.json` его зовёт)
+`links-context` не идёт, а deny `security-guard` (секреты) отбрасывается: их
+делает проект, иначе отказ и блок карты приходят дважды. ask `security-guard` (push, дампы, правка
+харнеса) остаётся.
 `bash-router` (matcher `Bash|mcp__ide__executeCode`),
 `read-router` (matcher `Read`): файл из таблицы
 `files` индекса tokensave читают `tokensave_body`/`tokensave_read`, не `Read`
