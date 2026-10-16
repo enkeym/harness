@@ -2,12 +2,14 @@
 
 У каждой сессии свой MCP-сервер, и без демона каждый грузил бы свою копию
 e5-large (1,5 ГБ, 5–45 с на загрузку). Демон слушает unix-сокет; клиент —
-Embedder: демона нет или он подвёл — Embedder считает сам.
+Embedder: демона нет — синк считает сам, поиск поднимает демон; демон
+подвёл — одна повторная попытка, дальше DaemonFailed.
 
-Протокол — по JSON-строке в каждую сторону, одно соединение на запрос:
-{"v":1,"model":…,"engine":…,"kind":"query"|"passage","texts":[…]} →
-{"vectors":[…]} или {"error":…} (с "refused": true — демон держит другую
-модель или версию fastembed).
+Протокол — по JSON-строке, одно соединение на запрос:
+{"v":2,"model":…,"engine":…,"kind":"query"|"passage","texts":[…]} →
+ноль и больше {"tick":1} (пульс синку: демон досчитал кусок, свой или чужой),
+затем {"vectors":[…]} или {"error":…} (с "refused": true — демон держит
+другую модель или версию fastembed).
 
 Демон поднимают только процессы с обычным приоритетом — поиск (embed_query).
 Синк из хука идёт под nice 19, и поднятый им демон унаследовал бы приоритет.
@@ -30,7 +32,8 @@ from typing import Any, Callable
 
 from . import config
 
-PROTOCOL = 1
+PROTOCOL = 2
+TICK = b'{"tick": 1}\n'
 
 
 class DaemonUnavailable(Exception):
@@ -45,12 +48,20 @@ class DaemonRefused(DaemonUnavailable):
     """Демон держит другую модель или версию fastembed: до его выхода не спрашивать."""
 
 
+class DaemonFailed(RuntimeError):
+    """Демон подвёл и после повторной попытки: вызов падает, своей модели не грузит."""
+
+
 def _lock_path(sock: Path) -> Path:
     return sock.with_suffix(".lock")
 
 
 def _log_path(sock: Path) -> Path:
     return sock.parent / "daemon.log"
+
+
+def log_path() -> Path:
+    return _log_path(Path(config.DAEMON_SOCKET))
 
 
 # ---------- клиент ----------
@@ -68,16 +79,22 @@ def _connect(timeout: float) -> socket.socket:
 
 
 def request(kind: str, texts: list[str], model: str, engine: str) -> list[list[float]]:
-    """Векторы от демона в порядке texts. DaemonUnavailable — считать самим."""
+    """Векторы от демона в порядке texts.
+
+    Поиску таймаут — на весь ответ, синку — на тишину между пульсами.
+    """
     payload = json.dumps(
         {"v": PROTOCOL, "model": model, "engine": engine, "kind": kind, "texts": texts},
         ensure_ascii=False,
     ).encode("utf-8") + b"\n"
-    with _connect(config.DAEMON_TIMEOUT) as conn:
+    timeout = config.DAEMON_QUERY_TIMEOUT if kind == "query" else config.DAEMON_IDLE_TIMEOUT
+    with _connect(timeout) as conn:
         try:
             conn.sendall(payload)
             with conn.makefile("rb") as reader:
                 line = reader.readline()
+                while line == TICK:
+                    line = reader.readline()
         except OSError as exc:
             raise DaemonUnavailable(f"{type(exc).__name__}: {exc}") from None
     if not line:
@@ -150,7 +167,9 @@ class _Engine:
 
     Поиск идёт вперёд синка: пачка синка не берёт модель, пока ждёт хоть один
     запрос поиска, а свою пачку демон считает кусками по DAEMON_INFER_BATCH —
-    поиск ждёт не дольше одного куска.
+    поиск ждёт не дольше одного куска. tick — пульс клиенту синка: после
+    каждого досчитанного куска, своего или чужого; ушедший клиент обрывает свою
+    пачку на ближайшем пульсе (OSError).
     """
 
     def __init__(self, embedder: Any) -> None:
@@ -162,12 +181,22 @@ class _Engine:
         self._active = 0
         self._last = time.monotonic()
 
-    def _run(self, query: bool, compute: Callable[[], list[list[float]]]) -> list[list[float]]:
+    def _run(
+        self, query: bool, compute: Callable[[], list[list[float]]],
+        tick: Callable[[], None] | None = None,
+    ) -> list[list[float]]:
         with self._cond:
             if query:
                 self._queries += 1
             while self._busy or (not query and self._queries):
                 self._cond.wait()
+                if tick is not None:
+                    # Пульс пишется без замка: медленный клиент не держит очередь.
+                    self._cond.release()
+                    try:
+                        tick()
+                    finally:
+                        self._cond.acquire()
             if query:
                 self._queries -= 1
             self._busy = True
@@ -178,17 +207,23 @@ class _Engine:
                 self._busy = False
                 self._cond.notify_all()
 
-    def embed(self, kind: str, texts: list[str]) -> list[list[float]]:
+    def embed(
+        self, kind: str, texts: list[str], tick: Callable[[], None] | None = None
+    ) -> list[list[float]]:
         if kind == "query":
             return self._run(True, lambda: [self.embedder.embed_query(t) for t in texts])
         vectors: list[list[float]] = []
         step = config.DAEMON_INFER_BATCH
         for start in range(0, len(texts), step):
             part = texts[start:start + step]
-            vectors.extend(self._run(False, lambda: self.embedder.embed_passages(part)))
+            vectors.extend(self._run(False, lambda: self.embedder.embed_passages(part), tick))
+            if tick is not None and start + step < len(texts):
+                tick()
         return vectors
 
-    def answer(self, line: bytes) -> dict[str, Any]:
+    def answer(
+        self, line: bytes, tick: Callable[[], None] | None = None
+    ) -> dict[str, Any]:
         try:
             req = json.loads(line)
         except ValueError:
@@ -201,7 +236,9 @@ class _Engine:
         if kind not in ("query", "passage") or not isinstance(texts, list):
             return {"error": "в запросе нет kind или texts"}
         try:
-            return {"vectors": self.embed(kind, [str(t) for t in texts])}
+            return {"vectors": self.embed(kind, [str(t) for t in texts], tick)}
+        except OSError:
+            raise  # клиент ушёл — отвечать некому
         except Exception as exc:  # noqa: BLE001 — демон отвечает отказом, а не падает
             traceback.print_exc()
             return {"error": f"{type(exc).__name__}: {exc}"}
@@ -225,10 +262,10 @@ class _Handler(socketserver.StreamRequestHandler):
         engine: _Engine = self.server.engine  # type: ignore[attr-defined]
         engine.enter()
         try:
-            reply = engine.answer(self.rfile.readline())
+            reply = engine.answer(self.rfile.readline(), lambda: self.wfile.write(TICK))
             self.wfile.write(json.dumps(reply).encode("utf-8") + b"\n")
         except OSError:
-            pass  # клиент ушёл, не дождавшись: его вызов уже считает сам
+            pass  # клиент ушёл, не дождавшись: его вызов повторит запрос или упадёт
         finally:
             engine.leave()
 
@@ -239,6 +276,27 @@ class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 
 def _say(message: str) -> None:
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{os.getpid()}] {message}", flush=True)
+
+
+def _take_lock(lock: Any) -> bool:
+    """Замок демона. Держит живой демон — False; держит выходящий по простою
+    (сокет уже убран) — дождаться его ухода: иначе клиент, поднявший
+    нас в этот момент, остался бы без демона.
+    """
+    deadline = time.monotonic() + config.DAEMON_START_WAIT
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        try:
+            _connect(1.0).close()
+            return False
+        except DaemonDown:
+            time.sleep(0.05)
 
 
 def serve(embedder: Any = None, idle: float | None = None) -> int:
@@ -252,9 +310,7 @@ def serve(embedder: Any = None, idle: float | None = None) -> int:
     idle = config.IDLE_UNLOAD if idle is None else idle
     lock = _lock_path(sock).open("a")
     try:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
+        if not _take_lock(lock):
             _say("демон уже запущен — выхожу")
             return 0
         if embedder is None:
@@ -270,9 +326,11 @@ def serve(embedder: Any = None, idle: float | None = None) -> int:
         _say(f"слушаю {sock}: {embedder.model_name}, простой до выхода {idle or '∞'} с")
         while not idle or server.engine.idle_for() < idle:  # type: ignore[attr-defined]
             time.sleep(min(1.0, idle / 4) if idle else 3600)
-        server.shutdown()
-        # Сокет убирается до того, как отпущен замок: новый демон его не застанет.
+        # Сначала сокет, потом shutdown: новый клиент получает DaemonDown и поднимает
+        # свежий демон (тот ждёт замок в _take_lock), а не пустой ответ из backlog.
+        # Уже стоящие в backlog получат обрыв и повторят запрос уже без сокета.
         sock.unlink(missing_ok=True)
+        server.shutdown()
         server.server_close()
         _say("простой — выход")
         return 0

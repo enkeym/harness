@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import __version__, config
 from .config import ProjectPaths, find_project_root
+from .daemon import DaemonFailed
 from .embedder import Embedder
 from .indexer import (
     SyncInProgress, holder_pid, index_project, lock_holder, read_progress,
@@ -294,8 +295,13 @@ def _cmd_search(args: argparse.Namespace) -> int:
         if mismatch:
             print(f"ragsave: {mismatch}", file=sys.stderr)
             return 1
+        try:
+            vector = embedder.embed_query(args.query)
+        except DaemonFailed as exc:
+            print(f"ragsave: {exc}", file=sys.stderr)
+            return 1
         hits = store.search(
-            query_vector=embedder.embed_query(args.query),
+            query_vector=vector,
             query_text=args.query,
             limit=args.limit,
             path_include=args.include,

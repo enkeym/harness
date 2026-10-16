@@ -3,7 +3,7 @@
 Модель грузится лениво и только один раз на процесс: MCP-сервер должен
 стартовать мгновенно, а инициализация ONNX занимает секунды. Ещё лучше —
 не грузить её вовсе: векторы считает общий демон (daemon.py), своя модель —
-только когда демона нет или он подвёл.
+только у синка без демона и когда демон держит другую модель.
 """
 
 from __future__ import annotations
@@ -72,26 +72,36 @@ class Embedder:
 
         start — поднять демон, если его нет. Синк не поднимает: в нём демон
         унаследовал бы nice хука. Демона нет и поднимать его не просили —
-        штатный случай, в лог не идёт.
+        штатный случай, в лог не идёт. Таймаут или обрыв — одна повторная
+        попытка (демон, ушедший по простою, поиск поднимает заново), дальше
+        DaemonFailed: вторая копия модели в MCP-сервере или синке стоила бы 1,5–3,8 ГБ.
         """
         if not self._daemon_on():
             return None
-        try:
+        started = retried = False
+        while True:
             try:
                 return daemon.request(kind, texts, self._model_name, self.engine_version)
             except daemon.DaemonDown:
                 if not start:
                     return None
-                if not daemon.start():
-                    raise daemon.DaemonUnavailable(
-                        f"демон не поднялся за {config.DAEMON_START_WAIT:.0f} с"
+                if started or not daemon.start():
+                    raise daemon.DaemonFailed(
+                        f"демон модели не поднялся за {config.DAEMON_START_WAIT:.0f} с; "
+                        f"лог — {daemon.log_path()}"
                     ) from None
-                return daemon.request(kind, texts, self._model_name, self.engine_version)
-        except daemon.DaemonUnavailable as exc:
-            if isinstance(exc, daemon.DaemonRefused):
+                started = True
+            except daemon.DaemonRefused as exc:
                 self._daemon_refused = True
-            daemon.log_fallback(str(exc))
-            return None
+                daemon.log_fallback(str(exc))
+                return None
+            except daemon.DaemonUnavailable as exc:
+                if retried:
+                    raise daemon.DaemonFailed(
+                        f"демон модели не ответил дважды ({exc}); повторите позже, "
+                        f"лог — {daemon.log_path()}"
+                    ) from None
+                retried = True
 
     def unload(self) -> None:
         """Отдать память модели (~1,5 ГБ у e5-large); следующий вызов загрузит её снова.
@@ -120,8 +130,9 @@ class Embedder:
         """Векторы для потока фрагментов, в порядке подачи.
 
         Поток идёт пачками в демон, если тот уже запущен: на всех ядрах и без
-        второй копии модели, а поиск вклинивается между кусками. Демон подвёл
-        посреди потока — остаток считает своя модель.
+        второй копии модели, а поиск вклинивается между кусками. Демона нет
+        или он упал посреди потока — остаток считает своя модель; демон жив, но
+        молчит — DaemonFailed, синк догонит следующий хук.
         """
         if not self._daemon_on():
             yield from self._local_stream(texts)
@@ -160,7 +171,7 @@ class Embedder:
         return list(self.embed_stream(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        """Вектор поискового запроса; демона нет — поднять его."""
+        """Вектор поискового запроса; демона нет — поднять его, подвёл — DaemonFailed."""
         vectors = self._via_daemon("query", [text], start=True)
         if vectors is not None:
             return vectors[0]

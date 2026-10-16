@@ -1075,8 +1075,26 @@ def test_daemon() -> None:
             self.loads += 1
             return FakeModel()
 
+    class Slow(Counted):
+        """Модель, считающая текст за delay секунд: синки дольше таймаута тишины."""
+
+        delay = 0.06
+
+        def _load(self):
+            self.loads += 1
+            fast, delay = FakeModel(), self.delay
+
+            class _Model:
+                def embed(self, texts, batch_size=None, parallel=None):
+                    for text in texts:
+                        time.sleep(delay)
+                        yield from fast.embed([text])
+
+            return _Model()
+
     original = (config.DAEMON, config.DAEMON_SOCKET, config.DAEMON_START_WAIT,
-                config.DAEMON_BATCH, daemon._spawn, os.environ.get("AI_HOOKS_LOG_DIR"))
+                config.DAEMON_BATCH, config.DAEMON_INFER_BATCH, config.DAEMON_QUERY_TIMEOUT,
+                config.DAEMON_IDLE_TIMEOUT, daemon._spawn, os.environ.get("AI_HOOKS_LOG_DIR"))
     with tempfile.TemporaryDirectory() as tmp:
         sock = Path(tmp) / "embed.sock"
         errors = Path(tmp) / "logs" / "errors.log"
@@ -1089,8 +1107,32 @@ def test_daemon() -> None:
         def logged() -> str:
             return errors.read_text(encoding="utf-8") if errors.exists() else ""
 
-        def run_daemon(idle: float) -> tuple[Counted, threading.Thread]:
-            model = Counted(use_daemon=False)
+        def fake_daemon(drop: bool, count: int) -> list[socket.socket]:
+            """Сокет без демона: count соединений рвёт (drop) или держит без ответа.
+
+            Сокет убирается до обрыва — как у демона, выходящего по простою.
+            """
+            listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            listener.bind(str(sock))
+            listener.listen()
+            held: list[socket.socket] = []
+
+            def loop() -> None:
+                for _ in range(count):
+                    conn, _ = listener.accept()
+                    conn.makefile("rb").readline()
+                    held.append(conn)
+                sock.unlink(missing_ok=True)
+                listener.close()
+                if drop:
+                    for conn in held:
+                        conn.close()
+
+            threading.Thread(target=loop, daemon=True).start()
+            return held
+
+        def run_daemon(idle: float, kind: type = Counted) -> tuple[Counted, threading.Thread]:
+            model = kind(use_daemon=False)
             thread = threading.Thread(target=daemon.serve,
                                       kwargs={"embedder": model, "idle": idle}, daemon=True)
             thread.start()
@@ -1140,10 +1182,14 @@ def test_daemon() -> None:
             check("синк без демона — не поднимает его, своя модель, лог не растёт",
                   (len(spawns), quiet.loads, logged().count("\n")), (0, 1, 1))
             lonely = Counted()
-            lonely.embed_query("деплой")
-            check_true("демон не поднялся — своя модель и строка в логе",
-                       len(spawns) == 1 and lonely.loads == 1 and "не поднялся" in logged(),
-                       f"spawns={len(spawns)} loads={lonely.loads}")
+            try:
+                lonely.embed_query("деплой")
+                failure = ""
+            except daemon.DaemonFailed as exc:
+                failure = str(exc)
+            check_true("демон не поднялся — понятная ошибка, своей модели нет",
+                       len(spawns) == 1 and lonely.loads == 0 and "не поднялся" in failure,
+                       f"spawns={len(spawns)} loads={lonely.loads} failure={failure!r}")
 
             # Сокет упавшего демона: файл есть, слушателя нет.
             stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -1158,9 +1204,73 @@ def test_daemon() -> None:
                   (1, 0, 1))
             if started:
                 started[0][1].join(timeout=5)
+
+            # Демон уходит по простою: запрос из backlog получает обрыв, а замок
+            # ещё держит уходящий. Повтор поднимает новый демон, тот дожидается замка.
+            import fcntl
+
+            config.DAEMON_START_WAIT = 2.0
+            leaving = (sock.with_suffix(".lock")).open("a")
+            fcntl.flock(leaving, fcntl.LOCK_EX)
+            threading.Timer(0.3, leaving.close).start()
+            fake_daemon(drop=True, count=1)
+            started.clear()
+            raced = Counted()
+            check("обрыв на выходе демона — новый демон отвечает, своей модели нет",
+                  (raced.embed_query("деплой"), raced.loads, len(started)),
+                  (local.embed_query("деплой"), 0, 1))
+            if started:
+                started[0][1].join(timeout=5)
+
+            # Демон молчит: поиск и синк падают после одного повтора, модель не грузят.
+            config.DAEMON_QUERY_TIMEOUT = config.DAEMON_IDLE_TIMEOUT = 0.2
+            for name, call in (("поиск", lambda m: m.embed_query("деплой")),
+                               ("синк", lambda m: list(m.embed_stream(texts)))):
+                held = fake_daemon(drop=False, count=2)
+                mute = Counted()
+                begun = time.monotonic()
+                try:
+                    call(mute)
+                    failure = ""
+                except daemon.DaemonFailed as exc:
+                    failure = str(exc)
+                spent = time.monotonic() - begun
+                for conn in held:
+                    conn.close()
+                check_true(f"молчащий демон — {name} падает за два таймаута без своей модели",
+                           "не ответил дважды" in failure and mute.loads == 0 and spent < 1.5,
+                           f"failure={failure!r} loads={mute.loads} spent={spent:.2f}")
+
+            # Очередь синков: каждый дольше таймаута тишины, но пульс после каждого
+            # куска, своего или чужого, держит их живыми.
+            config.DAEMON_INFER_BATCH, config.DAEMON_BATCH = 1, len(texts)
+            served, thread = run_daemon(idle=1.0, kind=Slow)
+            queued = [Counted() for _ in range(4)]
+            results: list = [None] * len(queued)
+
+            def sync(index: int) -> None:
+                try:
+                    results[index] = list(queued[index].embed_stream(texts))
+                except daemon.DaemonFailed as exc:
+                    results[index] = str(exc)
+
+            workers = [threading.Thread(target=sync, args=(i,)) for i in range(len(queued))]
+            begun = time.monotonic()
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join(timeout=10)
+            spent = time.monotonic() - begun
+            expected = local.embed_passages(texts)
+            check_true("четыре синка в очереди дольше таймаута — все досчитаны демоном",
+                       all(r == expected for r in results) and spent > 0.2 * 4
+                       and sum(q.loads for q in queued) == 0,
+                       f"spent={spent:.2f} results={[r if isinstance(r, str) else len(r) for r in results]}")
+            thread.join(timeout=5)
         finally:
             (config.DAEMON, config.DAEMON_SOCKET, config.DAEMON_START_WAIT,
-             config.DAEMON_BATCH, daemon._spawn, log_dir) = original
+             config.DAEMON_BATCH, config.DAEMON_INFER_BATCH, config.DAEMON_QUERY_TIMEOUT,
+             config.DAEMON_IDLE_TIMEOUT, daemon._spawn, log_dir) = original
             if log_dir is None:
                 os.environ.pop("AI_HOOKS_LOG_DIR", None)
             else:
