@@ -524,6 +524,27 @@ const CONTAINER_CMDS = new Set(['docker', 'docker-compose', 'podman', 'kubectl']
 // в историю, читается ими и без рабочей копии.
 const GIT_READ_SUBCMDS = new Set(['show', 'cat-file', 'diff', 'log', 'blame']);
 
+// `git commit -F .env` кладёт содержимое файла в сообщение коммита, а дальше в
+// историю и push: файл прочитан так же, как `cat .env`. Файл сообщения — значение
+// `-F`/`--file` (`-F f`, `-Ff`, `-aF f`, `--file f`, `--file=f`) у commit, tag, notes, merge.
+const GIT_MESSAGE_FILE_SUBCMDS = new Set(['commit', 'tag', 'notes', 'merge']);
+
+function gitMessageSecret(toks, at) {
+  if (at < 0 || !GIT_MESSAGE_FILE_SUBCMDS.has(toks[at])) return null;
+  for (let i = at + 1; i < toks.length; i++) {
+    const t = toks[i];
+    let file = null;
+    if (t === '--file') file = toks[i + 1];
+    else if (t.startsWith('--file=')) file = t.slice('--file='.length);
+    else {
+      const short = /^-[A-Za-z]*F(.*)$/.exec(t);
+      if (short && !t.startsWith('--')) file = short[1] || toks[i + 1];
+    }
+    if (file && isSecretPath(file)) return file;
+  }
+  return null;
+}
+
 // Опции с аргументом до цели: без них `ssh -p 2222 vps cat .env` считал хостом
 // `2222`, а командой — `vps cat .env`.
 const SSH_ARG_OPTS = ['-b', '-B', '-c', '-D', '-E', '-e', '-F', '-I', '-i', '-J', '-L', '-l', '-m',
@@ -722,6 +743,8 @@ export function guardBashSecurity(command, depth = 0) {
 
     if (cmd === 'git') {
       const at = gitSubcommandAt(toks);
+      const messageFile = gitMessageSecret(toks, at);
+      if (messageFile) return secretReason(messageFile);
       if (makesCommit(toks, at)) {
         const reason = gitCommitReason(toks, at);
         if (reason) return { level: ASK, reason };
