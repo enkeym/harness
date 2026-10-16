@@ -6,7 +6,8 @@
 // разбитый на записи с одним message.id, — один ход; отказ без «hook error», но с
 // toolDenialKind permission-rule — deny. --waste: каждый класс потерь с ценой по
 // сегменту, правка сбрасывает повторное чтение, отказ пользователя и сбой Bash —
-// не ошибка, сессии до границы не в счёте, недостающие вызовы.
+// не ошибка, сессии до границы не в счёте, недостающие вызовы,
+// пропущенный rag_search после пустого tokensave_search.
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
@@ -172,6 +173,47 @@ const rows = (out) => {
   const missing = table(missingTable);
   check('недостающие вызовы', [missing['read без if_digest']?.['ток.'], missing['search без path_include']?.['ток.'], missing.tokensave_context?.['случаи']],
     ['3.0k', '2.5k', '1']);
+  check('без пустого search пропущенного rag нет', missing['rag_search после пустого search']?.['случаи'], '0');
+
+  // Пропущенный rag: цепочка grep после пустого поиска по имени — один случай;
+  // rag_search сбрасывает; после пустого literal grep по коду в правилах, по докам — нет;
+  // после непустого search grep не в счёте, grep-фильтр после `|`
+  // и grep по /tmp/ — не поиск по проекту.
+  const ragBox = sandbox();
+  const empty = { content: [{ type: 'text', text: 'count: 0\n\n' }] };
+  write(ragBox.projDir, 'gggggggg-7.jsonl', [
+    call('r0', 1000, use('g1', `${TS}search`, { query: 'retryPolicy' })),
+    result('g1', 0, empty),
+    call('r1', 1000, use('g2', 'Bash', { command: 'grep -rn retry src' })),
+    result('g2', 4000),
+    call('r2', 1000, use('g3', 'Grep', { pattern: 'retry' }), use('g4', 'mcp__ragsave__rag_search', { query: 'retry' })),
+    result('g3', 4000),
+    result('g4', 400),
+    call('r3', 1000, use('g5', 'Bash', { command: 'grep -rn retry lib' })),
+    result('g5', 400),
+    call('r4', 1000, use('g6', `${TS}search`, { query: 'RETRY_MAX', literal: true })),
+    result('g6', 0, empty),
+    call('r5', 1000, use('g7', 'Bash', { command: 'grep -rn RETRY_MAX --include=*.ts src' })),
+    result('g7', 400),
+    call('r6', 1000, use('g8', 'Bash', { command: 'grep -rn RETRY_MAX docs/setup.md' })),
+    result('g8', 4000),
+    call('r7', 1000, use('g9', `${TS}search`, { query: 'retry' })),
+    result('g9', 400),
+    call('r8', 1000, use('g10', 'Grep', { pattern: 'retry', glob: '*.yml' })),
+    result('g10', 400),
+    call('r10', 1000, use('g11', `${TS}search`, { query: 'retryLimit' })),
+    result('g11', 0, empty),
+    call('r11', 1000, use('g12', 'Bash', { command: 'node t.mjs | grep FAIL' })),
+    result('g12', 4000),
+    call('r12', 1000, use('g13', 'Bash', { command: 'grep -c FAIL /tmp/t.out' })),
+    result('g13', 4000),
+    call('r9', 1000, { type: 'text', text: 'конец' }),
+  ]);
+  const ragOut = runIn(ragBox.home, '--waste', '2026-09-15', '0').stdout;
+  const noRag = table(ragOut.trim().split('\n\n')[3])['rag_search после пустого search'];
+  check('пропущенный rag — цепочки grep после пустого search, literal — только доки',
+    [noRag?.['случаи'], noRag?.['сессии'], noRag?.['ток.']], ['2', '1', '3.0k']);
+
   const bad = runIn(box.home, '--waste', 'yesterday');
   check('--waste с неверной границей — использование, код 1', [bad.status, bad.stderr.startsWith('Запуск:')], [1, true]);
 }

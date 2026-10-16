@@ -39,7 +39,11 @@
 // $ — по PRICES из usage-log: текст пишется в кэш раз (1h, если вызов писал
 // часовой) и читается из кэша в каждом следующем; handoff — по чтению кэша.
 // Недостающие вызовы — счётчиками: повторный tokensave_read без if_digest,
-// tokensave_search без path_include с выводом > 2k ток., tokensave_context.
+// tokensave_search без path_include с выводом > 2k ток., tokensave_context,
+// пропущенный rag_search — grep по файлам (не фильтр после `|`) после пустого
+// tokensave_search (count: 0) до rag_search или непустого search в сегменте:
+// после поиска по имени — любой, после literal — только по докам и конфигам (точную строку в коде правила отдают grep). Случай —
+// цепочка grep после одного пустого поиска, ток. — их вывод.
 //
 // Запуск — USAGE ниже. Граница по умолчанию — a0ec8f2 (снятие принуждения к
 // tokensave, 22.09.2026).
@@ -149,6 +153,12 @@ const HANDOFF_TOK = 150_000;
 const TS_READ = 'mcp__tokensave__tokensave_read';
 const TS_SEARCH = 'mcp__tokensave__tokensave_search';
 const TS_CONTEXT = 'mcp__tokensave__tokensave_context';
+const RAG_SEARCH = 'mcp__ragsave__rag_search';
+const EMPTY_SEARCH_RE = /(^|\n)count: 0\n/;
+// grep по файлам — в начале команды, не фильтр после `|` (`npm test | grep FAIL`);
+// вывод команд в /tmp/ — не файлы проекта.
+const FILE_GREP_RE = /(^|[;&(]|\|\|)\s*(\w+=\S*\s+)*(git\s+grep|grep|rg|ag|find)(\s|$)/;
+const DOCS_RE = /\.(mdx?|json|ya?ml|toml|ini|env|sql|txt|conf)\b|Dockerfile|docker-compose|\.gitlab-ci|\.github\//;
 const isEdit = (name) => /^(Edit|Write|NotebookEdit)$/.test(name) || MCP_EDIT_RE.test(name);
 const CODE_RE = /\.(m?[jt]sx?|c[jt]s|py|rs|go|java|kt|rb|php|cs|swift|c|cc|cpp|h|hpp|sh)$/;
 const METER_RE = /В контексте \d+k|Контекст занят|context-meter:/;
@@ -168,8 +178,9 @@ function waste(file) {
   const events = []; // { cls, at: индекс вызова, после которого текст вошёл в окно, tok, kind }
   const uses = new Map(); // tool_use.id → { name, input, at, path }
   const answered = new Set();
-  const r = { usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, wide: 0, wideTok: 0, context: 0 };
-  const fresh = () => ({ reads: new Map(), full: new Map(), names: new Set(), skills: new Set(), handed: false });
+  const r = { usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, wide: 0, wideTok: 0, context: 0, noRag: 0, noRagTok: 0 };
+  // gap — пустой tokensave_search без rag_search после него: { literal, hit }.
+  const fresh = () => ({ reads: new Map(), full: new Map(), names: new Set(), skills: new Set(), handed: false, gap: null });
   let state = fresh();
   let seg = 0;
   let cwd = '';
@@ -203,6 +214,14 @@ function waste(file) {
     if (path && isEdit(b.name)) { state.reads.delete(path); state.full.delete(path); }
     if (b.name === 'Skill' && input.skill === 'handoff') state.handed = true;
     if (b.name === TS_CONTEXT) r.context += 1;
+    if (b.name === RAG_SEARCH) state.gap = null;
+    const { gap } = state;
+    const fileGrep = group(b) === 'grep' && (b.name !== 'Bash' || (FILE_GREP_RE.test(input.command ?? '') && !/\s\/tmp\//.test(input.command)));
+    if (gap && fileGrep && (!gap.literal || DOCS_RE.test(JSON.stringify(input)))) {
+      uses.get(b.id).noRag = true;
+      if (!gap.hit) r.noRag += 1;
+      gap.hit = true;
+    }
   }
 
   function onRead(use, tok) {
@@ -227,6 +246,10 @@ function waste(file) {
 
   function onResult(rec, b) {
     const use = uses.get(b.tool_use_id) ?? { name: 'unknown', input: {}, at: calls.length - 1 };
+    if (use.noRag) r.noRagTok += tokens(b.content);
+    if (use.name === TS_SEARCH && !b.is_error) {
+      state.gap = EMPTY_SEARCH_RE.test(plain(b.content)) ? { literal: Boolean(use.input.literal), hit: false } : null;
+    }
     if (b.is_error) {
       if (isDeny(rec, b)) { events.push({ cls: 'deny', at: use.at, kind: 'next' }); lastDeny = use; }
       else if (!rec.toolDenialKind && use.name !== 'Bash') events.push({ cls: 'error', at: use.at, kind: 'next' });
@@ -328,15 +351,16 @@ const usd = (n) => n.toFixed(2);
 // Отчёт --waste: классы по убыванию $, топ-10 сессий, недостающие вызовы.
 function printWaste(list) {
   const all = Object.fromEntries(WASTE_CLASSES.map((c) => [c, { n: 0, tok: 0, usd: 0, top: null }]));
-  const t = { turns: 0, ctx: 0, usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, noDigestS: 0, wide: 0, wideTok: 0, wideS: 0, context: 0, contextS: 0 };
+  const t = { turns: 0, ctx: 0, usd: 0, repeat: 0, noDigest: 0, noDigestTok: 0, noDigestS: 0, wide: 0, wideTok: 0, wideS: 0, context: 0, contextS: 0, noRag: 0, noRagTok: 0, noRagS: 0 };
   for (const r of list) {
     const w = r.waste;
     t.turns += r.turns;
     t.ctx += r.ctx;
-    for (const key of ['usd', 'repeat', 'noDigest', 'noDigestTok', 'wide', 'wideTok', 'context']) t[key] += w[key];
+    for (const key of ['usd', 'repeat', 'noDigest', 'noDigestTok', 'wide', 'wideTok', 'context', 'noRag', 'noRagTok']) t[key] += w[key];
     if (w.noDigest) t.noDigestS += 1;
     if (w.wide) t.wideS += 1;
     if (w.context) t.contextS += 1;
+    if (w.noRag) t.noRagS += 1;
     r.lost = { tok: 0, usd: 0, top: '' };
     for (const [cls, c] of Object.entries(w.classes)) {
       const a = all[cls];
@@ -368,6 +392,7 @@ function printWaste(list) {
   console.log(['read без if_digest', t.noDigest, t.noDigestS, k1(t.noDigestTok)].join('\t'));
   console.log(['search без path_include', t.wide, t.wideS, k1(t.wideTok)].join('\t'));
   console.log(['tokensave_context', t.context, t.contextS, '—'].join('\t'));
+  console.log(['rag_search после пустого search', t.noRag, t.noRagS, k1(t.noRagTok)].join('\t'));
 }
 
 if (WASTE) {
