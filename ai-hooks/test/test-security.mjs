@@ -334,6 +334,11 @@ check('«удали файл» не удаляет ветку', asked([say('уд
 check('«форс пуш» → force', asked([say('сделай форс пуш')], 'git push -f origin feat/x'), 'allow');
 check('«amend» → amend', asked([say('сделай amend')], 'git commit --amend --no-edit'), 'allow');
 check('«коммит позже» → commit спрашивает', asked([say('поправь, коммит позже')], 'git commit -m x'), 'ask');
+// web_groza bd58afeb, 15.10: «запушь и мр» при незакоммиченной правке спросил коммит.
+check('«запушь и мр» → commit', asked([say('запушь и мр')], 'git commit -F - <<\'EOF\'\nfix\nEOF'), 'allow');
+check('«сделай мр» → commit', asked([say('сделай мр')], 'git commit -m x'), 'allow');
+check('«смержи в dev» → commit', asked([say('смержи в dev')], 'git commit -m x'), 'allow');
+check('«не пушь» → commit спрашивает', asked([say('не пушь')], 'git commit -m x'), 'ask');
 const menu = (label, description) => result('answered', { toolUseResult: {
   questions: [{ question: 'Что делаем?', options: [{ label, description }, { label: 'Стоп', description: 'ничего' }] }],
   answers: { 'Что делаем?': label },

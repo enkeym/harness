@@ -219,9 +219,13 @@ const MR_WORDS = 'мр|mr|pr|merge request|мерж реквест|pull request'
 const MERGE_WORDS = '(?:с|в)мерж(?:и|ите|ить|ь|у|ни|нуть)?|мерж(?:и|ни|ить)|влей|влейте|влить';
 const RELEASE_WORDS = 'релиз|release';
 
+// Просьба доставить работу — push, MR, влить, релиз. При незакоммиченной правке
+// она велит и коммит: «запушь и мр» не должно спрашивать коммит.
+const DELIVER_WORDS = `${PUSH_WORDS}|${MR_WORDS}|${MERGE_WORDS}|${RELEASE_WORDS}`;
+
 const GRANT_WORDS = [
-  ['commit', word(`${COMMIT_WORDS}|${RELEASE_WORDS}`)],
-  ['push', word(`${PUSH_WORDS}|${MR_WORDS}|${MERGE_WORDS}|${RELEASE_WORDS}`)],
+  ['commit', word(`${COMMIT_WORDS}|${DELIVER_WORDS}`)],
+  ['push', word(DELIVER_WORDS)],
   ['mr', word(MR_WORDS)],
   ['merge', word(MERGE_WORDS)],
   ['delete', /(?<![\p{L}\p{N}])(?:удали|удалить|снеси|delete|remove)(?![\p{L}\p{N}]).*(?:ветк|branch)/iu],

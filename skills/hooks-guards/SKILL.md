@@ -24,8 +24,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   `+refspec`), branch deletion, push to the current branch (no refspec, `HEAD`, `@`, a
   `$…` name), deploy, remote-host commands, outbound data, the whole environment (`env`,
   `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
-- An ask the user's last prompt, approved plan or menu choice requested passes (commit,
-  push, MR via API, merge, branch deletion; table in `ai-hooks/README.md`); `$…` still asks.
+- An ask the user's last prompt, approved plan or menu choice requested passes (commit — a
+  push or MR request too, push, MR via API, merge, branch deletion; table in `ai-hooks/README.md`); `$…` still asks.
 - Asks before editing `~/harness` (guards, hooks, rules, settings) from a
   session rooted elsewhere — say why the edit is needed, don't retry around it.
 - Judges command **form**. Code *meaning* (auth, payments, secrets, outbound
