@@ -526,24 +526,34 @@ const GIT_READ_SUBCMDS = new Set(['show', 'cat-file', 'diff', 'log', 'blame']);
 
 // `git commit -F .env` кладёт содержимое файла в сообщение коммита, а дальше в
 // историю и push: файл прочитан так же, как `cat .env`. Файл сообщения — значение
-// `-F`/`--file` (`-F f`, `-Ff`, `-aF f`, `--file f`, `--file=f`) у commit, tag, notes, merge.
+// `-F`/`--file` (`-F f`, `-Ff`, `-aF f`, `--file f`, `--file=f`) у commit, tag, notes, merge,
+// у commit ещё шаблон `-t`/`--template`.
 // `git config -f .env -l` печатает файл как `cat`: флаг там `-f`/`--file`.
-const GIT_MESSAGE_FILE_SUBCMDS = new Set(['commit', 'tag', 'notes', 'merge']);
+// `args` — короткие флаги с аргументом: в `-mFix` после `m` идёт текст, а не флаг `F`.
+const GIT_FILE_FLAGS = {
+  commit: { args: 'mFCct', files: 'Ft', long: ['--file', '--template'] },
+  tag: { args: 'mFu', files: 'F', long: ['--file'] },
+  notes: { args: 'mFCc', files: 'F', long: ['--file'] },
+  merge: { args: 'mFsX', files: 'F', long: ['--file'] },
+  config: { args: 'f', files: 'f', long: ['--file'] },
+};
 
 function gitFileOperands(toks, at) {
-  if (at < 0) return [];
-  const sub = toks[at];
-  const short = GIT_MESSAGE_FILE_SUBCMDS.has(sub) ? 'F' : sub === 'config' ? 'f' : null;
-  if (!short) return [];
-  const re = new RegExp(`^-[A-Za-z]*${short}(.*)$`);
+  const flags = at < 0 ? null : GIT_FILE_FLAGS[toks[at]];
+  if (!flags) return [];
+  const short = new RegExp(`^-[A-Za-z]*?([${flags.args}])(.*)$`);
   const files = [];
-  for (let i = at + 1; i < toks.length; i++) {
+  for (let i = at + 1; i < toks.length && toks[i] !== '--'; i++) {
     const t = toks[i];
-    if (t === '--file') files.push(toks[i + 1]);
-    else if (t.startsWith('--file=')) files.push(t.slice('--file='.length));
-    else if (!t.startsWith('--') && re.test(t)) files.push(re.exec(t)[1] || toks[i + 1]);
+    const long = flags.long.find((opt) => t === opt || t.startsWith(`${opt}=`));
+    const m = t.startsWith('--') ? null : short.exec(t);
+    if (long) files.push(t === long ? toks[++i] : t.slice(long.length + 1));
+    else if (m) {
+      const value = m[2] || toks[++i];
+      if (flags.files.includes(m[1])) files.push(value);
+    }
   }
-  return files.filter(Boolean);
+  return files.filter((file) => file && file !== '-');
 }
 
 // Секрет по имени или по цели симлинка; путь, вычисляемый при запуске

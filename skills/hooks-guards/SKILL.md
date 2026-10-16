@@ -12,7 +12,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 - Hard-blocks reading secret stores: `.env*`, `.envrc`, keys, certificates,
   `secrets.yaml`, Terraform state and `*.tfvars`, `/proc/*/environ`,
   `auth.json`, CLI credentials (`~/.claude/.credentials.json`, `~/.aws`,
-  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, `xargs -a`, `tar`, a git message file (`git commit|tag|notes|merge -F .env`, `git config -f .env`; a computed `-F "$f"` asks),
+  `~/.docker`, `~/.kube`, `gh`, `glab-cli`), also through `< file`, `xargs -a`, `tar`, a git message file (`git commit|tag|notes|merge -F .env`, `git commit -t .env`, `git config -f .env`; a computed `-F "$f"` asks),
   `dotenv -p`, an interpreter (`python.exe`, `python3.12`, heredoc code), a `Grep` glob
   (`.env*`), a symlink to one, the browser (`file://`, `browser_file_upload`), a recursive
   `grep` without `--include`, or with one `.env` matches (`*`, `.*`), over a directory
