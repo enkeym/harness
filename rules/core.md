@@ -50,7 +50,8 @@ what it cannot: a file outside the index, a file to create, a string it missed.
 | What a symbol does                              | `tokensave_body`/`signature`                          |
 | A file in the index, whole or a range           | `tokensave_read` (`mode: "lines"`, `lines: "A-B"`) — `Read` is refused |
 | An edit to a file in the index                  | `tokensave_str_replace`/`multi_str_replace` — built-in edit needs a built-in read first |
-| Meaning, no name: how/where/why; docs, configs, `.env.example`, yml, CI, a link map — an exact string there too | `rag_search` |
+| Meaning, no name: how/where/why; docs, configs, `.env.example`, yml, CI, infrastructure | `rag_search` |
+| Exact string in docs, configs or a link map      | `tokensave_search` `literal: true`; empty → `rag_search` with `path_include` on that dir — unfiltered, code outranks the doc |
 | A file outside the index; a new file            | `Read`, `Edit`, `Write`                               |
 | Exact string in code after `search` `literal: true` answered empty | grep with a file glob              |
 

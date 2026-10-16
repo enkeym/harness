@@ -41,6 +41,9 @@ file, a path outside the index, a string `search` missed.
 
 - Empty = wrong name guess, not missing code. Ladder: `rag_search` → grep →
   `tokensave_read` of the likely file. Don't repeat the identical call.
+- `rag_search` answers a missing string with the nearest text (`HEAL_AFTER`
+  for `WARM_AFTER`). An exact string counts as found only when the fragment
+  contains it verbatim.
 - Error (not indexed, DB busy) → one line, then built-in tools. Graph
   genuinely silent: DB is `.tokensave/tokensave.db`, tables `nodes`, `edges`,
   `files`. Offer an issue at https://github.com/aovestdipaperino/tokensave —
