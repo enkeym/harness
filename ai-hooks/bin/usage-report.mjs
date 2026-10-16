@@ -72,6 +72,7 @@ const byProject = {};
 const byModel = {};
 const tools = {};
 const skills = {}; // скилл → { sessions, calls }; записи до поля skills его не несут
+let skillSessions = 0; // сессий с полем skills — охват секции скиллов
 const sourceTools = {}; // инструмент → { calls, chars } из tool_result
 const sourceFiles = {}; // файл → символы, отданные Read
 let total = 0;
@@ -92,6 +93,7 @@ for (const r of records) {
     if (m.priced === false) acc.priced = false;
   }
   for (const [name, n] of Object.entries(r.tools || {})) tools[name] = (tools[name] || 0) + n;
+  if (r.skills) skillSessions += 1;
   for (const [name, n] of Object.entries(r.skills || {})) {
     const acc = skills[name] || (skills[name] = { sessions: 0, calls: 0 });
     acc.sessions += 1;
@@ -131,7 +133,8 @@ for (const [name, n] of Object.entries(tools).sort((a, b) => b[1] - a[1]).slice(
 
 const topSkills = Object.entries(skills).sort((a, b) => b[1].sessions - a[1].sessions);
 if (topSkills.length > 0) {
-  out += '\nСкиллы — загрузки моделью (сессий / вызовов):\n';
+  const coverage = skillSessions < records.length ? `, учтено ${skillSessions} из ${records.length} сессий` : '';
+  out += `\nСкиллы — загрузки моделью (сессий / вызовов${coverage}):\n`;
   for (const [name, s] of topSkills) {
     out += `  ${pad(name, 44)} ${rpad(s.sessions, 5)} ${rpad(s.calls, 5)}\n`;
   }
