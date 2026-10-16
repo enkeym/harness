@@ -4,9 +4,8 @@ Contents: Report · MR comments · Finding · Summary · Menu.
 
 ## Report
 
-Two parts, nothing before, between or after them: the report in plain chat
-markdown — for reading, the terminal renders it; the menu. No preamble on
-what was run — that goes to the summary.
+Two parts and nothing around them: the report in plain chat markdown, then
+the menu. No preamble on what was run — that goes to the summary.
 
 ~~~
 **Ревью: <режим из строки-заголовка>**
@@ -28,16 +27,15 @@ what was run — that goes to the summary.
 <сводка>
 ~~~
 
-A severity with no findings — its title line is dropped.
+A severity with no findings — its title dropped.
 
 ## MR comments
 
 One per finding, Minor included, in number order — the body of a draft note
-(*Drafts* of [gitlab.md](gitlab.md)). In chat only when the drafts cannot be
-sent: the comments and nothing else — no header, severity titles, verdict,
-checked or not-checked lines — one fence per comment, so each is copied whole
-into its GitLab line or a Telegram message. The anchor line sits above the
-fence, never inside it; four backticks keep the inner ` ``` ` blocks inside:
+(*Drafts* of [gitlab.md](gitlab.md)). In chat only when drafts cannot be
+sent, and then nothing else — no header, severities, verdict or checked
+lines; one fence per comment, copied whole into GitLab or Telegram. The
+anchor line above the fence; four backticks keep inner ` ``` ` blocks inside:
 
 ~~~
 **<N>.** `<path>:<line>`
@@ -55,19 +53,18 @@ fence, never inside it; four backticks keep the inner ` ``` ` blocks inside:
 ````
 ~~~
 
-- Plain lines inside, no `>` prefix; the fence holds exactly the comment text.
-- Text: neutral, addressed to the change, not the person; no mention of AI, a
-  model or a tool — it goes out under the user's name. `Как воспроизвести`
-  only when the manual check fits one line.
-- `suggestion` only when the replacement sits on lines of the diff; GitHub
-  remote → plain ` ```suggestion `. Otherwise a plain code block; a fix
-  spanning several files or a design choice → no code block.
-- Markup inside a fence only what both Telegram and GitLab render:
-  `**bold**`, inline code, ` ``` ` fences with a language, plain `-` and `1.`
-  lists, emoji. No `#` headings, `>` quotes, `---` rules, tables, markdown
-  links, `*`/`_` italics — Telegram shows them as raw characters.
-  Identifiers, paths and anything with `_` or `*` always in backticks: bare
-  `__init__` turns italic in Telegram.
+- The fence holds exactly the comment text, plain lines, no `>` prefix.
+- Neutral, about the change, not the person; no mention of AI, a model or a
+  tool — it goes out under the user's name. `Как воспроизвести` only when the
+  manual check fits one line.
+- `suggestion` only when the replacement sits on diff lines; GitHub remote →
+  plain ` ```suggestion `. Otherwise a plain code block; a multi-file fix or a
+  design choice → no code block.
+- Markup both Telegram and GitLab render: `**bold**`, inline code, ` ``` `
+  fences with a language, plain `-`/`1.` lists, emoji. No `#` headings, `>`
+  quotes, `---`, tables, markdown links, `*`/`_` italics — Telegram shows them
+  raw. Identifiers, paths, anything with `_` or `*` in backticks: bare
+  `__init__` turns italic.
 
 ## Finding
 
@@ -96,15 +93,15 @@ One block per finding, Critical and Important:
 ```
 ~~~
 
-- Manual check: steps the user runs as written on a local or dev stand, never
-  prod; a security payload is harmless (`<b>x</b>`, a second test user's id).
-  A defect no action shows (race, type hole, dead branch) → a static check:
-  the `path:line` to open, what to compare it with, or a command and its
-  expected output. "Убедитесь, что …" without the how is not a step.
-- The fix covers every line it changes; a fix spanning several files or a
-  design choice → code of the key part plus one line on the rest.
+- Manual check: steps run as written on a local or dev stand, never prod; a
+  harmless security payload (`<b>x</b>`, a second test user's id). A defect no
+  action shows (race, type hole, dead branch) → a static check: the
+  `path:line` and what to compare, or a command and its expected output.
+  "Убедитесь, что …" without the how is not a step.
+- The fix covers every line it changes; multi-file or a design choice → the
+  key part plus one line on the rest.
 - The MR comment is not repeated here.
-- Minor findings: one list item each, no code blocks, the path in backticks —
+- Minor: one list item each, no code blocks, the path in backticks —
   `- <N>. <path>:<line> — проблема — проверка`.
 
 ## Summary
@@ -119,8 +116,7 @@ One block per finding, Critical and Important:
 ~~~
 
 Empty section = "нет". Nothing found → the summary only, no menu, no drafts.
-An unread file on the coverage line → `changes requested` or `не досмотрено`,
-never `approved`.
+An unread file on the coverage line → never `approved`.
 
 ## Menu
 
@@ -144,17 +140,17 @@ A colleague's:
 - Исправить все
 ```
 
-- Target is another ref: no fix options, so no menu — a colleague's branch
-  goes straight to Only review.
+- Target is another ref → no fix options, no menu: a colleague's branch goes
+  straight to Only review. MR mode (1.2) has no menu at all.
 - Only review → *Drafts* of [gitlab.md](gitlab.md) into the MR of
   *Current branch with an open MR*; no MR fits → the MR comments in chat,
-  one line why. MR mode (1.2) has no menu at all.
-- Не исправлять → one line, no recap of the report.
-- Fix selected → a second question, `multiSelect`: one option per finding
-  when ≤4, otherwise severity groups (all Critical; Critical and Important),
+  one line why.
+- Не исправлять → one line, no recap.
+- Fix selected → a second `multiSelect` question: one option per finding
+  when ≤4, else severity groups (all Critical; Critical and Important),
   single numbers through "Other".
-- Chosen fixes: apply exactly the fix shown, nothing beyond it; never
-  `git add` — in the soft-reset flow the colleague's change is staged and the
-  fix stays unstaged, so VS Code shows them apart. Then `tsc`, linter without
-  fix flags and tests of the touched module with real output. No commit, no
-  push — `/commit` is the user's call.
+- Chosen fixes: exactly the fix shown, nothing more; never `git add` — in the
+  soft-reset flow the colleague's change stays staged and the fix unstaged,
+  so VS Code shows them apart. Then `tsc`, linter without fix flags, tests of
+  the touched module, real output. No commit or push — `/commit` is the
+  user's call.

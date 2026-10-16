@@ -1,12 +1,9 @@
 # /review — open MRs and draft notes
 
-GitLab API for the MR mode: list, pick, scope, drafts. Token `$GITLAB_TOKEN`
-only, as `-H "PRIVATE-TOKEN: $GITLAB_TOKEN"` — never printed, never
-`~/.git-credentials`. Host and project from `git remote get-url origin`, the
-parse of [../../git-flow/reference/mr.md](../../git-flow/reference/mr.md)
-(*Opening the MR in GitLab*): `<host>`, project id
-`<group>%2F<repo>`, every `/` of the path encoded. `<api>` below =
-`https://<host>/api/v4/projects/<id>`, written out in full.
+GitLab API for the MR mode: list, pick, scope, drafts. Token rules, `<host>`
+and `<api>`: *Opening the MR in GitLab* of
+[../../git-flow/reference/mr.md](../../git-flow/reference/mr.md); `curl …`
+below stands for `curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN"`.
 
 ## Unavailable
 
@@ -17,22 +14,21 @@ stops there, `!<iid>` asks for its source branch.
 ## List and pick
 
 ```bash
-curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://<host>/api/v4/user" | jq -r .username
-curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
+curl … "https://<host>/api/v4/user" | jq -r .username
+curl … "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
   | jq -r '.[] | [.iid, .title, .source_branch, .target_branch, .author.username, .draft] | @tsv'
 ```
 
-- Drop the MRs whose author is the `/user` name before counting or listing:
-  the user's own branch gets the fix menu through the `<branch>` row, never
-  drafts. `!<iid>` of such an MR → its source branch through that row.
-- Option label `!<iid> <title, ≤40 chars>`; description
+- Drop the MRs authored by the `/user` name before counting: the user's own
+  branch gets the fix menu through the `<branch>` row, never drafts; its
+  `!<iid>` → its source branch through that row.
+- Option label `!<iid> <title, ≤40 chars>`, description
   `<source> → <target>, <author>`, plus `черновик` when `draft`.
-- None left → `Открытых MR коллег нет`, stop.
-- ≤3 → one `AskUserQuestion`, `multiSelect`: `Все (<n>)`, then the MRs.
-- More → the numbered list in chat, then one call: the first question
-  `Все (<n>)` + 3 MRs, the next ones 4 MRs each, ≤4 questions (15 MRs); no
-  question with a single option — move one MR back to it. The rest and bare
-  numbers through «Other».
+- None left → `Открытых MR коллег нет`, stop. ≤3 → one `AskUserQuestion`,
+  `multiSelect`: `Все (<n>)`, then the MRs.
+- More → the numbered list in chat, then one call: `Все (<n>)` + 3 MRs, then
+  4 MRs per question, ≤4 questions (15 MRs); never a single-option question —
+  move one MR back to it. The rest and bare numbers through «Other».
 - `Все` picked alongside single MRs → all.
 
 ## Scope of one MR
@@ -48,10 +44,10 @@ curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "<api>/merge_request
 
 ## Drafts
 
-All drafts of one MR in one Bash call, no question in chat first —
-security-guard's confirmation is the only one. One `curl`
-per finding, Minor included, in number order; body = the MR comment of
-[report.md](report.md) under its rules, through a quoted heredoc into stdin:
+All drafts of one MR in one Bash call, no chat question first —
+security-guard's prompt is the confirmation. One `curl` per finding, Minor
+included, in number order; body = the MR comment of [report.md](report.md)
+through a quoted heredoc:
 
 ```bash
 curl -sS -o /dev/null -w '<N> %{http_code}\n' -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
@@ -69,16 +65,14 @@ NOTE_<N>
 
 - Position only on an added line: `new_line` from a `+` row of
   `git diff -U0 <base_sha> <head_sha> -- <path>`, never counted by eye; no
-  `old_line`. A removed line, a context line or one outside the hunks → no
-  `position[...]` fields, the note's first line `` `<path>:<line>` `` —
-  GitLab stores such a position as a draft, then «Submit review» can fail on
-  it with 500.
-- `400` on a positioned note → one more call for those notes, without
-  position, first line `` `<path>:<line>` ``.
+  `old_line`. Any other line → no `position[...]` fields, first line
+  `` `<path>:<line>` `` — GitLab stores such a draft, then «Submit review»
+  fails on it with 500.
+- `400` on a positioned note → resend those without position, same first line.
 - Any other code (`401`, `403`, `000` …) → that note's MR comment in chat
-  ([report.md](report.md)) with its code.
-- After the call, `GET <api>/merge_requests/<iid>/draft_notes`: the count of
-  this run's drafts matches the `201` lines, or the missing ones go to chat.
+  with its code.
+- Then `GET <api>/merge_requests/<iid>/draft_notes`: this run's drafts match
+  the `201` lines, or the missing ones go to chat.
 - Done → `MR !<iid>: <n> черновиков → <web_url> — проверь и нажми «Submit review»; если упадёт — не жми повторно, скажи мне`.
   Drafts stay visible only to the user until that submit.
 - Submit failed → no retry and no `bulk_publish`: each attempt publishes the
@@ -89,19 +83,19 @@ NOTE_<N>
 ## Existing comments
 
 ```bash
-curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "<api>/merge_requests/<iid>/discussions?per_page=100" \
+curl … "<api>/merge_requests/<iid>/discussions?per_page=100" \
   | jq -r '.[] | .notes[0] | select(.system == false) | [.id, .author.username, .resolvable and (.resolved | not), (.position.new_path // "-"), (.position.new_line // .position.old_line // "-"), (.body | gsub("\n"; " ") | .[0:160])] | @tsv'
 ```
 
-- A finding an open comment already names → no new finding, no draft; the
-  summary counts it.
-- An open comment whose line the reviewed code changed since → checked:
-  fixed or still there, one line each in the summary.
+- A finding an open comment already names → no finding, no draft; the summary
+  counts it.
+- An open comment on a line the reviewed code changed since → fixed or still
+  there, one line each in the summary.
 - Nothing open, or the call fails → one line, the pass goes on.
 
 ## Current branch with an open MR
 
 `curl … "<api>/merge_requests?source_branch=<branch>&state=opened"`. Drafts
-go there only when the reviewed code is its `diff_refs.head_sha`: the reviewed
-ref is that sha, or in the uncommitted scope `git diff --quiet <head_sha>`
-succeeds. Otherwise the lines would not match what the MR shows — no drafts.
+only when the reviewed code is its `diff_refs.head_sha` — the reviewed ref is
+that sha, or in the uncommitted scope `git diff --quiet <head_sha>` succeeds;
+otherwise the anchors miss the MR's lines.
