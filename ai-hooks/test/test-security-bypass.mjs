@@ -57,7 +57,6 @@ check('xargs cat', `echo .env | xargs cat`, 'deny');
 process.stdout.write('\n--- удалённый хост ---\n');
 check('ssh cat секрета', `ssh vps "cat /app/.env"`, 'deny');
 check('ssh обычная команда', `ssh vps "df -h"`, 'allow');
-check('docker exec printenv', `docker compose exec app printenv`, 'ask');
 check('docker exec обычная', `docker compose exec app node -v`, 'allow');
 
 process.stdout.write('\n--- формы пути ---\n');
@@ -105,15 +104,6 @@ check('docker run', `docker run --rm -v $PWD:/w alpine cat /w/.env`, 'deny');
 check('kubectl exec -n', `kubectl exec -n prod pod -- cat .env`, 'deny');
 check('kubectl exec -c после цели', `kubectl exec pod -c app -- cat .env`, 'deny');
 
-process.stdout.write('\n--- окружение целиком ---\n');
-check('sudo env', `sudo env`, 'ask');
-check('export -p', `export -p`, 'ask');
-check('declare -x', `declare -x`, 'ask');
-check('printenv -0', `printenv -0`, 'ask');
-check('printenv одной переменной', `printenv HOME`, 'allow');
-check('set -e не печатает', `set -e`, 'allow');
-check('export переменной', `export PORT=3000`, 'allow');
-
 process.stdout.write('\n--- архив, xargs, интерпретатор с версией, dotenv ---\n');
 check('tar на stdout', `tar cf - .env | tar xOf -`, 'deny');
 check('tar в архив', `tar czf /tmp/b.tgz .env`, 'deny');
@@ -132,7 +122,6 @@ check('node heredoc с process.env', `node - <<'EOF'\nconsole.log(process.env.HO
 check('cat heredoc с упоминанием .env', `cat > README.md <<'EOF'\nСкопируй .env из примера\nEOF`, 'allow');
 check('tsx -e', `tsx -e "console.log(require('fs').readFileSync('.env','utf8'))"`, 'deny');
 check('git.exe show', `git.exe show HEAD:.env`, 'deny');
-check('dotenv печатает окружение', `dotenv -e .env -- printenv`, 'ask');
 check('dotenv cat', `dotenv -e .env -- cat .env`, 'deny');
 check('dotenv -p переменной', `dotenv -e .env -p API_KEY`, 'deny');
 check('dotenv -p из примера', `dotenv -e .env.example -p API_KEY`, 'allow');

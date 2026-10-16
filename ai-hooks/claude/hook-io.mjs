@@ -53,14 +53,13 @@ export function logVerdict(input, result) {
   return false;
 }
 
-// Ответ check → JSON события. updatedInput без permissionDecision: allow
-// отсюда снял бы вопрос о разрешении и plan mode, а решать их — не дело хука,
-// который только правит вход.
+// Ответ check → JSON события. allow ставит только dispatch (permit): отдельный
+// хук, что правит вход, о разрешении не решает.
 export function payloadOf(event, result) {
   if (!result) return null;
   if (result.block) return { decision: 'block', reason: result.block };
-  if (result.context) return { hookSpecificOutput: { hookEventName: event, additionalContext: result.context } };
   const out = { hookEventName: event };
+  if (result.context) out.additionalContext = result.context;
   if (result.decision) {
     out.permissionDecision = result.decision;
     out.permissionDecisionReason = result.reason;

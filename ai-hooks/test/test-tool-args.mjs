@@ -60,7 +60,7 @@ check('хук: верный вход — молчит', run({ tool_name: READ, t
 
 // --- гарды под угаданным именем ---
 check('security-guard: .env правкой по file — запрет',
-  securityGuard(EDIT, { file: '.env', old_str: 'a', new_str: 'b' }, { cwd: '/tmp/proj' })?.level, 'deny');
+  securityGuard(EDIT, { file: '.env', old_str: 'a', new_str: 'b' })?.level, 'deny');
 check('skill-gate: SKILL.md правкой по file — гейт',
   GATES[0].matches(EDIT, { file: 'skills/x/SKILL.md', old_str: 'a', new_str: 'b' }, '/home/u/harness'), true);
 

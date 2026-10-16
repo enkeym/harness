@@ -19,13 +19,12 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   (files like `*.mjs` pass) — it reads `.env`; indexed project: `tokensave_search`, exact
   string with `literal: true` (tokensave's hook stops code grep even with `--include`);
   docs, configs, yml: `rag_search`; elsewhere add `--include=*.ts`. Take a variable's shape from `.env.example`, its value from the user.
-- Asks confirmation: every push but `--dry-run` (its own reason for a protected branch,
-  force `-f`/`+refspec`, deletion, the current branch: no refspec, `HEAD`, `@`, a `$…`
-  name), `commit --amend`/`--no-verify` — a plain commit passes, database dumps,
-  non-local databases, deploy, remote-host commands, outbound data, the whole environment (`env`,
-  `printenv`, `jq -n env`; the `{env}` key passes): name one variable.
-- Asks before editing `~/harness` (guards, hooks, rules, settings) from a
-  session rooted elsewhere — say why the edit is needed, don't retry around it.
+- Asks confirmation only on push, every one but `--dry-run` (its own reason for a
+  protected branch, force `-f`/`+refspec`, deletion, the current branch: no refspec,
+  `HEAD`, `@`, a `$…` name). Everything else it doesn't deny passes.
+- `dispatch` answers `allow` to every call no check denied or asked: Claude Code's own
+  permission prompt is gone in every mode. Kept: `AskUserQuestion`, `ExitPlanMode`
+  (the handoff window), `EnterPlanMode`, and any call in plan mode.
 - Judges command **form**. Code *meaning* (auth, payments, secrets, outbound
   calls) still needs `review-security`.
 

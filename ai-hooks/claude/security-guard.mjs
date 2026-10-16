@@ -13,10 +13,7 @@ import { runHook } from './hook-io.mjs';
 export function check(input) {
   let verdict = null;
   try {
-    // Корень сессии, а не текущий cwd: `cd ~/harness` из чужого проекта не
-    // должен делать правку харнеса «своей».
-    const cwd = process.env.CLAUDE_PROJECT_DIR || input.cwd;
-    verdict = securityGuard(input.tool_name, input.tool_input, { cwd });
+    verdict = securityGuard(input.tool_name, input.tool_input);
   } catch {
     verdict = null; // fail-open: гард не должен ломать работу
   }

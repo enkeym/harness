@@ -17,6 +17,11 @@
 //   block            → ответ, остальные проверки события не идут.
 // Падение проверки → crash в журнал под её именем, остальные работают.
 //
+// PreToolUse без deny и ask → allow: защита — гарды, штатный вопрос Claude Code
+// о разрешении не задаётся ни в одном режиме. Кроме окон, где человек выбирает
+// сам (вопрос, план, перенос handoff), и plan mode — там правки закрыты режимом.
+// deny из permissions и от хука tokensave сильнее allow.
+//
 // Проект со своим ядром гардов (ai-kit: `.claude/settings.json` зовёт
 // `ai/hooks/run.mjs`) сам запрещает чтение секретов и выдаёт карту связей: здесь links-context молчит, у security-guard
 // отбрасывается deny (секреты), ask остаётся. Иначе один отказ и один блок
@@ -31,6 +36,7 @@ import { readInput, finish, logVerdict, payloadOf } from './hook-io.mjs';
 const ALL = null;
 const EDIT_MCP = 'mcp__tokensave__tokensave_';
 const PROJECT_GUARDS = 'ai/hooks/run.mjs';
+const CHOICE_TOOLS = /^(AskUserQuestion|ExitPlanMode|EnterPlanMode)$/;
 
 const PROJECT_SKIP = new Set(['links-context']);
 const PROJECT_FILTER = {
@@ -95,6 +101,12 @@ function merge(results) {
   return context ? { context } : null;
 }
 
+function permit(event, input, result) {
+  if (event !== 'PreToolUse' || result?.decision) return result;
+  if (input.permission_mode === 'plan' || CHOICE_TOOLS.test(String(input.tool_name || ''))) return result;
+  return { ...result, decision: 'allow' };
+}
+
 async function dispatch(event, input) {
   const results = [];
   const projectGuards = projectOwnsGuards(input);
@@ -114,7 +126,7 @@ async function dispatch(event, input) {
       logCrash(e);
     }
   }
-  return merge(results);
+  return permit(event, input, merge(results));
 }
 
 readInput(async (input) => {

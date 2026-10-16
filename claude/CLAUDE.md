@@ -17,8 +17,8 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 ## Hooks
 
 - `git push` is gated by security-guard (every push asks, `--dry-run` aside);
-  a commit passes, `--amend`/`--no-verify` ask — run them, don't add a chat
-  question on top.
+  it is the only hook question — every other call no guard denies passes
+  without a permission prompt in any mode. Don't add a chat question on top.
 - A hook blocked or warned; ask mode, guards, index sync, bootstrap → load
   `hooks-guards` before reacting.
 

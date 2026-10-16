@@ -67,7 +67,7 @@ function records(sb) {
 {
   const sb = sandbox();
   askOn(sb, 'sid-d');
-  const out = bash(sb, 'git commit --amend -m x')?.hookSpecificOutput || {};
+  const out = bash(sb, 'git commit -m x && git push origin main')?.hookSpecificOutput || {};
   check('commit в ask mode: deny', out.permissionDecision, 'deny');
   const reasons = String(out.permissionDecisionReason).split('\n');
   check('причины ask-guard и skill-gate по порядку таблицы',
@@ -88,26 +88,24 @@ function records(sb) {
   check('npm install в ask mode: без updatedInput', out.updatedInput, undefined);
 }
 
-// --- ask несёт исправленный вход ---
-{
-  const out = bash(sandbox(), 'docker compose config')?.hookSpecificOutput || {};
-  check('docker compose config: ask', out.permissionDecision, 'ask');
-  check('docker compose config: команда через ограничитель', /clip-output\.sh docker compose -- /.test(out.updatedInput?.command), true);
-}
-
-// --- шумная команда: только updatedInput ---
+// --- шумная команда: allow и updatedInput ---
 {
   const sb = sandbox();
   const out = bash(sb, 'npm test')?.hookSpecificOutput || {};
-  check('npm test: без решения', out.permissionDecision, undefined);
+  check('npm test: allow', out.permissionDecision, 'allow');
   check('npm test: через ограничитель', /clip-output\.sh npm test -- 'npm test'$/.test(out.updatedInput?.command), true);
   check('npm test: журнал пуст', records(sb).length, 0);
 }
 
-// --- обычный вызов: молчание ---
+// --- обычный вызов: allow без вопроса Claude Code ---
 {
   const sb = sandbox();
-  check('ls: пустой ответ', bash(sb, 'ls'), null);
+  check('ls: allow', bash(sb, 'ls'), { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } });
+  const pre = (input) => run(sb, 'PreToolUse', { session_id: 'sid-d', ...input })?.hookSpecificOutput?.permissionDecision;
+  check('AskUserQuestion: окно выбора остаётся', pre({ tool_name: 'AskUserQuestion', tool_input: {} }), undefined);
+  check('ExitPlanMode: окно handoff остаётся', pre({ tool_name: 'ExitPlanMode', tool_input: {} }), undefined);
+  check('plan mode: Edit без allow', pre({ permission_mode: 'plan', tool_name: 'Edit', tool_input: { file_path: path.join(sb.cwd, 'a.ts') } }), undefined);
+  check('Read вне проекта: allow', pre({ tool_name: 'Read', tool_input: { file_path: '/etc/hostname' } }), 'allow');
 }
 
 // --- падение одной проверки не теряет вердикт другой ---
@@ -183,7 +181,8 @@ function records(sb) {
   fs.mkdirSync(path.join(sb.cwd, '.claude'));
   fs.writeFileSync(path.join(sb.cwd, '.claude', 'settings.json'), '{"hooks":{"PreToolUse":[{"hooks":[{"command":"node ai/hooks/run.mjs claude pre"}]}]}}');
   check('с ai/hooks/run.mjs: карты связей нет', edit(), null);
-  check('с ai/hooks/run.mjs: cat .env — решает проект', env(), undefined);
+  // allow уступает deny хука проекта.
+  check('с ai/hooks/run.mjs: cat .env — решает проект', env(), 'allow');
   check('с ai/hooks/run.mjs: ask на push остаётся', push(), 'ask');
 }
 

@@ -22,8 +22,7 @@ paths:
   matcher в `dispatch.mjs:TABLE` ↔ `ai-hooks/skill-core.mjs:MCP_EDIT_RE` —
   правка SKILL.md через tokensave молча проходит мимо skill-authoring. Тот же
   `MCP_EDIT_RE` берёт `ai-hooks/security-core.mjs:securityGuard` (matcher `*`):
-  новый инструмент правки tokensave, не вписанный туда, правит харнес из чужой
-  сессии без ask и `.env` без запрета. Источник списка — `tokensave_more` area edit
+  новый инструмент правки tokensave, не вписанный туда, правит `.env` без запрета. Источник списка — `tokensave_more` area edit
   (сейчас с `path`: `str_replace`, `multi_str_replace`, `replace_lines`, `insert_at`);
   тот же список целиком (и символьные, `rename` с `dry_run: false`) —
   `ai-hooks/ask-core.mjs:TOKENSAVE_WRITE_RE`/`TOKENSAVE_RENAME_RE` (matcher `*`): новая версия
@@ -34,4 +33,8 @@ paths:
   Инструменты с алиасами — `ai-hooks/tool-args-core.mjs:TOOL_RE` ↔ matcher `tool-args` в
   `ai-hooks/claude/dispatch.mjs:TABLE`: новый инструмент только в `TOOL_RE` — гарды сверяют
   исправленный путь, а сервер получает угаданное имя и отвечает ошибкой.
-- Текст отказа рекурсивного grep и формы коммита для `ask` — `hooks/guards/shell.md`.
+- Окна выбора — `ai-hooks/claude/dispatch.mjs:CHOICE_TOOLS` (`AskUserQuestion`, `ExitPlanMode`,
+  `EnterPlanMode`) ↔ имена интерактивных инструментов Claude Code и окно `ExitPlanMode`, где
+  `skills/handoff/SKILL.md` даёт очистить контекст. Инструмент не в списке — `permit` отвечает
+  ему `allow`, окно не показывается: вопрос уходит без ответа, handoff остаётся в той же сессии.
+- Текст отказа рекурсивного grep и формы коммита — `hooks/guards/shell.md`.
