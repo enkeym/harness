@@ -19,9 +19,12 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   (files like `*.mjs` pass) — it reads `.env`; indexed project: `tokensave_search`, exact
   string with `literal: true` (tokensave's hook stops code grep even with `--include`);
   docs, configs, yml: `rag_search`; elsewhere add `--include=*.ts`. Take a variable's shape from `.env.example`, its value from the user.
-- Asks confirmation only on push, every one but `--dry-run` (its own reason for a
-  protected branch, force `-f`/`+refspec`, deletion, the current branch: no refspec,
-  `HEAD`, `@`, a `$…` name). Everything else it doesn't deny passes.
+- Asks confirmation only on what can't be undone: every push but `--dry-run` (its own
+  reason for a protected branch, force `-f`/`+refspec`, deletion, the current branch: no
+  refspec, `HEAD`, `@`, a `$…` name), database dumps, non-local databases, prod docker,
+  `kubectl apply`, state-changing `ssh`, outbound data, a computed git file path (`-F "$f"`),
+  the whole environment (`env`, `printenv`, `jq -n env`, `docker compose config`): name one
+  variable. Amend, `--no-verify`, harness edits pass.
 - `dispatch` answers `allow` to every call no check denied or asked: Claude Code's own
   permission prompt is gone in every mode. Kept: `AskUserQuestion`, `ExitPlanMode`
   (the handoff window), `EnterPlanMode`, and any call in plan mode.

