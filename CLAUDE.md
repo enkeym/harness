@@ -27,7 +27,10 @@ Source of the global agent setup. Layout, install and the test list:
 
 - Node ESM `.mjs`, no dependencies. Shared logic lives in `ai-hooks/*-core.mjs`;
   `ai-hooks/claude/` is a thin adapter over it.
-- Comments and messages the agent reads are Russian, matching the file.
+- Comments are Russian, matching the file. Text the agent reads (injected
+  context, deny reasons it acts on) turns English when its hook is touched;
+  text the user sees (ask reasons, `resume-hint`, paste refusals, the
+  `## Состояние` snapshot headings `oversizedPlan` checks) stays Russian.
 - A hook's behaviour is also described in `skills/hooks-guards/SKILL.md` and
   `ai-hooks/README.md` — change them in the same commit.
 

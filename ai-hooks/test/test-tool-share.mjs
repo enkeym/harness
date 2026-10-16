@@ -131,6 +131,8 @@ const rows = (out) => {
     meta([{ type: 'text', text: 'x'.repeat(400) }], 'u12'),
     hook('context-meter: 91k токенов.'),
     hook('Карта неявных связей `docs/links/x.md`'),
+    hook('Implicit-links map `docs/links/x.md`, items naming `src/a.ts`'),
+    hook('`src/b.ts` is covered by the implicit-links map `docs/links/x.md`'),
     call('c8', 1000, { type: 'text', text: 'готово' }),
     meta('Stop hook feedback:\nХод кончился без меню.'),
     call('c9', 200_000, use('u13', 'Skill', { skill: 'handoff' })),
@@ -167,7 +169,7 @@ const rows = (out) => {
   check('bigbash — только сверх 5k', got('bigbash'), ['1', '6.0k']);
   check('toolsearch — повтор уже загруженной схемы, только случай', got('toolsearch'), ['1', '0.0k']);
   check('skill — повторный текст скилла', got('skill'), ['1', '0.3k']);
-  check('meter и links — тексты хуков', [got('meter'), got('links')], [['1', '0.3k'], ['1', '0.3k']]);
+  check('meter и links — тексты хуков, links в трёх формах', [got('meter'), got('links')], [['1', '0.3k'], ['3', '0.9k']]);
   check('handoff — сверх 150k до Skill handoff', got('handoff'), ['1', '50.0k']);
   check('топ сессий — без сессии до границы', Object.keys(table(topTable)), ['-demo']);
   const missing = table(missingTable);

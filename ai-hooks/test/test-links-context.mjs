@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Тесты хука подключения домена карты: файл домена приходит в контекст, когда
-// правленый путь попал в его `paths:`, один раз на сессию, любым инструментом
-// правки; чтение молчит.
+// Тесты хука подключения карты: когда правленый путь попал в `paths:` домена,
+// в контекст приходят только пункты с этим файлом, его каталогом или глобом над ним
+// и счётчик остальных; ни одного — строка-указатель. Каждый пункт — один раз
+// на сессию, любым инструментом правки; чтение молчит.
 // Гоняется на временном проекте с собственным каталогом состояния.
 
 import './env-isolate.mjs';
@@ -24,10 +25,17 @@ const ORDERS = [
   '---',
   'paths:',
   '  - "src/orders/**"',
+  '  - "src/legacy.ts"',
   '---',
   '',
   '## События',
-  '- `order.paid` — эмит `src/orders/service.ts:markPaid` → слушает `src/mail.ts:onPaid`.',
+  '- `order.paid` — эмит `src/orders/service.ts:markPaid` →',
+  '  слушает `src/mail.ts:onPaid`.',
+  '- `order.refund` — эмит `src/orders/refund.ts:refund` → слушает `src/mail.ts:onRefund`, src — в логах.',
+  '',
+  '## Каталоги',
+  '- `src/orders/` — схема заказов, общая с `src/billing/`.',
+  '- `src/orders/**/*.sql` — миграции заказов ↔ `src/billing/schema.ts`.',
   '',
 ].join('\n');
 
@@ -68,16 +76,38 @@ function run(dir, toolName, toolInput, { sessionId = newSession(), toolResponse 
 
 const dir = project();
 
-// Первый вызов в сессии — тело домена без frontmatter; второй — тишина.
+// Пункты с файлом и его каталогом — с заголовками и продолжениями; чужие пункты
+// только в счётчике. Второй вызов — тишина.
 {
   const sessionId = newSession();
   const first = run(dir, 'Edit', { file_path: path.join(dir, 'src/orders/service.ts') }, { sessionId });
-  check('первое касание подключает домен',
-    first.includes('docs/links/orders.md') && first.includes('order.paid') && !first.includes('paths:'), first);
+  check('пункт с путём файла целиком, с продолжением',
+    first.includes('docs/links/orders.md') && first.includes('order.paid') && first.includes('слушает `src/mail.ts:onPaid`')
+      && first.includes('## События') && !first.includes('paths:'), first);
+  check('пункт с каталогом файла', first.includes('схема заказов') && first.includes('## Каталоги'), first);
+  check('чужой файл и неподходящий глоб не показаны',
+    !first.includes('order.refund') && !first.includes('миграции'), first);
+  check('счётчик остальных пунктов', first.includes('2 more items in `docs/links/orders.md`'), first);
   const second = run(dir, 'Write', { file_path: path.join(dir, 'src/orders/service.ts') }, { sessionId });
   check('второе касание в той же сессии молчит', second === '', second);
+  const refund = run(dir, 'Edit', { file_path: path.join(dir, 'src/orders/refund.ts') }, { sessionId });
+  check('другой файл домена получает только новые пункты',
+    refund.includes('order.refund') && !refund.includes('схема заказов'), refund);
   const other = run(dir, 'Edit', { file_path: path.join(dir, 'src/orders/service.ts') });
-  check('другая сессия получает домен снова', other.includes('order.paid'), other);
+  check('другая сессия получает пункты снова', other.includes('order.paid'), other);
+}
+
+// Глоб в пункте накрывает файл; файл домена без упоминаний — только указатель, один раз.
+{
+  const sql = run(dir, 'Write', { file_path: path.join(dir, 'src/orders/db/001.sql') });
+  check('пункт с глобом над файлом', sql.includes('миграции') && !sql.includes('order.paid'), sql);
+  const sessionId = newSession();
+  const legacy = run(dir, 'Edit', { file_path: path.join(dir, 'src/legacy.ts') }, { sessionId });
+  check('ни одного пункта — строка-указатель',
+    legacy.includes('docs/links/orders.md') && legacy.includes('4 items, none names this file') && !legacy.includes('order.paid')
+      && legacy.split('\n').length === 1, legacy);
+  const again = run(dir, 'Edit', { file_path: path.join(dir, 'src/legacy.ts') }, { sessionId });
+  check('указатель — один раз на сессию', again === '', again);
 }
 
 // tokensave принимает путь относительно проекта — резолвим от cwd.

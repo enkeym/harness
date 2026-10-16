@@ -164,7 +164,8 @@ const DOCS_RE = /\.(mdx?|json|ya?ml|toml|ini|env|sql|txt|conf)\b|Dockerfile|dock
 const isEdit = (name) => /^(Edit|Write|NotebookEdit)$/.test(name) || MCP_EDIT_RE.test(name);
 const CODE_RE = /\.(m?[jt]sx?|c[jt]s|py|rs|go|java|kt|rb|php|cs|swift|c|cc|cpp|h|hpp|sh)$/;
 const METER_RE = /В контексте \d+k|Контекст занят|context-meter:/;
-const LINKS_PREFIX = 'Карта неявных связей';
+// Вставка links-context: старая (карта целиком), пункты по файлу или строка-указатель.
+const LINKS_RE = /^(Карта неявных связей|Implicit-links map `|`[^`]+` is covered by the implicit-links map)/;
 const STOP_PREFIX = 'Stop hook feedback:';
 const WASTE_CLASSES = ['deny', 'error', 'stop', 'reread', 'fullread', 'bigbash', 'toolsearch', 'skill', 'meter', 'links', 'handoff'];
 
@@ -300,7 +301,7 @@ function waste(file) {
     } else if (rec.type === 'attachment' && rec.attachment?.type === 'hook_additional_context') {
       const s = plain(rec.attachment.content);
       if (METER_RE.test(s)) carry('meter', calls.length - 1, tokens(s));
-      else if (s.startsWith(LINKS_PREFIX)) carry('links', calls.length - 1, tokens(s));
+      else if (LINKS_RE.test(s)) carry('links', calls.length - 1, tokens(s));
     }
   }
   flush();

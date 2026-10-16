@@ -112,10 +112,10 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 - MCP servers start through `~/.ai-hooks/bin/mcp-serve.sh`, pinned to the session
   directory. Outside a project the server doesn't come up — tools are absent, not wrong.
 - `links-context` (PostToolUse on edit tools, native and tokensave; reads stay silent) injects
-  a domain file of the project's impact map when the edited path matches its `paths:` — once
-  per session per domain. Treat the text as the map's lines for this change: check them, add
-  the missing link to that file. Silent ≠ no links: a domain without `paths:` is reached only
-  through `INDEX.md`, so the impact pass still reads the index.
+  the impact-map items naming the edited file, its directory or a glob over it (path in the
+  domain's `paths:`), each once per session, plus "N more items"; none → one pointer line.
+  Check the edit against them, add the missing link there. A slice only: the impact pass
+  before the commit reads the whole domain and `INDEX.md` (a domain without `paths:`).
 - `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI, dependabot, or an impact
   map in an indexed project: offer in one line in the first reply (`/impact-map` for the map).
   Silent hook = deliberate skip (`<project>/.claude/bootstrap-ignore`).

@@ -60,8 +60,11 @@ paths:
 ---
 ```
 
-- The harness hook `links-context.mjs` injects the file once per session the
-  first time an edit tool touches a matching path; reads stay silent. Native
+- The harness hook `links-context.mjs` injects, when an edit tool touches a
+  matching path, only the items naming that file, a directory of it, or a
+  backticked glob over it — each once per session; reads stay silent. Write
+  each link as one `- ` item with full project-relative paths, continuation
+  lines indented, so the filter finds it. Native
   path-scoped rules fire on `Read` only, never on `tokensave_read`, which the
   router forces for indexed files. `INDEX.md` stays for the impact pass.
 - Globs are project-relative in `path.matchesGlob` syntax; each one matches

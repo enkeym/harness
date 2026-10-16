@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// Claude Code, PostToolUse на инструментах правки: подключает файл домена из
-// карты неявных связей, когда правленый путь попал в его `paths:`. На чтении
-// молчит: карта нужна для сверки правки, а сессия без правок платила бы за
-// домен целиком (~1,4k токенов) ни за что.
+// Claude Code, PostToolUse на инструментах правки: когда правленый путь попал в
+// `paths:` файла домена карты неявных связей, подключает из него только пункты,
+// где назван этот файл или его каталог, и строку «ещё N пунктов». Карта целиком
+// стоила 93% всего текста хуков (медиана 5k символов на сессию, до 70k), а
+// полную карту всё равно читает review-standards перед коммитом. Ни один пункт
+// не назвал файл — одна строка-указатель на карту. На чтении молчит: карта
+// нужна для сверки правки.
 //
 // Зачем хук, а не path-scoped правило .claude/rules. Проверено зондом: такое
 // правило срабатывает на встроенном Read и молчит на mcp__tokensave__tokensave_read,
@@ -14,9 +17,11 @@
 //   инструмент не правит файл                          → сверять нечего;
 //   путь не в репозитории или у репозитория нет карты → нечего подключать;
 //   ни один глоб `paths:` не совпал                     → домен не тронут;
-//   домен в этой сессии уже подключали                 → дроссель, файл уже в контексте.
+//   пункт в этой сессии уже показан                    → дроссель, он уже в контексте;
+//   указатель на домен в этой сессии уже был          → то же.
 // Любая ошибка → выход без вывода: пропущенная подсказка дешевле сломанного хода.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot, statePath, projectKey, isEntryPoint } from '../state-core.mjs';
@@ -41,10 +46,10 @@ function touchedFile(input) {
   return m ? m[1] : null;
 }
 
-// Один домен в одной сессии подключаем один раз: второй показ — тот же текст в
-// контексте дважды. Метка не критична: не записалась — покажем ещё раз.
-function shown(sessionId, root, domain) {
-  const key = `${sessionId}-${projectKey(root)}-${domain.replace(/[^\w.-]/g, '_')}`;
+// Пункт или указатель на домен в одной сессии показываем один раз: второй показ —
+// тот же текст в контексте дважды. Метка не критична: не записалась — покажем ещё раз.
+function shown(sessionId, root, mark) {
+  const key = `${sessionId}-${projectKey(root)}-${mark.replace(/[^\w.-]/g, '_')}`;
   const stamp = path.join(STATE_DIR, key);
   if (fs.existsSync(stamp)) return true;
   try {
@@ -67,14 +72,65 @@ function matchedDomains(root, mapDir, rel) {
   return hits;
 }
 
-function render(hits) {
-  return hits
-    .map(({ file, body }) => [
-      `Карта неявных связей \`${file}\`: сверь с ней правку, новую связь допиши туда строкой того же формата.`,
-      '',
-      body,
-    ].join('\n'))
-    .join('\n\n');
+// Пункт карты — строка `- ` и строки с отступом под ней, до пустой строки,
+// заголовка или следующего пункта. Заголовок раздела идёт с пунктом: без него
+// пункт вырван из контекста.
+function itemsOf(body) {
+  const items = [];
+  let heading = '';
+  let item = null;
+  for (const line of body.split('\n')) {
+    if (line.startsWith('#')) {
+      heading = line;
+      item = null;
+    } else if (line.startsWith('- ')) {
+      item = { heading, lines: [line] };
+      items.push(item);
+    } else if (item && /^\s+\S/.test(line)) {
+      item.lines.push(line);
+    } else {
+      item = null;
+    }
+  }
+  return items.map(({ heading, lines }) => ({ heading, text: lines.join('\n') }));
+}
+
+const PATH_CHAR = String.raw`[\w./*-]`;
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Пункт задевает файл, когда называет его путь целиком (`a/b.mjs`, `a/b.mjs:fn`),
+// один из его каталогов как целое (`a/` или `a` в обратных кавычках, но не
+// `a/c.mjs` и не слово «a» в тексте) или глоб в обратных кавычках, под который
+// файл попадает (`a/**`, `a/test-*.mjs`).
+function mentionTest(rel) {
+  const parts = rel.split('/');
+  const dirs = parts.slice(0, -1).map((_, i) => escapeRe(parts.slice(0, i + 1).join('/')));
+  const named = [escapeRe(rel), ...dirs.map((d) => `${d}/`)].join('|');
+  const quoted = dirs.length ? `|\`(?:${dirs.join('|')})\`` : '';
+  const re = new RegExp(`(?<!${PATH_CHAR})(?:${named})(?!${PATH_CHAR})${quoted}`);
+  return (text) =>
+    re.test(text) ||
+    [...text.matchAll(/`([^`\s]*\*[^`\s]*)`/g)].some((m) => path.matchesGlob(rel, m[1].replace(/:.*$/, '')));
+}
+
+const digest = (text) => crypto.createHash('sha1').update(text).digest('hex').slice(0, 12);
+
+function renderItems(file, rel, items, rest) {
+  const lines = [
+    `Implicit-links map \`${file}\`, items naming \`${rel}\`: check the edit against them; add a new link there in the same format.`,
+  ];
+  let heading = null;
+  for (const item of items) {
+    if (item.heading && item.heading !== heading) lines.push('', item.heading);
+    heading = item.heading;
+    lines.push(item.text);
+  }
+  if (rest) lines.push('', `${rest} more items in \`${file}\` do not name this file.`);
+  return lines.join('\n');
+}
+
+function renderPointer(file, rel, total) {
+  return `\`${rel}\` is covered by the implicit-links map \`${file}\` (${total} items, none names this file): read it if the edit changes a contract between modules; add a new link there in the same format.`;
 }
 
 export function check(input) {
@@ -93,8 +149,16 @@ export function check(input) {
   if (rel.startsWith('..')) return null;
 
   const sessionId = String(input.session_id || 'default');
-  const hits = matchedDomains(root, mapDir, rel).filter((h) => !shown(sessionId, root, h.domain));
-  return hits.length ? { context: render(hits) } : null;
+  const mentions = mentionTest(rel);
+  const parts = [];
+  for (const { domain, file, body } of matchedDomains(root, mapDir, rel)) {
+    const items = itemsOf(body);
+    const hits = items.filter((item) => mentions(item.text));
+    const fresh = hits.filter((item) => !shown(sessionId, root, `${domain}#${digest(item.text)}`));
+    if (fresh.length) parts.push(renderItems(file, rel, fresh, items.length - hits.length));
+    else if (!hits.length && !shown(sessionId, root, domain)) parts.push(renderPointer(file, rel, items.length));
+  }
+  return parts.length ? { context: parts.join('\n\n') } : null;
 }
 
 if (isEntryPoint(import.meta.url)) runHook(check, 'PostToolUse');
