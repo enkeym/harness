@@ -1,6 +1,6 @@
 ---
 name: task-brief
-description: "Turns a large or loosely worded task into a brief checked against the code that waits for approval; for a single decision runs a short challenge with one recommendation. Load for a multi-module change, a new subsystem, data model or integration, a feature with no place or acceptance criterion named, on /task-brief, or when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"предложи как\", \"спроси если непонятно\"."
+description: "Turns a large or loosely worded task into a brief checked against the code that waits for approval; for a single decision runs a short challenge with one recommendation. Load for a multi-module change, a new subsystem, data model or integration, a feature with no place or acceptance criterion named, on /task-brief, or when the user says \"подумай\", \"продумай\", \"мозговой штурм\", \"поспорь\", \"найди дыры\", \"предложи как\", \"какой вариант лучше\", \"стоит ли\", \"спроси если непонятно\"."
 ---
 
 # Task brief
@@ -24,7 +24,9 @@ verified by code, docs or a run before it reaches the user.
   `EnterPlanMode`; the brief is the plan file it names
   (`~/.claude/plans/<slug>.md`).
 - "поспорь", "мозговой штурм", "найди дыры", "что может пойти не так" about one
-  decision, library, schema or idea → *Challenge*, not the brief.
+  decision, library, schema or idea → *Challenge*, not the brief. So is a
+  question that weighs approaches: "какой вариант стабильнее", "стоит ли
+  внедрять", "а нельзя ли вместо …".
 
 ## Challenge
 
