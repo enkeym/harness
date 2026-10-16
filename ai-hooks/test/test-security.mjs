@@ -273,6 +273,20 @@ check('commit --file .env', bash('git commit --file .env'), 'deny');
 check('commit --file=.env', bash('git commit --file=.env -m x'), 'deny');
 check('tag -F .env', bash('git tag -a v1 -F .env'), 'deny');
 check('commit -F .env.example', bash('git commit -F .env.example'), 'allow');
+check('commit -F переменная', bash('git commit -F "$MSG"'), 'ask');
+check('commit -F подстановка', bash('git commit -F "$(mktemp)"'), 'ask');
+check('config -f .env', bash('git config -f .env -l'), 'deny');
+check('config --file .env', bash('git config --file .env --get-regexp .'), 'deny');
+check('config user.name', bash('git config user.name x'), 'allow');
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sec-link-'));
+  fs.writeFileSync(path.join(dir, '.env'), 'K=v\n');
+  fs.symlinkSync(path.join(dir, '.env'), path.join(dir, 'msg.txt'));
+  fs.writeFileSync(path.join(dir, 'plain.txt'), 'x\n');
+  check('commit -F симлинк на .env', bash(`git commit -F ${path.join(dir, 'msg.txt')}`), 'deny');
+  check('commit -F обычный файл', bash(`git commit -F ${path.join(dir, 'plain.txt')}`), 'allow');
+  fs.rmSync(dir, { recursive: true, force: true });
+}
 check('commit --amend', bash('git commit --amend --no-edit'), 'ask');
 check('commit --no-verify', bash('git commit --no-verify -m x'), 'ask');
 check('commit через -C', bash('git -C /tmp/repo commit -m x'), 'allow');

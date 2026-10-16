@@ -527,20 +527,35 @@ const GIT_READ_SUBCMDS = new Set(['show', 'cat-file', 'diff', 'log', 'blame']);
 // `git commit -F .env` кладёт содержимое файла в сообщение коммита, а дальше в
 // историю и push: файл прочитан так же, как `cat .env`. Файл сообщения — значение
 // `-F`/`--file` (`-F f`, `-Ff`, `-aF f`, `--file f`, `--file=f`) у commit, tag, notes, merge.
+// `git config -f .env -l` печатает файл как `cat`: флаг там `-f`/`--file`.
 const GIT_MESSAGE_FILE_SUBCMDS = new Set(['commit', 'tag', 'notes', 'merge']);
 
-function gitMessageSecret(toks, at) {
-  if (at < 0 || !GIT_MESSAGE_FILE_SUBCMDS.has(toks[at])) return null;
+function gitFileOperands(toks, at) {
+  if (at < 0) return [];
+  const sub = toks[at];
+  const short = GIT_MESSAGE_FILE_SUBCMDS.has(sub) ? 'F' : sub === 'config' ? 'f' : null;
+  if (!short) return [];
+  const re = new RegExp(`^-[A-Za-z]*${short}(.*)$`);
+  const files = [];
   for (let i = at + 1; i < toks.length; i++) {
     const t = toks[i];
-    let file = null;
-    if (t === '--file') file = toks[i + 1];
-    else if (t.startsWith('--file=')) file = t.slice('--file='.length);
-    else {
-      const short = /^-[A-Za-z]*F(.*)$/.exec(t);
-      if (short && !t.startsWith('--')) file = short[1] || toks[i + 1];
+    if (t === '--file') files.push(toks[i + 1]);
+    else if (t.startsWith('--file=')) files.push(t.slice('--file='.length));
+    else if (!t.startsWith('--') && re.test(t)) files.push(re.exec(t)[1] || toks[i + 1]);
+  }
+  return files.filter(Boolean);
+}
+
+// Секрет по имени или по цели симлинка; путь, вычисляемый при запуске
+// (`-F "$f"`, `-F $(…)`), в команде не виден — решает человек.
+function gitFileVerdict(toks, at) {
+  for (const file of gitFileOperands(toks, at)) {
+    if (/[$`]/.test(file)) {
+      return { level: ASK, reason: `git читает файл \`${file}\`: путь вычисляется при запуске, в команде его не видно.` };
     }
-    if (file && isSecretPath(file)) return file;
+    if (isSecretPath(file)) return secretReason(file);
+    const real = resolveReal(file);
+    if (isSecretPath(real)) return secretReason(`${file}\` → \`${real}`);
   }
   return null;
 }
@@ -743,8 +758,8 @@ export function guardBashSecurity(command, depth = 0) {
 
     if (cmd === 'git') {
       const at = gitSubcommandAt(toks);
-      const messageFile = gitMessageSecret(toks, at);
-      if (messageFile) return secretReason(messageFile);
+      const fileVerdict = gitFileVerdict(toks, at);
+      if (fileVerdict) return fileVerdict;
       if (makesCommit(toks, at)) {
         const reason = gitCommitReason(toks, at);
         if (reason) return { level: ASK, reason };
