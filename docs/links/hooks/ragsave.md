@@ -21,7 +21,12 @@ paths:
 - Лимит потоков фонового синка — `RAGSAVE_THREADS` (по умолчанию 6) в
   `ai-hooks/bin/ragsave-sync.sh` ↔ `ragsave/ragsave/config.py:EMBED_THREADS`.
   Переименовал переменную в одном месте — синк снова занимает все ядра.
+  Лимит и `nice` действуют, только пока демона нет: при живом демоне
+  (`ragsave/ragsave/daemon.py`) синк считает в нём, на всех ядрах.
+- Демон поднимает только `ragsave/ragsave/embedder.py:Embedder.embed_query`
+  (`start=True`), поток синка — нет ↔ `nice -n 19` в `ai-hooks/bin/ragsave-sync.sh`.
+  Дал синку поднимать демон — демон и весь поиск живут под `nice 19`.
 - Список хранилищ секретов `ragsave/ragsave/config.py:SECRET_NAME_RE` — пара к
   гарду, строка в `hooks/guards/security.md`.
-- Каталог логов `ragsave/ragsave/server.py:_log_failure` — строка
+- Каталог логов `ragsave/ragsave/config.py:errors_log` — строка
   `AI_HOOKS_LOG_DIR` в `hooks/logs.md`.

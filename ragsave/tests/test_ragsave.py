@@ -1039,6 +1039,134 @@ def test_idle_unload() -> None:
         config.EMBED_DIM, config.IDLE_UNLOAD, server._embedder = original
 
 
+class _Vec(list):
+    """Вектор поддельной модели: у numpy-вектора fastembed есть tolist."""
+
+    def tolist(self) -> list[float]:
+        return list(self)
+
+
+class FakeModel:
+    """Подмена TextEmbedding для настоящего Embedder."""
+
+    def embed(self, texts, batch_size=None, parallel=None):
+        for text in texts:
+            yield _Vec(fake_vector(len(text), FakeEmbedder.dim))
+
+
+def test_daemon() -> None:
+    print("\n--- общий демон модели ---")
+
+    import socket
+    import threading
+    import time
+
+    from ragsave import daemon
+    from ragsave.embedder import Embedder
+
+    class Counted(Embedder):
+        """Настоящий Embedder, чей _load считает загрузки вместо ONNX."""
+
+        def __init__(self, model_name="intfloat/multilingual-e5-large", **kw):
+            super().__init__(model_name, **kw)
+            self.loads = 0
+
+        def _load(self):
+            self.loads += 1
+            return FakeModel()
+
+    original = (config.DAEMON, config.DAEMON_SOCKET, config.DAEMON_START_WAIT,
+                config.DAEMON_BATCH, daemon._spawn, os.environ.get("AI_HOOKS_LOG_DIR"))
+    with tempfile.TemporaryDirectory() as tmp:
+        sock = Path(tmp) / "embed.sock"
+        errors = Path(tmp) / "logs" / "errors.log"
+        config.DAEMON, config.DAEMON_SOCKET = True, str(sock)
+        config.DAEMON_START_WAIT = 0.3
+        # Настоящий демон с настоящей моделью тест не поднимает никогда.
+        daemon._spawn = lambda: None
+        os.environ["AI_HOOKS_LOG_DIR"] = str(errors.parent)
+
+        def logged() -> str:
+            return errors.read_text(encoding="utf-8") if errors.exists() else ""
+
+        def run_daemon(idle: float) -> tuple[Counted, threading.Thread]:
+            model = Counted(use_daemon=False)
+            thread = threading.Thread(target=daemon.serve,
+                                      kwargs={"embedder": model, "idle": idle}, daemon=True)
+            thread.start()
+            deadline = time.monotonic() + 3
+            while not sock.exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            return model, thread
+
+        try:
+            local = Counted(use_daemon=False)
+            texts = ["деплой", "сервер почты", "ci", "миграции базы", "а"]
+
+            served, thread = run_daemon(idle=1.5)
+            first, second = Counted(), Counted()
+            check("вектор запроса через демон совпадает с локальным",
+                  first.embed_query("деплой"), local.embed_query("деплой"))
+            config.DAEMON_BATCH = 2
+            check("поток пачками через демон — те же векторы и порядок",
+                  list(second.embed_stream(iter(texts))), local.embed_passages(texts))
+            check("два клиента — одна загрузка модели, у клиентов ни одной",
+                  (served.loads, first.loads, second.loads), (1, 0, 0))
+            check("второй демон упирается в замок и выходит",
+                  daemon.serve(embedder=Counted(use_daemon=False), idle=1.5), 0)
+
+            config.DAEMON = False
+            off = Counted()
+            off.embed_query("деплой")
+            check("RAGSAVE_DAEMON=0 — своя модель", off.loads, 1)
+            config.DAEMON = True
+
+            other = Counted("sentence-transformers/all-MiniLM-L6-v2")
+            other.embed_query("деплой")
+            other.embed_query("сервер")
+            check_true("чужая модель — отказ, своя модель, одна строка в логе",
+                       other.loads == 1 and logged().count("демон держит") == 1,
+                       f"loads={other.loads} log={logged()!r}")
+            check("демон полной модели не подгружал чужую", served.loads, 1)
+
+            thread.join(timeout=5)
+            check_true("простой — демон вышел и убрал сокет",
+                       not thread.is_alive() and not sock.exists())
+
+            spawns = []
+            daemon._spawn = lambda: spawns.append(1)
+            quiet = Counted()
+            list(quiet.embed_stream(texts))
+            check("синк без демона — не поднимает его, своя модель, лог не растёт",
+                  (len(spawns), quiet.loads, logged().count("\n")), (0, 1, 1))
+            lonely = Counted()
+            lonely.embed_query("деплой")
+            check_true("демон не поднялся — своя модель и строка в логе",
+                       len(spawns) == 1 and lonely.loads == 1 and "не поднялся" in logged(),
+                       f"spawns={len(spawns)} loads={lonely.loads}")
+
+            # Сокет упавшего демона: файл есть, слушателя нет.
+            stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            stale.bind(str(sock))
+            stale.close()
+            started = []
+            daemon._spawn = lambda: started.append(run_daemon(idle=0.3))
+            revived = Counted()
+            revived.embed_query("деплой")
+            check("устаревший сокет — демон поднимается и отвечает",
+                  (len(started), revived.loads, started[0][0].loads if started else None),
+                  (1, 0, 1))
+            if started:
+                started[0][1].join(timeout=5)
+        finally:
+            (config.DAEMON, config.DAEMON_SOCKET, config.DAEMON_START_WAIT,
+             config.DAEMON_BATCH, daemon._spawn, log_dir) = original
+            if log_dir is None:
+                os.environ.pop("AI_HOOKS_LOG_DIR", None)
+            else:
+                os.environ["AI_HOOKS_LOG_DIR"] = log_dir
+
+
 def test_fts_query() -> None:
     print("\n--- разбор запроса FTS ---")
 
@@ -1103,6 +1231,8 @@ def test_progress_bar() -> None:
 
 
 def main() -> int:
+    # Живой демон машины тестам не нужен: test_daemon включает свой на временном сокете.
+    config.DAEMON = False
     test_chunker()
     test_file_filters()
     test_project_root()
@@ -1116,6 +1246,7 @@ def main() -> int:
     test_sync_state()
     test_index_needs_init()
     test_idle_unload()
+    test_daemon()
     test_fts_query()
     test_progress_bar()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")

@@ -1,4 +1,4 @@
-"""CLI ragsave: init / sync / reindex / search / status / serve.
+"""CLI ragsave: init / sync / reindex / search / status / serve / daemon.
 
 Тот же код, что и у MCP-сервера — терминал нужен для первичной индексации,
 диагностики и хуков, которым MCP недоступен.
@@ -348,6 +348,12 @@ def _cmd_serve(_: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_daemon(_: argparse.Namespace) -> int:
+    from .daemon import serve
+
+    return serve()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ragsave",
@@ -383,6 +389,8 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("path", nargs="?", help="путь к проекту")
 
     sub.add_parser("serve", help="запустить MCP-сервер (stdio)")
+    sub.add_parser("daemon", help="общий демон модели; поднимается поиском сам, "
+                                  "выходит после простоя RAGSAVE_IDLE_UNLOAD")
     return parser
 
 
@@ -399,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_status(args)
         case "serve":
             return _cmd_serve(args)
+        case "daemon":
+            return _cmd_daemon(args)
     return 2
 
 

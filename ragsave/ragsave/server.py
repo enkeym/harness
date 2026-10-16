@@ -111,12 +111,10 @@ def _log_failure(tool: str, exc: BaseException) -> None:
     Сам лог никогда не должен ронять инструмент — отсюда молчаливый except.
     """
     try:
-        log_dir = Path(
-            os.environ.get("AI_HOOKS_LOG_DIR", Path.home() / ".ai-hooks" / "logs")
-        )
-        log_dir.mkdir(parents=True, exist_ok=True)
+        log = config.errors_log()
+        log.parent.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        with (log_dir / "errors.log").open("a", encoding="utf-8") as handle:
+        with log.open("a", encoding="utf-8") as handle:
             handle.write(
                 f"[{stamp}] ragsave mcp {tool} | {os.getcwd()} | "
                 f"{type(exc).__name__}: {exc}\n"

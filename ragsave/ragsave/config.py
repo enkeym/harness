@@ -76,6 +76,34 @@ EMBED_THREADS = _env_int("RAGSAVE_THREADS", None)
 # одного поиска держат ~4,5 ГБ; цена — холодный поиск (1,5–3 с) после паузы.
 IDLE_UNLOAD = max(0, _env_int("RAGSAVE_IDLE_UNLOAD", 600) or 0)
 
+# Общий демон модели (ragsave daemon): одна копия модели на машину вместо
+# копии в каждой сессии. RAGSAVE_DAEMON=0 — каждый процесс грузит модель сам.
+# Рядом с сокетом лежат замок от двойного старта и лог демона.
+DAEMON = os.environ.get("RAGSAVE_DAEMON", "1").strip() != "0"
+DAEMON_SOCKET = os.environ.get(
+    "RAGSAVE_DAEMON_SOCKET", str(Path.home() / ".rag-mcp" / "embed.sock")
+)
+# Сколько ждать сокет поднятого демона; не дождались — модель своя на этот вызов.
+DAEMON_START_WAIT = 3.0
+# Ответ демона: первый запрос ждёт загрузку модели (до 45 с), пачка синка — инференцию.
+DAEMON_TIMEOUT = 180.0
+# Текстов в одном запросе синка к демону. DAEMON_TIMEOUT покрывает весь запрос:
+# 32 фрагмента e5-large на 0,69/с — 46 с, 128 уже упирались бы в таймаут.
+DAEMON_BATCH = EMBED_BATCH
+# Кусок инференции в демоне. Демон живёт дольше синка, и арену ONNX Runtime,
+# выросшую под крупный кусок, держит до выхода (malloc_trim её не возвращает).
+# Замер на e5-large, 64 коротких фрагмента: по 8 — демон 2,2 ГБ и 29 с, по 32 —
+# 3,8 ГБ и 62 с. Поиск ждёт синк не дольше одного куска.
+DAEMON_INFER_BATCH = 8
+
+
+def errors_log() -> Path:
+    """Общий лог отказов tokensave/ragsave и фоновых задач хуков."""
+    return Path(
+        os.environ.get("AI_HOOKS_LOG_DIR", Path.home() / ".ai-hooks" / "logs")
+    ) / "errors.log"
+
+
 # Сколько секунд ждать, если БД занята другим соединением (WAL: писатель один).
 DB_BUSY_TIMEOUT = 60.0
 

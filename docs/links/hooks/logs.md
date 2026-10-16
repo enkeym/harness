@@ -15,7 +15,8 @@ paths:
 - `AI_HOOKS_LOG_DIR` (по умолчанию `~/.ai-hooks/logs`) — читают
   `ai-hooks/hooklog-core.mjs:LOG_DIR` (его импортируют `ai-hooks/claude/usage-log.mjs`
   и `ai-hooks/bin/cleanup.mjs`), `ai-hooks/bin/log-error.sh`,
-  `ragsave/ragsave/server.py:_log_failure`. Сменил путь в одном месте — errors.log
+  `ragsave/ragsave/config.py:errors_log` (им пишут `server.py:_log_failure` и
+  `daemon.py:log_fallback`). Сменил путь в одном месте — errors.log
   расползается на два каталога.
 - `AI_HOOKS_STATE_DIR` / `~/.claude/state/clip-output` — `ai-hooks/state-core.mjs:STATE_ROOT`
   задаёт корень, `ai-hooks/bin/cleanup.mjs:TARGETS` чистит `clip-output` под ним,

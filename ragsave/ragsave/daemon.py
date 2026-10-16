@@ -1,0 +1,280 @@
+"""Общий демон модели: одна загруженная модель на машину.
+
+У каждой сессии свой MCP-сервер, и без демона каждый грузил бы свою копию
+e5-large (1,5 ГБ, 5–45 с на загрузку). Демон слушает unix-сокет; клиент —
+Embedder: демона нет или он подвёл — Embedder считает сам.
+
+Протокол — по JSON-строке в каждую сторону, одно соединение на запрос:
+{"v":1,"model":…,"engine":…,"kind":"query"|"passage","texts":[…]} →
+{"vectors":[…]} или {"error":…} (с "refused": true — демон держит другую
+модель или версию fastembed).
+
+Демон поднимают только процессы с обычным приоритетом — поиск (embed_query).
+Синк из хука идёт под nice 19, и поднятый им демон унаследовал бы приоритет.
+"""
+
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+import socket
+import socketserver
+import subprocess
+import sys
+import threading
+import time
+import traceback
+from pathlib import Path
+from typing import Any, Callable
+
+from . import config
+
+PROTOCOL = 1
+
+
+class DaemonUnavailable(Exception):
+    """Демон не ответил: таймаут, обрыв, ошибка внутри демона."""
+
+
+class DaemonDown(DaemonUnavailable):
+    """К сокету не подключиться: демона нет."""
+
+
+class DaemonRefused(DaemonUnavailable):
+    """Демон держит другую модель или версию fastembed: до его выхода не спрашивать."""
+
+
+def _lock_path(sock: Path) -> Path:
+    return sock.with_suffix(".lock")
+
+
+def _log_path(sock: Path) -> Path:
+    return sock.parent / "daemon.log"
+
+
+# ---------- клиент ----------
+
+
+def _connect(timeout: float) -> socket.socket:
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.settimeout(timeout)
+    try:
+        conn.connect(config.DAEMON_SOCKET)
+    except OSError as exc:
+        conn.close()
+        raise DaemonDown(f"{type(exc).__name__}: {exc}") from None
+    return conn
+
+
+def request(kind: str, texts: list[str], model: str, engine: str) -> list[list[float]]:
+    """Векторы от демона в порядке texts. DaemonUnavailable — считать самим."""
+    payload = json.dumps(
+        {"v": PROTOCOL, "model": model, "engine": engine, "kind": kind, "texts": texts},
+        ensure_ascii=False,
+    ).encode("utf-8") + b"\n"
+    with _connect(config.DAEMON_TIMEOUT) as conn:
+        try:
+            conn.sendall(payload)
+            with conn.makefile("rb") as reader:
+                line = reader.readline()
+        except OSError as exc:
+            raise DaemonUnavailable(f"{type(exc).__name__}: {exc}") from None
+    if not line:
+        raise DaemonUnavailable("демон закрыл соединение без ответа")
+    try:
+        answer = json.loads(line)
+    except ValueError:
+        raise DaemonUnavailable("ответ демона — не JSON") from None
+    if "error" in answer:
+        raise (DaemonRefused if answer.get("refused") else DaemonUnavailable)(answer["error"])
+    vectors = answer.get("vectors")
+    if not isinstance(vectors, list) or len(vectors) != len(texts):
+        raise DaemonUnavailable("демон вернул не столько векторов, сколько текстов")
+    return vectors
+
+
+def _spawn() -> None:
+    """Запустить `python -m ragsave daemon` отдельной сессией, вывод — в daemon.log."""
+    sock = Path(config.DAEMON_SOCKET)
+    sock.parent.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    package_root = str(Path(__file__).resolve().parents[1])
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [package_root, env.get("PYTHONPATH")]))
+    env["RAGSAVE_DAEMON_SOCKET"] = str(sock)
+    with _log_path(sock).open("ab") as log:
+        subprocess.Popen(
+            [sys.executable, "-m", "ragsave", "daemon"],
+            cwd=str(sock.parent), env=env, stdin=subprocess.DEVNULL,
+            stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+
+
+def start() -> bool:
+    """Поднять демон и дождаться его сокета. False — не дождались."""
+    try:
+        _spawn()
+    except OSError:
+        return False
+    deadline = time.monotonic() + config.DAEMON_START_WAIT
+    while time.monotonic() < deadline:
+        try:
+            _connect(1.0).close()
+            return True
+        except DaemonDown:
+            time.sleep(0.05)
+    return False
+
+
+def log_fallback(reason: str) -> None:
+    """Одна строка в общий лог ошибок: демон подвёл, вызов считает своя модель.
+
+    Лог никогда не должен ронять поиск — отсюда молчаливый except.
+    """
+    try:
+        path = config.errors_log()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{stamp}] ragsave daemon | {os.getcwd()} | {reason} "
+                         f"— модель своя\n")
+    except OSError:
+        pass
+
+
+# ---------- сервер ----------
+
+
+class _Engine:
+    """Одна модель и один замок на инференцию.
+
+    Поиск идёт вперёд синка: пачка синка не берёт модель, пока ждёт хоть один
+    запрос поиска, а свою пачку демон считает кусками по DAEMON_INFER_BATCH —
+    поиск ждёт не дольше одного куска.
+    """
+
+    def __init__(self, embedder: Any) -> None:
+        self.embedder = embedder
+        self._cond = threading.Condition()
+        self._busy = False
+        self._queries = 0
+        self._clock = threading.Lock()
+        self._active = 0
+        self._last = time.monotonic()
+
+    def _run(self, query: bool, compute: Callable[[], list[list[float]]]) -> list[list[float]]:
+        with self._cond:
+            if query:
+                self._queries += 1
+            while self._busy or (not query and self._queries):
+                self._cond.wait()
+            if query:
+                self._queries -= 1
+            self._busy = True
+        try:
+            return compute()
+        finally:
+            with self._cond:
+                self._busy = False
+                self._cond.notify_all()
+
+    def embed(self, kind: str, texts: list[str]) -> list[list[float]]:
+        if kind == "query":
+            return self._run(True, lambda: [self.embedder.embed_query(t) for t in texts])
+        vectors: list[list[float]] = []
+        step = config.DAEMON_INFER_BATCH
+        for start in range(0, len(texts), step):
+            part = texts[start:start + step]
+            vectors.extend(self._run(False, lambda: self.embedder.embed_passages(part)))
+        return vectors
+
+    def answer(self, line: bytes) -> dict[str, Any]:
+        try:
+            req = json.loads(line)
+        except ValueError:
+            return {"error": "запрос — не JSON"}
+        model, engine = self.embedder.model_name, self.embedder.engine_version
+        if (req.get("v"), req.get("model"), req.get("engine")) != (PROTOCOL, model, engine):
+            return {"error": f"демон держит {model} (fastembed {engine}, протокол "
+                             f"{PROTOCOL})", "refused": True}
+        kind, texts = req.get("kind"), req.get("texts")
+        if kind not in ("query", "passage") or not isinstance(texts, list):
+            return {"error": "в запросе нет kind или texts"}
+        try:
+            return {"vectors": self.embed(kind, [str(t) for t in texts])}
+        except Exception as exc:  # noqa: BLE001 — демон отвечает отказом, а не падает
+            traceback.print_exc()
+            return {"error": f"{type(exc).__name__}: {exc}"}
+
+    def enter(self) -> None:
+        with self._clock:
+            self._active += 1
+
+    def leave(self) -> None:
+        with self._clock:
+            self._active -= 1
+            self._last = time.monotonic()
+
+    def idle_for(self) -> float:
+        with self._clock:
+            return 0.0 if self._active else time.monotonic() - self._last
+
+
+class _Handler(socketserver.StreamRequestHandler):
+    def handle(self) -> None:
+        engine: _Engine = self.server.engine  # type: ignore[attr-defined]
+        engine.enter()
+        try:
+            reply = engine.answer(self.rfile.readline())
+            self.wfile.write(json.dumps(reply).encode("utf-8") + b"\n")
+        except OSError:
+            pass  # клиент ушёл, не дождавшись: его вызов уже считает сам
+        finally:
+            engine.leave()
+
+
+class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    pass
+
+
+def _say(message: str) -> None:
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{os.getpid()}] {message}", flush=True)
+
+
+def serve(embedder: Any = None, idle: float | None = None) -> int:
+    """Слушать сокет до простоя в idle секунд (0 — всегда); второй экземпляр выходит сразу.
+
+    Модель грузится первым запросом: сокет поднят сразу, и клиент, поднявший
+    демон, ждёт загрузку здесь, а не грузит вторую копию у себя.
+    """
+    sock = Path(config.DAEMON_SOCKET)
+    sock.parent.mkdir(parents=True, exist_ok=True)
+    idle = config.IDLE_UNLOAD if idle is None else idle
+    lock = _lock_path(sock).open("a")
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            _say("демон уже запущен — выхожу")
+            return 0
+        if embedder is None:
+            from .embedder import Embedder
+
+            embedder = Embedder(use_daemon=False)
+        # Сокет под замком может остаться только от упавшего демона.
+        sock.unlink(missing_ok=True)
+        server = _Server(str(sock), _Handler)
+        server.engine = _Engine(embedder)  # type: ignore[attr-defined]
+        os.chmod(sock, 0o600)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        _say(f"слушаю {sock}: {embedder.model_name}, простой до выхода {idle or '∞'} с")
+        while not idle or server.engine.idle_for() < idle:  # type: ignore[attr-defined]
+            time.sleep(min(1.0, idle / 4) if idle else 3600)
+        server.shutdown()
+        # Сокет убирается до того, как отпущен замок: новый демон его не застанет.
+        sock.unlink(missing_ok=True)
+        server.server_close()
+        _say("простой — выход")
+        return 0
+    finally:
+        lock.close()
