@@ -1158,6 +1158,22 @@ def test_daemon() -> None:
             check("второй демон упирается в замок и выходит",
                   daemon.serve(embedder=Counted(use_daemon=False), idle=1.5), 0)
 
+            # Куски демона — из фрагментов близкой длины, ответ — в порядке запроса.
+            seen: list[list[str]] = []
+
+            class Recorded:
+                def embed_passages(self, part):
+                    seen.append(list(part))
+                    return [[float(len(t))] for t in part]
+
+            config.DAEMON_INFER_BATCH = 2
+            got = daemon._Engine(Recorded()).embed("passage", texts)
+            config.DAEMON_INFER_BATCH = original[4]
+            check("куски демона — по длине, векторы — в порядке запроса",
+                  (seen, got),
+                  ([["а", "ci"], ["деплой", "сервер почты"], ["миграции базы"]],
+                   [[float(len(t))] for t in texts]))
+
             config.DAEMON = False
             off = Counted()
             off.embed_query("деплой")
