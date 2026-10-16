@@ -72,8 +72,6 @@ context-core.mjs                # замер занятости окна, пор
 claude/context-meter.mjs        # порог на ходу пользователя (UserPromptSubmit)
 claude/context-step.mjs         # порог посреди хода, между вызовами (PostToolUse)
 claude/paste-guard.mjs          # промпт длиннее предела — не в контекст (UserPromptSubmit, block)
-prompt-core.mjs                 # размытый промпт: длинный, из нескольких фраз, без якоря; текст напоминания
-claude/prompt-shape.mjs         # напоминание о task-brief на размытый промпт (UserPromptSubmit)
 claude/plan-guard.mjs           # план длиннее предела или с наслоенным снимком — не выходит (PreToolUse: ExitPlanMode)
 handoff-core.mjs                # цепочка передач handoff между транскриптами: последнее звено
 claude/resume-hint.mjs          # открыли звено цепочки — команда /resume последнего (SessionStart: resume)
@@ -103,7 +101,7 @@ logs/hooks.jsonl                # решения хуков по сессиям:
 test/test-guards.mjs            # shell-гард: одни сценарии через хук и напрямую через ядро
 test/test-hooklog.mjs           # журнал решений: запрет пишется, allow — нет, падение хука → оба журнала
 test/test-hook-io.mjs           # ответ хука: битый stdin, runHook deny/ask/null, журнал
-test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, block обрывает UPS и Stop, напоминание prompt-shape, регистрация
+test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, ask + updatedInput, имя проверки в журнале, падение одной, block обрывает UPS и Stop, регистрация
 test/test-tool-args.mjs         # имена параметров tokensave: алиасы, пары замен, ответ хука, гарды под угаданным именем
 test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
@@ -116,7 +114,6 @@ test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — че�
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-scratch.mjs           # черновики /tmp: созданное удаляется, чужое, репозиторий и каталог Claude Code — нет
 test/test-context-meter.mjs     # цифра из последнего хода, порог, одно срабатывание на сессию
-test/test-prompt-shape.mjs      # размытый промпт → напоминание; короткий, одна-две фразы, /команда, любой якорь, загруженный task-brief → молчание
 test/test-question-guard.mjs    # работа или порог контекста без меню, вопрос, ожидание решения, варианты → block; код, цитата, заголовок, меню в ходе, stop_hook_active → пропуск
 test/test-output-clip.mjs       # что оборачивается, что нет, сохранение кода возврата
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert, скиллы по имени
@@ -272,24 +269,6 @@ git ставит сам. `printf … | git commit -F -` не разбирает�
 (cleanup уберёт через 7 дней) или `AI_HOOKS_SKILL_GATE_OFF=1`.
 
 Тесты: `test/test-skill-gate.mjs`.
-
-## Напоминание о task-brief
-
-Длинную задачу без цели и места берёт в работу `task-brief`, но строку его
-триггера в таблице `core.md` модель пропускала и начинала угадывать.
-`claude/prompt-shape.mjs` на `UserPromptSubmit` добавляет одну строку
-контекста `prompt-shape: …` — загрузи `task-brief` до первого действия, — если
-промпт размытый (`prompt-core.mjs:isLoosePrompt`): от 400 символов, от трёх
-фраз по три слова и больше, не `/команда` и без якоря — блока или имени в
-обратных кавычках, вставки, `<command-name>`, ссылки, пути или имени файла,
-camelCase/snake_case, `…Error`/`…Exception`/стека. Скилл уже загружен в сессии
-(`skill-core.mjs:loadedSkills`) — молчит. Решение по форме текста, без модели:
-хук на каждом промпте не может стоить секунд, а ошибка в обе стороны дешёвая —
-лишняя строка или то же, что без хука. Промпт не переписывается:
-`UserPromptSubmit` умеет только добавить контекст. Нужен ли хук, решают
-загрузки `task-brief` в `/usage` (раздел «Скиллы») до и после.
-
-Тесты: `test/test-prompt-shape.mjs`.
 
 ## Вопрос только через меню
 
@@ -568,7 +547,7 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` и `Stop`.
 `plan-guard` на `PreToolUse` (matcher `ExitPlanMode`), `resume-hint` на
 `SessionStart` (matcher `resume`).
 Гейт скиллов: `skill-track` на `PreToolUse`
-(matcher `Skill`) и `skill-track` на `UserPromptSubmit`, за ним `prompt-shape`, `skill-gate`
+(matcher `Skill`) и `skill-track` на `UserPromptSubmit`, `skill-gate`
 на `PreToolUse` (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at`,
 после гардов и до shell-гарда).
 На `Stop` по порядку: `usage-log`, `cleanup` (`../bin/cleanup.mjs`),

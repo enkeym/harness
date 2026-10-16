@@ -116,7 +116,6 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 - `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI, dependabot, or an impact
   map in an indexed project: offer in one line in the first reply (`/impact-map` for the map).
   Silent hook = deliberate skip (`<project>/.claude/bootstrap-ignore`).
-- `prompt-shape:` in context — a long prompt with no anchor: load `task-brief` first; a plain question → answer.
 
 ## When something is broken
 
