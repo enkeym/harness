@@ -9,18 +9,22 @@ Trigger: two hooks fire at the token thresholds in
 `~/.ai-hooks/context-core.mjs` — `context-meter.mjs` between turns,
 `context-step.mjs` mid-turn. `SOFT` offers the move through the menu, `HAND`,
 `HARD` the handoff — only while work continues (a plan step, a check); a closed
-task or one small edit is finished here with a result line. Don't raise
-context size yourself. Never start a new session; write only the `task-brief`
-plan file and plan mode's plan file.
+task or one small edit (one place, already read) is finished here with a
+result line. A new user request after `HAND` gets the same test: anything
+bigger is not started — clarify, put it first under `Дальше`, hand off. Don't
+raise context size yourself. Never start a new session; write only the
+`task-brief` plan file and plan mode's plan file.
 
 Mid-turn the answer is never cut in half: finish the step in hand, then, while
 work continues, end the turn with the handoff, not a summary — also when the
 edits were reverted; the step not started goes first under `Дальше`. A
 session that has changed nothing gets no handoff at `SOFT` — the next one
-would re-read the same and hit the same threshold. From `HAND` it delivers its
-conclusion, then one question: move (recommended) or stay; a move carries
-conclusions only (`Решения`, `Открытые вопросы`, `Дальше`) and the files the
-next step needs. The hook says which case it is; follow its wording.
+would re-read the same and hit the same threshold. From `HAND` a discussion
+gives its conclusion and asks: move (recommended) or stay; research with edits
+ahead splits the task into steps and hands off unasked — a session received
+from a handoff that gets here again: split the step further, tell the user.
+A move carries conclusions only (`Решения`, `Открытые вопросы`, `Дальше`) and
+the files the next step needs. The hook says which case it is; follow it.
 
 ## Steps
 
