@@ -3,6 +3,8 @@ paths:
   - "ai-hooks/security-core.mjs"
   - "ai-hooks/tool-args-core.mjs"
   - "ai-hooks/claude/security-guard.mjs"
+  - "ai-hooks/grant-core.mjs"
+  - "ai-hooks/claude/grant-track.mjs"
   - "ai-hooks/claude/links-context.mjs"
   - "ai-hooks/claude/tool-args.mjs"
   - "ai-hooks/claude/dispatch.mjs"
@@ -37,4 +39,11 @@ paths:
   `EnterPlanMode`) ↔ имена интерактивных инструментов Claude Code и окно `ExitPlanMode`, где
   `skills/handoff/SKILL.md` даёт очистить контекст. Инструмент не в списке — `permit` отвечает
   ему `allow`, окно не показывается: вопрос уходит без ответа, handoff остаётся в той же сессии.
+- Разрешения из промпта — категории `cat` у `ask(reason, cat)` и `gitPushReason` в
+  `ai-hooks/security-core.mjs` ↔ ключи `WORD_STEMS`/`PHRASES`/`IMPLIES` в `ai-hooks/grant-core.mjs` ↔
+  список категорий в `ai-hooks/README.md` и `skills/hooks-guards/SKILL.md`. Категория только в
+  гарде — её ask не снимается никогда; только в словаре — мёртвое слово. `grant-track` в
+  `ai-hooks/claude/dispatch.mjs:TABLE` — за `paste-guard`: выше — стёртый промпт даёт разрешение.
+  Каталог `grant-core.mjs:GRANTS_DIR` ↔ `touchesGrants` (deny агенту) ↔ цель уборки
+  `ai-hooks/bin/cleanup.mjs:TARGETS`.
 - Текст отказа рекурсивного grep и формы коммита — `hooks/guards/shell.md`.

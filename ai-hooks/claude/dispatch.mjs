@@ -77,6 +77,8 @@ const TABLE = {
   UserPromptSubmit: [
     // Первым: стёртый промпт не помечает скилл и не несёт контекст.
     ['paste-guard', ALL],
+    // Сразу за ним: стёртый промпт разрешений не даёт, прежние остаются в силе.
+    ['grant-track', ALL],
     ['skill-track', ALL],
     ['ask-reminder', ALL],
     ['context-meter', ALL],

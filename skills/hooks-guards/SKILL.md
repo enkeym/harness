@@ -25,11 +25,11 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   data (`scp`, `curl -X POST|sh`), publish/deploy, migrations, `git reset --hard`, `rm -rf` of
   `/ ~ . .git`, `sudo` (list: `ai-hooks/README.md`), a computed git path (`-F "$f"`), the whole
   environment (`env`): name one variable. `gh auth token` is denied; amend, `--no-verify`, harness edits pass.
-- `dispatch` answers `allow` to every call no check denied or asked: Claude Code's own
-  permission prompt is gone in every mode. Kept: `AskUserQuestion`, `ExitPlanMode`
-  (the handoff window), `EnterPlanMode`, and any call in plan mode.
-- Judges command **form**. Code *meaning* (auth, payments, secrets, outbound
-  calls) still needs `review-security`.
+- An action named in the current prompt skips its ask until the next prompt: «запушь»/`push`, «МР»/`PR` (push + `gh pr`/`glab mr`), «удали», «откати», «задеплой», «накати миграцию»; force and branch deletion need «форс»/«удали ветку».
+  Negation, ``` blocks, `>` quotes grant nothing; `rm -rf /`/`~`, secret output, `env`, ssh, sudo, outbound, `kubectl` always ask; grant state is denied to you. Ask anyway → let the dialog answer.
+- `dispatch` answers `allow` to every call no check denied or asked, in every mode. Kept: `AskUserQuestion`,
+  `ExitPlanMode` (the handoff window), `EnterPlanMode`, and any call in plan mode.
+- Judges command **form**; code *meaning* (auth, payments, secrets, outbound calls) still needs `review-security`.
 
 ## ask-guard
 

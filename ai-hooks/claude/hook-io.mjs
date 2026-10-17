@@ -35,7 +35,7 @@ export function finish(payload) {
 }
 
 // Цель вызова для журнала: путь, команда, код или паттерн — что есть.
-function targetOf(input) {
+export function targetOf(input) {
   const ti = input.tool_input || {};
   const target = ti.file_path || ti.path || ti.command || ti.code || ti.pattern || ti.glob
     || ti.planFilePath || '';

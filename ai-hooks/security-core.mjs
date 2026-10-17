@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals, redirectWords } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 import { normalizeToolInput } from './tool-args-core.mjs';
+import { touchesGrants } from './grant-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -138,19 +139,22 @@ const PROD_TOKEN_RE = /(^|[^a-z])prod(uction)?([^a-z]|$)/i;
 const PUSH_ARG_OPTS = ['-o', '--push-option', '--repo', '--receive-pack', '--exec'];
 
 // at — индекс подкоманды `push` в токенах.
+// → { reason, cat } или null. cat — категория разрешения: force и удаление снимает
+// только своё слово, прочее — обычное «запушь».
 function gitPushReason(toks, at) {
+  const push = (reason, cat = 'push') => ({ reason, cat });
   const args = toks.slice(at + 1);
   // `-f` бывает и в склейке с другими короткими флагами: `-uf`.
   if (args.some((t) => /^(-[a-z]*f[a-z]*|--force|--force-with-lease.*)$/.test(t))) {
-    return 'force push переписывает историю';
+    return push('force push переписывает историю', 'push-force');
   }
   if (args.some((t) => ['--all', '--mirror', '--branches'].includes(t))) {
-    return 'push всех веток, включая защищённые';
+    return push('push всех веток, включая защищённые', 'push-delete');
   }
-  if (args.some((t) => t === '-d' || t === '--delete')) return 'удаление ветки на remote';
+  if (args.some((t) => t === '-d' || t === '--delete')) return push('удаление ветки на remote', 'push-delete');
   // Цель вычисляется при запуске — `$(git branch --show-current)`, `$BRANCH`:
   // в команде её имени нет, решает человек.
-  if (args.some((t) => /[$`]/.test(t))) return 'push: цель вычисляется при запуске, в команде её не видно';
+  if (args.some((t) => /[$`]/.test(t))) return push('push: цель вычисляется при запуске, в команде её не видно');
 
   const free = [];
   for (let i = 0; i < args.length; i++) {
@@ -162,18 +166,18 @@ function gitPushReason(toks, at) {
   // `--dry-run` ничего не публикует.
   if (args.some((t) => t === '--dry-run' || t === '-n')) return null;
   // Без refspec push уходит в текущую ветку — её имени в команде нет, решает человек.
-  if (refspecs.length === 0) return 'push в текущую ветку (refspec не указан)';
+  if (refspecs.length === 0) return push('push в текущую ветку (refspec не указан)');
   for (const spec of refspecs) {
     // `+` перед refspec — тот же force push, только для одной ветки.
-    if (spec.startsWith('+')) return 'force push (+refspec) переписывает историю';
-    if (spec.startsWith(':')) return `удаление ветки «${spec.slice(1)}» на remote`;
+    if (spec.startsWith('+')) return push('force push (+refspec) переписывает историю', 'push-force');
+    if (spec.startsWith(':')) return push(`удаление ветки «${spec.slice(1)}» на remote`, 'push-delete');
     const branch = spec.split(':').pop().replace(/^refs\/heads\//, '');
-    if (branch === 'HEAD' || branch === '@') return 'push в текущую ветку (HEAD)';
-    if (branch.includes('*')) return `push по шаблону «${spec}» задевает все ветки`;
-    if (PROTECTED_BRANCH_RE.test(branch)) return `push в защищённую ветку «${branch}»`;
+    if (branch === 'HEAD' || branch === '@') return push('push в текущую ветку (HEAD)');
+    if (branch.includes('*')) return push(`push по шаблону «${spec}» задевает все ветки`, 'push-delete');
+    if (PROTECTED_BRANCH_RE.test(branch)) return push(`push в защищённую ветку «${branch}»`);
   }
   // Push — точка, где человек проверяет, что уходит наружу: спрашивается любой.
-  return `push в «${refspecs.map((s) => s.split(':').pop()).join('», «')}»`;
+  return push(`push в «${refspecs.map((s) => s.split(':').pop()).join('», «')}»`);
 }
 
 // ---------------------------------------------------------------------------
@@ -681,7 +685,9 @@ function printsEnv(toks) {
 // stash, установка пакетов) идёт молча. Токены и пароли — deny: подтверждать
 // нечем, значение нужно запросить у пользователя.
 
-const ask = (reason) => ({ level: ASK, reason });
+// cat — категория действия для разрешения из промпта (grant-core.mjs). Без неё ask
+// спрашивается всегда: секреты в выводе, передача наружу, ssh, sudo.
+const ask = (reason, cat) => (cat ? { level: ASK, reason, cat } : { level: ASK, reason });
 const deny = (reason) => ({ level: DENY, reason });
 
 // Свободные слова команды: без флагов и перенаправлений.
@@ -708,22 +714,25 @@ const CLOUD_VERB_RE = /^(delete|create|update|deploy|apply|remove|set|add|start|
 
 function publishVerdict(cmd, toks, w) {
   if (PKG_MANAGERS.has(cmd)) {
-    if (w.includes('publish')) return ask(`\`${cmd} publish\` публикует пакет в registry.`);
+    if (w.includes('publish')) return ask(`\`${cmd} publish\` публикует пакет в registry.`, 'deploy');
     const script = PKG_PLAIN_VERBS.has(w[0]) ? null : w.find((x) => RELEASE_SCRIPT_RE.test(x));
-    if (script) return ask(`скрипт «${script}» похож на деплой или релиз.`);
+    if (script) return ask(`скрипт «${script}» похож на деплой или релиз.`, 'deploy');
   }
   if (cmd === 'make') {
     const target = w.find((x) => RELEASE_SCRIPT_RE.test(x));
-    if (target) return ask(`цель make «${target}» похожа на деплой или релиз.`);
+    if (target) return ask(`цель make «${target}» похожа на деплой или релиз.`, 'deploy');
   }
-  if (cmd === 'cargo' && w.includes('publish')) return ask('`cargo publish` публикует крейт.');
-  if (cmd === 'twine' && w.includes('upload')) return ask('`twine upload` публикует пакет в PyPI.');
+  if (cmd === 'cargo' && w.includes('publish')) return ask('`cargo publish` публикует крейт.', 'deploy');
+  if (cmd === 'twine' && w.includes('upload')) return ask('`twine upload` публикует пакет в PyPI.', 'deploy');
   if ((cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') && w.includes('push')) {
-    return ask('`docker push` публикует образ в registry.');
+    return ask('`docker push` публикует образ в registry.', 'deploy');
   }
   if (cmd === 'gh') {
-    if (pair(w, 'pr', 'merge', 'create') || pair(w, 'release', 'create', 'delete', 'upload')
-      || pair(w, 'repo', 'delete', 'create') || pair(w, 'gist', 'create') || pair(w, 'workflow', 'run')) {
+    if (pair(w, 'pr', 'merge', 'create')) return ask('`gh pr` создаёт или сливает pull request.', 'mr');
+    if (pair(w, 'release', 'create', 'delete', 'upload') || pair(w, 'workflow', 'run')) {
+      return ask('`gh` выкладывает релиз или запускает workflow.', 'deploy');
+    }
+    if (pair(w, 'repo', 'delete', 'create') || pair(w, 'gist', 'create')) {
       return ask('`gh` публикует или меняет состояние на GitHub.');
     }
     if (w.includes('api') && (MUTATING_METHODS.has(methodOf(toks))
@@ -731,30 +740,30 @@ function publishVerdict(cmd, toks, w) {
       return ask('`gh api` меняет состояние на GitHub.');
     }
   }
-  if (cmd === 'glab' && (pair(w, 'mr', 'merge', 'create') || pair(w, 'release', 'create') || pair(w, 'repo', 'delete'))) {
-    return ask('`glab` публикует или меняет состояние на GitLab.');
-  }
+  if (cmd === 'glab' && pair(w, 'mr', 'merge', 'create')) return ask('`glab mr` создаёт или сливает merge request.', 'mr');
+  if (cmd === 'glab' && pair(w, 'release', 'create')) return ask('`glab release` выкладывает релиз.', 'deploy');
+  if (cmd === 'glab' && pair(w, 'repo', 'delete')) return ask('`glab` удаляет репозиторий на GitLab.');
   if ((cmd === 'terraform' || cmd === 'tofu') && anyWord(w, 'apply', 'destroy')) {
-    return ask(`\`${cmd}\` меняет инфраструктуру.`);
+    return ask(`\`${cmd}\` меняет инфраструктуру.`, 'deploy');
   }
-  if (cmd === 'pulumi' && anyWord(w, 'up', 'destroy')) return ask('`pulumi` меняет инфраструктуру.');
+  if (cmd === 'pulumi' && anyWord(w, 'up', 'destroy')) return ask('`pulumi` меняет инфраструктуру.', 'deploy');
   if (cmd === 'helm' && anyWord(w, 'install', 'upgrade', 'uninstall', 'rollback', 'delete')) {
-    return ask('`helm` меняет релиз в кластере.');
+    return ask('`helm` меняет релиз в кластере.', 'deploy');
   }
   if (cmd === 'ansible-playbook' && !toks.some((t) => /^(--check|-C|--syntax-check|--list-hosts)$/.test(t))) {
-    return ask('`ansible-playbook` меняет состояние хостов.');
+    return ask('`ansible-playbook` меняет состояние хостов.', 'deploy');
   }
   if (cmd === 'vercel' && (w.length === 0 || anyWord(w, 'deploy', 'promote', 'rollback', 'remove', 'rm')
     || toks.includes('--prod'))) {
-    return ask('`vercel` выкладывает или удаляет деплой.');
+    return ask('`vercel` выкладывает или удаляет деплой.', 'deploy');
   }
   if ((cmd === 'fly' || cmd === 'flyctl') && anyWord(w, 'deploy', 'launch', 'destroy', 'scale')) {
-    return ask('`fly` меняет приложение на Fly.io.');
+    return ask('`fly` меняет приложение на Fly.io.', 'deploy');
   }
-  if (cmd === 'railway' && anyWord(w, 'up', 'deploy', 'down')) return ask('`railway` меняет деплой.');
-  if ((cmd === 'serverless' || cmd === 'sls') && anyWord(w, 'deploy', 'remove')) return ask('`serverless` меняет деплой.');
-  if (cmd === 'netlify' && anyWord(w, 'deploy')) return ask('`netlify deploy` выкладывает сайт.');
-  if (cmd === 'wrangler' && anyWord(w, 'deploy', 'publish', 'delete')) return ask('`wrangler` меняет воркер Cloudflare.');
+  if (cmd === 'railway' && anyWord(w, 'up', 'deploy', 'down')) return ask('`railway` меняет деплой.', 'deploy');
+  if ((cmd === 'serverless' || cmd === 'sls') && anyWord(w, 'deploy', 'remove')) return ask('`serverless` меняет деплой.', 'deploy');
+  if (cmd === 'netlify' && anyWord(w, 'deploy')) return ask('`netlify deploy` выкладывает сайт.', 'deploy');
+  if (cmd === 'wrangler' && anyWord(w, 'deploy', 'publish', 'delete')) return ask('`wrangler` меняет воркер Cloudflare.', 'deploy');
   if (cmd === 'aws' && (w.some((x) => AWS_VERB_RE.test(x)) || pair(w, 's3', 'rm', 'sync', 'mb', 'rb', 'mv', 'cp'))) {
     return ask('`aws` меняет ресурсы облака.');
   }
@@ -841,25 +850,27 @@ function transferVerdict(cmd, toks, w) {
 
 // Необратимое локально: незакоммиченная работа, тома с данными, корень, диск.
 const DANGEROUS_RM_RE = /^(\/\*?|~\/?\*?|\$\{?HOME\}?\/?\*?|\.{1,2}\/?\*?|\*|(\S*\/)?\.git\/?)$/;
+// Корень и домашний каталог — без категории: «удали tmp» в промпте их не открывает.
+const ROOT_OR_HOME_RE = /^(\/\*?|~\/?\*?|\$\{?HOME\}?\/?\*?)$/;
 
 function gitRiskVerdict(toks, at) {
   const sub = toks[at];
   const args = toks.slice(at + 1);
   const free = args.filter((a) => !a.startsWith('-'));
-  if (sub === 'reset' && args.includes('--hard')) return ask('`git reset --hard` стирает незакоммиченные изменения.');
+  if (sub === 'reset' && args.includes('--hard')) return ask('`git reset --hard` стирает незакоммиченные изменения.', 'revert');
   if (sub === 'clean' && !args.some((a) => a === '-n' || a === '--dry-run')
     && args.some((a) => /^-[a-zA-Z]*f|^--force$/.test(a))) {
-    return ask('`git clean -f` удаляет неотслеживаемые файлы.');
+    return ask('`git clean -f` удаляет неотслеживаемые файлы.', 'delete');
   }
-  if (sub === 'checkout' && free.includes('.')) return ask('`git checkout .` стирает незакоммиченные изменения.');
+  if (sub === 'checkout' && free.includes('.')) return ask('`git checkout .` стирает незакоммиченные изменения.', 'revert');
   if (sub === 'restore' && free.includes('.') && !(args.includes('--staged') && !args.includes('--worktree'))) {
-    return ask('`git restore .` стирает незакоммиченные изменения.');
+    return ask('`git restore .` стирает незакоммиченные изменения.', 'revert');
   }
   if (sub === 'branch' && (args.some((a) => /^-[a-zA-Z]*D/.test(a))
     || (args.some((a) => a === '--delete') && args.some((a) => a === '--force' || a === '-f')))) {
-    return ask('`git branch -D` удаляет ветку вместе с неслитыми коммитами.');
+    return ask('`git branch -D` удаляет ветку вместе с неслитыми коммитами.', 'delete');
   }
-  if (sub === 'stash' && anyWord(args, 'drop', 'clear')) return ask('`git stash drop|clear` стирает отложенную работу.');
+  if (sub === 'stash' && anyWord(args, 'drop', 'clear')) return ask('`git stash drop|clear` стирает отложенную работу.', 'revert');
   if (sub === 'reflog' && anyWord(args, 'expire', 'delete')) return ask('`git reflog` стирает страховку от потери коммитов.');
   if (sub === 'filter-repo' || sub === 'filter-branch') return ask(`\`git ${sub}\` переписывает историю.`);
   if (sub === 'update-ref' && args.includes('-d')) return ask('`git update-ref -d` удаляет ссылку.');
@@ -871,18 +882,19 @@ function gitRiskVerdict(toks, at) {
 
 function irreversibleVerdict(cmd, toks, w) {
   if (cmd === 'rm' && toks.some((t) => /^-[a-zA-Z]*[rR]|^--recursive$/.test(t)) && w.some((x) => DANGEROUS_RM_RE.test(x))) {
-    return ask('рекурсивное удаление корня, домашнего каталога, текущего каталога или `.git`.');
+    return ask('рекурсивное удаление корня, домашнего каталога, текущего каталога или `.git`.',
+      w.some((x) => ROOT_OR_HOME_RE.test(x)) ? undefined : 'delete');
   }
-  if (cmd === 'find' && toks.includes('-delete')) return ask('`find -delete` удаляет всё найденное.');
+  if (cmd === 'find' && toks.includes('-delete')) return ask('`find -delete` удаляет всё найденное.', 'delete');
   if (cmd === 'shred' || cmd === 'truncate' || cmd.startsWith('mkfs')) return ask(`\`${cmd}\` необратимо стирает данные.`);
   if (cmd === 'dd' && toks.some((t) => /^of=\/dev\//.test(t))) return ask('`dd` пишет прямо в устройство.');
   if (cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') {
     if (w.includes('down') && toks.some((t) => t === '-v' || t === '--volumes')) {
-      return ask('`down -v` удаляет тома с данными.');
+      return ask('`down -v` удаляет тома с данными.', 'delete');
     }
-    if (pair(w, 'volume', 'rm', 'prune')) return ask('`docker volume` удаляет тома с данными.');
+    if (pair(w, 'volume', 'rm', 'prune')) return ask('`docker volume` удаляет тома с данными.', 'delete');
     if (pair(w, 'system', 'prune') && toks.some((t) => /^(-[a-z]*a[a-z]*|--all|--volumes)$/.test(t))) {
-      return ask('`docker system prune -a` удаляет образы, контейнеры и тома.');
+      return ask('`docker system prune -a` удаляет образы, контейнеры и тома.', 'delete');
     }
   }
   return null;
@@ -897,19 +909,19 @@ const SQL_DESTRUCTIVE_RE = /\b(drop|truncate)\b|\bdelete\s+from\b(?![^;]*\bwhere
 function migrationVerdict(cmd, toks, w, seg) {
   if (ORM_RUNNERS.has(cmd)) {
     if (w.includes('prisma') || cmd === 'prisma') {
-      if (pair(w, 'migrate', 'deploy', 'reset', 'resolve')) return ask('`prisma migrate` меняет схему базы из DATABASE_URL.');
+      if (pair(w, 'migrate', 'deploy', 'reset', 'resolve')) return ask('`prisma migrate` меняет схему базы из DATABASE_URL.', 'migrate');
       if (pair(w, 'db', 'push', 'execute') && (toks.includes('--accept-data-loss') || toks.includes('--force-reset')
         || w.includes('execute'))) {
-        return ask('`prisma db` меняет базу из DATABASE_URL.');
+        return ask('`prisma db` меняет базу из DATABASE_URL.', 'migrate');
       }
     }
     if (w.some((x) => /^(migration:(run|revert)|schema:(drop|sync))$/.test(x))) {
-      return ask('`typeorm` меняет схему базы из окружения.');
+      return ask('`typeorm` меняет схему базы из окружения.', 'migrate');
     }
     if (w.some((x) => /^migrate:(latest|rollback|up|down)$/.test(x)) || (w.includes('knex') && pair(w, 'migrate', 'latest', 'rollback', 'up', 'down'))) {
-      return ask('`knex migrate` меняет схему базы из окружения.');
+      return ask('`knex migrate` меняет схему базы из окружения.', 'migrate');
     }
-    if (w.some((x) => /^db:(migrate|drop)/.test(x))) return ask('`sequelize db:*` меняет базу из окружения.');
+    if (w.some((x) => /^db:(migrate|drop)/.test(x))) return ask('`sequelize db:*` меняет базу из окружения.', 'migrate');
   }
   if ((cmd === 'psql' || cmd === 'mysql') && toks.some((t) => /^(-c|-e|--command|--execute)$/.test(t))
     && SQL_DESTRUCTIVE_RE.test(seg)) {
@@ -983,7 +995,16 @@ function splitHeredoc(text) {
   return nl === -1 ? { head: text, body: '' } : { head: text.slice(0, nl), body: text.slice(nl + 1) };
 }
 
-export function guardBashSecurity(command, depth = 0) {
+// Разрешение из промпта снимает ask своей категории: вердикт уходит в ctx.granted,
+// разбор идёт дальше — `git push && rm -rf ~` по «запушь» всё равно спросит про rm. deny не снимается.
+function settle(verdict, ctx) {
+  if (verdict?.level !== ASK || !verdict.cat || !ctx.isGranted?.(verdict.cat)) return verdict;
+  ctx.granted?.push(verdict);
+  return null;
+}
+
+// ctx: { isGranted(cat), granted: [] } — разрешения сессии и снятые ими вердикты.
+export function guardBashSecurity(command, depth = 0, ctx = {}) {
   const raw = String(command || '');
   if (!raw.trim() || depth > 3) return null;
 
@@ -997,147 +1018,151 @@ export function guardBashSecurity(command, depth = 0) {
     // Тело heredoc — команды у оболочки, интерпретатора, ssh; у git, cat, tee,
     // curl — данные (сообщение коммита, файл). Данные, попавшие в `| bash`, снова команды.
     const script = body && !DATA_HEREDOC_CMDS.has(cmd) ? body : piped && SHELL_EXEC_CMDS.has(cmd) ? prevBody : '';
-    if (script) {
-      const verdict = guardBashSecurity(script, depth + 1);
-      if (verdict) return verdict;
-    }
     prevCmd = cmd;
     prevBody = body;
-
-    // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
-    const envCmd = printsEnv(toks);
-    if (envCmd) {
-      return {
-        level: ASK,
-        reason: `\`${envCmd}\` печатает всё окружение. Нужна одна переменная — назови её явно.`,
-      };
-    }
-
-    if (!cmd) continue;
-
-    // Вложенные команды разбираем до всего остального: обёртка сама по себе
-    // безобидна, опасно то, что она запускает.
-    const nested = nestedCommands(toks, cmd);
-    for (const inner of nested) {
-      const verdict = guardBashSecurity(inner, depth + 1);
-      if (verdict) return verdict;
-    }
-
-    // Путь снаружи, чтение внутри: `find . -name .env -exec cat {} \;`. У dotenv путь
-    // снаружи — его `-e`: файл уходит в окружение, а не в вывод `node dist/main.js`.
-    if (nested.length && cmd !== 'dotenv' && nestedReadsFile(nested)) {
-      const outer = secretPathsIn(seg, toks)[0];
-      if (outer) return secretReason(outer);
-    }
-
-    if (cmd === 'dotenv') {
-      const printed = dotenvPrintsSecret(toks);
-      if (printed) return secretReason(printed);
-    }
-
-    // git читает содержимое из истории, даже когда файла нет в рабочей копии.
-    if (cmd === 'git' && toks.some((t) => GIT_READ_SUBCMDS.has(t))) {
-      const hit = secretPathsIn(seg, toks)[0];
-      if (hit) return secretReason(hit);
-    }
-
-    // Секреты проверяем первыми: `curl -T .env` — это не «отправка данных,
-    // подтверди», а утечка ключей, и подтверждать её нечем.
-    // Запрещаем только чтение: содержимое попадает в транскрипт навсегда.
-    // Запись безвредна — `cp .env.example .env` и `echo X >> .env` ничего не
-    // раскрывают, и блокировать их значит мешать обычной настройке проекта.
-    // Читающая команда из пайпа берёт путь из соседнего сегмента
-    // (`echo .env | xargs cat`), поэтому кандидатов ищем по всей строке. Так же
-    // интерпретатор с heredoc (`python - <<EOF`): его код — в следующих строках.
-    const heredocCode = INTERPRETERS.has(cmd) && seg.includes('<<');
-    const scope = (piped && READS_FILE.has(cmd)) || heredocCode ? raw : seg;
-    const secret = readsSecret(scope, toks, cmd);
-    if (secret) return secretReason(secret);
-
-    if (GREP_CMDS.has(cmd) && grepWithoutInclude(toks)) {
-      return {
-        level: DENY,
-        reason: 'рекурсивный grep без `--include` на расширения кода читает и `.env` в дереве. ' +
-          'В проекте с `.tokensave/` символ ищет `tokensave_search`, точную строку — ' +
-          '`tokensave_search` с `literal: true` (grep по коду там останавливает хук tokensave ' +
-          'и с `--include`); доки, конфиги, yml, инфраструктуру — `rag_search`; вне индексов ' +
-          'укажи файлы: `--include=*.ts` (можно несколько).',
-      };
-    }
-
-    // Команды, печатающие окружение целиком. Секрет в них приходит не из
-    // файла, а из вывода, и по имени файла его не поймать: `printenv` в
-    // проекте с экспортированным токеном кладёт его в транскрипт так же
-    // надёжно, как `cat .env`.
-    if (/^docker(-compose)?$/.test(cmd) && toks.includes('config') && !toks.includes('--services')) {
-      return {
-        level: ASK,
-        reason: '`docker compose config` печатает конфиг с подставленными секретами. Список сервисов — `--services`.',
-      };
-    }
-
-    if (DUMP_CMDS.has(cmd)) {
-      return { level: ASK, reason: `\`${cmd}\` выгружает базу целиком.` };
-    }
-
-    if (DB_CLIENTS.has(cmd)) {
-      const external = dbHostsIn(raw, seg, toks).filter((h) => !LOCAL_HOST_RE.test(h));
-      if (external.length) {
-        return { level: ASK, reason: `\`${cmd}\` идёт на внешний хост ${external[0]} — возможно, боевая база.` };
-      }
-      if (/\.dump\b|--rdb\b|COPY\s+.*\bTO\b/i.test(seg)) {
-        return { level: ASK, reason: `\`${cmd}\` выгружает содержимое базы.` };
-      }
-    }
-
-    if (cmd === 'sqlite3' && /\.dump\b/.test(seg)) {
-      return { level: ASK, reason: 'sqlite3 .dump выгружает базу целиком.' };
-    }
-
-    if (cmd === 'git') {
-      const at = gitSubcommandAt(toks);
-      const fileVerdict = gitFileVerdict(toks, at);
-      if (fileVerdict) return fileVerdict;
-      if (toks[at] === 'push') {
-        const reason = gitPushReason(toks, at);
-        if (reason) return { level: ASK, reason };
-      }
-    }
-
-    if (cmd === 'docker' || cmd === 'docker-compose') {
-      const acts = ['up', 'down', 'restart', 'stack', 'push'];
-      if (toks.some((t) => acts.includes(t)) && PROD_TOKEN_RE.test(seg)) {
-        return { level: ASK, reason: 'docker меняет прод-конфигурацию.' };
-      }
-    }
-
-    if (cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') {
-      if (toks.includes('login')) return ask('`docker login` сохраняет учётные данные registry.');
-      if (toks.includes('run') && (toks.includes('--privileged') || /(?:^|\s)(?:-v|--volume)(?:=|\s+)["']?\/:/.test(seg)
-        || /--mount[= ].*\bsrc(?:ource)?=\/(?:,|\s|$)/.test(seg))) {
-        return ask('контейнер с полным доступом к хосту (`--privileged` или монтирование `/`).');
-      }
-    }
-
-    if (cmd === 'kubectl' && toks.some((t) => ['apply', 'delete', 'scale', 'rollout', 'patch', 'exec', 'cp', 'drain',
-      'cordon', 'uncordon', 'taint', 'edit', 'port-forward', 'create', 'set', 'replace', 'annotate', 'label'].includes(t))) {
-      return { level: ASK, reason: 'kubectl меняет состояние кластера.' };
-    }
-
-    if (cmd === 'ssh') {
-      const remote = sshRemoteVerdict(toks, commandIndex(toks));
-      if (remote) return remote;
-    }
-
-    if (cmd === 'curl' || cmd === 'wget' || cmd === 'http' || cmd === 'httpie') {
-      const reason = outboundReason(toks, seg);
-      if (reason) return { level: ASK, reason };
-    }
-
-    const risk = riskVerdict(cmd, toks, seg, { fromFetch });
-    if (risk) return risk;
+    const verdict = settle(segmentVerdict({ raw, seg, toks, cmd, piped, fromFetch, script }, depth, ctx), ctx);
+    if (verdict) return verdict;
   }
   return null;
+}
+
+function segmentVerdict({ raw, seg, toks, cmd, piped, fromFetch, script }, depth, ctx) {
+  if (script) {
+    const verdict = guardBashSecurity(script, depth + 1, ctx);
+    if (verdict) return verdict;
+  }
+
+  // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
+  const envCmd = printsEnv(toks);
+  if (envCmd) {
+    return {
+      level: ASK,
+      reason: `\`${envCmd}\` печатает всё окружение. Нужна одна переменная — назови её явно.`,
+    };
+  }
+
+  if (!cmd) return null;
+
+  // Вложенные команды разбираем до всего остального: обёртка сама по себе
+  // безобидна, опасно то, что она запускает.
+  const nested = nestedCommands(toks, cmd);
+  for (const inner of nested) {
+    const verdict = guardBashSecurity(inner, depth + 1, ctx);
+    if (verdict) return verdict;
+  }
+
+  // Путь снаружи, чтение внутри: `find . -name .env -exec cat {} \;`. У dotenv путь
+  // снаружи — его `-e`: файл уходит в окружение, а не в вывод `node dist/main.js`.
+  if (nested.length && cmd !== 'dotenv' && nestedReadsFile(nested)) {
+    const outer = secretPathsIn(seg, toks)[0];
+    if (outer) return secretReason(outer);
+  }
+
+  if (cmd === 'dotenv') {
+    const printed = dotenvPrintsSecret(toks);
+    if (printed) return secretReason(printed);
+  }
+
+  // git читает содержимое из истории, даже когда файла нет в рабочей копии.
+  if (cmd === 'git' && toks.some((t) => GIT_READ_SUBCMDS.has(t))) {
+    const hit = secretPathsIn(seg, toks)[0];
+    if (hit) return secretReason(hit);
+  }
+
+  // Секреты проверяем первыми: `curl -T .env` — это не «отправка данных,
+  // подтверди», а утечка ключей, и подтверждать её нечем.
+  // Запрещаем только чтение: содержимое попадает в транскрипт навсегда.
+  // Запись безвредна — `cp .env.example .env` и `echo X >> .env` ничего не
+  // раскрывают, и блокировать их значит мешать обычной настройке проекта.
+  // Читающая команда из пайпа берёт путь из соседнего сегмента
+  // (`echo .env | xargs cat`), поэтому кандидатов ищем по всей строке. Так же
+  // интерпретатор с heredoc (`python - <<EOF`): его код — в следующих строках.
+  const heredocCode = INTERPRETERS.has(cmd) && seg.includes('<<');
+  const scope = (piped && READS_FILE.has(cmd)) || heredocCode ? raw : seg;
+  const secret = readsSecret(scope, toks, cmd);
+  if (secret) return secretReason(secret);
+
+  if (GREP_CMDS.has(cmd) && grepWithoutInclude(toks)) {
+    return {
+      level: DENY,
+      reason: 'рекурсивный grep без `--include` на расширения кода читает и `.env` в дереве. ' +
+        'В проекте с `.tokensave/` символ ищет `tokensave_search`, точную строку — ' +
+        '`tokensave_search` с `literal: true` (grep по коду там останавливает хук tokensave ' +
+        'и с `--include`); доки, конфиги, yml, инфраструктуру — `rag_search`; вне индексов ' +
+        'укажи файлы: `--include=*.ts` (можно несколько).',
+    };
+  }
+
+  // Команды, печатающие окружение целиком. Секрет в них приходит не из
+  // файла, а из вывода, и по имени файла его не поймать: `printenv` в
+  // проекте с экспортированным токеном кладёт его в транскрипт так же
+  // надёжно, как `cat .env`.
+  if (/^docker(-compose)?$/.test(cmd) && toks.includes('config') && !toks.includes('--services')) {
+    return {
+      level: ASK,
+      reason: '`docker compose config` печатает конфиг с подставленными секретами. Список сервисов — `--services`.',
+    };
+  }
+
+  if (DUMP_CMDS.has(cmd)) {
+    return { level: ASK, reason: `\`${cmd}\` выгружает базу целиком.` };
+  }
+
+  if (DB_CLIENTS.has(cmd)) {
+    const external = dbHostsIn(raw, seg, toks).filter((h) => !LOCAL_HOST_RE.test(h));
+    if (external.length) {
+      return { level: ASK, reason: `\`${cmd}\` идёт на внешний хост ${external[0]} — возможно, боевая база.` };
+    }
+    if (/\.dump\b|--rdb\b|COPY\s+.*\bTO\b/i.test(seg)) {
+      return { level: ASK, reason: `\`${cmd}\` выгружает содержимое базы.` };
+    }
+  }
+
+  if (cmd === 'sqlite3' && /\.dump\b/.test(seg)) {
+    return { level: ASK, reason: 'sqlite3 .dump выгружает базу целиком.' };
+  }
+
+  if (cmd === 'git') {
+    const at = gitSubcommandAt(toks);
+    const fileVerdict = gitFileVerdict(toks, at);
+    if (fileVerdict) return fileVerdict;
+    if (toks[at] === 'push') {
+      const push = gitPushReason(toks, at);
+      if (push) return ask(push.reason, push.cat);
+    }
+  }
+
+  if (cmd === 'docker' || cmd === 'docker-compose') {
+    const acts = ['up', 'down', 'restart', 'stack', 'push'];
+    if (toks.some((t) => acts.includes(t)) && PROD_TOKEN_RE.test(seg)) {
+      return ask('docker меняет прод-конфигурацию.', 'deploy');
+    }
+  }
+
+  if (cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') {
+    if (toks.includes('login')) return ask('`docker login` сохраняет учётные данные registry.');
+    if (toks.includes('run') && (toks.includes('--privileged') || /(?:^|\s)(?:-v|--volume)(?:=|\s+)["']?\/:/.test(seg)
+      || /--mount[= ].*\bsrc(?:ource)?=\/(?:,|\s|$)/.test(seg))) {
+      return ask('контейнер с полным доступом к хосту (`--privileged` или монтирование `/`).');
+    }
+  }
+
+  if (cmd === 'kubectl' && toks.some((t) => ['apply', 'delete', 'scale', 'rollout', 'patch', 'exec', 'cp', 'drain',
+    'cordon', 'uncordon', 'taint', 'edit', 'port-forward', 'create', 'set', 'replace', 'annotate', 'label'].includes(t))) {
+    return { level: ASK, reason: 'kubectl меняет состояние кластера.' };
+  }
+
+  if (cmd === 'ssh') {
+    const remote = sshRemoteVerdict(toks, commandIndex(toks));
+    if (remote) return remote;
+  }
+
+  if (cmd === 'curl' || cmd === 'wget' || cmd === 'http' || cmd === 'httpie') {
+    const reason = outboundReason(toks, seg);
+    if (reason) return { level: ASK, reason };
+  }
+
+  return riskVerdict(cmd, toks, seg, { fromFetch });
 }
 
 export function guardReadSecurity(filePath) {
@@ -1195,12 +1220,17 @@ function resolveReal(p) {
   return path.join(realpathOrSelf(dir), ...rest);
 }
 
-// Единая точка для адаптера хука.
-export function securityGuard(toolName, toolInput = {}) {
+// Файлы разрешений пишет только хук промпта: иначе агент выдал бы согласие себе сам.
+const GRANTS_DENY = deny('the prompt-grant state is written only by the UserPromptSubmit hook from the ' +
+  "user's own words; do not read or change it. Ask the user to name the action in their next prompt.");
+
+// Единая точка для адаптера хука. ctx — разрешения из промпта (см. guardBashSecurity).
+export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   const name = String(toolName || '');
   // Имена tokensave — настоящие: хук tool-args переименует `file` в `path` уже
   // после гарда, и правка `.env` по `file` иначе прошла бы без проверки.
   const ti = normalizeToolInput(name, toolInput) || {};
+  if ([ti.command, ti.code, ti.file_path, ti.notebook_path, ti.path].some(touchesGrants)) return GRANTS_DENY;
 
   if (name === 'Read') return guardReadSecurity(ti.file_path || ti.path || '');
   if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit') {
@@ -1214,8 +1244,8 @@ export function securityGuard(toolName, toolInput = {}) {
     const file = base ? path.resolve(String(base), String(ti.path)) : String(ti.path);
     return guardReadSecurity(file);
   }
-  if (name === 'Bash') return guardBashSecurity(ti.command);
-  if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code);
+  if (name === 'Bash') return guardBashSecurity(ti.command, 0, ctx);
+  if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code, 0, ctx);
   if (name === 'Grep') {
     // glob проверяется и как имя, и как шаблон: `.env*` захватывает `.env`,
     // `.env.*` — `.env.local`.

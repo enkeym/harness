@@ -80,6 +80,8 @@ claude/question-guard.mjs       # адаптер Claude: Stop — такой х�
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
 bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
+grant-core.mjs                  # разрешения из промпта: словарь основ → категории ask, состояние на sid
+claude/grant-track.mjs          # действия, названные в промпте, — разрешения до следующего (UserPromptSubmit)
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
 bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
 bin/start-cost.mjs              # стартовая цена сессий по слоям — из транскриптов
@@ -110,6 +112,7 @@ test/test-impact-map.mjs        # чекер карты: битые ссылки
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-resume-hint.mjs       # цепочка передач до последнего звена; последнее звено, отказ без звена, промпт после передачи, чужой slug — молчат
 test/test-security.mjs          # что deny, что ask (push), что проходит молча
+test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вставки), сброс, чужой sid, ask → allow через dispatch
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-scratch.mjs           # черновики /tmp: созданное удаляется, чужое, репозиторий и каталог Claude Code — нет
@@ -219,7 +222,8 @@ tokensave такого скрипта не требует: его сервер
 
 Строка на **решение**, не на вызов: `sid`, `hook`, `tool`, `target`,
 `decision`, `reason` (обрезана до 160), `ms` — время от старта процесса хука.
-Решения: `deny`, `ask`, `block` (ход не завершён — `question-guard`), `slow`
+Решения: `deny`, `ask`, `granted` (ask security-guard снят разрешением из промпта,
+поле `cat` — категория), `block` (ход не завершён — `question-guard`), `slow`
 (разрешённый вызов, хук работал дольше 800 мс — медленный хук ощущается как
 «спотыкание» не хуже запрещающего) и `crash`.
 Разрешённые вызовы не пишутся — в тихой сессии файл не растёт.
@@ -415,6 +419,28 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 amend, `--no-verify`, правка харнеса из чужого проекта — проходит без вопроса:
 так решил пользователь.
 
+Разрешение из промпта (`grant-core.mjs`, `claude/grant-track.mjs` на `UserPromptSubmit`
+сразу за `paste-guard`): действие, которое пользователь назвал в текущем промпте,
+не спрашивается второй раз. У ask есть категория (`cat` вердикта), словарь основ даёт
+категории промпта: `push` («запушь», `push`; обычный push, main/dev/prod, без refspec,
+`HEAD`, `$…`), `mr` («МР», `PR`, «мерж-реквест», «смержи» — `gh pr`/`glab mr` create|merge, плюс `push`),
+`push-force` («форс», `force`, «перезапиши историю» — `-f`, `+refspec`), `push-delete`
+(«удали ветку», «все ветки», `mirror` — `--delete`, `:ветка`, `--all`/`--mirror`, шаблон `*`),
+`delete` («удали», «почисти», `rm` — `rm -rf .`/`.git`/`*`, `clean -f`, `branch -D`, `find -delete`,
+тома docker), `revert` («откати», «сбрось», `reset` — `reset --hard`, `checkout .`, `restore .`,
+`stash drop|clear`), `deploy` («задеплой», «опубликуй», «релиз» — publish-скрипты, `npm|cargo publish`,
+`twine`, `docker push`, docker с прод-конфигом, `gh|glab release`, terraform/pulumi/helm/ansible/vercel/fly/…),
+`migrate` («накати», «миграция» — prisma/typeorm/knex/sequelize). Отрицание в той же клаузе
+(«не пушь», «без пуша», «пушить не надо», «don't push») разрешения не даёт; блоки ```…``` и
+строки `>` вырезаются — вставка не говорит за пользователя. Набор живёт до следующего
+промпта (`~/.claude/state/grants/<sid>.json`, пустой — файла нет); писать или читать его
+агенту — `deny`. Снятый ask пишется в `hooks.jsonl` как `granted`. После снятого сегмента
+разбор идёт дальше: `git push && rm -rf ~` по «запушь» спросит про `rm`. Без категории
+и всегда с вопросом: `rm -rf /` и `~`, секреты в выводе, `env`, дампы и внешняя БД, `ssh`,
+`sudo`, файрвол, `kubectl`, мутирующий `aws|gcloud|az`, передача наружу, вычисляемый путь git.
+`deny` не снимается ничем, ask mode (ask-guard) блокирует по-прежнему. Слово — не согласие
+на конкретную команду: «удали tmp» открывает и `rm -rf .`, поэтому корень и `~` вне категорий.
+
 На вопрос самого Claude Code о разрешении отвечает `claude/dispatch.mjs`:
 PreToolUse без `deny` и `ask` получает `allow` в любом режиме (default, правки,
 auto). Без него остаются окна выбора — `AskUserQuestion`, `ExitPlanMode` (в нём
@@ -576,6 +602,7 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` (с `--warm`) и `Stop`.
 `context-meter` на `UserPromptSubmit`,
 `paste-guard` на `UserPromptSubmit` первым в таблице — заблокированный промпт
 остальные проверки не видят (у `tokensave hook-prompt-submit` свой процесс),
+за ним `grant-track` (разрешения из промпта для security-guard),
 `plan-guard` на `PreToolUse` (matcher `ExitPlanMode`), `resume-hint` на
 `SessionStart` (matcher `resume`).
 Гейт скиллов: `skill-track` на `PreToolUse`
@@ -774,7 +801,8 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 `~/.claude/state/.cleanup-stamp`). Убирает то, что мертво по устройству: метки
 подсказок ragsave (дроссель внутри — 15 минут, метка старше двух суток
 бессмысленна), метки диагностики проектов и ask mode по сессиям (`default` не трогает), метки
-подключённых доменов карты связей (`links-context`, старше двух суток), служебные
+подключённых доменов карты связей (`links-context`, старше двух суток) и
+разрешения из промпта (`grants`, тоже двое суток), служебные
 метки в корне состояния, неотправленную телеметрию
 Claude Code, кеш вставок,
 окружение и снимки shell завершённых сессий, планы plan mode
@@ -832,6 +860,7 @@ node ~/.ai-hooks/test/test-ask-mode.mjs
 node ~/.ai-hooks/test/test-project-bootstrap.mjs
 node ~/.ai-hooks/test/test-resume-hint.mjs
 node ~/.ai-hooks/test/test-security.mjs
+node ~/.ai-hooks/test/test-grants.mjs
 node ~/.ai-hooks/test/test-security-bypass.mjs
 node ~/.ai-hooks/test/test-cleanup.mjs
 node ~/.ai-hooks/test/test-scratch.mjs

@@ -5,18 +5,25 @@
 // Предохранителя нет: в отличие от гардов tokensave, здесь запрет говорит не
 // «возьми другой инструмент», а «у этого действия есть последствия». Пропускать
 // повторный вызов значило бы отменять запрет вторым нажатием.
+//
+// ask, чью категорию пользователь назвал в текущем промпте (grant-core.mjs), не
+// задаётся: в hooks.jsonl уходит строка `granted` с категорией — для аудита.
 
 import { securityGuard, DENY } from '../security-core.mjs';
+import { isGranted } from '../grant-core.mjs';
+import { logDecision } from '../hooklog-core.mjs';
 import { isEntryPoint } from '../state-core.mjs';
-import { runHook } from './hook-io.mjs';
+import { runHook, targetOf } from './hook-io.mjs';
 
 export function check(input) {
   let verdict = null;
+  const ctx = { isGranted: (cat) => isGranted(input.session_id, cat), granted: [] };
   try {
-    verdict = securityGuard(input.tool_name, input.tool_input);
+    verdict = securityGuard(input.tool_name, input.tool_input, ctx);
   } catch {
     verdict = null; // fail-open: гард не должен ломать работу
   }
+  for (const g of ctx.granted) logDecision('granted', { target: targetOf(input), cat: g.cat, reason: g.reason });
 
   if (!verdict) return null;
   return {
