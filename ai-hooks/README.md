@@ -393,7 +393,22 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 `-hHOST`, `--host`, URL, строка подключения `host=…`, `PGHOST=`/`MYSQL_HOST=` в
 любом месте команды), `docker compose` с прод-конфигом, `kubectl apply`, команды
 через `ssh`, `curl`/`wget` с телом запроса (`-d`, слитный `-dfoo`, `-F`, `-T`,
-`--post-*`, `--body-*`) на внешний хост, с URL или без схемы. Обратимое —
+`--post-*`, `--body-*`) на внешний хост, с URL или без схемы. Ещё `ask`
+(`security-core.mjs`, блок `riskVerdict`): публикация и деплой (`npm publish`,
+`docker push`, `gh`/`glab` merge|create|release, `terraform apply`, `helm upgrade`,
+`vercel --prod`, `fly deploy`, мутирующий `aws|gcloud|az`, скрипты `deploy|release|publish`);
+секрет из вывода (`kubectl get secret -o`, `docker inspect`, `aws configure get`,
+`vault`, `op`, `doppler`, `heroku config`, `git credential`), а токены
+(`gh auth token`, `gcloud … print-access-token`, `aws sts get-session-token`) — `deny`;
+передача наружу (`scp`/`rsync` на `host:`, `sftp`, `rclone`, `curl -X POST|PUT|PATCH|DELETE`
+без тела, `curl … | sh`, `nc`/`socat`/`ngrok`, `ssh -R|-L`, `git remote add|set-url`);
+необратимое локально (`rm -rf` корня, `~`, `.`, `.git`; `git reset --hard`,
+`clean -f`, `checkout .`, `branch -D`, `stash drop`; `compose down -v`,
+`docker volume|system prune`; `find -delete`, `dd of=/dev/…`); миграции
+(`prisma migrate deploy|reset`, `typeorm migration:run`, `knex migrate`) и
+`psql|mysql -c` с `DROP`/`TRUNCATE`/`DELETE` без `WHERE`; `ssh` с любой
+командой, кроме чтения; `kubectl exec|cp|drain|edit|…`; `sudo`, `chmod|chown -R`,
+`crontab -e|-r`, `systemctl start|stop|…`, `iptables`/`ufw`. Обратимое —
 amend, `--no-verify`, правка харнеса из чужого проекта — проходит без вопроса:
 так решил пользователь.
 

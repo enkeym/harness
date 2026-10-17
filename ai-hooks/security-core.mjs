@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals } from './shell-core.mjs';
+import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals, redirectWords } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 import { normalizeToolInput } from './tool-args-core.mjs';
 
@@ -209,11 +209,27 @@ function bareHosts(toks) {
   return hosts;
 }
 
+// Метод запроса: `-X POST`, `-XPOST`, `--request=POST`, `--method POST`.
+function methodOf(toks) {
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === '-X' || t === '--request' || t === '--method') return String(toks[i + 1] || '').toUpperCase();
+    if (/^-X./.test(t)) return t.slice(2).toUpperCase();
+    if (/^--(request|method)=/.test(t)) return t.split('=')[1].toUpperCase();
+  }
+  return '';
+}
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 function outboundReason(toks, seg) {
-  if (!hasUploadFlag(toks)) return null;
+  const method = methodOf(toks);
+  const mutating = MUTATING_METHODS.has(method);
+  if (!hasUploadFlag(toks) && !mutating) return null;
   const hosts = [...hostsIn(seg, toks), ...bareHosts(toks)];
   const external = hosts.filter((h) => h && !LOCAL_HOST_RE.test(h));
   if (external.length === 0) return null;
+  if (!hasUploadFlag(toks)) return `${method}-запрос на ${external[0]} меняет состояние сервиса`;
   const fromFile = /[@<]\s*[\w./-]+/.test(seg) || toks.some((t) => FROM_FILE_FLAG_RE.test(t));
   return `отправка данных на ${external[0]}${fromFile ? ' с содержимым файла' : ''}`;
 }
@@ -659,13 +675,313 @@ function printsEnv(toks) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Публикация и деплой, секреты не из файла, передача наружу, необратимое,
+// миграции. Распознаётся форма команды; обратимое (локальный up, reset --soft,
+// stash, установка пакетов) идёт молча. Токены и пароли — deny: подтверждать
+// нечем, значение нужно запросить у пользователя.
+
+const ask = (reason) => ({ level: ASK, reason });
+const deny = (reason) => ({ level: DENY, reason });
+
+// Свободные слова команды: без флагов и перенаправлений.
+function freeWords(toks) {
+  const rest = toks.slice(commandIndex(toks) + 1);
+  const out = [];
+  for (let i = 0; i < rest.length; i++) {
+    const skip = redirectWords(rest[i]);
+    if (skip) { i += skip - 1; continue; }
+    if (!rest[i].startsWith('-')) out.push(rest[i]);
+  }
+  return out;
+}
+
+// Слово `a`, сразу за ним — одно из `bs`: `gh pr merge`, `docker volume rm`.
+const pair = (w, a, ...bs) => w.some((x, i) => x === a && bs.includes(w[i + 1]));
+const anyWord = (w, ...names) => w.some((x) => names.includes(x));
+
+const PKG_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
+const PKG_PLAIN_VERBS = new Set(['install', 'i', 'add', 'ci', 'remove', 'uninstall', 'update', 'up', 'info', 'view', 'test']);
+const RELEASE_SCRIPT_RE = /^(deploy|release|publish)([:_-]|$)|:(deploy|publish)$|(^|:)(migrate:prod|db:reset)$/;
+const AWS_VERB_RE = /^(terminate|delete|create|put|update|run|start|stop|reboot|modify|deregister|register|send|publish|invoke|attach|detach)-[\w-]+$/;
+const CLOUD_VERB_RE = /^(delete|create|update|deploy|apply|remove|set|add|start|stop|restart|reset|resize|submit|import|export|push|set-iam-policy|add-iam-policy-binding)$/;
+
+function publishVerdict(cmd, toks, w) {
+  if (PKG_MANAGERS.has(cmd)) {
+    if (w.includes('publish')) return ask(`\`${cmd} publish\` публикует пакет в registry.`);
+    const script = PKG_PLAIN_VERBS.has(w[0]) ? null : w.find((x) => RELEASE_SCRIPT_RE.test(x));
+    if (script) return ask(`скрипт «${script}» похож на деплой или релиз.`);
+  }
+  if (cmd === 'make') {
+    const target = w.find((x) => RELEASE_SCRIPT_RE.test(x));
+    if (target) return ask(`цель make «${target}» похожа на деплой или релиз.`);
+  }
+  if (cmd === 'cargo' && w.includes('publish')) return ask('`cargo publish` публикует крейт.');
+  if (cmd === 'twine' && w.includes('upload')) return ask('`twine upload` публикует пакет в PyPI.');
+  if ((cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') && w.includes('push')) {
+    return ask('`docker push` публикует образ в registry.');
+  }
+  if (cmd === 'gh') {
+    if (pair(w, 'pr', 'merge', 'create') || pair(w, 'release', 'create', 'delete', 'upload')
+      || pair(w, 'repo', 'delete', 'create') || pair(w, 'gist', 'create') || pair(w, 'workflow', 'run')) {
+      return ask('`gh` публикует или меняет состояние на GitHub.');
+    }
+    if (w.includes('api') && (MUTATING_METHODS.has(methodOf(toks))
+      || toks.some((t) => /^(-f|-F|--field|--raw-field|--input)$/.test(t)))) {
+      return ask('`gh api` меняет состояние на GitHub.');
+    }
+  }
+  if (cmd === 'glab' && (pair(w, 'mr', 'merge', 'create') || pair(w, 'release', 'create') || pair(w, 'repo', 'delete'))) {
+    return ask('`glab` публикует или меняет состояние на GitLab.');
+  }
+  if ((cmd === 'terraform' || cmd === 'tofu') && anyWord(w, 'apply', 'destroy')) {
+    return ask(`\`${cmd}\` меняет инфраструктуру.`);
+  }
+  if (cmd === 'pulumi' && anyWord(w, 'up', 'destroy')) return ask('`pulumi` меняет инфраструктуру.');
+  if (cmd === 'helm' && anyWord(w, 'install', 'upgrade', 'uninstall', 'rollback', 'delete')) {
+    return ask('`helm` меняет релиз в кластере.');
+  }
+  if (cmd === 'ansible-playbook' && !toks.some((t) => /^(--check|-C|--syntax-check|--list-hosts)$/.test(t))) {
+    return ask('`ansible-playbook` меняет состояние хостов.');
+  }
+  if (cmd === 'vercel' && (w.length === 0 || anyWord(w, 'deploy', 'promote', 'rollback', 'remove', 'rm')
+    || toks.includes('--prod'))) {
+    return ask('`vercel` выкладывает или удаляет деплой.');
+  }
+  if ((cmd === 'fly' || cmd === 'flyctl') && anyWord(w, 'deploy', 'launch', 'destroy', 'scale')) {
+    return ask('`fly` меняет приложение на Fly.io.');
+  }
+  if (cmd === 'railway' && anyWord(w, 'up', 'deploy', 'down')) return ask('`railway` меняет деплой.');
+  if ((cmd === 'serverless' || cmd === 'sls') && anyWord(w, 'deploy', 'remove')) return ask('`serverless` меняет деплой.');
+  if (cmd === 'netlify' && anyWord(w, 'deploy')) return ask('`netlify deploy` выкладывает сайт.');
+  if (cmd === 'wrangler' && anyWord(w, 'deploy', 'publish', 'delete')) return ask('`wrangler` меняет воркер Cloudflare.');
+  if (cmd === 'aws' && (w.some((x) => AWS_VERB_RE.test(x)) || pair(w, 's3', 'rm', 'sync', 'mb', 'rb', 'mv', 'cp'))) {
+    return ask('`aws` меняет ресурсы облака.');
+  }
+  if ((cmd === 'gcloud' || cmd === 'az') && w.some((x) => CLOUD_VERB_RE.test(x))) {
+    return ask(`\`${cmd}\` меняет ресурсы облака.`);
+  }
+  return null;
+}
+
+// Секрет приходит в транскрипт не из файла, а из вывода команды.
+function secretOutputVerdict(cmd, toks, w, at) {
+  const kubectlLike = cmd === 'kubectl' || cmd === 'oc';
+  if (kubectlLike && w.includes('get') && w.some((x) => /^secrets?(\/|$)/.test(x))
+    && toks.some((t) => /^(-o|--output)(=|$)|^-o\w/.test(t))) {
+    return ask('`kubectl get secret -o …` печатает значения секретов. Нужен список — без `-o`.');
+  }
+  if (kubectlLike && pair(w, 'config', 'view') && toks.includes('--raw')) {
+    return ask('`kubectl config view --raw` печатает токены и ключи кластера.');
+  }
+  if ((cmd === 'docker' || cmd === 'podman') && w.includes('inspect')) {
+    return ask('`docker inspect` печатает переменные окружения контейнера. Нужно поле — `--format`.');
+  }
+  if (cmd === 'gh' && (pair(w, 'auth', 'token')
+    || (pair(w, 'auth', 'status') && toks.some((t) => t === '-t' || t === '--show-token')))) {
+    return deny('`gh auth token` печатает токен GitHub. Значение — запроси у пользователя.');
+  }
+  if (cmd === 'gcloud' && w.some((x) => /^print-(access|identity)-token$/.test(x))) {
+    return deny('`gcloud … print-access-token` печатает токен. Значение — запроси у пользователя.');
+  }
+  if (cmd === 'aws') {
+    if (anyWord(w, 'export-credentials', 'get-session-token', 'get-login-password', 'get-authorization-token')) {
+      return deny('`aws` печатает учётные данные. Значение — запроси у пользователя.');
+    }
+    if (pair(w, 'configure', 'get') || pair(w, 'secretsmanager', 'get-secret-value')
+      || (pair(w, 'ssm', 'get-parameter', 'get-parameters') && toks.includes('--with-decryption'))) {
+      return ask('`aws` печатает секрет.');
+    }
+  }
+  if (cmd === 'vault' && (pair(w, 'kv', 'get') || w.includes('read'))) return ask('`vault` печатает секрет.');
+  if (cmd === 'op' && (anyWord(w, 'read', 'inject') || pair(w, 'item', 'get'))) return ask('`op` печатает секрет.');
+  if (cmd === 'doppler' && w.includes('secrets')) return ask('`doppler secrets` печатает секреты.');
+  if (cmd === 'heroku' && w.some((x) => /^config(:get)?$/.test(x))) return ask('`heroku config` печатает секреты.');
+  if (cmd === 'vercel' && w.includes('env') && anyWord(w, 'ls', 'list', 'pull')) {
+    return ask('`vercel env` печатает или скачивает секреты.');
+  }
+  if ((cmd === 'fly' || cmd === 'flyctl') && w.includes('secrets')) return ask('`fly secrets` работает с секретами.');
+  if (cmd === 'security' && anyWord(w, 'find-generic-password', 'find-internet-password')) {
+    return ask('`security` достаёт пароль из связки ключей.');
+  }
+  if (cmd === 'git') {
+    const sub = toks[at];
+    const args = toks.slice(at + 1);
+    if (sub === 'credential' && anyWord(args, 'fill', 'approve', 'reject')) {
+      return ask('`git credential` работает с хранилищем паролей.');
+    }
+    if (sub === 'config' && args.some((a) => /^credential\./.test(a)) && args.some((a) => /^(--get|--get-all|-l|--list)/.test(a))) {
+      return ask('`git config` печатает настройки хранилища паролей.');
+    }
+  }
+  return null;
+}
+
+// scp/rsync/sftp/rclone: уходит ли что-то на удалённый адрес. Назначение —
+// последний операнд; скачивание на локальный путь не спрашивается.
+const REMOTE_OPERAND_RE = /^(?:[\w.-]+@)?[\w.-]{2,}:(?!\/\/)|^rsync:\/\//;
+const TUNNEL_CMDS = new Set(['nc', 'ncat', 'netcat', 'socat', 'ngrok', 'localtunnel', 'lt']);
+const MAIL_CMDS = new Set(['mail', 'mailx', 'sendmail', 'mutt']);
+
+function transferVerdict(cmd, toks, w) {
+  if (cmd === 'scp' || cmd === 'rsync') {
+    const rest = toks.slice(commandIndex(toks) + 1).filter((t) => !t.startsWith('-') && !redirectWords(t));
+    const dest = rest[rest.length - 1] || '';
+    if (rest.length >= 2 && REMOTE_OPERAND_RE.test(dest)) return ask(`\`${cmd}\` отправляет файлы на ${dest.split(':')[0]}.`);
+  }
+  if (cmd === 'sftp') return ask('`sftp` открывает сеанс передачи файлов на удалённый хост.');
+  if (cmd === 'rclone' && anyWord(w, 'copy', 'sync', 'move', 'copyto', 'moveto', 'bisync')) {
+    return ask('`rclone` копирует данные в удалённое хранилище.');
+  }
+  if (TUNNEL_CMDS.has(cmd)) return ask(`\`${cmd}\` открывает сетевое соединение или выставляет порт наружу.`);
+  if (cmd === 'cloudflared' && w.includes('tunnel')) return ask('`cloudflared tunnel` выставляет порт наружу.');
+  if (MAIL_CMDS.has(cmd)) return ask(`\`${cmd}\` отправляет письмо.`);
+  return null;
+}
+
+// Необратимое локально: незакоммиченная работа, тома с данными, корень, диск.
+const DANGEROUS_RM_RE = /^(\/\*?|~\/?\*?|\$\{?HOME\}?\/?\*?|\.{1,2}\/?\*?|\*|(\S*\/)?\.git\/?)$/;
+
+function gitRiskVerdict(toks, at) {
+  const sub = toks[at];
+  const args = toks.slice(at + 1);
+  const free = args.filter((a) => !a.startsWith('-'));
+  if (sub === 'reset' && args.includes('--hard')) return ask('`git reset --hard` стирает незакоммиченные изменения.');
+  if (sub === 'clean' && !args.some((a) => a === '-n' || a === '--dry-run')
+    && args.some((a) => /^-[a-zA-Z]*f|^--force$/.test(a))) {
+    return ask('`git clean -f` удаляет неотслеживаемые файлы.');
+  }
+  if (sub === 'checkout' && free.includes('.')) return ask('`git checkout .` стирает незакоммиченные изменения.');
+  if (sub === 'restore' && free.includes('.') && !(args.includes('--staged') && !args.includes('--worktree'))) {
+    return ask('`git restore .` стирает незакоммиченные изменения.');
+  }
+  if (sub === 'branch' && (args.some((a) => /^-[a-zA-Z]*D/.test(a))
+    || (args.some((a) => a === '--delete') && args.some((a) => a === '--force' || a === '-f')))) {
+    return ask('`git branch -D` удаляет ветку вместе с неслитыми коммитами.');
+  }
+  if (sub === 'stash' && anyWord(args, 'drop', 'clear')) return ask('`git stash drop|clear` стирает отложенную работу.');
+  if (sub === 'reflog' && anyWord(args, 'expire', 'delete')) return ask('`git reflog` стирает страховку от потери коммитов.');
+  if (sub === 'filter-repo' || sub === 'filter-branch') return ask(`\`git ${sub}\` переписывает историю.`);
+  if (sub === 'update-ref' && args.includes('-d')) return ask('`git update-ref -d` удаляет ссылку.');
+  if (sub === 'remote' && anyWord(args.slice(0, 1), 'add', 'set-url')) {
+    return ask('`git remote` меняет адрес, куда уйдёт следующий push.');
+  }
+  return null;
+}
+
+function irreversibleVerdict(cmd, toks, w) {
+  if (cmd === 'rm' && toks.some((t) => /^-[a-zA-Z]*[rR]|^--recursive$/.test(t)) && w.some((x) => DANGEROUS_RM_RE.test(x))) {
+    return ask('рекурсивное удаление корня, домашнего каталога, текущего каталога или `.git`.');
+  }
+  if (cmd === 'find' && toks.includes('-delete')) return ask('`find -delete` удаляет всё найденное.');
+  if (cmd === 'shred' || cmd === 'truncate' || cmd.startsWith('mkfs')) return ask(`\`${cmd}\` необратимо стирает данные.`);
+  if (cmd === 'dd' && toks.some((t) => /^of=\/dev\//.test(t))) return ask('`dd` пишет прямо в устройство.');
+  if (cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') {
+    if (w.includes('down') && toks.some((t) => t === '-v' || t === '--volumes')) {
+      return ask('`down -v` удаляет тома с данными.');
+    }
+    if (pair(w, 'volume', 'rm', 'prune')) return ask('`docker volume` удаляет тома с данными.');
+    if (pair(w, 'system', 'prune') && toks.some((t) => /^(-[a-z]*a[a-z]*|--all|--volumes)$/.test(t))) {
+      return ask('`docker system prune -a` удаляет образы, контейнеры и тома.');
+    }
+  }
+  return null;
+}
+
+// Миграции и DDL. ORM берёт адрес базы из `.env`, в команде его не видно —
+// боевая это база или локальная, решает человек.
+const ORM_RUNNERS = new Set(['npx', 'pnpm', 'yarn', 'bunx', 'npm', 'bun', 'prisma', 'typeorm', 'knex', 'sequelize',
+  'sequelize-cli', 'typeorm-ts-node-commonjs', 'typeorm-ts-node-esm']);
+const SQL_DESTRUCTIVE_RE = /\b(drop|truncate)\b|\bdelete\s+from\b(?![^;]*\bwhere\b)/i;
+
+function migrationVerdict(cmd, toks, w, seg) {
+  if (ORM_RUNNERS.has(cmd)) {
+    if (w.includes('prisma') || cmd === 'prisma') {
+      if (pair(w, 'migrate', 'deploy', 'reset', 'resolve')) return ask('`prisma migrate` меняет схему базы из DATABASE_URL.');
+      if (pair(w, 'db', 'push', 'execute') && (toks.includes('--accept-data-loss') || toks.includes('--force-reset')
+        || w.includes('execute'))) {
+        return ask('`prisma db` меняет базу из DATABASE_URL.');
+      }
+    }
+    if (w.some((x) => /^(migration:(run|revert)|schema:(drop|sync))$/.test(x))) {
+      return ask('`typeorm` меняет схему базы из окружения.');
+    }
+    if (w.some((x) => /^migrate:(latest|rollback|up|down)$/.test(x)) || (w.includes('knex') && pair(w, 'migrate', 'latest', 'rollback', 'up', 'down'))) {
+      return ask('`knex migrate` меняет схему базы из окружения.');
+    }
+    if (w.some((x) => /^db:(migrate|drop)/.test(x))) return ask('`sequelize db:*` меняет базу из окружения.');
+  }
+  if ((cmd === 'psql' || cmd === 'mysql') && toks.some((t) => /^(-c|-e|--command|--execute)$/.test(t))
+    && SQL_DESTRUCTIVE_RE.test(seg)) {
+    return ask(`\`${cmd}\` выполняет разрушающий SQL (DROP, TRUNCATE или DELETE без WHERE).`);
+  }
+  return null;
+}
+
+// Повышение прав и системные настройки хоста.
+function hostVerdict(cmd, toks, w) {
+  const lead = toks.slice(0, commandIndex(toks)).map((t) => path.basename(t));
+  if (lead.includes('sudo') || lead.includes('doas') || cmd === 'su') return ask('команда с правами root.');
+  if ((cmd === 'chmod' || cmd === 'chown') && toks.some((t) => /^-[a-zA-Z]*R|^--recursive$/.test(t))) {
+    return ask(`\`${cmd} -R\` меняет права всего дерева.`);
+  }
+  if (cmd === 'crontab' && (toks.some((t) => t === '-e' || t === '-r') || w.length)) {
+    return ask('`crontab` меняет расписание задач.');
+  }
+  if (cmd === 'systemctl' && anyWord(w, 'start', 'stop', 'restart', 'enable', 'disable', 'mask', 'reload', 'daemon-reload', 'kill')) {
+    return ask('`systemctl` меняет состояние сервиса.');
+  }
+  if ((cmd === 'iptables' || cmd === 'ip6tables')
+    && toks.some((t) => /^-[AIDFXPRZ]$|^--(append|insert|delete|flush|policy|new-chain|delete-chain|replace)$/.test(t))) {
+    return ask(`\`${cmd}\` меняет правила файрвола.`);
+  }
+  if (cmd === 'ufw' && anyWord(w, 'allow', 'deny', 'delete', 'enable', 'disable', 'reset', 'reject', 'limit', 'insert', 'route')) {
+    return ask('`ufw` меняет правила файрвола.');
+  }
+  if (cmd === 'nft' && anyWord(w, 'flush', 'add', 'delete', 'insert', 'replace')) return ask('`nft` меняет правила файрвола.');
+  return null;
+}
+
+// Команды, исполняющие скачанное: `curl … | bash`.
+const FETCH_CMDS = new Set(['curl', 'wget', 'http', 'httpie']);
+const SHELL_EXEC_CMDS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', ...INTERPRETERS]);
+
+function riskVerdict(cmd, toks, seg, { fromFetch }) {
+  const w = freeWords(toks);
+  if (fromFetch && SHELL_EXEC_CMDS.has(cmd)) return ask('скачанное из сети исполняется без просмотра.');
+  const at = gitSubcommandAt(toks);
+  return publishVerdict(cmd, toks, w)
+    || secretOutputVerdict(cmd, toks, w, at)
+    || transferVerdict(cmd, toks, w)
+    || (cmd === 'git' && gitRiskVerdict(toks, at))
+    || irreversibleVerdict(cmd, toks, w)
+    || migrationVerdict(cmd, toks, w, seg)
+    || hostVerdict(cmd, toks, w);
+}
+
+// Удалённая команда ssh, кроме чтения, меняет состояние хоста.
+const SSH_READ_CMDS = new Set(['ls', 'cat', 'tail', 'head', 'df', 'du', 'uptime', 'journalctl', 'free', 'ps', 'top',
+  'whoami', 'hostname', 'date', 'uname', 'id', 'pwd', 'echo', 'grep', 'wc', 'stat', 'file', 'which', 'git', 'true']);
+
+function sshRemoteVerdict(toks, at) {
+  if (toks.some((t) => /^-[RL]/.test(t))) return ask('`ssh -R|-L` пробрасывает порт: сервис станет доступен снаружи или изнутри.');
+  const remote = afterTarget(toks, at + 1, SSH_ARG_OPTS).join(' ');
+  if (!remote.trim()) return null;
+  const names = segments(remote).map((s) => baseCommand(commandName(tokenize(s.text))));
+  if (names.some((n) => n && !SSH_READ_CMDS.has(n))) return ask('команда меняет состояние удалённого хоста.');
+  return null;
+}
+
 export function guardBashSecurity(command, depth = 0) {
   const raw = String(command || '');
   if (!raw.trim() || depth > 3) return null;
 
+  let prevCmd = '';
   for (const { text: seg, piped } of segments(raw)) {
     const toks = tokenize(seg);
     const cmd = baseCommand(commandName(toks));
+    const fromFetch = piped && FETCH_CMDS.has(prevCmd);
+    prevCmd = cmd;
 
     // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
     const envCmd = printsEnv(toks);
@@ -774,12 +1090,22 @@ export function guardBashSecurity(command, depth = 0) {
       }
     }
 
-    if (cmd === 'kubectl' && toks.some((t) => ['apply', 'delete', 'scale', 'rollout', 'patch'].includes(t))) {
+    if (cmd === 'docker' || cmd === 'docker-compose' || cmd === 'podman') {
+      if (toks.includes('login')) return ask('`docker login` сохраняет учётные данные registry.');
+      if (toks.includes('run') && (toks.includes('--privileged') || /(?:^|\s)(?:-v|--volume)(?:=|\s+)["']?\/:/.test(seg)
+        || /--mount[= ].*\bsrc(?:ource)?=\/(?:,|\s|$)/.test(seg))) {
+        return ask('контейнер с полным доступом к хосту (`--privileged` или монтирование `/`).');
+      }
+    }
+
+    if (cmd === 'kubectl' && toks.some((t) => ['apply', 'delete', 'scale', 'rollout', 'patch', 'exec', 'cp', 'drain',
+      'cordon', 'uncordon', 'taint', 'edit', 'port-forward', 'create', 'set', 'replace', 'annotate', 'label'].includes(t))) {
       return { level: ASK, reason: 'kubectl меняет состояние кластера.' };
     }
 
-    if (cmd === 'ssh' && /\b(systemctl|docker|rm|deploy|migrate)\b/.test(seg)) {
-      return { level: ASK, reason: 'команда меняет состояние удалённого хоста.' };
+    if (cmd === 'ssh') {
+      const remote = sshRemoteVerdict(toks, commandIndex(toks));
+      if (remote) return remote;
     }
 
     if (cmd === 'curl' || cmd === 'wget' || cmd === 'http' || cmd === 'httpie') {
@@ -787,6 +1113,8 @@ export function guardBashSecurity(command, depth = 0) {
       if (reason) return { level: ASK, reason };
     }
 
+    const risk = riskVerdict(cmd, toks, seg, { fromFetch });
+    if (risk) return risk;
   }
   return null;
 }
