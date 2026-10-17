@@ -56,8 +56,9 @@ ticket, commit style, remote and project restrictions come from
   verified: `git push origin <branch>` (`-u` the first time). Earlier commits
   stay local; a handoff mid-request leaves the push to the session that
   finishes. security-guard asks the user on every push — that dialog is the
-  only confirmation; declined → the commits stay local, say so in one line, no
-  retry. Only the project's own memory or rules file can restrict it; then say
+  only confirmation — unless the user's last prompt named it («запушь»,
+  «сделай МР»), then it passes without one; declined → the commits stay
+  local, say so in one line, no retry. Only the project's own memory or rules file can restrict it; then say
   in one line that the push is left to the user.
 
 ## Merge request and Jira text — only on explicit request

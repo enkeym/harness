@@ -11,7 +11,8 @@ Claude Code tools and gates: `CLAUDE.md`.
   user says "покажи в чате", "не применяй", "только предложи".
 - Confirm only before: deleting files, deploy, destructive migration, force
   push, merge into a protected branch. Commit needs no confirmation; push is
-  confirmed in security-guard's dialog, not in chat.
+  confirmed in security-guard's dialog (skipped when the user's last prompt
+  named it), not in chat.
 - A question to the user — a fork, a choice, an open point before a handoff —
   goes through `AskUserQuestion`, options
   with the recommended one first; never left as prose at the end of a reply,
@@ -93,7 +94,7 @@ user asks, not the only trigger.
   reproduced case), no open question → impact pass, `review-standards`,
   `review-security`, fix findings, commit — without asking in chat. Push once,
   after the last commit of the whole request, not after each plan step (the
-  push itself asks through security-guard). One edit of
+  push asks through security-guard unless the user's prompt named it). One edit of
   an unfinished request, an unverified fix, or a change the user is still
   steering is not done. In doubt → «Закоммитить» as an option in the closing
   menu, not a commit. Only a restriction in the project's own memory or rules

@@ -16,7 +16,8 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 
 ## Hooks
 
-- `git push` is gated by security-guard (every push asks, `--dry-run` aside);
+- `git push` is gated by security-guard (every push asks, `--dry-run` aside,
+  unless the user named it in their last prompt: «запушь», «сделай МР»);
   besides it security-guard asks only on irreversible operations (prod, ssh,
   remote DB, outbound data); every other call no guard denies passes without a
   permission prompt in any mode. Don't add a chat question on top.
