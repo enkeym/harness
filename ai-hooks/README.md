@@ -83,7 +83,7 @@ security-core.mjs               # что запрещено насмерть, ч
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
 bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
 bin/start-cost.mjs              # стартовая цена сессий по слоям — из транскриптов
-bin/tool-share.mjs              # доля tokensave/rag_search против Read/grep и токены за сессию — из транскриптов, до/после границы; --waste — цена лишних вызовов по классам (ток. и $), топ сессий, недостающие вызовы
+bin/tool-share.mjs              # доля tokensave/rag_search против Read/grep, токены за сессию, шаги на реплику (steps/ask) и доля пачек инструментов (batch%) — из транскриптов, до/после границы; --waste — цена лишних вызовов по классам (ток. и $), топ сессий, недостающие вызовы
 bin/cleanup.mjs                 # уборка меток, кешей и журналов (Stop, раз в сутки)
 scratch-core.mjs                # черновики агента в /tmp: какие пути созданы сессией, их удаление
 claude/scratch.mjs              # адаптер Claude: PreToolUse(Bash|Write) запоминает, Stop и SessionEnd удаляют
@@ -119,7 +119,7 @@ test/test-output-clip.mjs       # что оборачивается, что не
 test/test-usage-log.mjs         # дедуп сообщений, арифметика цены, субагенты, upsert, скиллы по имени
 test/test-usage-report.mjs      # отчёт /usage: период, --project, суммы по моделям и проектам (git-корень), источники, скиллы, --sessions, неверные аргументы
 test/test-start-cost.mjs        # стартовая цена: слои до первого ответа, субагент и <synthetic> мимо, порог размера, rest, неверный аргумент
-test/test-tool-share.mjs        # доля инструментов: граница делит сессии, <synthetic> не в turns, один message.id — один ход, отказ по toolDenialKind — deny, каталог HOME — ~, неверная граница или размер — использование; --waste: каждый класс потерь, сброс правкой и сегментом, недостающие вызовы, пропущенный rag_search после пустого search, rag_search точной строки без path_include
+test/test-tool-share.mjs        # доля инструментов: граница делит сессии, <synthetic> не в turns, один message.id — один ход, отказ по toolDenialKind — deny, реплика без ответа API не в asks, batch% по ответам с инструментами, каталог HOME — ~, неверная граница или размер — использование; --waste: каждый класс потерь, сброс правкой и сегментом, недостающие вызовы, пропущенный rag_search после пустого search, rag_search точной строки без path_include
 test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, перерегистрация в Claude
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, занятый замок не трогает sync.log, выбор каталога и бинаря, тихие выходы

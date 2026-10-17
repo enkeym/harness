@@ -18,6 +18,11 @@
 // ответам: столько токенов контекста прочитала модель за сессию; out — Σ output.
 // Запись с моделью <synthetic> — без вызова API (ошибка /login, «No response
 // requested») — не ответ: не в turns и не в модель.
+// asks — реплики пользователя (запись user без tool_result и не isMeta), за
+// которыми был хоть один ответ API: /model и вывод локальных команд не в счёт.
+// steps/ask — turns на реплику; batch% — доля ответов с инструментами, где их
+// два и больше: цена хода — окно × шаги, независимые вызовы по одному —
+// лишние шаги.
 //
 // --waste первым аргументом — вместо долей цена лишних вызовов в сессиях после
 // границы. Окно вызова API — input + cache_read + cache_creation; сегмент
@@ -114,12 +119,15 @@ const text = (content) => (typeof content === 'string' ? content : JSON.stringif
 const isDeny = (rec, b) => b.is_error && (rec.toolDenialKind === 'permission-rule' || /hook error/.test(text(b.content)));
 
 function session(file) {
-  const r = { file: basename(file).slice(0, 8), start: '', model: '', turns: 0, deny: 0, ctx: 0, out: 0 };
+  const r = { file: basename(file).slice(0, 8), start: '', model: '', turns: 0, asks: 0, tooled: 0, multi: 0, deny: 0, ctx: 0, out: 0 };
   for (const g of GROUPS) r[g] = 0;
   const answered = new Set();
+  const uses = new Map();
+  let prompted = true;
   for (const rec of records(file)) {
     if (!r.start && rec.timestamp) r.start = rec.timestamp;
     const content = rec.message?.content;
+    if (rec.type === 'user' && !rec.isMeta && !(Array.isArray(content) && content.some((b) => b.type === 'tool_result'))) prompted = true;
     if (!Array.isArray(content)) continue;
     if (rec.type === 'assistant') {
       if (rec.message.model === '<synthetic>') continue;
@@ -128,12 +136,15 @@ function session(file) {
       if (u && !answered.has(id)) {
         answered.add(id);
         r.turns += 1;
+        if (prompted) r.asks += 1;
+        prompted = false;
         r.model = (rec.message.model ?? '').replace('claude-', '');
         r.ctx += (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
         r.out += u.output_tokens ?? 0;
       }
       for (const b of content) {
         if (b.type !== 'tool_use') continue;
+        uses.set(id, (uses.get(id) ?? 0) + 1);
         const g = group(b);
         if (g) r[g] += 1;
       }
@@ -142,6 +153,10 @@ function session(file) {
         if (b.type === 'tool_result' && isDeny(rec, b)) r.deny += 1;
       }
     }
+  }
+  for (const n of uses.values()) {
+    r.tooled += 1;
+    if (n > 1) r.multi += 1;
   }
   return r.turns ? r : null;
 }
@@ -411,29 +426,30 @@ if (WASTE) {
 }
 // Доля «умных» инструментов среди всех поисков и чтений.
 const share = (r) => pct(r.ts + r.rag, r.ts + r.rag + r.read + r.grep);
+const steps = (r) => (r.asks ? (r.turns / r.asks).toFixed(1) : '—');
 
-const head = ['proj', 'file', 'start', 'model', 'turns', ...GROUPS, 'deny', 'share%', 'ctx', 'ctx/turn', 'out'];
+const head = ['proj', 'file', 'start', 'model', 'turns', ...GROUPS, 'deny', 'share%', 'ctx', 'ctx/turn', 'out', 'asks', 'steps/ask', 'batch%'];
 console.log(head.join('\t'));
 for (const r of rows) {
   console.log([r.proj, r.file, r.start.slice(0, 16), r.model, r.turns, ...GROUPS.map((g) => r[g]),
-    r.deny, share(r), k(r.ctx), k(r.ctx / r.turns), k(r.out)].join('\t'));
+    r.deny, share(r), k(r.ctx), k(r.ctx / r.turns), k(r.out), r.asks, steps(r), pct(r.multi, r.tooled)].join('\t'));
 }
 
 // Итог до и после границы — по проектам и всего.
 function total(list) {
-  const t = { turns: 0, deny: 0, ctx: 0, out: 0, n: list.length };
+  const t = { turns: 0, asks: 0, tooled: 0, multi: 0, deny: 0, ctx: 0, out: 0, n: list.length };
   for (const g of GROUPS) t[g] = 0;
-  for (const r of list) for (const key of ['turns', 'deny', 'ctx', 'out', ...GROUPS]) t[key] += r[key];
+  for (const r of list) for (const key of ['turns', 'asks', 'tooled', 'multi', 'deny', 'ctx', 'out', ...GROUPS]) t[key] += r[key];
   return t;
 }
 function printTotal(label, list) {
   if (!list.length) return;
   const t = total(list);
-  console.log([label, `${t.n} сессий`, t.turns, ...GROUPS.map((g) => t[g]), t.deny, share(t), k(t.ctx), k(t.ctx / t.turns), k(t.out)].join('\t'));
+  console.log([label, `${t.n} сессий`, t.turns, ...GROUPS.map((g) => t[g]), t.deny, share(t), k(t.ctx), k(t.ctx / t.turns), k(t.out), t.asks, steps(t), pct(t.multi, t.tooled)].join('\t'));
 }
 
 console.log('');
-console.log(['период', 'сессии', 'turns', ...GROUPS, 'deny', 'share%', 'ctx', 'ctx/turn', 'out'].join('\t'));
+console.log(['период', 'сессии', 'turns', ...GROUPS, 'deny', 'share%', 'ctx', 'ctx/turn', 'out', 'asks', 'steps/ask', 'batch%'].join('\t'));
 for (const proj of [...new Set(rows.map((r) => r.proj))]) {
   const mine = rows.filter((r) => r.proj === proj);
   printTotal(`${proj} до`, mine.filter((r) => r.start < CUTOFF));

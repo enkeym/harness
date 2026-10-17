@@ -4,7 +4,8 @@
 // весь отчёт по одну сторону границы; запись <synthetic> (без вызова API) не
 // ответ — не в turns и не в модель; сессии из самого HOME подписаны ~; ответ,
 // разбитый на записи с одним message.id, — один ход; отказ без «hook error», но с
-// toolDenialKind permission-rule — deny. --waste: каждый класс потерь с ценой по
+// toolDenialKind permission-rule — deny; asks — реплики с ответом API, batch% —
+// ответы с несколькими инструментами. --waste: каждый класс потерь с ценой по
 // сегменту, правка сбрасывает повторное чтение, отказ пользователя и сбой Bash —
 // не ошибка, сессии до границы не в счёте, недостающие вызовы,
 // пропущенный rag_search после пустого tokensave_search.
@@ -84,6 +85,37 @@ const rows = (out) => {
   const [r] = rows(runIn(box.home, '2026-09-15', '0').stdout);
   check('один message.id — один ход, ctx и out один раз', [r.turns, r.ctx, r.out, r.read], ['1', '1k', '0k', '1']);
   check('toolDenialKind permission-rule — deny', r.deny, '1');
+}
+
+// --- шаги на реплику и доля пачек ---
+{
+  const box = sandbox();
+  const at = '2026-09-30T10:00:00.000Z';
+  const answer = (id, block) => ({
+    type: 'assistant', timestamp: at,
+    message: { id, model: 'claude-opus-5', usage: { input_tokens: 1000 }, content: [block] },
+  });
+  const use = (id) => ({ type: 'tool_use', id, name: 'Read', input: {} });
+  const prompt = (content) => ({ type: 'user', timestamp: at, message: { content } });
+  const result = (id) => ({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'x' }] } });
+  write(box.projDir, 'ffffffff-6.jsonl', [
+    prompt('почини'),
+    answer('m1', use('t1')),
+    answer('m1', use('t2')),
+    result('t1'),
+    result('t2'),
+    answer('m2', use('t3')),
+    result('t3'),
+    answer('m3', { type: 'text', text: 'готово' }),
+    prompt('<command-name>/model</command-name>'),
+    prompt('<local-command-stdout>Set model</local-command-stdout>'),
+    { type: 'user', isMeta: true, message: { content: 'caveat' } },
+    prompt([{ type: 'text', text: 'ещё' }]),
+    answer('m4', { type: 'text', text: 'да' }),
+  ]);
+  const [r] = rows(runIn(box.home, '2026-09-15', '0').stdout);
+  check('реплика без ответа API не в asks, tool_result не реплика', [r.turns, r.asks, r['steps/ask']], ['4', '2', '2.0']);
+  check('batch% — ответы с двумя инструментами среди ответов с инструментами', r['batch%'], '50');
 }
 
 // --- --waste ---
