@@ -1093,7 +1093,6 @@
       "text": "~/awg-start.sh claude\n"
     }
   }
-
   // {
   //   "key": "ctrl+shift+l",
   //   "command": "workbench.action.terminal.sendSequence",

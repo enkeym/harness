@@ -58,8 +58,8 @@ def _raise_cancelled(signum: int, frame: object) -> None:
 def _make_bar(min_interval: float = 0.1, elapsed_before: float = 0.0):
     """Однострочный прогресс-бар с перезаписью через \\r вместо скролла.
 
-    done/total — файлы (доля не меняется во время эмбеддинга уже поставленного
-    в очередь батча — двигается только текст детали). min_interval ограничивает
+    done/total — файлы при сканировании, фрагменты при эмбеддинге: синк
+    сменяет total между фазами, и бар начинается заново. min_interval ограничивает
     частоту перерисовки: без этого печать на каждый под-батч из EMBED_SUB_BATCH
     фрагментов на быстрых файлах может мелькать чаще, чем терминал успевает
     отрисовать, и тратить время на саму печать, а не на индексацию.
@@ -87,9 +87,6 @@ def _make_bar(min_interval: float = 0.1, elapsed_before: float = 0.0):
         fraction = 0.0 if total == 0 else min(1.0, done / total)
         elapsed = now - started
         pct = int(fraction * 100)
-        # done дробный внутри батча (эмбеддинг файла ещё не дописан) — в счётчике
-        # округляем вниз, чтобы не показывать "16/16" раньше, чем 16-й файл
-        # реально попал в индекс.
         shown = min(total, int(done))
 
         limit = shutil.get_terminal_size(fallback=(100, 20)).columns - 1
@@ -107,11 +104,13 @@ def _make_bar(min_interval: float = 0.1, elapsed_before: float = 0.0):
         drawn = True
 
     def say(message: str) -> None:
-        nonlocal drawn
+        nonlocal drawn, last
         if drawn:
             sys.stderr.write("\r\033[K")
             drawn = False
         stderr_progress(message)
+        # Кадр стёрт — следующий рисуется сразу, без ожидания min_interval.
+        last = 0.0
 
     def finish() -> None:
         """Оставить последний кадр на экране и перейти на новую строку."""

@@ -55,6 +55,9 @@ LOCK_HELD_MESSAGE = "another sync is already in progress"
 # в занятый замок.
 PROGRESS_INTERVAL = 0.5
 
+# Как часто бар эмбеддинга повторяет последний кадр, пока модель молчит.
+HEARTBEAT_INTERVAL = 1.0
+
 
 class SyncInProgress(RuntimeError):
     """Другой процесс уже индексирует этот проект."""
@@ -452,10 +455,10 @@ def _index_pass(
         known = store.known_files()
         seen: set[str] = set()
         pending: list[tuple[str, FileRecord, list[Chunk], bool]] = []
-        # Дробный счётчик «готово»: +1 за файл, решённый на месте, и дробный
-        # рост по фрагментам для файлов в очереди на эмбеддинг — иначе бар
-        # прыгал бы на 100% при постановке в очередь и молчал, пока модель считает.
-        done = 0.0
+        # Бар сканирования считает файлы, решённые на месте; файлы в очереди
+        # в него не входят — их ход показывает отдельный бар эмбеддинга по
+        # фрагментам.
+        done = 0
 
         for item in _scanned(all_files, known, force):
             seen.add(item.relative)
@@ -526,8 +529,7 @@ def _index_pass(
 
         if pending:
             started = time.monotonic()
-            done = _embed_pending(store, encoder, pending, done, total_files,
-                                  total_chunks, bump, report)
+            _embed_pending(store, encoder, pending, total_chunks, bump, report)
             report.embed_seconds = time.monotonic() - started
             rate = total_chunks / report.embed_seconds if report.embed_seconds else 0.0
             log(f"эмбеддинг: {total_chunks} фрагментов за "
@@ -573,17 +575,70 @@ def _scanned(
         worker.join(timeout=5)
 
 
+@contextmanager
+def _heartbeat(
+    bump: Callable[[float, int, str], None], every: float = HEARTBEAT_INTERVAL,
+) -> Iterator[Callable[[float, int, str], None]]:
+    """bump, чей последний кадр повторяется раз в every секунд.
+
+    Загрузка модели и батч e5-large на CPU идут десятки секунд без единого
+    вектора: без повтора часы бара стояли бы и синк выглядел бы зависшим.
+    Замок не даёт повтору и главному потоку рисовать одновременно.
+    """
+    lock = threading.Lock()
+    stop = threading.Event()
+    latest: tuple[float, int, str] | None = None
+
+    def beat(done: float, total: int, detail: str) -> None:
+        nonlocal latest
+        with lock:
+            latest = (done, total, detail)
+            bump(done, total, detail)
+
+    def repeat() -> None:
+        try:
+            while not stop.wait(every):
+                with lock:
+                    if latest is not None:
+                        bump(*latest)
+        except OSError:
+            pass  # stderr закрыт — прогресс только для глаз
+
+    worker = threading.Thread(target=repeat, name="ragsave-heartbeat", daemon=True)
+    worker.start()
+    try:
+        yield beat
+    finally:
+        stop.set()
+        worker.join(timeout=5)
+
+
 def _embed_pending(
     store: Store,
     encoder: Embedder,
     pending: list[tuple[str, FileRecord, list[Chunk], bool]],
-    done: float,
-    total_files: int,
     total_chunks: int,
     bump: Callable[[float, int, str], None],
     report: IndexReport,
-) -> float:
-    """Прогнать очередь через модель одним потоком, записывая файлы по готовности."""
+) -> None:
+    """Прогнать очередь через модель одним потоком, записывая файлы по готовности.
+
+    Бар здесь свой, по фрагментам: в баре по файлам очередь — хвост в
+    процент-другой, и он стоял бы на 99%, пока идёт вся работа синка.
+    """
+    with _heartbeat(bump) as beat:
+        beat(0, total_chunks, "ждём модель (загрузка — до минуты)")
+        _embed_into_store(store, encoder, pending, total_chunks, beat, report)
+
+
+def _embed_into_store(
+    store: Store,
+    encoder: Embedder,
+    pending: list[tuple[str, FileRecord, list[Chunk], bool]],
+    total_chunks: int,
+    bump: Callable[[float, int, str], None],
+    report: IndexReport,
+) -> None:
     # Путь файла подмешивается в эмбеддинг: `config/mail.yaml` сообщает тему не
     # хуже содержимого, а для структурированных конфигов — лучше, там прозы нет
     # вовсе и голые ключи (smtp, timeout_seconds) плохо ложатся в вектор.
@@ -598,7 +653,7 @@ def _embed_pending(
     embedded = 0
     for relative, record, chunks, in_graph in pending:
         file_vectors: list[list[float]] = []
-        for chunk_index in range(len(chunks)):
+        for _ in chunks:
             try:
                 file_vectors.append(next(vectors))
             except StopIteration:
@@ -606,8 +661,7 @@ def _embed_pending(
                     f"модель вернула меньше векторов, чем фрагментов ({relative})"
                 ) from None
             embedded += 1
-            bump(done + (chunk_index + 1) / len(chunks), total_files,
-                 f"эмбеддинг: {embedded}/{total_chunks} фрагментов — {relative}")
+            bump(embedded, total_chunks, f"эмбеддинг: {relative}")
 
         rows = [(c.text, c.start_line, c.end_line) for c in chunks]
         with store.transaction():
@@ -616,8 +670,6 @@ def _embed_pending(
             # ветке (или переименованный) переиспользует эти же векторы.
             store.put_cache(record.hash, rows, file_vectors)
         report.chunks += len(rows)
-        done += 1
-    return done
 
 
 def _reset(store: Store, drop_cache: bool = False) -> None:

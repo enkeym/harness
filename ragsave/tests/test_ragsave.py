@@ -716,13 +716,22 @@ def test_sync_lock() -> None:
             # в файле остаётся последний кадр.
             progress = root / ".ragsave" / ".sync.progress"
             seen = []
+            frames = []
+
+            def record(done, total, detail):
+                seen.append(read_progress(progress))
+                frames.append((done, total, detail))
+
             (root / "b.md").write_text("# b", encoding="utf-8")
-            index_project(root=root, embedder=FakeEmbedder(),
-                          tick=lambda done, total, detail: seen.append(read_progress(progress)))
+            index_project(root=root, embedder=FakeEmbedder(), tick=record)
             check("ход синка опубликован с PID", (seen[0] or {}).get("pid"), os.getpid())
+            # Эмбеддинг идёт своим баром по фрагментам, а не хвостом бара файлов.
+            check("бар эмбеддинга: ожидание модели, затем фрагменты",
+                  [f for f in frames if f[1] == 1],
+                  [(0, 1, "ждём модель (загрузка — до минуты)"), (1, 1, "эмбеддинг: b.md")])
             last = read_progress(progress) or {}
             check("после синка в файле хода последний кадр",
-                  (last.get("done"), last.get("total")), (2, 2))
+                  (last.get("done"), last.get("total")), (1, 1))
 
             check("PID из записи замка", holder_pid("PID 42, начат 2026-10-09 13:15:56"), 42)
             check("запись без PID", holder_pid("неизвестный процесс"), None)
@@ -1407,6 +1416,25 @@ def test_progress_bar() -> None:
 
     check_true("finish оставляет кадр и переводит строку один раз",
                draw(57, cancelled).endswith("█" * 10 + "] 100% (3773/3773)     0с\033[K\n"))
+
+    import threading
+
+    from ragsave.indexer import _heartbeat
+
+    # Пока модель молчит, бар повторяет последний кадр — часы идут.
+    repeated = threading.Event()
+    beats = []
+
+    def bump(done, total, detail):
+        beats.append((done, total, detail))
+        if len(beats) >= 3:
+            repeated.set()
+
+    with _heartbeat(bump, every=0.01) as beat:
+        beat(0, 56, "ждём модель")
+        check_true("кадр повторяется без новых вызовов", repeated.wait(5))
+    check_true("повторяется последний кадр", set(beats) == {(0, 56, "ждём модель")},
+               str(beats[:3]))
 
 
 def main() -> int:
