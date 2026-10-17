@@ -52,6 +52,9 @@ paths:
 - Лимиты — `ai-hooks/context-core.mjs:PASTE_LIMIT` (40k) и `PLAN_LIMIT` (12k) ↔ те же
   числа в `ai-hooks/README.md` (оба) и `OVERVIEW.md` (вставка). Сменил константу — доки обещают
   старый порог отказа.
+- Порог пометки `/model` — `ai-hooks/claude/statusline.mjs:MODEL_SWITCH_MIN` (50k) ↔
+  то же число в `ai-hooks/README.md` (раздел порогов и строка теста). Сменил
+  константу — README обещает пометку не с того окна.
 - Пункты `.claude/bootstrap-ignore` (`claude-md`, `husky`, `ci`, `dependabot`,
   `impact-map`) — `ai-hooks/claude/project-bootstrap.mjs:bootstrapContext` ↔
   список в `ai-hooks/README.md` и файлы `.claude/bootstrap-ignore` в чужих

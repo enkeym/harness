@@ -65,7 +65,7 @@ tool-args-core.mjs              # угаданные имена параметр
 claude/tool-args.mjs            # адаптер Claude: PreToolUse(tokensave_read|str_replace|multi_str_replace) — updatedInput
 claude/ask-guard.mjs            # адаптер Claude: PreToolUse(*) — запрет изменений в ask mode
 claude/ask-reminder.mjs         # правило ask mode в промпт (UserPromptSubmit)
-claude/statusline.mjs           # каталог, ветка, модель, индикатор ask mode
+claude/statusline.mjs           # каталог, ветка, модель, ctx, цена /model, индикатор ask mode
 claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты, скиллы по сессии → logs/usage.jsonl (Stop)
 context-core.mjs                # замер занятости окна, пороги в токенах и их тексты
@@ -103,7 +103,7 @@ test/test-hooklog.mjs           # журнал решений: запрет пи
 test/test-hook-io.mjs           # ответ хука: битый stdin, runHook deny/ask/null, журнал
 test/test-dispatch.mjs          # диспетчер: deny сильнее ask и правки входа, allow кроме окон выбора и plan mode, имя проверки в журнале, падение одной, block обрывает UPS и Stop, проект со своим ядром, регистрация
 test/test-tool-args.mjs         # имена параметров tokensave: алиасы, пары замен, ответ хука, гарды под угаданным именем
-test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, ask mode по корню сессии
+test/test-statusline.mjs        # статусная строка: ~, ветка, цвет модели, пороги ctx, /model с 50k, ask mode по корню сессии
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
 test/test-links-context.mjs     # пункты с файлом/каталогом/глобом, счётчик, указатель, раз на сессию; чтение молчит
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
@@ -665,6 +665,11 @@ Sonnet принимал за инъекцию в выводе инструмен
 в новую сессию руками (история старой остаётся в `claude --resume <id>`), либо
 просто очищает контекст. Индикатор в статусной строке показывает те же пороги
 цветом — в контекст оттуда ничего не уходит.
+
+С 50k окна рядом с `ctx` стоит `/model: кеш заново`: кеш привязан к
+модели, и после смены всё окно записывается в него заново (за 30 дней 55
+переключений Opus↔Sonnet — ≈4M токенов записи). Пометка в statusline, а не хук:
+на первом ходе новой модели кеш уже переписан, а строка видна до набора `/model`.
 
 Пороги ловят рост, но не старт. Стартовая цена сессии — `cache_creation` первой
 записи ассистента, по слоям её считает `bin/start-cost.mjs` — раскладывается так (trader, opus, короткий промпт, 44k):

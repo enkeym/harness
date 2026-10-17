@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Claude Code, statusLine: каталог, ветка, название модели неоновым цветом
-// тем-класса и индикатор ask mode.
+// тем-класса, занятость окна, цена смены модели и индикатор ask mode.
 // Встроенная строка режимов (manual/accept edits/plan/auto) рисуется самим CLI
 // и про ask mode ничего не знает — поэтому индикатор живёт здесь.
 
@@ -52,13 +52,22 @@ function branch(dir) {
 //
 // Показываем токены, а не долю окна: с 1M-окном процент выглядит безобидно
 // (220k — «22%»), тогда как платим мы ровно за эти токены на каждом ходе.
-function contextBadge(transcriptPath) {
-  const used = contextUsed(transcriptPath);
+function contextBadge(used) {
   if (!used) return '';
   const lvl = level(used.tokens);
   const color = lvl === 'hard' || lvl === 'hand' ? RED : lvl === 'soft' ? AMBER : DIM;
   const mark = lvl === 'hard' ? '!' : '';
   return `${color}ctx ${Math.round(used.tokens / 1000)}k${mark}${RESET}`;
+}
+
+// Кеш привязан к модели: после /model всё окно записывается в кеш заново.
+// Хук на первом ходе новой модели опоздал бы — кеш уже переписан, — поэтому
+// цену показываем заранее, пока пользователь не набрал /model.
+const MODEL_SWITCH_MIN = 50_000;
+
+function modelSwitchBadge(used) {
+  if (!used || used.tokens < MODEL_SWITCH_MIN) return '';
+  return `${DIM}/model: кеш заново${RESET}`;
 }
 
 let raw = '';
@@ -85,10 +94,12 @@ process.stdin.on('end', () => {
   // Режим показываем всегда: он включён по умолчанию, и «ничего не написано»
   // читалось бы как «правки разрешены».
   const mode = isOn(anchor, input.session_id) ? `${LIME}ask mode on${RESET}` : `${DIM}ask mode off${RESET}`;
+  const used = contextUsed(input.transcript_path);
   const line = [
     `${DIM}${parts.join('  ')}${RESET}`,
     modelBadge(model),
-    contextBadge(input.transcript_path),
+    contextBadge(used),
+    modelSwitchBadge(used),
     mode,
   ]
     .filter(Boolean)

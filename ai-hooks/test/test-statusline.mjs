@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Тесты статусной строки (claude/statusline.mjs): каталог сокращается до ~,
 // ветка видна только в репозитории, цвет модели — по тем-классу, ctx — в
-// токенах с цветом порогов context-meter, ask mode читается по сессии (без
+// токенах с цветом порогов context-meter, цена /model — с 50k окна,
+// ask mode читается по сессии (без
 // неё — по корню сессии, а не по текущему каталогу) и показывается
 // всегда — даже при битом stdin.
 
@@ -89,6 +90,13 @@ check('ниже soft — тускло', ctx(50_000), ['2', 'ctx 50k']);
 check('soft — янтарный', ctx(100_000), ['1;38;2;230;180;0', 'ctx 100k']);
 check('hand — красный без метки', ctx(160_000), ['1;38;2;230;80;60', 'ctx 160k']);
 check('hard — красный с !', ctx(230_000), ['1;38;2;230;80;60', 'ctx 230k!']);
+
+// --- цена смены модели ---
+const switchMark = (tokens) => plain(line(at(other, { transcript_path: transcript(tokens) }))).includes('/model: кеш заново');
+check('ниже 50k — без пометки /model', switchMark(49_000), false);
+check('с 50k — пометка /model', switchMark(50_000), true);
+check('пометка между ctx и ask mode',
+  / ctx 160k  \/model: кеш заново  ask mode off$/.test(plain(line(at(other, { transcript_path: transcript(160_000) })))), true);
 
 // --- ask mode ---
 check('по умолчанию off', plain(line(at(project))).endsWith('ask mode off'), true);
