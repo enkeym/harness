@@ -457,6 +457,15 @@ check('iptables -A', bash('iptables -A INPUT -j DROP'), 'ask');
 check('iptables -L', bash('iptables -L'), 'allow');
 check('ufw allow', bash('ufw allow 22'), 'ask');
 
+// --- heredoc: тело — данные у git/cat/tee, команды у оболочки и ssh
+check('сообщение коммита называет запрещённую команду', bash('git commit -F - <<\'EOF\'\nfeat: gh auth token is denied\n\n- git reset --hard asks\nEOF'), 'allow');
+check('cat > файл с текстом про запрет', bash('cat > notes.md <<EOF\ngh auth token\nrm -rf /\nEOF'), 'allow');
+check('bash <<EOF с командой', bash('bash <<EOF\ngit reset --hard\nEOF'), 'ask');
+check('ssh <<EOF с командой', bash('ssh vps <<EOF\nsystemctl restart bot\nEOF'), 'ask');
+check('cat <<EOF | bash', bash('cat <<EOF | bash\nrm -rf /\nEOF'), 'ask');
+check('cat <<EOF | grep', bash('cat <<EOF | grep x\nrm -rf /\nEOF'), 'allow');
+check('bash <<EOF читает .env', bash('bash <<EOF\ncat .env\nEOF'), 'deny');
+
 // --- обычная работа не задета
 check('npm test', bash('pnpm test'), 'allow');
 check('tsc', bash('pnpm exec tsc --noEmit'), 'allow');

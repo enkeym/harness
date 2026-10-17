@@ -972,16 +972,37 @@ function sshRemoteVerdict(toks, at) {
   return null;
 }
 
+// Команды, для которых тело heredoc — текст, а не код.
+const DATA_HEREDOC_CMDS = new Set(['git', 'cat', 'tee', 'gh', 'glab', 'curl', 'wget', 'http', 'httpie', 'echo', 'printf']);
+const HEREDOC_OPEN_RE = /<<-?\s*(?:'\w+'|"\w+"|\\?\w+)/;
+
+// Сегмент с heredoc (keepHeredoc) → строка команды и тело после неё.
+function splitHeredoc(text) {
+  const m = text.match(HEREDOC_OPEN_RE);
+  const nl = m ? text.indexOf('\n', m.index + m[0].length) : -1;
+  return nl === -1 ? { head: text, body: '' } : { head: text.slice(0, nl), body: text.slice(nl + 1) };
+}
+
 export function guardBashSecurity(command, depth = 0) {
   const raw = String(command || '');
   if (!raw.trim() || depth > 3) return null;
 
   let prevCmd = '';
-  for (const { text: seg, piped } of segments(raw)) {
+  let prevBody = '';
+  for (const { text: full, piped } of segments(raw, { keepHeredoc: true })) {
+    const { head: seg, body } = splitHeredoc(full);
     const toks = tokenize(seg);
     const cmd = baseCommand(commandName(toks));
     const fromFetch = piped && FETCH_CMDS.has(prevCmd);
+    // Тело heredoc — команды у оболочки, интерпретатора, ssh; у git, cat, tee,
+    // curl — данные (сообщение коммита, файл). Данные, попавшие в `| bash`, снова команды.
+    const script = body && !DATA_HEREDOC_CMDS.has(cmd) ? body : piped && SHELL_EXEC_CMDS.has(cmd) ? prevBody : '';
+    if (script) {
+      const verdict = guardBashSecurity(script, depth + 1);
+      if (verdict) return verdict;
+    }
     prevCmd = cmd;
+    prevBody = body;
 
     // До отсева пустого cmd: голый `env` — обёртка без команды, имя у него пустое.
     const envCmd = printsEnv(toks);

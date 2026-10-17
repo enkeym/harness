@@ -408,7 +408,10 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 (`prisma migrate deploy|reset`, `typeorm migration:run`, `knex migrate`) и
 `psql|mysql -c` с `DROP`/`TRUNCATE`/`DELETE` без `WHERE`; `ssh` с любой
 командой, кроме чтения; `kubectl exec|cp|drain|edit|…`; `sudo`, `chmod|chown -R`,
-`crontab -e|-r`, `systemctl start|stop|…`, `iptables`/`ufw`. Обратимое —
+`crontab -e|-r`, `systemctl start|stop|…`, `iptables`/`ufw`. Тело heredoc —
+команды у оболочки, интерпретатора и `ssh`, но текст у `git`, `cat`, `tee`, `gh`,
+`curl` (сообщение коммита не срабатывает на упомянутую в нём команду), пока оно
+не уходит в `| bash`. Обратимое —
 amend, `--no-verify`, правка харнеса из чужого проекта — проходит без вопроса:
 так решил пользователь.
 
