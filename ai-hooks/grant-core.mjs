@@ -2,20 +2,17 @@
 // текущем промпте («сделай МР», «удали», «откати», «задеплой») — вопрос
 // security-guard на это действие не задаётся: согласие уже дано словами.
 //
-// Источник один — текст промпта в UserPromptSubmit; агент его не пишет. Набор
-// категорий живёт до следующего промпта: каждый промпт переписывает его, пустой
-// удаляет файл. Ключ — session_id, `/clear` даёт новый — чисто. deny не
+// Источник — последний промпт человека в транскрипте сессии (`origin.kind:
+// human`): своего файла состояния нет, выдать согласие себе скриптом агенту
+// нечем. План после handoff (`auto-continuation`), ответы меню и уведомления —
+// не промпт человека. Набор живёт до следующего промпта сам собой. deny не
 // снимается ничем; ask без категории (секреты в выводе, `env`, ssh, sudo,
 // передача наружу, внешняя БД) спрашивается всегда.
 //
 // Словарь — основы слов, без разбора смысла: «удали tmp-файлы» откроет и
 // `rm -rf .`. Поэтому корень и домашний каталог категории не имеют вовсе.
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { STATE_ROOT, statePath, writeJSON, readJSON } from './state-core.mjs';
-
-export const GRANTS_DIR = statePath('grants');
+import { transcriptLines } from './context-core.mjs';
 
 // Категория → основы отдельных слов (начало слова после нормализации).
 const WORD_STEMS = {
@@ -48,10 +45,11 @@ const NEG_BEFORE = new Set(['не', 'без', 'нельзя', 'никаких', 
 const NEG_AFTER_RE = /^(надо|нужно|стоит|требуется|смей|вздумай)/;
 const NEG_WINDOW = 3;
 
-// Вставки не говорят за пользователя: блок ``` и строки цитаты `>`.
+// Вставки не говорят за пользователя: блок ```, `<pasted_content>` и строки цитаты `>`.
 export function ownWords(prompt) {
   return String(prompt || '')
     .replace(/```[\s\S]*?(```|$)/g, '\n')
+    .replace(/<pasted_content\b[\s\S]*?(<\/pasted_content>|$)/g, '\n')
     .split('\n')
     .filter((line) => !/^\s*>/.test(line))
     .join('\n');
@@ -102,33 +100,20 @@ export function grantsIn(prompt) {
   return [...cats].sort();
 }
 
-function grantsFile(sid) {
-  return /^[\w-]+$/.test(String(sid || '')) ? path.join(GRANTS_DIR, `${sid}.json`) : null;
-}
-
-// Каждый промпт переписывает набор; пустой — файла нет.
-export function recordGrants(sid, prompt) {
-  const file = grantsFile(sid);
-  if (!file) return [];
-  const cats = grantsIn(prompt);
-  if (cats.length) writeJSON(file, { cats, ts: new Date().toISOString() });
-  else {
-    try { fs.unlinkSync(file); } catch { /* разрешений и не было */ }
+// Текст последнего промпта человека в транскрипте; нет такого — ''.
+export function lastPrompt(transcriptPath) {
+  const lines = transcriptPath ? transcriptLines(transcriptPath) : [];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let e;
+    try { e = JSON.parse(lines[i]); } catch { continue; }
+    if (e?.type !== 'user' || e.isMeta || e.origin?.kind !== 'human') continue;
+    const c = e.message?.content;
+    if (typeof c === 'string') return c;
+    return Array.isArray(c) ? c.filter((b) => b?.type === 'text').map((b) => b.text).join('\n') : '';
   }
-  return cats;
+  return '';
 }
 
-export function isGranted(sid, cat) {
-  const file = grantsFile(sid);
-  if (!file || !cat) return false;
-  const { cats } = readJSON(file);
-  return Array.isArray(cats) && cats.includes(cat);
-}
-
-// Команда или путь, касающиеся файлов разрешений: писать их может только хук промпта.
-// Каталог состояния и `grants` в одной команде тоже: `cd ~/.claude/state && echo > grants/x`.
-export function touchesGrants(text) {
-  const s = String(text || '');
-  if (s.includes(GRANTS_DIR) || /state[\\/]+grants\b/.test(s)) return true;
-  return /\bgrants\b/.test(s) && (s.includes(STATE_ROOT) || /\.claude[\\/]+state\b/.test(s));
+export function isGranted(transcriptPath, cat) {
+  return Boolean(cat) && grantsIn(lastPrompt(transcriptPath)).includes(cat);
 }

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Тест разрешений из промпта: словарь промпт → категории, сброс следующим
-// промптом, привязка к сессии и снятие ask security-guard через dispatch —
-// так, как это видит Claude Code (UserPromptSubmit, затем PreToolUse).
+// Тест разрешений из промпта: словарь промпт → категории, последний
+// промпт человека в транскрипте и снятие ask security-guard через dispatch —
+// так, как это видит Claude Code (PreToolUse с transcript_path).
 
 import { ISOLATED_HOOKS_LOG } from './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { grantsIn, recordGrants, isGranted, GRANTS_DIR } from '../grant-core.mjs';
+import { grantsIn, lastPrompt, isGranted } from '../grant-core.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DISPATCH = path.join(ROOT, 'claude', 'dispatch.mjs');
@@ -54,34 +55,40 @@ check('отрицание через «и»', grantsIn('не трогай тес
 check('``` блок', grantsIn('посмотри лог\n```\ngit push --force\nrm -rf .\n```'), []);
 check('цитата >', grantsIn('что значит\n> задеплой и удали всё'), []);
 check('свои слова рядом со вставкой', grantsIn('```\nlog\n```\nзапушь'), ['push']);
+check('<pasted_content>', grantsIn('что тут\n<pasted_content id="a">\nзапушь и удали\n</pasted_content id="a">'), []);
 
-// --- состояние: сброс следующим промптом, другой sid
-check('запись', recordGrants('s1', 'запушь'), ['push']);
-check('s1 видит push', isGranted('s1', 'push'), true);
-check('другой sid не видит', isGranted('s2', 'push'), false);
-check('другая категория', isGranted('s1', 'delete'), false);
-recordGrants('s1', 'спасибо, дальше тесты');
-check('следующий промпт сбросил', isGranted('s1', 'push'), false);
-check('пустой набор — файла нет', fs.existsSync(path.join(GRANTS_DIR, 's1.json')), false);
-check('кривой sid не пишется', recordGrants('../x', 'запушь'), []);
+// --- транскрипт: только последний промпт человека
+const TDIR = fs.mkdtempSync(path.join(os.tmpdir(), 'grants-'));
+const human = (content) => ({ type: 'user', origin: { kind: 'human' }, message: { role: 'user', content } });
+const plan = (content) => ({ type: 'user', origin: { kind: 'auto-continuation' }, message: { role: 'user', content } });
+const toolResult = (content) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content }] } });
+const meta = (text) => ({ type: 'user', isMeta: true, origin: { kind: 'human' }, message: { role: 'user', content: [{ type: 'text', text }] } });
+const assistant = (text) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } });
+let tn = 0;
+function transcript(...entries) {
+  const file = path.join(TDIR, `t${tn++}.jsonl`);
+  fs.writeFileSync(file, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
+  return file;
+}
 
-// --- сквозь dispatch: промпт, затем вызов
-function prompt(sid, text) {
-  execFileSync('node', [DISPATCH, 'UserPromptSubmit'], {
-    input: JSON.stringify({ session_id: sid, cwd: ROOT, hook_event_name: 'UserPromptSubmit', prompt: text }),
-    encoding: 'utf8',
-  });
-}
-function bash(sid, command) {
+const tPush = transcript(human('запушь'), assistant('пушу'), toolResult('ok'));
+check('последний промпт человека', lastPrompt(tPush), 'запушь');
+check('push разрешён', isGranted(tPush, 'push'), true);
+check('другая категория', isGranted(tPush, 'delete'), false);
+check('следующий промпт сбрасывает',
+  isGranted(transcript(human('запушь'), assistant('готово'), human('спасибо, дальше тесты')), 'push'), false);
+check('план после handoff — не промпт', isGranted(transcript(plan('4. Один push в конце')), 'push'), false);
+check('ответ меню — не промпт', isGranted(transcript(human('посмотри'), toolResult('«Запушить»')), 'push'), false);
+check('текст скилла (isMeta) — не промпт', isGranted(transcript(human('посмотри'), meta('Push once per request')), 'push'), false);
+check('промпт блоками text', lastPrompt(transcript(human([{ type: 'image' }, { type: 'text', text: 'сделай МР' }]))), 'сделай МР');
+check('нет транскрипта', isGranted(path.join(TDIR, 'none.jsonl'), 'push'), false);
+check('пустой путь', isGranted(undefined, 'push'), false);
+
+// --- сквозь dispatch: транскрипт с промптом, затем вызов
+function bash(sid, text, command) {
   const out = execFileSync('node', [DISPATCH, 'PreToolUse'], {
-    input: JSON.stringify({ session_id: sid, cwd: ROOT, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } }),
-    encoding: 'utf8',
-  });
-  return out.trim() ? JSON.parse(out).hookSpecificOutput.permissionDecision : null;
-}
-function edit(sid, file_path) {
-  const out = execFileSync('node', [DISPATCH, 'PreToolUse'], {
-    input: JSON.stringify({ session_id: sid, cwd: ROOT, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path, content: '{}' } }),
+    input: JSON.stringify({ session_id: sid, transcript_path: transcript(human(text)), cwd: ROOT, hook_event_name: 'PreToolUse',
+      tool_name: 'Bash', tool_input: { command } }),
     encoding: 'utf8',
   });
   return out.trim() ? JSON.parse(out).hookSpecificOutput.permissionDecision : null;
@@ -109,41 +116,31 @@ const CASES = [
 ];
 for (const [cmd, text] of CASES) {
   const sid = `case-${CASES.findIndex((c) => c[0] === cmd)}`;
-  prompt(sid, 'посмотри код');
-  check(`${cmd}: без разрешения — ask`, bash(sid, cmd), 'ask');
-  prompt(sid, text);
-  check(`${cmd}: «${text}» — allow`, bash(sid, cmd), 'allow');
+  check(`${cmd}: без разрешения — ask`, bash(sid, 'посмотри код', cmd), 'ask');
+  check(`${cmd}: «${text}» — allow`, bash(sid, text, cmd), 'allow');
 }
 
 // Своё слово для force и удаления ветки.
-prompt('force', 'запушь');
-check('force push по «запушь» — ask', bash('force', 'git push -f origin feat'), 'ask');
-check('+refspec по «запушь» — ask', bash('force', 'git push origin +feat'), 'ask');
-check('удаление ветки по «запушь» — ask', bash('force', 'git push origin --delete feat'), 'ask');
-check('--all по «запушь» — ask', bash('force', 'git push --all'), 'ask');
+check('force push по «запушь» — ask', bash('force', 'запушь', 'git push -f origin feat'), 'ask');
+check('+refspec по «запушь» — ask', bash('force', 'запушь', 'git push origin +feat'), 'ask');
+check('удаление ветки по «запушь» — ask', bash('force', 'запушь', 'git push origin --delete feat'), 'ask');
+check('--all по «запушь» — ask', bash('force', 'запушь', 'git push --all'), 'ask');
 
 // Без категории спрашивается всегда.
-prompt('always', 'удали всё, задеплой, запушь, откати');
-check('rm -rf ~ по «удали» — ask', bash('always', 'rm -rf ~'), 'ask');
-check('rm -rf / по «удали» — ask', bash('always', 'rm -rf /'), 'ask');
-check('kubectl get secret -o — ask', bash('always', 'kubectl get secret db -o yaml'), 'ask');
-check('env целиком — ask', bash('always', 'env'), 'ask');
-check('ssh — ask', bash('always', 'ssh prod systemctl restart app'), 'ask');
-check('scp наружу — ask', bash('always', 'scp dump.sql user@host:/tmp/'), 'ask');
-check('sudo — ask', bash('always', 'sudo apt install x'), 'ask');
-check('cat .env — deny', bash('always', 'cat .env'), 'deny');
-check('разрешённый сегмент не прячет следующий', bash('always', 'git push origin feat && rm -rf ~'), 'ask');
-
-// Агент не выдаёт разрешение себе.
-check('Write в файлы разрешений — deny', edit('always', path.join(GRANTS_DIR, 'always.json')), 'deny');
-check('echo в файлы разрешений — deny', bash('always', 'echo {} > ~/.claude/state/grants/x.json'), 'deny');
-check('cd в состояние и запись — deny', bash('always', 'cd ~/.claude/state && echo {} > grants/x.json'), 'deny');
+const ALL_WORDS = 'удали всё, задеплой, запушь, откати';
+check('rm -rf ~ по «удали» — ask', bash('always', ALL_WORDS, 'rm -rf ~'), 'ask');
+check('rm -rf / по «удали» — ask', bash('always', ALL_WORDS, 'rm -rf /'), 'ask');
+check('kubectl get secret -o — ask', bash('always', ALL_WORDS, 'kubectl get secret db -o yaml'), 'ask');
+check('env целиком — ask', bash('always', ALL_WORDS, 'env'), 'ask');
+check('ssh — ask', bash('always', ALL_WORDS, 'ssh prod systemctl restart app'), 'ask');
+check('scp наружу — ask', bash('always', ALL_WORDS, 'scp dump.sql user@host:/tmp/'), 'ask');
+check('sudo — ask', bash('always', ALL_WORDS, 'sudo apt install x'), 'ask');
+check('cat .env — deny', bash('always', ALL_WORDS, 'cat .env'), 'deny');
+check('разрешённый сегмент не прячет следующий', bash('always', ALL_WORDS, 'git push origin feat && rm -rf ~'), 'ask');
 
 // Разрешение живёт до следующего промпта.
-prompt('next', 'сделай МР');
-check('после МР push — allow', bash('next', 'git push origin feat'), 'allow');
-prompt('next', 'а теперь поправь тест');
-check('следующий промпт — снова ask', bash('next', 'git push origin feat'), 'ask');
+check('после МР push — allow', bash('next', 'сделай МР', 'git push origin feat'), 'allow');
+check('следующий промпт — снова ask', bash('next', 'а теперь поправь тест', 'git push origin feat'), 'ask');
 
 // Снятое разрешением ask видно в журнале.
 const granted = fs.readFileSync(ISOLATED_HOOKS_LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l))

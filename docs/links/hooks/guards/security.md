@@ -4,7 +4,6 @@ paths:
   - "ai-hooks/tool-args-core.mjs"
   - "ai-hooks/claude/security-guard.mjs"
   - "ai-hooks/grant-core.mjs"
-  - "ai-hooks/claude/grant-track.mjs"
   - "ai-hooks/claude/links-context.mjs"
   - "ai-hooks/claude/tool-args.mjs"
   - "ai-hooks/claude/dispatch.mjs"
@@ -42,8 +41,8 @@ paths:
 - Разрешения из промпта — категории `cat` у `ask(reason, cat)` и `gitPushReason` в
   `ai-hooks/security-core.mjs` ↔ ключи `WORD_STEMS`/`PHRASES`/`IMPLIES` в `ai-hooks/grant-core.mjs` ↔
   список категорий в `ai-hooks/README.md` и `skills/hooks-guards/SKILL.md`. Категория только в
-  гарде — её ask не снимается никогда; только в словаре — мёртвое слово. `grant-track` в
-  `ai-hooks/claude/dispatch.mjs:TABLE` — за `paste-guard`: выше — стёртый промпт даёт разрешение.
-  Каталог `grant-core.mjs:GRANTS_DIR` ↔ `touchesGrants` (deny агенту) ↔ цель уборки
-  `ai-hooks/bin/cleanup.mjs:TARGETS`.
+  гарде — её ask не снимается никогда; только в словаре — мёртвое слово.
+  `ai-hooks/grant-core.mjs:lastPrompt` ↔ формат транскрипта Claude Code (`type: user`,
+  `origin.kind: human`, `isMeta`): Claude Code переименовал поле — разрешения молча
+  пропадают (снова всегда ask), строк `granted` в `hooks.jsonl` нет.
 - Текст отказа рекурсивного grep и формы коммита — `hooks/guards/shell.md`.

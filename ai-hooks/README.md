@@ -80,8 +80,7 @@ claude/question-guard.mjs       # адаптер Claude: Stop — такой х�
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
 bin/clip-output.sh              # запуск команды с обрезкой вывода и сохранением кода возврата
 security-core.mjs               # что запрещено насмерть, что требует человека
-grant-core.mjs                  # разрешения из промпта: словарь основ → категории ask, состояние на sid
-claude/grant-track.mjs          # действия, названные в промпте, — разрешения до следующего (UserPromptSubmit)
+grant-core.mjs                  # разрешения из промпта: последний промпт человека в транскрипте → категории ask
 claude/security-guard.mjs       # адаптер Claude: PreToolUse(*) — секреты, БД, прод, отправка наружу
 bin/usage-report.mjs            # отчёт по usage.jsonl: /usage
 bin/start-cost.mjs              # стартовая цена сессий по слоям — из транскриптов
@@ -112,7 +111,7 @@ test/test-impact-map.mjs        # чекер карты: битые ссылки
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-resume-hint.mjs       # цепочка передач до последнего звена; последнее звено, отказ без звена, промпт после передачи, чужой slug — молчат
 test/test-security.mjs          # что deny, что ask (push), что проходит молча
-test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вставки), сброс, чужой sid, ask → allow через dispatch
+test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вставки), промпт человека в транскрипте, ask → allow через dispatch
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-scratch.mjs           # черновики /tmp: созданное удаляется, чужое, репозиторий и каталог Claude Code — нет
@@ -419,8 +418,7 @@ ragsave, чтобы секрет не попал в индекс (`ragsave/confi
 amend, `--no-verify`, правка харнеса из чужого проекта — проходит без вопроса:
 так решил пользователь.
 
-Разрешение из промпта (`grant-core.mjs`, `claude/grant-track.mjs` на `UserPromptSubmit`
-сразу за `paste-guard`): действие, которое пользователь назвал в текущем промпте,
+Разрешение из промпта (`grant-core.mjs`): действие, которое пользователь назвал в текущем промпте,
 не спрашивается второй раз. У ask есть категория (`cat` вердикта), словарь основ даёт
 категории промпта: `push` («запушь», `push`; обычный push, main/dev/prod, без refspec,
 `HEAD`, `$…`), `mr` («МР», `PR`, «мерж-реквест», «смержи» — `gh pr`/`glab mr` create|merge, плюс `push`),
@@ -432,9 +430,11 @@ amend, `--no-verify`, правка харнеса из чужого проект
 `twine`, `docker push`, docker с прод-конфигом, `gh|glab release`, terraform/pulumi/helm/ansible/vercel/fly/…),
 `migrate` («накати», «миграция» — prisma/typeorm/knex/sequelize). Отрицание в той же клаузе
 («не пушь», «без пуша», «пушить не надо», «don't push») разрешения не даёт; блоки ```…``` и
-строки `>` вырезаются — вставка не говорит за пользователя. Набор живёт до следующего
-промпта (`~/.claude/state/grants/<sid>.json`, пустой — файла нет); писать или читать его
-агенту — `deny`. Снятый ask пишется в `hooks.jsonl` как `granted`. После снятого сегмента
+`<pasted_content>` и строки `>` вырезаются — вставка не говорит за пользователя.
+Источник — последняя запись `type: user` с `origin.kind: human` в `transcript_path`
+(не `isMeta`): своего файла состояния нет, агенту нечего подделать скриптом;
+план после handoff (`auto-continuation`), ответ меню и текст скилла разрешения не дают.
+Набор живёт до следующего промпта сам собой. Снятый ask пишется в `hooks.jsonl` как `granted`. После снятого сегмента
 разбор идёт дальше: `git push && rm -rf ~` по «запушь» спросит про `rm`. Без категории
 и всегда с вопросом: `rm -rf /` и `~`, секреты в выводе, `env`, дампы и внешняя БД, `ssh`,
 `sudo`, файрвол, `kubectl`, мутирующий `aws|gcloud|az`, передача наружу, вычисляемый путь git.
@@ -602,7 +602,6 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` (с `--warm`) и `Stop`.
 `context-meter` на `UserPromptSubmit`,
 `paste-guard` на `UserPromptSubmit` первым в таблице — заблокированный промпт
 остальные проверки не видят (у `tokensave hook-prompt-submit` свой процесс),
-за ним `grant-track` (разрешения из промпта для security-guard),
 `plan-guard` на `PreToolUse` (matcher `ExitPlanMode`), `resume-hint` на
 `SessionStart` (matcher `resume`).
 Гейт скиллов: `skill-track` на `PreToolUse`
@@ -801,8 +800,7 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 `~/.claude/state/.cleanup-stamp`). Убирает то, что мертво по устройству: метки
 подсказок ragsave (дроссель внутри — 15 минут, метка старше двух суток
 бессмысленна), метки диагностики проектов и ask mode по сессиям (`default` не трогает), метки
-подключённых доменов карты связей (`links-context`, старше двух суток) и
-разрешения из промпта (`grants`, тоже двое суток), служебные
+подключённых доменов карты связей (`links-context`, старше двух суток), служебные
 метки в корне состояния, неотправленную телеметрию
 Claude Code, кеш вставок,
 окружение и снимки shell завершённых сессий, планы plan mode

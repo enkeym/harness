@@ -17,7 +17,6 @@ import { fileURLToPath } from 'node:url';
 import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals, redirectWords } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 import { normalizeToolInput } from './tool-args-core.mjs';
-import { touchesGrants } from './grant-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -1220,17 +1219,12 @@ function resolveReal(p) {
   return path.join(realpathOrSelf(dir), ...rest);
 }
 
-// Файлы разрешений пишет только хук промпта: иначе агент выдал бы согласие себе сам.
-const GRANTS_DENY = deny('the prompt-grant state is written only by the UserPromptSubmit hook from the ' +
-  "user's own words; do not read or change it. Ask the user to name the action in their next prompt.");
-
 // Единая точка для адаптера хука. ctx — разрешения из промпта (см. guardBashSecurity).
 export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   const name = String(toolName || '');
   // Имена tokensave — настоящие: хук tool-args переименует `file` в `path` уже
   // после гарда, и правка `.env` по `file` иначе прошла бы без проверки.
   const ti = normalizeToolInput(name, toolInput) || {};
-  if ([ti.command, ti.code, ti.file_path, ti.notebook_path, ti.path].some(touchesGrants)) return GRANTS_DENY;
 
   if (name === 'Read') return guardReadSecurity(ti.file_path || ti.path || '');
   if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit') {

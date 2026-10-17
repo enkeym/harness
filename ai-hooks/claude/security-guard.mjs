@@ -6,8 +6,8 @@
 // «возьми другой инструмент», а «у этого действия есть последствия». Пропускать
 // повторный вызов значило бы отменять запрет вторым нажатием.
 //
-// ask, чью категорию пользователь назвал в текущем промпте (grant-core.mjs), не
-// задаётся: в hooks.jsonl уходит строка `granted` с категорией — для аудита.
+// ask, чью категорию пользователь назвал в последнем промпте транскрипта
+// (grant-core.mjs), не задаётся: в hooks.jsonl уходит строка `granted` с категорией — для аудита.
 
 import { securityGuard, DENY } from '../security-core.mjs';
 import { isGranted } from '../grant-core.mjs';
@@ -17,7 +17,7 @@ import { runHook, targetOf } from './hook-io.mjs';
 
 export function check(input) {
   let verdict = null;
-  const ctx = { isGranted: (cat) => isGranted(input.session_id, cat), granted: [] };
+  const ctx = { isGranted: (cat) => isGranted(input.transcript_path, cat), granted: [] };
   try {
     verdict = securityGuard(input.tool_name, input.tool_input, ctx);
   } catch {
