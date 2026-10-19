@@ -1,5 +1,6 @@
 ---
 description: Выключить ask mode на эту сессию — вернуть правки файлов
+disable-model-invocation: true
 allowed-tools: Bash(node ~/.ai-hooks/bin/ask-mode.mjs:*)
 ---
 

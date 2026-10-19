@@ -48,13 +48,16 @@ Playwright MCP глобально не регистрируется — толь
 npm i -g @playwright/mcp
 node "$(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js" install chromium
 # из корня проекта; запись ляжет в ~/.claude.json → projects
-claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless --browser chromium --isolated --timeout-settle 200
+claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless --browser chromium --isolated --timeout-settle 200 --no-webmcp
 ```
 
 `--isolated` держит профиль в памяти: каждый прогон с чистого листа, без
 записи на диск. `--timeout-settle 200` — пауза после действия 200 мс вместо
-500. Картинки не отключаем (`--image-responses omit`): `/test-browser`
-подтверждает визуальный баг скриншотом.
+500. `--no-webmcp` не отдаёт агенту инструменты, которые регистрирует сама
+страница (WebMCP, по умолчанию включён): QA кликает как пользователь, а
+страница — это ввод, не инструкции. Картинки не отключаем
+(`--image-responses omit`): `/test-browser` подтверждает визуальный баг
+скриншотом.
 
 В репозитории нет ни имени пользователя, ни путей этой машины: конфиги
 ссылаются на `$HOME` или `~`. Значения машины —

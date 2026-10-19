@@ -27,10 +27,10 @@ and regional · Rendering · Images · Core Web Vitals · Internal linking
 - `Disallow` does not remove a page from the index — `noindex` does, and needs
   the page crawlable to be seen. Both on one URL = the `noindex` is never read.
 - `Sitemap: https://<host>/sitemap.xml` with the absolute URL.
-- Yandex: `Clean-param: utm_source&utm_medium&utm_campaign&yclid&gclid` (and
-  the site's own tracking/sort params) instead of blocking them; a path prefix
-  as the second field narrows it. `Host` and `Crawl-delay` are ignored — remove
-  them; the main mirror is set by 301 plus "Переезд сайта" in Yandex Webmaster,
+- Yandex: `Clean-param: sort&ref` for the site's own params that don't change
+  content, instead of blocking them; a path prefix as the second field narrows
+  it. `utm_*` and `ysclid` are dropped by Yandex itself — no directive
+  needed. `Host` and `Crawl-delay` are ignored — remove them; the main mirror is set by 301 plus "Переезд сайта" in Yandex Webmaster,
   crawl rate in "Скорость обхода".
 - Google ignores `Clean-param`; parameter duplicates are solved by canonical.
 
@@ -39,9 +39,12 @@ and regional · Rendering · Images · Core Web Vitals · Internal linking
 - Policy is the owner's decision — ask; never block by default.
 - `Googlebot` and `YandexBot` feed search and its AI answers (AI Overviews,
   Yandex Neuro); blocking them removes the site from both.
-- `User-agent: Google-Extended` only opts out of Gemini training; Search and
-  AI Overviews are unaffected. Training and assistant bots (`GPTBot`,
-  `ClaudeBot`, `PerplexityBot`, `CCBot`) are separate `User-agent` groups.
+- `User-agent: Google-Extended` only opts out of Gemini training and grounding
+  in Gemini Apps and Vertex AI; Search and AI Overviews are unaffected.
+- `User-agent: YandexAdditional` limits the page in YandexGPT and Alice answers
+  without leaving search; it ignores `User-agent: *` — needs its own group.
+- Training and assistant bots (`GPTBot`, `ClaudeBot`, `PerplexityBot`,
+  `CCBot`) are separate `User-agent` groups.
 
 ## sitemap.xml
 
@@ -86,8 +89,8 @@ and regional · Rendering · Images · Core Web Vitals · Internal linking
 - `<html lang>` matches the content; `<meta name="viewport">` present.
 - Open Graph: `og:title`, `og:description`, `og:image` (1200×630, absolute URL),
   `og:url` = canonical, `og:type`; Twitter card `summary_large_image`.
-- Favicon: `favicon.ico` at the root plus an SVG/PNG icon ≥48 px — Yandex and
-  Google show it in results.
+- Favicon: `favicon.ico` at the root plus a square PNG icon larger than
+  48×48 — Yandex and Google show it in results; Google does not list SVG.
 
 ## Multilingual and regional
 

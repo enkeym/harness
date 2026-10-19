@@ -35,8 +35,9 @@ more. Validate with Google Rich Results Test, the Schema.org validator
   real page in the Yandex Webmaster validator.
 - Yandex reads Schema.org (JSON-LD or microdata) for organisation, products,
   recipes, breadcrumbs, and Open Graph for previews; unsupported or broken
-  markup is skipped, not penalised. The "Товары и цены" feed outranks product
-  markup when both exist. Snippets form within about two weeks of indexing.
+  markup is skipped, not penalised. The YML product feed (Webmaster → Товары →
+  Фиды) outranks product markup when both exist. Snippets form within about
+  two weeks of indexing.
 - `Organization`/`LocalBusiness` details must match the Yandex Business and
   Google Business profiles exactly — mismatched address or phone is a trust
   finding.

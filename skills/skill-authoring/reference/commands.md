@@ -1,13 +1,14 @@
 # Commands (`claude/commands/*.md`)
 
-A different mechanism from a skill, not a smaller version of one: no `name`
-field (the filename is the command), no `disable-model-invocation` (a command
-is never model-invoked to begin with), always user-invoked as `/<filename>`.
+The older form of a command skill: one file, no `reference/`, no `name` field
+(the filename is the command), no `paths`. Claude Code lists it with the
+skills, so the model can invoke it unless the frontmatter says otherwise.
 
 ## Frontmatter
 
-- `description` (third person, what running it does), tight `allowed-tools`;
-  `argument-hint` when it takes arguments.
+- `description` (what running it does), `disable-model-invocation: true`,
+  tight `allowed-tools`; `argument-hint` when it takes arguments.
+- A new command with supporting files → a skill directory instead.
 
 ## Body
 
@@ -15,5 +16,3 @@ is never model-invoked to begin with), always user-invoked as `/<filename>`.
   live state before the rest makes sense.
 - Same tone rules as a skill body (see `SKILL.md`) — imperative, no narration,
   no rationale paragraphs.
-- Never claim a skill-only field (`disable-model-invocation`, `user-invocable`)
-  for a command file — it doesn't have one.

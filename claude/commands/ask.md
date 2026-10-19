@@ -1,5 +1,6 @@
 ---
 description: Включить ask mode — только ответы в чате, без правок файлов
+disable-model-invocation: true
 allowed-tools: Bash(node ~/.ai-hooks/bin/ask-mode.mjs:*)
 ---
 

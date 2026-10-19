@@ -2,7 +2,7 @@
 name: doctor
 description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook, a startup settings warning, install drift — from logs and state, and proposes a fix. User-invoked as /doctor."
 disable-model-invocation: true
-allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls -t *), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/harness/install.sh --check), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/harness *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read, Grep, Glob
+allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls -t *), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/harness/install.sh --check), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/harness *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read
 argument-hint: "[what broke, in your own words | session [sid]]"
 ---
 

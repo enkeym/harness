@@ -2,7 +2,7 @@
 name: optimize
 description: "Analyses token spend and harness settings and proposes optimisations, each backed by a number. User-invoked as /optimize."
 disable-model-invocation: true
-allowed-tools: Bash(node ~/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read, Grep, Glob
+allowed-tools: Bash(node ~/.ai-hooks/bin/usage-report.mjs:*), Bash(tokensave cost:*), Read
 argument-hint: "[--days N | --project <name>]"
 ---
 
@@ -37,9 +37,9 @@ otherwise it is a guess.
 - **Subagents ran at all.** The harness has none; a `subagents > 0` in the
   ledger means a built-in agent (`Explore`, `Plan`) slipped through the rule —
   find the session and the prompt that caused it.
-- **Tools run for nothing.** The top calls in the report: a lot of `Grep` and
-  `Read` with a live index means the tool-choice rule didn't fire; many repeats
-  of one call means a guard or a loop — that is `/doctor`.
+- **Tools run for nothing.** The top calls in the report: a lot of shell
+  `grep` and `Read` with a live index means the tool-choice rule didn't fire;
+  many repeats of one call means a guard or a loop — that is `/doctor`.
 - **A tool that costs more per call.** Divide ~tokens by calls in the report's
   context-sources block for `Read`, `tokensave_read`, `tokensave_body`, `Bash`
   and compare. Under 50 calls for a tool → report "рано судить", not a verdict.

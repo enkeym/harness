@@ -72,8 +72,8 @@ loaded — this skill decides how one is written.
 
 ## Other targets
 
-- A command file (`claude/commands/*.md`) — no `name`, no
-  `disable-model-invocation`, always user-invoked:
+- A command file (`claude/commands/*.md`) — no `name`, model-invocable
+  unless `disable-model-invocation: true`:
   [reference/commands.md](reference/commands.md).
 - Always-loaded rules — `rules/core.md`, `claude/CLAUDE.md`, a project's
   `CLAUDE.md`/`AGENTS.md`: [reference/claude-md.md](reference/claude-md.md).
