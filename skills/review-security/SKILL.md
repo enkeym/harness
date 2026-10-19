@@ -52,8 +52,8 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
   `VITE_` = public). Sensitive cookies `httpOnly`, `secure`, `sameSite`.
 
 **Input**
-- Every external input validated at the boundary the project's way (DTO with
-  `whitelist` + `forbidNonWhitelisted`; client schema); numbers/ids parsed,
+- Every external input validated at the boundary the project's way (DTO behind a
+  `whitelist` pipe; client schema); numbers/ids parsed,
   enums checked, lengths and array sizes bounded.
 - No mass assignment: body never spread into an entity/update; fields picked.
 - Files: type from content, not the name or the client's content type,

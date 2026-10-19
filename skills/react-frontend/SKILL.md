@@ -14,7 +14,8 @@ asked or before an MR (`test-coverage`), never as a side effect of a UI edit.
 
 ## Components
 - Function components, named exports, one per file, file named after it.
-- Props = `XProps` interface beside the component; `children` typed explicitly.
+- Props = `XProps` beside the component, `type` or `interface` as the project
+  writes them; `children` typed explicitly.
 - Component renders, hook computes: loading, transformation, side effects go
   into `useX`; the component stays markup.
 - Derivable from props/state → computed, not stored. `useEffect` syncs with

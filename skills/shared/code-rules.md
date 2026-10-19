@@ -11,10 +11,11 @@ line here; facts about one project live in its memory, never in this file.
 - No `any`: the exact type, or `unknown` narrowed at the boundary. Same ban on
   its disguises — `as any`, `@ts-ignore`, unexplained `@ts-expect-error`, an
   untyped callback param, `!` over a real `undefined`.
-- Derive, never copy: `extends`/`Pick`/`Omit`, `PartialType`/`PickType`/`OmitType`,
-  `ReturnType`, `z.infer`. Two hand-listed identical shapes = one missing derivation.
-- Input = DTO class; response and internal service contract = interface; an
-  entity is neither and never leaves whole.
+- Derive, never copy: `Pick`/`Omit`, the project's extension form (`&` or
+  `extends`), `PartialType`/`PickType`/`OmitType`, `ReturnType`, `z.infer`.
+  Two hand-listed identical shapes = one missing derivation.
+- Input = DTO class; response and service contract = an explicit type in the
+  project's form (`type`, `interface`, response DTO); an entity never leaves whole.
 - One representation per value set: an existing `enum`/`as const` is used by
   member, not by literal; a literal union or `as const` twin next to an enum
   is a duplicate.

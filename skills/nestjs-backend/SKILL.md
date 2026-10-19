@@ -25,11 +25,11 @@ a side effect of a server edit.
 - Shared guards, interceptors, pipes, filters, decorators in `common/`.
 
 ## Input and output
-- Input = DTO class with `class-validator`/`class-transformer` behind a global
-  `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
+- Input = DTO class with `class-validator`/`class-transformer` behind the
+  project's global `ValidationPipe` (at least `whitelist`, `transform`).
   Numeric params via `ParseIntPipe` or `@Type(() => Number)`.
-- Output = interface/class with explicit fields; an entity never leaves whole;
-  sensitive fields excluded in the mapping.
+- Output = explicit fields in the project's response form; an entity never
+  leaves whole; sensitive fields excluded in the mapping.
 
 ## Errors
 - Expected failures → `HttpException` subclasses; client text carries no
@@ -39,12 +39,13 @@ a side effect of a server edit.
   payment bodies in logs.
 
 ## Config
-- Environment via `ConfigService` with a schema validated at startup.
+- Environment through the project's config layer, validated at startup.
 
 ## Database
 - Transaction wherever more than one entity changes together.
 - Parameterised queries; no string concatenation in SQL.
-- Migrations are separate reversible files; no `synchronize` on production.
+- Migrations are separate files made the project's way (generator or by hand);
+  no `synchronize` on production.
 
 ## Tests
 - How: `test-conventions`, including its NestJS lines.

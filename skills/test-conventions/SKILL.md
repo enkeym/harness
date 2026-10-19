@@ -6,9 +6,11 @@ description: "Test conventions for TypeScript projects — Jest/Vitest, NestJS T
 # TypeScript test conventions
 
 Cross-stack rules with the stack specifics inline; `nestjs-backend` and
-`react-frontend` point here and add nothing of their own. pytest: *What to
-test*, *Running* and *Never* hold, the rest is in `python`. Which tests a diff
-or branch still needs: `test-coverage`.
+`react-frontend` point here and add nothing of their own. The runner, test
+library and test-name language are the project's: a stack line below holds
+only where the project uses that tool. pytest: *What to test*, *Running* and
+*Never* hold, the rest is in `python`. Which tests a diff or branch still
+needs: `test-coverage`.
 
 ## What to test
 - Behaviour through the public interface: input → result, dependency called
@@ -20,7 +22,8 @@ or branch still needs: `test-coverage`.
 
 ## Structure
 - File beside the code: `x.service.spec.ts`, `X.test.tsx`. `describe` per
-  symbol; `it` reads as an assertion: `it('returns 404 when user is missing')`.
+  symbol; the test name reads as an assertion in the project's language:
+  `it('returns 404 when user is missing')`.
 - Arrange / Act / Assert separated by blank lines; shared setup in `beforeEach`.
 - Factories (`makeUser(overrides)`) over long literals; fixtures in
   `__fixtures__` or `test/`, whichever the project uses.
@@ -28,11 +31,11 @@ or branch still needs: `test-coverage`.
 ## Mocks
 - Mock boundaries only: network, DB, filesystem, time (`jest.useFakeTimers` or
   injected clock), external SDKs. Never internal project modules.
-- NestJS:
+- NestJS with `@nestjs/testing`:
   `Test.createTestingModule({ providers: [Service, { provide: Repo, useValue: mock }] })`;
   e2e = real `INestApplication` with `main.ts` pipes/filters + `supertest`.
-- React: mock the API client and timers, not the component's own hooks; query
-  by role and text; `userEvent` over `fireEvent`.
+- React with Testing Library: mock the API client and timers, not the
+  component's own hooks; query by role and text; `userEvent` over `fireEvent`.
 
 ## Playwright e2e
 - Read the package's `playwright.config.*` first

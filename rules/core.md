@@ -32,6 +32,11 @@ restrictions — from the project, in this order:
 A restriction applies only to the project whose memory or rules file states it.
 A skill line naming another project's value is a defect: fix the skill.
 
+A global skill carries the approach; the project's skills and rules files
+(`docs/rules/`, a rules section of `AGENTS.md`) carry its concrete choices:
+type form, test runner, config layer, map format and checker. Load both; a
+global line that fixes such a choice is a defect — make it defer to the project.
+
 ## Bash runs commands, nothing else
 
 `git`, `npm`, `tsc`, `docker`, tests, linters. No file reads or writes through
@@ -65,9 +70,9 @@ into commits. Scoping, empty answers, another project: skill
 ## Skills
 
 Load the skill before the first action in its area, once per area per session.
-Reviewing code counts as touching it. A project-level skill for the same area
-wins over the global one. Quoted phrases in the table are examples of how the
-user asks, not the only trigger.
+Reviewing code counts as touching it. A project skill for the same area is
+loaded next to the global one, not instead of it. Quoted phrases in the table
+are examples of how the user asks, not the only trigger.
 
 | You are about to                                                                  | Load                |
 | --------------------------------------------------------------------------------- | ------------------- |

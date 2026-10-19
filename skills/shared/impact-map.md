@@ -21,6 +21,10 @@ candidates come from it. Without one, do the impact pass with
   `CLAUDE.md`, `docs/architecture.md`, an ADR folder, another agent's rules →
   that is the map. Add the line there, in the format that file already uses.
   Never create a second place for the same link.
+- The project defines its own map contract (a rules file on `docs/links/`,
+  its own checker) → its sections, line format and checker replace *Shape*,
+  *What goes in*, *Line format* and the checker below; the impact pass and
+  *Keeping it honest* still hold.
 - No map at all → `/impact-map` creates and seeds it (user-invoked). Until
   then, a link the pass finds still gets its line: the first line creates the
   file.
@@ -133,7 +137,7 @@ paths:
   its index line when it was the last one. Never leave a section saying a rule
   no longer applies: a tombstone costs context every pass, and git history
   already keeps it.
-- `node ~/.ai-hooks/bin/check-impact-map.mjs <project>` resolves every
-  `path:symbol`, every `paths:` glob and the index against the working tree.
-  Run it in the impact pass before the review skills; a broken line is a
-  deleted module whose line outlived it.
+- The project's checker, or `node ~/.ai-hooks/bin/check-impact-map.mjs <project>`
+  without one, resolves every `path:symbol`, every `paths:` glob and the index
+  against the working tree. Run it in the impact pass before the review
+  skills; a broken line is a deleted module whose line outlived it.
