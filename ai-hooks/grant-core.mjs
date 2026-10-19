@@ -117,3 +117,12 @@ export function lastPrompt(transcriptPath) {
 export function isGranted(transcriptPath, cat) {
   return Boolean(cat) && grantsIn(lastPrompt(transcriptPath)).includes(cat);
 }
+
+// Проект назван в промпте: имя его каталога целым словом («dual-vpn», «web_groza»,
+// путь `~/harness/…`). Отрицание не разбирается — «не трогай harness» тоже
+// называет проект, но правка туда после такого промпта — уже не injection.
+export function namesProject(transcriptPath, name) {
+  if (!name) return false;
+  const esc = normalize(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^\\p{L}\\p{N}_-])${esc}([^\\p{L}\\p{N}_-]|$)`, 'u').test(normalize(ownWords(lastPrompt(transcriptPath))));
+}

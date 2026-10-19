@@ -5,18 +5,21 @@
 //   deny — законной причины нет, и есть безопасная альтернатива (секреты);
 //   ask  — операция законная, но необратимая или раскрывает данные: push,
 //          прод, удалённый хост, дамп или внешняя БД, curl с телом, печать
-//          окружения. Обратимое (amend, --no-verify, правка харнеса) идёт молча.
+//          окружения, правка файла чужого проекта. Обратимое (amend,
+//          --no-verify) идёт молча.
 //
 // Разбор нарочно грубый — распознаются формы, а не синтаксис shell. Всё
 // нераспознанное проходит: задача не поймать любой обход, а закрыть удобный
 // путь и поставить человека там, где цена ошибки высока.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { segments, tokenize, commandIndex, commandName, baseCommand, afterTarget, gitSubcommandAt, dropConditionals, redirectWords } from './shell-core.mjs';
 import { MCP_EDIT_RE } from './skill-core.mjs';
 import { normalizeToolInput } from './tool-args-core.mjs';
+import { repoRoot, TMP_DIRS } from './state-core.mjs';
 
 export const DENY = 'deny';
 export const ASK = 'ask';
@@ -1219,7 +1222,56 @@ function resolveReal(p) {
   return path.join(realpathOrSelf(dir), ...rest);
 }
 
-// Единая точка для адаптера хука. ctx — разрешения из промпта (см. guardBashSecurity).
+// ---------------------------------------------------------------------------
+// Правка чужого проекта. Сессия работает в своём репозитории; файл вне его —
+// след prompt injection из прочитанного или ошибка пути, а правка харнеса
+// (в том числе через симлинки ~/.claude) меняет гарды всех сессий сразу.
+// Свои места агента не спрашиваются: черновики /tmp и ~/.claude без симлинков
+// (память, планы). Проект, названный в последнем промпте, — согласие дано.
+
+const CLAUDE_HOME = realpathOrSelf(path.join(process.env.HOME || os.homedir(), '.claude'));
+
+function inside(dir, p) {
+  const rel = path.relative(dir, p);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+// Без git проект — первый каталог пути после общего с проектом сессии предка:
+// у `~/main/other/src/a.ts` из `~/main/app` это `other`, а не `src`.
+function projectOf(target, own) {
+  const dir = path.dirname(target);
+  const root = repoRoot(dir);
+  if (root) return root;
+  const parts = path.relative(own, dir).split(path.sep);
+  const up = parts.filter((p) => p === '..').length;
+  return parts[up] ? path.resolve(own, ...parts.slice(0, up + 1)) : dir;
+}
+
+function foreignEdit(file, cwd) {
+  if (!file || !cwd) return null;
+  const base = resolveReal(cwd);
+  const own = repoRoot(base) || base;
+  const target = resolveReal(path.resolve(base, String(file)));
+  if (inside(own, target) || inside(CLAUDE_HOME, target) || TMP_DIRS.some((d) => inside(d, target))) return null;
+  const project = projectOf(target, own);
+  return {
+    level: ASK,
+    cat: 'other-project',
+    project,
+    reason: `правка файла чужого проекта ${target} из сессии в ${own}. ` +
+      'Назови проект в промпте — правки туда пойдут без вопроса.',
+  };
+}
+
+function guardEdit(file, ctx) {
+  const verdict = guardReadSecurity(file) || foreignEdit(file, ctx.cwd);
+  if (verdict?.cat !== 'other-project' || !ctx.namesProject?.(path.basename(verdict.project))) return verdict;
+  ctx.granted?.push(verdict);
+  return null;
+}
+
+// Единая точка для адаптера хука. ctx — разрешения из промпта (см. guardBashSecurity)
+// и каталог сессии `cwd`: от него зависит, свой ли проект у правки.
 export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   const name = String(toolName || '');
   // Имена tokensave — настоящие: хук tool-args переименует `file` в `path` уже
@@ -1229,14 +1281,14 @@ export function securityGuard(toolName, toolInput = {}, ctx = {}) {
   if (name === 'Read') return guardReadSecurity(ti.file_path || ti.path || '');
   if (name === 'Edit' || name === 'Write' || name === 'MultiEdit' || name === 'NotebookEdit') {
     const file = ti.file_path || ti.notebook_path || ti.path || '';
-    return guardReadSecurity(file);
+    return guardEdit(file, ctx);
   }
   // tokensave пишет по абсолютному пути и вне своего проекта — та же правка, что Edit.
   // Относительный путь он считает от `project_root` (синоним `cwd`), иначе — от корня сессии.
   if (MCP_EDIT_RE.test(name) && ti.path) {
     const base = ti.project_root || ti.cwd;
     const file = base ? path.resolve(String(base), String(ti.path)) : String(ti.path);
-    return guardReadSecurity(file);
+    return guardEdit(file, ctx);
   }
   if (name === 'Bash') return guardBashSecurity(ti.command, 0, ctx);
   if (name === 'mcp__ide__executeCode') return guardBashSecurity(ti.code, 0, ctx);

@@ -30,5 +30,7 @@ process.env.GIT_CONFIG_COUNT = String(gitConfigs + 1);
 // Сессия живого Claude Code, из которого запущен тест: иначе ask-mode.mjs
 // в тестах писал бы режим под её session_id, а не под ключ теста.
 delete process.env.CLAUDE_CODE_SESSION_ID;
+// Корень проекта живой сессии: security-guard взял бы его вместо cwd теста.
+delete process.env.CLAUDE_PROJECT_DIR;
 
 export const ISOLATED_HOOKS_LOG = process.env.AI_HOOKS_HOOKS_LOG;

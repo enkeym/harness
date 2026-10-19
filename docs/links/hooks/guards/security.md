@@ -45,4 +45,9 @@ paths:
   `ai-hooks/grant-core.mjs:lastPrompt` ↔ формат транскрипта Claude Code (`type: user`,
   `origin.kind: human`, `isMeta`): Claude Code переименовал поле — разрешения молча
   пропадают (снова всегда ask), строк `granted` в `hooks.jsonl` нет.
+- Правка чужого проекта — `ai-hooks/security-core.mjs:foreignEdit` берёт `ctx.cwd` из
+  `ai-hooks/claude/security-guard.mjs:check` (`CLAUDE_PROJECT_DIR` ↔ `cwd`) и `repoRoot` из
+  `ai-hooks/state-core.mjs`; снятие — `ai-hooks/grant-core.mjs:namesProject`. Адаптер без `cwd` —
+  чужие правки молча проходят; `env-isolate.mjs` не стирает `CLAUDE_PROJECT_DIR` — тесты судят
+  от проекта живой сессии.
 - Текст отказа рекурсивного grep и формы коммита — `hooks/guards/shell.md`.

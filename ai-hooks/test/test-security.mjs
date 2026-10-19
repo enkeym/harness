@@ -14,9 +14,9 @@ import { findSecretValue, guardBashSecurity } from '../security-core.mjs';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SCRIPT = path.join(ROOT, 'claude', 'security-guard.mjs');
 
-function run(tool, input) {
+function run(tool, input, extra = {}) {
   const out = execFileSync('node', [SCRIPT], {
-    input: JSON.stringify({ session_id: 'test', cwd: '/home/user/main/vpn-new', tool_name: tool, tool_input: input }),
+    input: JSON.stringify({ session_id: 'test', cwd: '/home/user/main/vpn-new', tool_name: tool, tool_input: input, ...extra }),
     encoding: 'utf8',
   });
   if (!out.trim()) return 'allow';
@@ -351,9 +351,31 @@ check('Grep glob=**/*.pem', grep({ glob: '**/*.pem' }), 'deny');
 check('Grep glob=*.ts при path=.', grep({ path: '.', glob: '*.ts' }), 'allow');
 check('Grep glob=.env.example', grep({ path: '.', glob: '.env.example' }), 'allow');
 
-// --- правки: харнес из любого проекта молча (обратимо через git), .env — запрет
+// --- правки: чужой проект (и харнес из него) — вопрос, свой, /tmp и ~/.claude — молча, .env — запрет
 const TS_EDIT = 'mcp__tokensave__tokensave_str_replace';
-check('Edit харнеса', run('Edit', { file_path: path.join(ROOT, 'security-core.mjs') }), 'allow');
+const HARNESS = path.dirname(ROOT);
+const harnessFile = path.join(ROOT, 'security-core.mjs');
+check('Edit харнеса из чужого проекта', run('Edit', { file_path: harnessFile }), 'ask');
+check('Edit харнеса из сессии в харнесе', run('Edit', { file_path: harnessFile }, { cwd: HARNESS }), 'allow');
+check('Edit харнеса из подкаталога харнеса', run('Edit', { file_path: harnessFile }, { cwd: ROOT }), 'allow');
+check('Write чужого проекта', run('Write', { file_path: '/home/user/main/other/src/a.ts' }), 'ask');
+check('tokensave_str_replace чужого проекта', run(TS_EDIT, { path: '/home/user/main/other/src/a.ts' }), 'ask');
+check('tokensave_str_replace с project_root чужого проекта', run(TS_EDIT, { path: 'src/a.ts', project_root: '/home/user/main/other' }), 'ask');
+check('Write в /tmp', run('Write', { file_path: '/tmp/x/notes.md' }), 'allow');
+check('Write памяти в ~/.claude', run('Write', { file_path: path.join(os.homedir(), '.claude', 'projects', 'p', 'memory', 'm.md') }), 'allow');
+const promptFile = (text) => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tr-')), 't.jsonl');
+  fs.writeFileSync(file, JSON.stringify({ type: 'user', origin: { kind: 'human' }, message: { content: text } }) + '\n');
+  return file;
+};
+check('проект назван в промпте — без вопроса',
+  run('Write', { file_path: '/home/user/main/other/src/a.ts' }, { transcript_path: promptFile('поправь заодно в other конфиг') }), 'allow');
+check('назван другой проект — вопрос',
+  run('Write', { file_path: '/home/user/main/other/src/a.ts' }, { transcript_path: promptFile('поправь в another-app') }), 'ask');
+check('имя проекта внутри слова — вопрос',
+  run('Write', { file_path: '/home/user/main/other/src/a.ts' }, { transcript_path: promptFile('посмотри others') }), 'ask');
+check('имя проекта только во вставке — вопрос',
+  run('Write', { file_path: '/home/user/main/other/src/a.ts' }, { transcript_path: promptFile('глянь\n```\ncd other\n```') }), 'ask');
 check('tokensave_str_replace по .env', run(TS_EDIT, { path: '/home/user/main/vpn-new/.env' }), 'deny');
 check('tokensave_str_replace файла проекта', run(TS_EDIT, { path: 'src/app.ts' }), 'allow');
 

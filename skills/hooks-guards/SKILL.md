@@ -23,10 +23,10 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   protected branch, force `-f`/`+refspec`, deletion, the current branch: no refspec, `HEAD`,
   `@`, a `$…` name), DB dumps and non-local DBs, prod docker, `kubectl`, non-read `ssh`, outbound
   data (`scp`, `curl -X POST|sh`), publish/deploy, migrations, `git reset --hard`, `rm -rf` of
-  `/ ~ . .git`, `sudo` (list: `ai-hooks/README.md`), a computed git path (`-F "$f"`), the whole
-  environment (`env`): name one variable. `gh auth token` is denied; amend, `--no-verify`, harness edits pass.
-- An action named in the user's last own prompt (transcript, `origin.kind: human`; not a handoff plan or a menu answer) skips its ask until the next prompt: «запушь»/`push`, «МР»/`PR` (push + `gh pr`/`glab mr`), «удали», «откати», «задеплой», «накати миграцию»; force and branch deletion need «форс»/«удали ветку».
-  Negation, ``` blocks, `>` quotes grant nothing; `rm -rf /`/`~`, secret output, `env`, ssh, sudo, outbound, `kubectl` always ask. Ask anyway → let the dialog answer.
+  `/ ~ . .git`, `sudo` (list: `ai-hooks/README.md`), a computed git path, `env`: name one variable;
+  an edit outside the session's repo (harness via `~/.claude` too; not `/tmp`, memory, plans).
+- An action named in the user's last own prompt (transcript, `origin.kind: human`; not a handoff plan or a menu answer) skips its ask until the next prompt: «запушь»/`push`, «МР»/`PR` (push + `gh pr`/`glab mr`), «удали», «откати», «задеплой», «накати миграцию», the other project's directory name; force and branch deletion need «форс»/«удали ветку».
+  Negation, ``` blocks, `>` quotes grant nothing; `rm -rf /`/`~`, secret output, `env`, ssh, sudo, outbound, `kubectl` always ask; `gh auth token` is denied. Ask anyway → let the dialog answer.
 - `dispatch` answers `allow` to every call no check denied or asked, in every mode. Kept: `AskUserQuestion`,
   `ExitPlanMode` (the handoff window), `EnterPlanMode`, and any call in plan mode.
 - Judges command **form**; code *meaning* (auth, payments, secrets, outbound calls) still needs `review-security`.
