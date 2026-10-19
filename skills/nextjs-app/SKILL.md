@@ -14,7 +14,8 @@ what crosses the boundary. Components, hooks, forms, a11y stay in
 1. Read `next` in `package.json`. The installed version decides, not memory:
    `node_modules/next/dist/docs/` holds the matching docs (16.2+) — read the
    guide for the API before writing it. Project `AGENTS.md` with the
-   `nextjs-agent-rules` block points there too.
+   `nextjs-agent-rules` block points there too; `next dev` writes and refreshes
+   that block (16.3+) — commit it as is, never strip it from a diff.
 2. Pages Router project (`pages/`, no `app/`) → only `react-frontend` and the
    neighbours; the rules below are App Router.
 3. Breaking points to check against the version: request APIs async
@@ -54,11 +55,16 @@ what crosses the boundary. Components, hooks, forms, a11y stay in
 
 ## Rendering and cache
 
-- `cacheComponents` on → uncached data sits inside `<Suspense>`; cached work is
-  marked `'use cache'` with `cacheLife` and `cacheTag`. Off → follow the
-  version's fetch/segment config the neighbours use. Never mix the two models.
+- `cacheComponents` on (the `create-next-app` default from 16.4) → uncached
+  data sits inside `<Suspense>`; cached work is marked `'use cache'` with
+  `cacheLife` and `cacheTag`; `export const instant = false` only with a stated
+  reason. Off → follow the version's fetch/segment config the neighbours use;
+  switching an existing app over is its own task, not a side effect. Never mix
+  the two models.
 - `loading.tsx`, `error.tsx` (client), `not-found.tsx` per segment that fetches;
-  `notFound()` on a missing entity, not an empty page.
+  `notFound()` on a missing entity, not an empty page. A nested boundary that
+  must retry server data → `catchError` from `next/error` (16.3+), not a
+  hand-rolled class boundary that swallows `notFound`/`redirect`.
 - Parallel fetches with `Promise.all`; no waterfall of awaits for independent data.
 - No side effects in render (cookies, revalidation, writes) — actions only.
 
@@ -66,14 +72,16 @@ what crosses the boundary. Components, hooks, forms, a11y stay in
 
 - `proxy.ts` only for redirects, rewrites, headers and cheap auth gating; real
   authorisation stays in the DAL/action.
-- Dynamic segment params are user input: parse and validate.
+- Dynamic segment params are user input: parse and validate. Root-level params
+  (`[lang]`) read through `next/root-params` (16.3+), not drilled through props.
 - `Link` for internal navigation; `redirect()` in server code, `useRouter` only
   in client handlers.
 
 ## Assets and metadata
 
 - `next/image` with `width`/`height` or `fill` + `sizes`; remote hosts in
-  `images.remotePatterns`; `priority` only on the LCP image.
+  `images.remotePatterns`; the LCP image alone gets `loading="eager"` or
+  `fetchPriority="high"` — `priority` is deprecated from 16.
 - `next/font` in the root layout, not CSS `@import`.
 - `metadata` / `generateMetadata`, `app/robots.ts`, `app/sitemap.ts`,
   `opengraph-image` — conventions; what goes into them is `seo`.

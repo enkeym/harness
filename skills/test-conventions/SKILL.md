@@ -29,8 +29,10 @@ needs: `test-coverage`.
   `__fixtures__` or `test/`, whichever the project uses.
 
 ## Mocks
-- Mock boundaries only: network, DB, filesystem, time (`jest.useFakeTimers` or
-  injected clock), external SDKs. Never internal project modules.
+- Mock boundaries only: network, DB, filesystem, time (the runner's fake
+  timers or an injected clock), external SDKs. Never internal project modules.
+- Never assert calls recorded in `beforeAll` or another test: Vitest 5 clears
+  call history between tests by default (`clearMocks`), Jest per its config.
 - NestJS with `@nestjs/testing`:
   `Test.createTestingModule({ providers: [Service, { provide: Repo, useValue: mock }] })`;
   e2e = real `INestApplication` with `main.ts` pipes/filters + `supertest`.

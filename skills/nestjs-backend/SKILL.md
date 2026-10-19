@@ -25,9 +25,13 @@ a side effect of a server edit.
 - Shared guards, interceptors, pipes, filters, decorators in `common/`.
 
 ## Input and output
-- Input = DTO class with `class-validator`/`class-transformer` behind the
-  project's global `ValidationPipe` (at least `whitelist`, `transform`).
-  Numeric params via `ParseIntPipe` or `@Type(() => Number)`.
+- Input validated the project's way: a DTO class with
+  `class-validator`/`class-transformer` behind the global `ValidationPipe`
+  (at least `whitelist`, `transform`) — Nest's default; or, where the project
+  validates with zod/valibot, the `schema` option on `@Body`/`@Query`/`@Param`
+  (Nest 12+, Standard Schema). Never a second way beside the neighbours'.
+  Numeric params via `ParseIntPipe`, `@Type(() => Number)` or the schema's
+  coercion.
 - Output = explicit fields in the project's response form; an entity never
   leaves whole; sensitive fields excluded in the mapping.
 

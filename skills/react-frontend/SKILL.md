@@ -20,6 +20,15 @@ asked or before an MR (`test-coverage`), never as a side effect of a UI edit.
   into `useX`; the component stays markup.
 - Derivable from props/state → computed, not stored. `useEffect` syncs with
   the outside world, never recomputes state.
+- The installed `react` decides, not memory. 19+: `ref` is a plain prop — no
+  new `forwardRef`; context rendered as `<Ctx value>`, not `<Ctx.Provider>`.
+  19.2+: a value an effect reads without reacting to it → `useEffectEvent`,
+  not a silenced deps rule. 19.3+: a client-only subtree → `use(browser())`,
+  not `useEffect` + `mounted` state or a `typeof window` check; focus or
+  listeners on a group of siblings → a Fragment ref, not a wrapper `div`.
+- React Compiler on (`reactCompiler` in the config or its Babel plugin) → no
+  new `useMemo`/`useCallback`/`memo` for speed; existing ones stay unless the
+  task is that cleanup.
 
 ## Data and state
 - Call the API the way the project already does (its client, data hook or

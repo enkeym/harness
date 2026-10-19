@@ -18,8 +18,8 @@ adds what those rules miss.
   differs — other packages, other OS.
 - Checks before a commit, in `review-standards` step 9: the full `pytest` once,
   plus the linter and type checker the project configures (`pyproject.toml`,
-  `setup.cfg`, CI). None configured → `python -m pyflakes` on the touched files
-  if installed, else one line saying so.
+  `setup.cfg`, CI). None configured → `ruff check` on the touched files if
+  installed, else `python -m pyflakes`, else one line saying so.
 - No type checker run on unannotated code — its output is noise, not findings.
 - A pinned requirement stays pinned; a bump comes with the check its comment
   names.
@@ -57,14 +57,15 @@ adds what those rules miss.
 - Atomic write: a temp file in the same directory, `os.replace` onto the target.
   On Windows `os.replace` raises `PermissionError` (WinError 5/32) while another
   handle is open — writers share the lock, a temp name per writer.
-- Text I/O with explicit `encoding="utf-8"`: the Windows default is the ANSI
-  code page.
+- Text I/O with explicit `encoding="utf-8"`: below 3.15 the Windows default
+  is the ANSI code page, and the code may still run there.
 - `subprocess.run([...], timeout=..., check=...)` with an argument list;
   `shell=True` only for a fixed string.
 
 ## Platform-bound code
-- `ctypes.WinDLL`, `win32*`, `winreg`, `msvcrt` loaded at first call or behind
-  `sys.platform` — a module-level load breaks import on another OS, and with it
+- `ctypes.WinDLL`, `win32*`, `winreg`, `msvcrt` loaded at first call, behind
+  `sys.platform`, or by `lazy import` when the project requires 3.15+ — an
+  eager module-level load breaks import on another OS, and with it
   every test importing the module.
 - Tests run on the OS the code ships to, against the real packages from the
   requirements. No stub, `importorskip` or `skipif` added only so another OS's

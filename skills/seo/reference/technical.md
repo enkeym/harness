@@ -123,8 +123,9 @@ and regional · Rendering · Images · Core Web Vitals · Internal linking
 | INP | ≤ 200 ms | long tasks from hydration, heavy handlers, third-party scripts |
 | CLS | ≤ 0.1 | images/ads/embeds without size, fonts swapping without fallback metrics |
 
-- LCP image: not `loading="lazy"`, `fetchpriority="high"` (`priority` in
-  `next/image`), right size and modern format.
+- LCP image: not `loading="lazy"`, `fetchpriority="high"` (`next/image`:
+  `fetchPriority="high"` or `loading="eager"`; `priority` is deprecated from
+  Next 16), right size and modern format.
 - Third-party tags (analytics, chat, maps) deferred or loaded on interaction.
 
 ## Internal linking

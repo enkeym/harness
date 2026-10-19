@@ -14,7 +14,8 @@ line here; facts about one project live in its memory, never in this file.
 - Derive, never copy: `Pick`/`Omit`, the project's extension form (`&` or
   `extends`), `PartialType`/`PickType`/`OmitType`, `ReturnType`, `z.infer`.
   Two hand-listed identical shapes = one missing derivation.
-- Input = DTO class; response and service contract = an explicit type in the
+- Input = the project's validated form (DTO class or schema); response and
+  service contract = an explicit type in the
   project's form (`type`, `interface`, response DTO); an entity never leaves whole.
 - One representation per value set: an existing `enum`/`as const` is used by
   member, not by literal; a literal union or `as const` twin next to an enum
