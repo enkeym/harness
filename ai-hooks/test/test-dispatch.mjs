@@ -181,9 +181,23 @@ function records(sb) {
   fs.mkdirSync(path.join(sb.cwd, '.claude'));
   fs.writeFileSync(path.join(sb.cwd, '.claude', 'settings.json'), '{"hooks":{"PreToolUse":[{"hooks":[{"command":"node ai/hooks/run.mjs claude pre"}]}]}}');
   check('с ai/hooks/run.mjs: карты связей нет', edit(), null);
-  // allow уступает deny хука проекта.
-  check('с ai/hooks/run.mjs: cat .env — решает проект', env(), 'allow');
-  check('с ai/hooks/run.mjs: ask на push остаётся', push(), 'ask');
+  check('без policy.mjs: cat .env — deny харнеса', env(), 'deny');
+
+  // Заглушка ядра проекта: .env — deny, ssh — ask, остальное молча.
+  fs.writeFileSync(path.join(sb.cwd, 'ai', 'hooks', 'policy.mjs'), [
+    'export const policy = (name, input) => {',
+    "  const c = String(input.command || '');",
+    "  if (/\\.env\\b/.test(c)) return { level: 'deny', reason: 'p' };",
+    "  if (/^ssh /.test(c)) return { level: 'ask', reason: 'p' };",
+    '  return null;',
+    '};',
+  ].join('\n'));
+  const decision = (cmd) => bash(sb, cmd, 'sid-p')?.hookSpecificOutput?.permissionDecision;
+  // allow уступает deny и ask хука проекта.
+  check('проект запретил: cat .env — решает проект', env(), 'allow');
+  check('проект спросил: ssh host rm — ask не дублируется', decision('ssh host rm -rf x'), 'allow');
+  check('проект молчит: ask на push остаётся', push(), 'ask');
+  check('проект молчит: deny на gh auth token остаётся', decision('gh auth token'), 'deny');
 }
 
 // --- регистрация: наши хуки события — один вызов диспетчера ---

@@ -23,33 +23,56 @@
 // deny из permissions и от хука tokensave сильнее allow.
 //
 // Проект со своим ядром гардов (ai-kit: `.claude/settings.json` зовёт
-// `ai/hooks/run.mjs`) сам запрещает чтение секретов и выдаёт карту связей: здесь links-context молчит, у security-guard
-// отбрасывается deny (секреты), ask остаётся. Иначе один отказ и один блок
-// карты приходили бы дважды. Файла без подключённого хука мало: иначе проект
-// до `link` оставался бы без гарда секретов вовсе.
+// `ai/hooks/run.mjs`) сам выдаёт карту связей — links-context здесь молчит.
+// Вердикт security-guard сверяется с `policy()` проекта — тем же, что зовёт
+// его run.mjs: проект запретил — харнес молчит, проект спросил — харнес снимает
+// свой ask, проект молчит — вердикт харнеса остаётся (`gh auth token`, push).
+// Иначе один отказ и один вопрос приходили бы дважды. Ядро проекта не
+// загрузилось — вердикт харнеса целиком. Файла без подключённого хука мало:
+// иначе проект до `link` оставался бы без гарда секретов вовсе.
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { setHookContext, logSlowIfNeeded, logCrash } from '../hooklog-core.mjs';
 import { readInput, finish, logVerdict, payloadOf } from './hook-io.mjs';
 
 const ALL = null;
 const EDIT_MCP = 'mcp__tokensave__tokensave_';
 const PROJECT_GUARDS = 'ai/hooks/run.mjs';
+const PROJECT_POLICY = 'ai/hooks/policy.mjs';
 const CHOICE_TOOLS = /^(AskUserQuestion|ExitPlanMode|EnterPlanMode)$/;
 
 const PROJECT_SKIP = new Set(['links-context']);
+// project: { level, reason } | null — вердикт проекта; undefined — не узнать.
 const PROJECT_FILTER = {
-  'security-guard': (result) => (result?.decision === 'deny' ? null : result),
+  'security-guard': (result, project) => {
+    if (project === undefined) return result;
+    if (project?.level === 'deny') return null;
+    return project?.level === 'ask' && result.decision === 'ask' ? null : result;
+  },
 };
 
+const projectRoot = (input) => process.env.CLAUDE_PROJECT_DIR || input.cwd;
+
 function projectOwnsGuards(input) {
-  const root = process.env.CLAUDE_PROJECT_DIR || input.cwd;
+  const root = projectRoot(input);
   if (!root || !fs.existsSync(path.join(root, PROJECT_GUARDS))) return false;
   try {
     return fs.readFileSync(path.join(root, '.claude', 'settings.json'), 'utf8').includes(PROJECT_GUARDS);
   } catch {
     return false;
+  }
+}
+
+async function projectVerdict(input) {
+  const root = projectRoot(input);
+  try {
+    const { policy } = await import(pathToFileURL(path.join(root, PROJECT_POLICY)).href);
+    return policy(input.tool_name, input.tool_input, { root, cwd: input.cwd || root }) ?? null;
+  } catch (e) {
+    logCrash(e);
+    return undefined;
   }
 }
 
@@ -116,8 +139,9 @@ async function dispatch(event, input) {
     setHookContext(input, name);
     try {
       const { check } = await import(new URL(file, import.meta.url));
+      let result = check(input);
       const filter = projectGuards && PROJECT_FILTER[name];
-      const result = filter ? filter(check(input)) : check(input);
+      if (filter && result?.decision) result = filter(result, await projectVerdict(input));
       if (!result) continue;
       logVerdict(input, result);
       if (result.block) return result;

@@ -50,4 +50,9 @@ paths:
   `ai-hooks/state-core.mjs`; снятие — `ai-hooks/grant-core.mjs:namesProject`. Адаптер без `cwd` —
   чужие правки молча проходят; `env-isolate.mjs` не стирает `CLAUDE_PROJECT_DIR` — тесты судят
   от проекта живой сессии.
+- Проект со своим ядром гардов — `ai-hooks/claude/dispatch.mjs:projectVerdict` зовёт
+  `ai/hooks/policy.mjs:policy(toolName, toolInput, { root, cwd })` проекта (ai-kit) и
+  гасит deny и ask security-guard, которые проект выдаст сам. Проект переименовал
+  `policy` (`crash` в `hooks.jsonl`) или поле `level` ответа — харнес отвечает целиком,
+  и отказ с вопросом снова приходят дважды.
 - Текст отказа рекурсивного grep и формы коммита — `hooks/guards/shell.md`.

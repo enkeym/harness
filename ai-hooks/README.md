@@ -579,9 +579,12 @@ tokensave) в корне такого репозитория. Файл пров�
 остальные работают. Адаптеры экспортируют `check(input)` и остаются точками
 входа для тестов; `bin/cleanup.mjs` — ещё и CLI (`--force`, `--dry-run`).
 В проекте со своим ядром гардов (ai-kit: в корне `ai/hooks/run.mjs`, и `.claude/settings.json` его зовёт)
-`links-context` не идёт, а deny `security-guard` (секреты) отбрасывается: их
-делает проект, иначе отказ и блок карты приходят дважды. ask `security-guard` (push)
-остаётся; `allow` диспетчера уступает deny хука проекта.
+`links-context` не идёт, а вердикт `security-guard` сверяется с `ai/hooks/policy.mjs:policy`
+проекта: проект запретил — харнес молчит, спросил — харнес снимает свой ask, молчит —
+вердикт харнеса остаётся (push, `gh auth token`). Иначе отказ, вопрос и блок карты
+приходят дважды. Ядро проекта не загрузилось — вердикт харнеса целиком. `allow`
+диспетчера уступает deny и ask хука проекта (Claude Code: deny > ask > allow), поэтому
+разрешение из промпта ask проекта не снимает.
 `bash-router` (matcher `Bash|mcp__ide__executeCode`),
 `read-router` (matcher `Read`): файл из таблицы
 `files` индекса tokensave читают `tokensave_body`/`tokensave_read`, не `Read`
