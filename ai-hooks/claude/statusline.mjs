@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Claude Code, statusLine: каталог, ветка, название модели неоновым цветом
-// тем-класса, занятость окна, цена смены модели и индикатор ask mode.
+// тем-класса, занятость окна и индикатор ask mode.
 // Встроенная строка режимов (manual/accept edits/plan/auto) рисуется самим CLI
 // и про ask mode ничего не знает — поэтому индикатор живёт здесь.
 
@@ -60,16 +60,6 @@ function contextBadge(used) {
   return `${color}ctx ${Math.round(used.tokens / 1000)}k${mark}${RESET}`;
 }
 
-// Кеш привязан к модели: после /model всё окно записывается в кеш заново.
-// Хук на первом ходе новой модели опоздал бы — кеш уже переписан, — поэтому
-// цену показываем заранее, пока пользователь не набрал /model.
-const MODEL_SWITCH_MIN = 50_000;
-
-function modelSwitchBadge(used) {
-  if (!used || used.tokens < MODEL_SWITCH_MIN) return '';
-  return `${DIM}/model: кеш заново${RESET}`;
-}
-
 let raw = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (c) => { raw += c; });
@@ -99,7 +89,6 @@ process.stdin.on('end', () => {
     `${DIM}${parts.join('  ')}${RESET}`,
     modelBadge(model),
     contextBadge(used),
-    modelSwitchBadge(used),
     mode,
   ]
     .filter(Boolean)
