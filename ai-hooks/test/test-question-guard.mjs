@@ -164,7 +164,7 @@ check('HAND без работы — block с вопросом о перенос�
 check('SOFT без работы — пропуск', run([prompt('x'), sayAt(100_000, 'Вывод готов.')],
   { session_id: 'q-idle-soft' }) === null);
 const worked = (sid) => noteWork({ session_id: sid, cwd: REPO, tool_name: 'Edit', tool_input: { file_path: path.join(REPO, 'a.ts') } });
-// SOFT уже объявил context-meter; меню на каждом ходе после 90k — шум
+// SOFT уже объявил context-meter; меню на каждом ходе после SOFT — шум
 // (b231f3ab, 9bec0229: ответ на вопрос «установлена сборка?» уводил в перенос).
 worked('q-worked');
 check('SOFT и работа в прошлых ходах — пропуск', run([prompt('x'),

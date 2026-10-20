@@ -40,7 +40,7 @@ const num = (env, fallback) => Number(process.env[env]) || fallback;
 // SOFT — шаг пора закрывать: дальше каждый новый ход оплачивает всё накопленное.
 // HAND — собрать передачу, как только шаг доведён.
 // HARD — работать здесь уже дорого; напоминание повторяется каждый ход.
-export const SOFT = num('AI_HOOKS_CTX_SOFT', 90_000);
+export const SOFT = num('AI_HOOKS_CTX_SOFT', 100_000);
 export const HAND = num('AI_HOOKS_CTX_HAND', 150_000);
 export const HARD = num('AI_HOOKS_CTX_HARD', 220_000);
 
@@ -210,7 +210,7 @@ function mayRepeat(phase, stage, tokens, seen) {
 
 // Блок конца хода за порогом (question-guard) — по мерке объявления: SOFT не
 // блокирует, его текст уже доехал от context-meter, а меню на каждом ходе после
-// 90k уводило в перенос ответ на простой вопрос. HAND — один раз за сессию и ещё
+// SOFT уводило в перенос ответ на простой вопрос. HAND — один раз за сессию и ещё
 // раз, если после блока без правок появилась работа; HARD — каждый ход. Отметка
 // ставится здесь же: вызов и есть выданный блок.
 export function stopNoticeDue(sessionId, stage, worked) {
@@ -332,7 +332,7 @@ const NEW_REQUEST = {
   hand: `${SMALL_REQUEST} Другую работу не начинай: неясное уточни, внеси просьбу `
     + 'первым пунктом «Дальше» и закончи ход передачей по скиллу `handoff`.',
   // До HAND перенос решает пользователь: без текста на SOFT сессия молча отвечала
-  // на каждую новую просьбу вплоть до 150k.
+  // на каждую новую просьбу вплоть до HAND.
   soft: `${SMALL_REQUEST} Другую работу до начала — ${ASK_MOVE}`,
 };
 

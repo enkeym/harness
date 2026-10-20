@@ -161,20 +161,20 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 
 // --- первый порог: закрыть шаг, но блок ещё не собирать; звучит один раз
 {
-  const file = transcript('soft', [assistant(95_000)]);
+  const file = transcript('soft', [assistant(105_000)]);
   work('s-soft');
   const first = contextNotice({ transcript_path: file, session_id: 's-soft' });
-  check('95k: сработало как soft', first.stage, 'soft');
-  check('95k: токены в тексте', /95k/.test(first.text), true);
-  check('95k: сказано закрыть шаг коммитом', /коммит/.test(first.text), true);
+  check('105k: сработало как soft', first.stage, 'soft');
+  check('105k: токены в тексте', /105k/.test(first.text), true);
+  check('105k: сказано закрыть шаг коммитом', /коммит/.test(first.text), true);
   // «Новый не начинай» без конца хода толкал закончить его прозой «лучше в новой сессии».
-  check('95k: после коммита — вопрос о переносе',
+  check('105k: после коммита — вопрос о переносе',
     /вопрос AskUserQuestion: «Перенести в новую сессию» первым/.test(first.text), true);
-  check('95k: блок передачи сам не собирает', /\(скилл `handoff`\)/.test(first.text), true);
+  check('105k: блок передачи сам не собирает', /\(скилл `handoff`\)/.test(first.text), true);
   // Перенос закрытой задачи — пустая сессия; мелкую правку дешевле доделать здесь.
-  check('95k: закрытая задача или мелкая правка — без переноса',
+  check('105k: закрытая задача или мелкая правка — без переноса',
     /Задача закрыта или осталась мелкая правка[^.]*без переноса/.test(first.text), true);
-  check('95k: перенос — когда остались шаги', /Остались шаги плана/.test(first.text), true);
+  check('105k: перенос — когда остались шаги', /Остались шаги плана/.test(first.text), true);
   check('soft посреди хода второй раз молчит',
     contextNotice({ transcript_path: file, session_id: 's-soft' }, { phase: 'step' }), null);
   // Без текста на SOFT сессия молча отвечала на каждую новую просьбу до 150k.
@@ -188,7 +188,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 
 // --- второй порог звучит поверх первого, третий — поверх второго
 {
-  const soft = transcript('esc-soft', [assistant(95_000)]);
+  const soft = transcript('esc-soft', [assistant(105_000)]);
   const hand = transcript('esc-hand', [assistant(160_000)]);
   const hard = transcript('esc-hard', [assistant(240_000)]);
   work('s-esc');
@@ -219,7 +219,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 
   // откат ниже порога (новый ход дешевле предыдущего) младший порог не будит
   check('спуск к 160k после hard: молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
-  check('спуск к 95k после hard: молчит', contextNotice({ transcript_path: soft, session_id: 's-esc' }), null);
+  check('спуск к 105k после hard: молчит', contextNotice({ transcript_path: soft, session_id: 's-esc' }), null);
 }
 
 // --- сессия, начатая сразу в дорогой зоне, слышит верхний порог без младших
@@ -257,12 +257,12 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 
 // --- посреди хода: первый порог закрывает шаг, но блока ещё не просит
 {
-  const file = transcript('step-soft', [assistant(95_000)]);
+  const file = transcript('step-soft', [assistant(105_000)]);
   work('s-step-soft');
   const n = contextNotice({ transcript_path: file, session_id: 's-step-soft' }, { phase: 'step' });
-  check('95k посреди хода: soft', n.stage, 'soft');
-  check('95k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
-  check('95k посреди хода: вопрос о переносе — только после коммита', /после коммита вопрос AskUserQuestion/.test(n.text), true);
+  check('105k посреди хода: soft', n.stage, 'soft');
+  check('105k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
+  check('105k посреди хода: вопрос о переносе — только после коммита', /после коммита вопрос AskUserQuestion/.test(n.text), true);
 }
 
 // --- посреди хода на втором пороге: довести шаг до коммита с пушем, и только
@@ -337,7 +337,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 // подготовка к правке: коммитить ей нечего, а выводы терять нельзя, поэтому её
 // просят выдать вывод и закончить ход вопросом о переносе — решает пользователь
 {
-  const soft = transcript('idle-soft', [assistant(95_000)]);
+  const soft = transcript('idle-soft', [assistant(105_000)]);
   const hand = transcript('idle-hand', [assistant(160_000)]);
   const hard = transcript('idle-hard', [assistant(240_000)]);
   const sid = 's-idle';
@@ -393,7 +393,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('на следующем промпте — текст о новой просьбе', /Новая просьба/.test(contextNotice(input)?.text), true);
 
   const softSid = 's-idle-soft-then-work';
-  const soft = transcript('idle-soft-then-work', [assistant(95_000)]);
+  const soft = transcript('idle-soft-then-work', [assistant(105_000)]);
   contextNotice({ transcript_path: soft, session_id: softSid });
   work(softSid);
   check('SOFT без правок не будится правкой: следующим прозвучит HAND',
@@ -404,7 +404,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
 // источник и остаётся командой: длинное обоснование модель принимает за инъекцию
 {
   const texts = [];
-  for (const [i, tokens] of [95_000, 160_000, 240_000].entries()) {
+  for (const [i, tokens] of [105_000, 160_000, 240_000].entries()) {
     for (const phase of ['prompt', 'step']) {
       for (const worked of [false, true]) {
         const sid = `s-honest-${i}-${phase}-${worked}`;
