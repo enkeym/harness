@@ -189,7 +189,7 @@
       "effortLevel": "medium"
     },
     "claude-sonnet-5-5": {
-      "effortLevel": "medium"
+      "effortLevel": "low"
     }
   },
   "showClearContextOnPlanAccept": true,

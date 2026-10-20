@@ -10,10 +10,10 @@ Trigger: two hooks fire at the token thresholds in
 `context-step.mjs` mid-turn. `SOFT` offers the move through the menu, `HAND`,
 `HARD` the handoff — only while work continues (a plan step, a check); a closed
 task or one small edit (one place, already read) is finished here with a
-result line. A new user request after `HAND` gets the same test: anything
-bigger is not started — clarify, put it first under `Дальше`, hand off. Don't
-raise context size yourself. Never start a new session; write only the
-`task-brief` plan file and plan mode's plan file.
+result line. A new request gets the same test; anything bigger after `SOFT`
+first asks move or stay, after `HAND` is not started — clarify, put it first
+under `Дальше`, hand off. Don't raise context size yourself. Never start a
+new session; write only the `task-brief` plan file and plan mode's plan file.
 
 Mid-turn the answer is never cut in half: finish the step in hand, then, while
 work continues, end the turn with the handoff, not a summary — also when the

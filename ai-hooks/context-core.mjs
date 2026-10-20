@@ -326,12 +326,18 @@ export function noticeText(stage, tokens, { worked = false } = {}) {
 // если передача всё равно впереди, и от ~17, если нет. Просьба после 120k — медиана
 // 10 вызовов, p75 — 26; каждая пятая укладывается в три. Отсюда граница —
 // одно уже прочитанное место: такую правку дешевле сделать здесь.
-const NEW_REQUEST = 'Новая просьба: ответ или мелкая правка (одно место, уже прочитанное) — сделай '
-  + 'здесь и закончи ход итогом. Другую работу не начинай: неясное уточни, внеси просьбу '
-  + 'первым пунктом «Дальше» и закончи ход передачей по скиллу `handoff`.';
+const SMALL_REQUEST = 'Новая просьба: ответ или мелкая правка (одно место, уже прочитанное) — сделай '
+  + 'здесь и закончи ход итогом.';
+const NEW_REQUEST = {
+  hand: `${SMALL_REQUEST} Другую работу не начинай: неясное уточни, внеси просьбу `
+    + 'первым пунктом «Дальше» и закончи ход передачей по скиллу `handoff`.',
+  // До HAND перенос решает пользователь: без текста на SOFT сессия молча отвечала
+  // на каждую новую просьбу вплоть до 150k.
+  soft: `${SMALL_REQUEST} Другую работу до начала — ${ASK_MOVE}`,
+};
 
-function requestText(tokens) {
-  return `context-meter: ${k(tokens)} токенов. ${NEW_REQUEST}`;
+function requestText(stage, tokens) {
+  return `context-meter: ${k(tokens)} токенов. ${NEW_REQUEST[stage]}`;
 }
 
 // null — молчим. Иначе порог, занятость и текст для additionalContext.
@@ -342,9 +348,10 @@ function requestText(tokens) {
 //
 // Леджер объявлений у фаз общий: порог, пройденный посреди хода, не повторяется
 // следующим же промптом — указание уже доехало, и вторая копия была бы шумом.
-// Исключение — HAND на ходу пользователя: каждый новый промпт там — новая
-// просьба, и звучит текст о ней (`requestText`). Сессии без правок он звучит со
-// второго промпта: первый получает вывод и вопрос о переносе.
+// Исключение — SOFT и HAND на ходу пользователя: каждый новый промпт там — новая
+// просьба, и звучит текст о ней (`requestText`). На SOFT — со второго промпта:
+// первый получает текст порога. На HAND сессии без правок — тоже со второго:
+// первый получает вывод и вопрос о переносе.
 export function contextNotice(input, { phase = 'prompt' } = {}) {
   const used = contextUsed(input?.transcript_path);
   if (!used) return null;
@@ -359,8 +366,8 @@ export function contextNotice(input, { phase = 'prompt' } = {}) {
 
   const seen = sessionId ? record(sessionId) : null;
   const worked = seen?.worked === true;
-  const request = phase === 'prompt' && stage === 'hand' && seen?.stage !== 'hard'
-    && (worked || seen?.stage === 'hand');
+  const request = phase === 'prompt' && seen?.stage !== 'hard'
+    && (stage === 'hand' ? worked || seen?.stage === 'hand' : seen?.stage === 'soft');
   if (seen?.stage && RANK[seen.stage] >= RANK[stage]
     && !request
     && !mayRepeat(phase, stage, used.tokens, seen)
@@ -373,6 +380,6 @@ export function contextNotice(input, { phase = 'prompt' } = {}) {
     stage,
     pct: used.pct,
     tokens: used.tokens,
-    text: request ? requestText(used.tokens) : noticeText(stage, used.tokens, { worked }),
+    text: request ? requestText(stage, used.tokens) : noticeText(stage, used.tokens, { worked }),
   };
 }

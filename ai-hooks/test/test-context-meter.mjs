@@ -175,7 +175,15 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('95k: закрытая задача или мелкая правка — без переноса',
     /Задача закрыта или осталась мелкая правка[^.]*без переноса/.test(first.text), true);
   check('95k: перенос — когда остались шаги', /Остались шаги плана/.test(first.text), true);
-  check('повтор того же порога молчит', contextNotice({ transcript_path: file, session_id: 's-soft' }), null);
+  check('soft посреди хода второй раз молчит',
+    contextNotice({ transcript_path: file, session_id: 's-soft' }, { phase: 'step' }), null);
+  // Без текста на SOFT сессия молча отвечала на каждую новую просьбу до 150k.
+  const next = contextNotice({ transcript_path: file, session_id: 's-soft' });
+  check('следующий промпт после soft: текст о новой просьбе', /Новая просьба/.test(next?.text), true);
+  check('новая просьба на soft: другая работа — вопрос о переносе, без передачи',
+    /Другую работу до начала — вопрос AskUserQuestion: «Перенести в новую сессию» первым/.test(next?.text)
+      && !/«Дальше»/.test(next?.text), true);
+  check('и на каждом следующем промпте', /Новая просьба/.test(contextNotice({ transcript_path: file, session_id: 's-soft' })?.text), true);
 }
 
 // --- второй порог звучит поверх первого, третий — поверх второго
