@@ -75,7 +75,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 ## question-guard
 
 - Stop hook blocks once a turn without `AskUserQuestion`/`ExitPlanMode`: HAND once,
-  HARD every turn (do what the meter's text says); last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite).
+  HARD every turn (do what the meter's text says); last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite), or open questions stated in the last two paragraphs ("Открытыми остаются вопросы: …").
 - `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a
   stacked snapshot: rewrite the plan file per `handoff`, then exit again.
 - `resume-hint` on resume: work moved through handoff to the named session — changes after

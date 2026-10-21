@@ -28,6 +28,17 @@ const INLINE_CODE_RE = /`[^`\n]*`/g;
 const HEADING_RE = /^#{1,6}\s/;
 // `?` в конце строки; после него — только разметка, закрывающие знаки, эмодзи.
 const QUESTION_END_RE = /\?[:!\s*_)\]»"'“”\p{Extended_Pictographic}\u{FE0F}\u{200D}]*$/u;
+// `?` в середине строки, дальше новое предложение: «Какой метод показывает /status?
+// По нему можно сузить причину.» (a19ce8c3) — пояснение в той же строке.
+const QUESTION_MID_RE = /\?[*_)\]»"'“”]*\s+[\p{Lu}]/u;
+// Открытые вопросы утверждением: «Открытыми остаются три вопроса: …» (87ab5ef7) —
+// ответа ждут так же, но без `?` и часто не последним абзацем. Без «открыт»
+// («Остался вопрос к X: не менялся») это чаще отчёт, чем вопрос.
+const OPEN_RE = /(?<![\p{L}\p{N}])(?:открыт\p{L}*\s+(?:[\p{L}\p{N}]+\s+){0,2}вопрос|вопрос\p{L}*\s+(?:[\p{L}\p{N}]+\s+){0,2}открыт|open questions?(?![\p{L}\p{N}]))/iu;
+// «Открытых вопросов нет», «вопрос из плана закрылся» — отчёт, что ждать нечего.
+const OPEN_CLOSED_RE = /(?<![\p{L}\p{N}])(?:нет|не остал\p{L}*|закрыл\p{L}*|снят\p{L}*|решён|решен\p{L}*|none)(?![\p{L}\p{N}])/iu;
+// Столько последних абзацев проверяет OPEN_RE.
+const OPEN_PARAS = 2;
 // Цитируемое в кавычках — не слова автора: «Жду вашего „ок“» судится без „ок“.
 const QUOTED_RE = /«[^»]*»|„[^“”]*[“”]|"[^"]*"|“[^”]*”/g;
 // Ожидание решения пользователя в форме утверждения. «Подтвердите UAC» — просьба
@@ -104,18 +115,26 @@ function proseLines(text) {
 }
 
 const asks = (line) => QUESTION_END_RE.test(line)
+  || QUESTION_MID_RE.test(line)
   || AWAIT_RE.test(line.replace(QUOTED_RE, ''))
   || OPTIONS_HEAD_RE.test(line);
 
 // Строка, на которой ответ ждёт пользователя, или null. Судится последний абзац
 // целиком — пояснение после вопроса его не прячет; и хвост из MIN_OPTIONS+
-// пунктов списка, если строка перед ним — вопрос или заголовок вариантов.
+// пунктов списка, если строка перед ним — вопрос или заголовок вариантов;
+// открытые вопросы — в OPEN_PARAS последних абзацах.
 export function pendingQuestion(text) {
   const lines = proseLines(text);
   if (!lines.length) return null;
   const lastPara = lines[lines.length - 1].para;
   const hit = lines.find((l) => l.para === lastPara && asks(l.text));
   if (hit) return hit.text;
+  const tailParas = [...new Set(lines.map((l) => l.para))].slice(-OPEN_PARAS);
+  const open = lines.find((l) => {
+    const prose = l.text.replace(QUOTED_RE, '');
+    return tailParas.includes(l.para) && OPEN_RE.test(prose) && !OPEN_CLOSED_RE.test(prose);
+  });
+  if (open) return open.text;
   let i = lines.length;
   while (i > 0 && LIST_ITEM_RE.test(lines[i - 1].text)) i--;
   if (lines.length - i >= MIN_OPTIONS && i > 0 && asks(lines[i - 1].text)) return lines[i - 1].text;
