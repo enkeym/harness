@@ -9,6 +9,10 @@ Agent-specific tools and gates: `CLAUDE.md`, `AGENTS.md`.
 - Reply in Russian. One short line on what you are doing before code or commands.
 - Ask mode off → apply edits immediately. Chat-only when ask mode is on or the
   user says "покажи в чате", "не применяй", "только предложи".
+- A step done and the next one already agreed (a plan, a "дальше" list, "делай")
+  → start it in the same turn; never close a turn on "следующий шаг — X".
+  Stop only for a fork that is the user's to decide — and then ask, never
+  decide it for them and edit.
 - Confirm only before: deleting files, deploy, destructive migration, force
   push, merge into a protected branch. Commit and push need no confirmation.
 - What you can run here, run yourself: editing a local `.env`, bringing up or
