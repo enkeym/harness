@@ -3,6 +3,7 @@
 [core]
 	excludesfile = ~/.gitignore_global
 	hooksPath = ~/.config/git/hooks
+	autocrlf = input
 [credential]
 	helper = store
 [credential "https://github.com"]
@@ -15,6 +16,7 @@
 	rebase = true
 [push]
 	default = current
+	autoSetupRemote = true
 [include]
 	path = ~/.gitconfig.local
 [diff]
