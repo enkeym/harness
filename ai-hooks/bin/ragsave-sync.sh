@@ -50,16 +50,28 @@ find "$repo_root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>
 # при переиндексации после смены ветки). RAGSAVE_THREADS из окружения главнее.
 # Лимит и nice — только синку: демон, поднятый warm, живёт дольше синка и
 # считает поиск всех сессий.
-setsid bash -c '
-  root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; tmp="$log.$$"
+# На macOS нет ни setsid, ни ionice. Без setsid — обычный фон `&`: вывод уже в
+# /dev/null, хук его не ждёт. Без ionice — taskpolicy -b (фоновый QoS macOS:
+# и CPU, и IO), нет и его — один nice.
+detach=""
+command -v setsid >/dev/null 2>&1 && detach=setsid
+low_io=""
+if command -v ionice >/dev/null 2>&1; then
+  low_io="ionice -c 3"
+elif command -v taskpolicy >/dev/null 2>&1; then
+  low_io="taskpolicy -b"
+fi
+$detach bash -c '
+  root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; low_io="$6"; tmp="$log.$$"
   if [ "$warm" = 1 ]; then
     "$bin" warm >"$tmp" 2>&1 || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave warm" "$root" "$tmp" "$?"
   fi
-  RAGSAVE_THREADS="$threads" nice -n 19 ionice -c 3 "$bin" sync "$root" --quiet >"$tmp" 2>&1
+  # low_io без кавычек: пусто — ничего, иначе команда со своими флагами.
+  RAGSAVE_THREADS="$threads" nice -n 19 $low_io "$bin" sync "$root" --quiet >"$tmp" 2>&1
   code=$?
   [ "$code" = 3 ] && { rm -f "$tmp"; exit 0; }
   [ "$code" = 0 ] || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"
   mv -f "$tmp" "$log"
-' _ "$repo_root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" </dev/null >/dev/null 2>&1 &
+' _ "$repo_root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" "$low_io" </dev/null >/dev/null 2>&1 &
 
 exit 0

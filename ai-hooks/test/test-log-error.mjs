@@ -127,6 +127,20 @@ function sandbox() {
   check('маленький файл не ротируется', sb.read().split('---\n').length - 1, 2);
 }
 
+// --- ротация без GNU stat (macOS: `stat -c` — ошибка) ---
+{
+  const sb = sandbox();
+  const bin = path.join(sb.dir, 'bin');
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, 'stat'), '#!/bin/sh\necho "stat: illegal option -- c" >&2\nexit 1\n', { mode: 0o755 });
+  fs.mkdirSync(sb.logDir, { recursive: true });
+  fs.writeFileSync(sb.errors, Buffer.alloc(5 * 1024 * 1024 + 1, 'a'));
+  spawnSync('bash', [SCRIPT, 'tokensave sync', '/work/new', '', '1'], {
+    encoding: 'utf8', env: { ...process.env, AI_HOOKS_LOG_DIR: sb.logDir, PATH: `${bin}:${process.env.PATH}` },
+  });
+  check('BSD stat — ротация всё равно идёт', fs.existsSync(`${sb.errors}.1`), true);
+}
+
 // --- каталог журнала создать нельзя ---
 {
   const sb = sandbox();

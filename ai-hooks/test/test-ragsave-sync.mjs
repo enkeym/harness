@@ -2,7 +2,7 @@
 // Тесты bin/ragsave-sync.sh — фонового `ragsave sync` по UserPromptSubmit и Stop.
 // Бинарь подменяет fixtures/fake-indexer.mjs через AI_HOOKS_RAGSAVE_CMD либо
 // симлинком $HOME/.local/bin/ragsave; HOME — песочница с симлинком на настоящий
-// log-error.sh, который скрипт зовёт по пути под $HOME/.ai-hooks. Фоновый setsid
+// log-error.sh, который скрипт зовёт по пути под $HOME/.ai-hooks. Фоновый синк
 // дожидаемся по файлу вызовов фейка; отсутствие вызова проверяем после общей паузы.
 
 import './env-isolate.mjs';
@@ -175,6 +175,40 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
   check('отказ warm — запись в errors.log, sync всё равно идёт',
     waitFor(() => sb.errors().includes(`] ragsave warm | ${sb.root} | exit=1`)
       && sb.readCalls().length === 2), true);
+}
+
+// macOS: ни setsid, ни ionice — PATH только из нужных скрипту утилит.
+// taskpolicy — фейк: пишет свои аргументы и запускает остальное.
+function macRun(sb, { taskpolicy = false } = {}) {
+  const bin = path.join(sb.home, 'path');
+  fs.mkdirSync(bin);
+  for (const t of ['bash', 'git', 'find', 'nice', 'mv', 'rm', 'node']) {
+    fs.symlinkSync(spawnSync('bash', ['-c', `command -v ${t}`], { encoding: 'utf8' }).stdout.trim(), path.join(bin, t));
+  }
+  const policy = path.join(sb.home, 'taskpolicy.args');
+  if (taskpolicy) {
+    fs.writeFileSync(path.join(bin, 'taskpolicy'), `#!/bin/sh\necho "$1" >"${policy}"\nshift\nexec "$@"\n`, { mode: 0o755 });
+  }
+  const res = spawnSync(path.join(bin, 'bash'), [SCRIPT, sb.root], {
+    cwd: sb.home, encoding: 'utf8',
+    env: { HOME: sb.home, PATH: bin, AI_HOOKS_RAGSAVE_CMD: FAKE, FAKE_INDEXER_CALLS: path.join(sb.home, 'calls.jsonl') },
+  });
+  return { status: res.status, policy: () => read(policy) };
+}
+
+{
+  const sb = sandbox();
+  const res = macRun(sb);
+  check('без setsid и ionice — код 0 и sync всё равно вызван', [res.status, sb.waitCalls(1)], [0, [['sync', sb.root, '--quiet']]]);
+  check('без setsid и ionice — итог в sync.log',
+    waitFor(() => read(path.join(sb.dir, 'sync.log')).includes('fake sync')), true);
+}
+
+{
+  const sb = sandbox();
+  const res = macRun(sb, { taskpolicy: true });
+  check('без ionice, есть taskpolicy — sync под `taskpolicy -b`',
+    [sb.waitCalls(1), res.policy()], [[['sync', sb.root, '--quiet']], '-b\n']);
 }
 
 {
