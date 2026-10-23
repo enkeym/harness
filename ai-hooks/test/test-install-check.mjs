@@ -288,6 +288,47 @@ check('LOCALS разобран и не смешан с LINKS',
 }
 
 {
+  const sb = sandbox();
+  const today = spawnSync('date', ['+%Y%m%d-%H%M%S'], { encoding: 'utf8' }).stdout.trim();
+  const [oldRc, freshRc, oldSkills] = ['.bashrc.bak-20200101-000000', `.bashrc.bak-${today}`, '.claude/skills.bak-20200101-000000'].map(sb.target);
+  fs.writeFileSync(oldRc, '');
+  fs.writeFileSync(freshRc, '');
+  fs.mkdirSync(oldSkills);
+  const res = sb.run();
+  check('--check называет бэкапы старше 30 дней, свежий молчит, drift не растёт',
+    [res.out.includes(`${oldRc} — бэкап старше 30 дней`), res.out.includes(`${oldSkills} — бэкап старше 30 дней`),
+      res.out.includes(freshRc), res.out.includes('/doctor спросит, какие удалить'), res.out.includes(summary(ALL, 0, 0))],
+    [true, true, false, true, true]);
+  check('без старых бэкапов строки нет', sandbox().run().out.includes('бэкап'), false);
+}
+
+{
+  const sb = sandbox();
+  const project = (name, files, cwd = sb.target(name)) => {
+    const dir = sb.target(`.claude/projects/-${name}`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 's.jsonl'), `{"type":"summary"}\n${JSON.stringify({ type: 'user', cwd })}\n`);
+    for (const f of files) {
+      fs.mkdirSync(path.dirname(sb.target(`${name}/${f}`)), { recursive: true });
+      fs.writeFileSync(sb.target(`${name}/${f}`), '');
+    }
+  };
+  project('bare', ['.git']);
+  project('tsonly', ['.git', '.tokensave/db', '.ragsave-disable']);
+  project('ragonly', ['.git', '.ragsave/rag.db']);
+  project('full', ['.git', '.tokensave/db', '.ragsave/rag.db']);
+  project('nogit', []);
+  project('home', [], sb.home);
+  const out = sb.run().out;
+  const line = (name) => out.split('\n').find((l) => l.includes(`${sb.target(name)} — нет индекса`)) ?? '';
+  check('--check называет git-проекты сессий без индекса и команду на каждый',
+    [line('bare').endsWith(`нет индекса: tokensave init ${sb.target('bare')}; cd ${sb.target('bare')} && ragsave init`),
+      line('ragonly').endsWith(`нет индекса: tokensave init ${sb.target('ragonly')}`),
+      line('tsonly'), line('full'), line('nogit'), out.includes(`${sb.home} — нет индекса`), out.includes(summary(ALL, 0, 0))],
+    [true, true, '', '', '', false, true]);
+}
+
+{
   const gitSandbox = (tools) => {
     const sb = sandbox({ tools });
     const [gitconfig, local] = ['.gitconfig', '.gitconfig.local'].map(sb.target);

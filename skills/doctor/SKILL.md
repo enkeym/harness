@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook, a startup settings warning, install drift, settings overwritten by tokensave, duplicates and dead paths in the machine env — from logs and state, and proposes or restores a fix. User-invoked as /doctor."
+description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook, a startup settings warning, install drift, settings overwritten by tokensave, duplicates and dead paths in the machine env, old install backups, projects without an index — from logs and state, and proposes or restores a fix. User-invoked as /doctor."
 disable-model-invocation: true
 allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls -t *), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/harness/install.sh --check), Bash(~/harness/install.sh), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/harness *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read, Edit
 argument-hint: "[what broke, in your own words | session [sid]]"
@@ -75,6 +75,7 @@ Then, per symptom: `~/.claude/state/`.
 | A setting or skill edit stopped reaching git | `install.sh --check`: `/config` replaced a symlink with a file. `./install.sh` restores it, the file goes to `.bak-<date>` |
 | tokensave hooks, rules or MCP entry came back after `tokensave init` or an upgrade | section 5 — settings |
 | A command vanished from PATH after `./install.sh`, or `install.sh --check` names lines in `~/.config/harness/env` | section 5 — machine env |
+| `install.sh --check` names old `.bak-<date>` files or projects without an index | section 5 — backups, indexes |
 | Guards broke right after a harness edit | `git -C ~/harness status`: an uncommitted edit is live in every session; the red test names it |
 
 ## 3. What to do with a finding
@@ -123,4 +124,5 @@ with a test as in section 3.
 ## 5. Repairs after install
 
 Settings overwritten by tokensave, duplicates and dead paths in
-`~/.config/harness/env`: [reference/repair.md](reference/repair.md).
+`~/.config/harness/env`, old backups, projects without an index:
+[reference/repair.md](reference/repair.md).

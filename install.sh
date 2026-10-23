@@ -112,11 +112,13 @@ vscode_one() {
   fi
 }
 
+# VSCODE_DIR запоминается для backups_check: cmd.exe запускается долго.
+VSCODE_DIR=""
 vscode_links() {
-  local dir name
-  dir="$(vscode_dir)"
-  [ -n "$dir" ] || return 0
-  for name in "${VSCODE_LINKS[@]}"; do vscode_one "$dir" "$name"; done
+  local name
+  VSCODE_DIR="$(vscode_dir)"
+  [ -n "$VSCODE_DIR" ] || return 0
+  for name in "${VSCODE_LINKS[@]}"; do vscode_one "$VSCODE_DIR" "$name"; done
 }
 
 check_one() {
@@ -303,6 +305,55 @@ env_check() {
   fi
   warn "убрать эти строки из $env — /doctor чистит их сам"
   drift=$((drift + 1))
+}
+
+# Бэкапы <имя>.bak-<дата> рядом с целями LINKS, LOCALS и в папке VS Code: install
+# называет каждый при создании, но не убирает. Старше BAK_DAYS дней — в отчёт,
+# без счёта в drift: удалять или нет, решает пользователь в /doctor. Дата — из имени:
+# mv сохраняет mtime файла, и по нему свежий бэкап старого файла выглядел бы старым.
+BAK_DAYS=30
+backups_check() {
+  local cutoff pair d f day dirs=() seen=" " n=0
+  cutoff="$(date -d "$BAK_DAYS days ago" +%Y%m%d 2>/dev/null)" || return 0
+  for pair in "${LINKS[@]}" "${LOCALS[@]}"; do dirs+=("$(dirname "${pair%%|*}")"); done
+  [ -z "$VSCODE_DIR" ] || dirs+=("$VSCODE_DIR")
+  for d in "${dirs[@]}"; do
+    case "$seen" in *" $d "*) continue ;; esac
+    seen+="$d "
+    for f in "$d"/*.bak-* "$d"/.*.bak-*; do
+      day="${f##*.bak-}"; day="${day%%-*}"
+      [[ $day =~ ^[0-9]{8}$ ]] && [ "$day" -lt "$cutoff" ] || continue
+      warn "$f — бэкап старше $BAK_DAYS дней"
+      n=$((n + 1))
+    done
+  done
+  [ "$n" -eq 0 ] || warn "старые бэкапы — /doctor спросит, какие удалить"
+}
+
+# Проекты, где шли сессии Claude, без индекса: на новой машине клон приходит
+# без .tokensave/ и .ragsave/, а хуки сами индекс не создают. Путь — из поля cwd
+# транскрипта: имя каталога в ~/.claude/projects не раскодируется (любой
+# не алфанумерик → -). Только git-репозитории кроме $HOME; .ragsave-disable снимает
+# ragsave. Индекс создаёт пользователь — отчёт без счёта в drift.
+projects_check() {
+  local d t cwd need n=0
+  for d in "$HOME/.claude/projects"/*/; do
+    cwd=""
+    for t in "$d"*.jsonl; do
+      [ -f "$t" ] || continue
+      cwd="$(grep -m1 -o '"cwd":"[^"]*"' "$t" 2>/dev/null | head -1)" || true
+      [ -n "$cwd" ] && break
+    done
+    cwd="${cwd#\"cwd\":\"}"; cwd="${cwd%\"}"
+    [ -n "$cwd" ] && [ "$cwd" != "$HOME" ] && [ -e "$cwd/.git" ] || continue
+    need=""
+    [ -d "$cwd/.tokensave" ] || need="tokensave init $cwd"
+    [ -f "$cwd/.ragsave/rag.db" ] || [ -e "$cwd/.ragsave-disable" ] || need="${need:+$need; }cd $cwd && ragsave init"
+    [ -n "$need" ] || continue
+    warn "$cwd — нет индекса: $need"
+    n=$((n + 1))
+  done
+  [ "$n" -eq 0 ] || warn "проекты без индекса — /doctor предложит команды, индекс создаёт пользователь"
 }
 
 build_venv() {
@@ -501,6 +552,8 @@ case "$MODE" in
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     env_check
+    backups_check
+    projects_check
     mcp_sync --check
     externals
     say
@@ -519,6 +572,8 @@ case "$MODE" in
     bashrc_migrate
     gitconfig_migrate
     env_check
+    backups_check
+    projects_check
     mcp_sync
     externals
     say

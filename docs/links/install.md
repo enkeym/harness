@@ -64,6 +64,15 @@ paths:
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
   `SETUP_RE` и `BASHRC_OWN` общие с `bashrc_migrate`: что перенесено, то и
   проверяется.
+- `install.sh:backups_check` ↔ формат `STAMP` (`%Y%m%d-…`) и каталоги, куда
+  `.bak-` кладут `link_one`, `vscode_one` и чистка правил tokensave: дата берётся
+  из имени. Сменил формат `STAMP` или бэкап лёг в новый каталог — старые молча
+  пропадут из отчёта. Формулировки строк ↔ `skills/doctor/reference/repair.md`
+  (Old backups).
+- `install.sh:projects_check` ↔ поле `cwd` в транскриптах
+  `~/.claude/projects/*/*.jsonl` ↔ `.ragsave-disable` у `ragsave-sync`.
+  Claude Code переименует поле — проекты без индекса молча пропадут из отчёта.
+  Формулировка `нет индекса:` ↔ repair.md (Projects without an index).
 - Голое имя команды в `mcp/servers.json` (`foo-mcp`) ↔ PATH оболочки,
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь. Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —
