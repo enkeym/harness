@@ -23,8 +23,12 @@
       `~/.bashrc` берёт node по default-алиасу nvm.
 - [ ] Claude Code: установить, запустить `claude` и залогиниться —
       появится `~/.claude.json`, без него MCP-серверы не зарегистрируются.
-- [ ] tokensave — бинарь в `/usr/local/bin/tokensave` (другой путь → поправить
-      `command` хуков в `claude/settings.json`). **`tokensave install` /
+- [ ] tokensave — бинарь из релизов
+      <https://github.com/aovestdipaperino/tokensave> в `/usr/local/bin/tokensave`.
+      MCP найдёт его и в другом каталоге PATH, хуки — нет: поправить `command`
+      хуков в `claude/settings.json` (`install.sh --check` назовёт оба пути).
+      Версию прежней машины — `previous_version` в её
+      `~/.tokensave/state.toml`. **`tokensave install` /
       `reinstall` не запускать**, даже если `tokensave doctor` советует.
 - [ ] WSL + VS Code в Windows: включить «Параметры → Для разработчиков → Режим
       разработчика», иначе `mklink` не создаст симлинки настроек.

@@ -363,6 +363,15 @@ tokensave_hook_check() {
   drift=$((drift + 1))
 }
 
+# Бинаря нет — говорим, откуда взять и какую версию: state.toml переживает
+# удаление бинаря, версия в нём — последняя стоявшая здесь. На новой машине
+# файла нет, и подсказка обходится без версии.
+tokensave_missing() {
+  local want
+  want="$(awk -F'"' '/^(last_installed_version|previous_version) *=/ && $2 != "" { print $2; exit }' "$HOME/.tokensave/state.toml" 2>/dev/null)" || true
+  bad "tokensave — не найден: бинарь из релизов https://github.com/aovestdipaperino/tokensave в /usr/local/bin${want:+, здесь стояла $want}; tokensave install не запускать"
+}
+
 # `tokensave install` пишет поверх харнеса: свою MCP-запись вместо mcp-serve.sh
 # (ловит mcp-sync --check), файлы правил — и заносит агента в installed_agents.
 # После смены версии любая команда tokensave (и `tokensave init`) тихо
@@ -442,7 +451,7 @@ externals() {
   say
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
-  command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || bad "tokensave — не найден, поставить отдельно"
+  command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || tokensave_missing
   command -v tokensave >/dev/null && tokensave_hook_check
   tokensave_install_check
   # Playwright MCP не глобальный: его регистрируют в отдельных проектах (README),

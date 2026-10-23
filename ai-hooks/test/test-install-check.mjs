@@ -230,7 +230,7 @@ check('LOCALS разобран и не смешан с LINKS',
   fs.writeFileSync(clean.target('.tokensave/state.toml'), state('[]'));
   const res = clean.run();
   check('state.toml без агентов, правил tokensave нет — следов install нет',
-    [res.status, res.out.includes('tokensave install'), res.out.includes(summary(ALL, 0, 0))], [0, false, true]);
+    [res.status, /след tokensave install|tokensave install записал/.test(res.out), res.out.includes(summary(ALL, 0, 0))], [0, false, true]);
 
   const sb = sandbox();
   fs.writeFileSync(sb.target('.tokensave/state.toml'), state('[\n    "claude",\n]'));
@@ -363,6 +363,15 @@ check('LOCALS разобран и не смешан с LINKS',
   check('внешних бинарей нет — названы, код не меняют',
     [res.status, res.out.includes('claude — не найден'), res.out.includes('tokensave — не найден'), res.out.includes('python3 — не найден')],
     [0, true, true, true]);
+  check('tokensave не найден, state.toml нет — откуда взять, без версии',
+    [res.out.includes('релизов https://github.com/aovestdipaperino/tokensave'), res.out.includes('здесь стояла')], [true, false]);
+}
+
+{
+  const sb = sandbox();
+  fs.writeFileSync(sb.target('.tokensave/state.toml'), 'last_installed_version = ""\nprevious_version = "7.16.0"\ninstalled_agents = []\n');
+  check('tokensave не найден — версия из state.toml, пустая last_installed_version пропущена',
+    sb.run().out.includes('здесь стояла 7.16.0'), true);
 }
 
 {

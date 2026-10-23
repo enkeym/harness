@@ -94,6 +94,15 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 }
 
 {
+  const sb = sandbox();
+  const bin = path.join(sb.home, 'bin');
+  fs.mkdirSync(bin);
+  fs.symlinkSync(FAKE, path.join(bin, 'tokensave'));
+  const res = sb.run(['tokensave'], { AI_HOOKS_TOKENSAVE_CMD: undefined, PATH: `${bin}:${process.env.PATH}` });
+  check('tokensave: без AI_HOOKS_TOKENSAVE_CMD — бинарь из PATH', res.calls, [['serve', '-p', sb.root]]);
+}
+
+{
   const sb = sandbox({ indexes: ['ragsave'] });
   const res = sb.run(['tokensave']);
   check('tokensave: индекса нет — код 1, без запуска', [res.status, res.calls], [1, []]);

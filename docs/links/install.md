@@ -29,6 +29,12 @@ paths:
 - Путь к бинарю tokensave в хуках `claude/settings.json` ↔
   `install.sh:tokensave_hook_check` и `tokensave doctor`: оба сверяют путь
   буквально. `tokensave install`/`reinstall` переписывают хуки своим путём.
+  `ai-hooks/bin/mcp-serve.sh` берёт бинарь из PATH (запасной —
+  `/usr/local/bin`): с бинарём вне `/usr/local/bin` MCP работает, а хуки нет —
+  это ловит только `tokensave_hook_check`.
+- `install.sh:tokensave_missing` ↔ ключи `last_installed_version` /
+  `previous_version` в `~/.tokensave/state.toml`: переименует tokensave — версия
+  молча пропадёт из подсказки.
 - `tokensave install` ↔ файлы, которые он пишет поверх харнеса: MCP-запись
   `tokensave` в `~/.claude.json`, `~/.claude/rules/tokensave.md`, `installed_agents` в
   `~/.tokensave/state.toml` (по нему тихий reinstall после смены версии и на

@@ -82,7 +82,10 @@ Windows-симлинки через `mklink`. Без прав администр
 
 Хуки tokensave в `claude/settings.json` зовут `/usr/local/bin/tokensave` —
 так их пишет `tokensave install`, и `tokensave doctor` сверяет именно путь.
-Бинарь в другом месте (Homebrew) — `--check` назовёт оба пути.
+Бинарь в другом месте (Homebrew) — `--check` назовёт оба пути. MCP-сервер
+(`ai-hooks/bin/mcp-serve.sh`) берёт tokensave из PATH, `/usr/local/bin` — запасной.
+Бинаря нет — `--check` назовёт релизы и версию, что стояла на машине
+(`~/.tokensave/state.toml`).
 
 ### tokensave: только бинарь, без `tokensave install`
 

@@ -900,7 +900,7 @@ node ~/.ai-hooks/test/test-statusline.mjs
 
 Внешние бинари тесты подменяют переменными: `AI_HOOKS_TOKENSAVE_CMD` —
 `bin/seed-impact-map.mjs`, `bin/mcp-serve.sh` (по умолчанию `tokensave`
-из PATH у seed-impact-map и `/usr/local/bin/tokensave` у shell-скриптов);
+из PATH, у mcp-serve с запасным `/usr/local/bin/tokensave`);
 `AI_HOOKS_RAGSAVE_CMD` — `bin/seed-impact-map.mjs`, `bin/ragsave-sync.sh`,
 `bin/mcp-serve.sh` (по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
 `test/fixtures/`: `fake-tokensave.mjs` и `fake-ragsave.mjs` отвечают на поиск
