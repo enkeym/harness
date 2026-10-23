@@ -289,6 +289,23 @@ check('LOCALS разобран и не смешан с LINKS',
 
 {
   const sb = sandbox();
+  const [zshenv, env] = ['.zshenv', '.config/harness/env'].map(sb.target);
+  const brew = 'eval "$(/opt/homebrew/bin/brew shellenv)"';
+  fs.writeFileSync(path.join(sb.harness, 'shell', 'zshenv'), `if true; then\n  ${brew}\nfi\n`);
+  fs.writeFileSync(env, 'export GITLAB_HOST=""\n');
+  fs.rmSync(zshenv);
+  fs.writeFileSync(zshenv, `. "$HOME/.cargo/env"\n${brew}\n`);
+  const res = sb.run([]);
+  check('install переносит строки из бэкапа ~/.zshenv в env, своё shell/zshenv — нет',
+    read(env).replace(/^# Перенесено install\.sh из ~\/\.zshenv\.bak-[\d-]+: строк нет в shell\/zshenv\.\n/m, ''),
+    'export GITLAB_HOST=""\n\n. "$HOME/.cargo/env"\n');
+  check('~/.zshenv — симлинк на shell/zshenv, перенос назван',
+    [fs.readlinkSync(zshenv), res.out.includes(`${env} — дописаны строки из .zshenv.bak-`)],
+    [path.join(sb.harness, 'shell', 'zshenv'), true]);
+}
+
+{
+  const sb = sandbox();
   const today = spawnSync('date', ['+%Y%m%d-%H%M%S'], { encoding: 'utf8' }).stdout.trim();
   const [oldRc, freshRc, oldSkills] = ['.bashrc.bak-20200101-000000', `.bashrc.bak-${today}`, '.claude/skills.bak-20200101-000000'].map(sb.target);
   fs.writeFileSync(oldRc, '');

@@ -43,6 +43,7 @@ LINKS=(
   "$HOME/.local/bin/ragsave|bin/ragsave"
   "$HOME/.bashrc|shell/bashrc"
   "$HOME/.bash_env|shell/bash_env"
+  "$HOME/.zshenv|shell/zshenv"
   "$HOME/.gitconfig|git/gitconfig"
   "$HOME/.gitignore_global|git/gitignore_global"
   "$HOME/.tokensave/config.toml|tokensave/config.toml"
@@ -210,10 +211,11 @@ local_one() {
   fixed=$((fixed + 1))
 }
 
-# Установщики (brew, conda, cargo, sdkman) дописывают себя в ~/.bashrc, а link_one
-# увозит его в бэкап — PATH к ним молча пропадает. Строки настройки из бэкапа,
-# которых нет в shell/bashrc и в env, дописываются в ~/.config/harness/env: его
-# подключают и ~/.bashrc, и ~/.bash_env. Только строки верхнего уровня и блоки
+# Установщики (brew, conda, cargo, sdkman, rustup) дописывают себя в ~/.bashrc
+# или ~/.zshenv, а link_one увозит его в бэкап — PATH к ним молча пропадает.
+# Строки настройки из бэкапа $1, которых нет в своём файле харнесса $2 и в env,
+# дописываются в ~/.config/harness/env: его подключают ~/.bashrc и ~/.bash_env,
+# а через него и ~/.zshenv. Только строки верхнего уровня и блоки
 # `# >>> … >>>`: строка из середины if/case без своего блока сломала бы env.
 # nvm, pnpm и ~/.local/bin shell/bashrc ставит сам — nvm лениво, и копия
 # `. nvm.sh` из бэкапа вернула бы его загрузку на каждый шелл.
@@ -221,8 +223,8 @@ local_one() {
 # Регэкспы без обратных слэшей: awk -v раскрывает в значении escape-последовательности.
 SETUP_RE='^(export +[A-Za-z_][A-Za-z0-9_]*=|PATH=|eval |alias |([[].*[]] *&& *)?([.]|source) )'
 BASHRC_OWN='NVM_DIR|nvm[.]sh|PNPM_HOME|[.]local/bin|harness/env|bash_env'
-bashrc_migrate() {
-  local bak="$HOME/.bashrc.bak-$STAMP" env="$HOME/.config/harness/env" lines line
+shell_migrate() {
+  local bak="$HOME/$1.bak-$STAMP" own_file="$2" env="$HOME/.config/harness/env" lines line
   [ -f "$bak" ] && [ -f "$env" ] || return 0
   lines="$(awk -v bak="$bak" -v own="$BASHRC_OWN" -v setup="$SETUP_RE" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -230,10 +232,10 @@ bashrc_migrate() {
     blk { if (!drop) print; if ($0 ~ /^# <<< .* <<</) blk = 0; next }
     /^# >>> .* >>>/ { blk = 1; drop = (trim($0) in known); if (!drop) print; next }
     $0 ~ setup { if (!(trim($0) in known) && $0 !~ own) print }
-  ' "$HARNESS/shell/bashrc" "$env" "$bak")" || true
+  ' "$HARNESS/$own_file" "$env" "$bak")" || true
   [ -n "$lines" ] || return 0
-  printf '\n# Перенесено install.sh из ~/%s: строк нет в shell/bashrc.\n%s\n' "$(basename "$bak")" "$lines" >>"$env"
-  warn "$env — дописаны строки из $(basename "$bak"), которых нет в shell/bashrc:"
+  printf '\n# Перенесено install.sh из ~/%s: строк нет в %s.\n%s\n' "$(basename "$bak")" "$own_file" "$lines" >>"$env"
+  warn "$env — дописаны строки из $(basename "$bak"), которых нет в $own_file:"
   while IFS= read -r line; do
     if [[ $line =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)= ]]; then
       warn "  export ${BASH_REMATCH[1]}"
@@ -594,7 +596,8 @@ case "$MODE" in
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
-    bashrc_migrate
+    shell_migrate .bashrc shell/bashrc
+    shell_migrate .zshenv shell/zshenv
     gitconfig_migrate
     env_check
     backups_check

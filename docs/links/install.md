@@ -48,13 +48,16 @@ paths:
   агенты) и `git checkout` — settings.json, порядок в `/doctor`. Новый файл,
   который начнёт писать install, проверка не увидит.
 - Шаблоны `local/*.example` ↔ `install.sh:LOCALS` ↔ кто их читает:
-  `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`), `git/gitconfig`
+  `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`; zsh — через `shell/zshenv`), `git/gitconfig`
   (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в
   шаблоне; переименовал файл — install создаёт один, shell ищет другой.
-- `install.sh:bashrc_migrate` ↔ имя бэкапа `link_one` (`~/.bashrc.bak-$STAMP`)
-  ↔ что ставит `shell/bashrc` сам (список `own`: nvm, pnpm, `~/.local/bin`).
+- `install.sh:shell_migrate` ↔ имена бэкапов `link_one` (`~/.bashrc.bak-$STAMP`,
+  `~/.zshenv.bak-$STAMP`) ↔ что ставят `shell/bashrc` и `shell/zshenv` сами (список
+  `own`: nvm, pnpm, `~/.local/bin`; строка `brew shellenv` — дословной копией в `shell/zshenv`).
   Сменил имя бэкапа — перенос молча не запустится; новая строка PATH в
-  `shell/bashrc` без записи в `own` — старая её копия из бэкапа задвоится в env.
+  `shell/bashrc` или `shell/zshenv` без записи в `own` — старая её копия из бэкапа
+  задвоится в env. env читают и bash, и zsh: zsh-синтаксис из `.zshenv` в нём
+  сломает bash.
   Порядок: после `LOCALS`, иначе на новой машине env ещё нет.
 - `install.sh:gitconfig_migrate` ↔ имя бэкапа `link_one` (`~/.gitconfig.bak-$STAMP`)
   ↔ `[include]` `~/.gitconfig.local` последним в `git/gitconfig`: только так
@@ -65,7 +68,7 @@ paths:
 - `install.sh:env_check` ↔ `skills/doctor/reference/repair.md` (Machine env): doctor удаляет
   строки по тексту причины (`дубль строки`, `это уже ставит shell/bashrc`,
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
-  `SETUP_RE` и `BASHRC_OWN` общие с `bashrc_migrate`: что перенесено, то и
+  `SETUP_RE` и `BASHRC_OWN` общие с `shell_migrate`: что перенесено, то и
   проверяется.
 - `install.sh:backups_check` ↔ формат `STAMP` (`%Y%m%d-…`) и каталоги, куда
   `.bak-` кладут `link_one`, `vscode_one` и чистка правил tokensave: дата берётся

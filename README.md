@@ -23,7 +23,7 @@
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
 | `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
 | `mcp/` | `~/.claude.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов |
-| `shell/` | `~/.bashrc`, `~/.bash_env` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env` |
+| `shell/` | `~/.bashrc`, `~/.bash_env`, `~/.zshenv` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env`; `~/.zshenv` даёт то же zsh через `~/.bash_env` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: `credential.helper store`, identity через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
 | `vscode/` | `%APPDATA%\Code\User\{settings.json,keybindings.json,snippets}` — Windows-симлинки на `\\wsl.localhost\…`, только под WSL | VS Code в Windows: настройки (`keyboard.dispatch: keyCode` — сочетания в любой раскладке), клавиши, сниппеты |
@@ -88,6 +88,10 @@ Windows-симлинки через `mklink`. Без прав администр
   ставится CPU-сборка `onnxruntime`.
 - VS Code читает `~/Library/Application Support/Code/User`: туда идут обычные
   симлинки, прежний файл уезжает в `.bak-<дата>`, как у остальных целей.
+- zsh не читает `BASH_ENV`: `~/.zshenv` → `shell/zshenv` (каждым шеллом)
+  подключает `~/.bash_env` — Bash-тул Claude Code видит `GITLAB_TOKEN` и env
+  машины — и `brew shellenv` для запуска без login-шелла. Прежний `~/.zshenv`
+  уезжает в бэкап, его строки настройки (`. "$HOME/.cargo/env"`) — в env.
 - Фоновый синк ragsave без `setsid`/`ionice` идёт под `taskpolicy -b`, бэкапы и
   `/doctor` обходятся без GNU `date`.
 
