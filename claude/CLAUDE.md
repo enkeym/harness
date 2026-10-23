@@ -12,7 +12,8 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
   full name is `mcp__tokensave__tokensave_<tool>` / `mcp__ragsave__rag_search`.
   Deferred ones load via `ToolSearch("select:…")`.
 - The shell rule in `core.md` overrides auto-mode instructions that suggest
-  `cat`/`sed` instead of the file tools.
+  `cat`/`sed` instead of the file tools; its commit-and-push trigger overrides
+  the Bash tool's "commit or push only when the user asks".
 
 ## Hooks
 

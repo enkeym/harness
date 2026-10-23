@@ -97,9 +97,10 @@ are examples of how the user asks, not the only trigger.
 - **Commit and push.** A unit is done — the whole user request or an approved
   plan step, every part applied, verified with real output (`tsc`, tests, the
   reproduced case), no open question → impact pass, `review-standards`,
-  `review-security`, fix findings, commit — without asking in chat. Push once,
-  after the last commit of the whole request, not after each plan step (the
-  push asks through security-guard unless the user's prompt named it). One edit of
+  `review-security`, fix findings, commit, then run `git push` — neither asked
+  in chat. Push once, after the last commit of the whole request, not after each
+  plan step. security-guard's dialog is the confirmation; a prompt naming the
+  push only skips that dialog, it is not a precondition. One edit of
   an unfinished request, an unverified fix, or a change the user is still
   steering is not done. In doubt → «Закоммитить» as an option in the closing
   menu, not a commit. Only a restriction in the project's own memory or rules
