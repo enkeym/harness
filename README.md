@@ -80,6 +80,17 @@ Windows-симлинки через `mklink`. Без прав администр
 сработал, прежний файл возвращается на место. Если WSL не запущен, VS Code
 поднимет его при старте, чтобы прочитать настройки.
 
+### macOS
+
+- Python — из Homebrew (`brew install python`): у системного `/usr/bin/python3`
+  нет `sqlite3.enable_load_extension`, без него ragsave не загрузит sqlite-vec.
+  `--venv` проверяет это до сборки и без расширений venv не создаёт. GPU нет —
+  ставится CPU-сборка `onnxruntime`.
+- VS Code читает `~/Library/Application Support/Code/User`: туда идут обычные
+  симлинки, прежний файл уезжает в `.bak-<дата>`, как у остальных целей.
+- Фоновый синк ragsave без `setsid`/`ionice` идёт под `taskpolicy -b`, бэкапы и
+  `/doctor` обходятся без GNU `date`.
+
 Хуки tokensave в `claude/settings.json` зовут `/usr/local/bin/tokensave` —
 так их пишет `tokensave install`, и `tokensave doctor` сверяет именно путь.
 Бинарь в другом месте (Homebrew) — `--check` назовёт оба пути. MCP-сервер

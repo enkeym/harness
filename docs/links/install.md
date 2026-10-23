@@ -23,6 +23,9 @@ paths:
   симлинка читает `win_link_target` из вывода `dir /AL` (`<SYMLINK>`,
   `<SYMLINKD>`, путь в скобках). Сменится формат `dir` — `--check` выдаст
   ложное «не симлинк», а install пересоздаст живой симлинк.
+  На macOS (`uname -s` = `Darwin`, WSL проверяется первым) `install.sh:vscode_dir` ↔
+  `~/Library/Application Support/Code/User`, симлинки — `link_one`/`check_one`.
+  VS Code сменит каталог — настройки молча не подключаются, `--check` о них не скажет.
   `vscode/keybindings.json` (`ctrl+alt+a`) зовёт
   `~/.ai-hooks/bin/ask-mode.mjs` через `!` Claude Code: переименуешь скрипт —
   сочетание молча сломается.
@@ -67,7 +70,8 @@ paths:
 - `install.sh:backups_check` ↔ формат `STAMP` (`%Y%m%d-…`) и каталоги, куда
   `.bak-` кладут `link_one`, `vscode_one` и чистка правил tokensave: дата берётся
   из имени. Сменил формат `STAMP` или бэкап лёг в новый каталог — старые молча
-  пропадут из отчёта. Формулировки строк ↔ `skills/doctor/reference/repair.md`
+  пропадут из отчёта. Отсечка — `date -d` (GNU), иначе `date -v` (BSD, macOS);
+  не сработали оба — отчёт молча пуст. Формулировки строк ↔ `skills/doctor/reference/repair.md`
   (Old backups).
 - `install.sh:projects_check` ↔ поле `cwd` в транскриптах
   `~/.claude/projects/*/*.jsonl` ↔ `.ragsave-disable` у `ragsave-sync`.
@@ -98,3 +102,7 @@ paths:
   Без `nvidia-smi` `build_venv` правит список на лету: строки `nvidia-*` вон,
   `onnxruntime-gpu==X` → `onnxruntime==X`. Переименуют пакеты nvidia или
   разойдутся версии сборок — CPU-машина получит GPU-пакеты или ошибку pip.
+- Проверка `sqlite3.Connection.enable_load_extension` в `install.sh:build_venv` ↔
+  загрузка sqlite-vec в `ragsave/ragsave/store.py`. ragsave перейдёт на другой способ
+  загрузки — проверка зря откажет python macOS; уберёшь проверку — venv на
+  `/usr/bin/python3` соберётся, а ragsave упадёт на первом индексе.

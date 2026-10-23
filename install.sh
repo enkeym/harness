@@ -58,7 +58,11 @@ LOCALS=(
 # VS Code стоит в Windows и читает %APPDATA%\Code\User: симлинк WSL туда
 # Windows-программе не виден, нужен Windows-симлинк на \\wsl.localhost\....
 # Без прав администратора mklink создаёт его только в режиме разработчика.
+# На macOS VS Code читает ~/Library/Application Support/Code/User — там хватает
+# обычного симлинка, и его ставят те же link_one/check_one, что и LINKS.
 VSCODE_LINKS=(settings.json keybindings.json snippets)
+
+is_wsl() { command -v cmd.exe >/dev/null && command -v wslpath >/dev/null; }
 
 # cmd.exe из каталога WSL ругается на UNC-путь первой строкой вывода — запуск из /mnt/c.
 wincmd() { (cd /mnt/c && cmd.exe /c "$@") 2>&1 | tr -d '\r'; }
@@ -68,14 +72,18 @@ win_link_target() {
   wincmd dir /AL "$1" | sed -nE "s/.*<SYMLINKD?> +${2//./\\.} \[(.*)\]\$/\1/p"
 }
 
-# Каталог настроек VS Code в виде /mnt/c/...; пусто — не WSL или VS Code нет.
+# Каталог настроек VS Code (в WSL — в виде /mnt/c/...); пусто — не WSL и не macOS
+# или VS Code нет.
 vscode_dir() {
-  command -v cmd.exe >/dev/null && command -v wslpath >/dev/null || return 0
-  local appdata dir
-  appdata="$(wincmd 'echo %APPDATA%')"
-  [ -n "$appdata" ] || return 0
-  dir="$(wslpath -u "$appdata")/Code/User"
-  [ -d "$dir" ] && printf '%s' "$dir"
+  local appdata dir=""
+  if is_wsl; then
+    appdata="$(wincmd 'echo %APPDATA%')"
+    [ -n "$appdata" ] || return 0
+    dir="$(wslpath -u "$appdata")/Code/User"
+  elif [ "$(uname -s 2>/dev/null)" = Darwin ]; then
+    dir="$HOME/Library/Application Support/Code/User"
+  fi
+  [ -n "$dir" ] && [ -d "$dir" ] && printf '%s' "$dir"
   return 0
 }
 
@@ -118,7 +126,15 @@ vscode_links() {
   local name
   VSCODE_DIR="$(vscode_dir)"
   [ -n "$VSCODE_DIR" ] || return 0
-  for name in "${VSCODE_LINKS[@]}"; do vscode_one "$VSCODE_DIR" "$name"; done
+  for name in "${VSCODE_LINKS[@]}"; do
+    if is_wsl; then
+      vscode_one "$VSCODE_DIR" "$name"
+    elif [ "$MODE" = "--check" ]; then
+      check_one "$VSCODE_DIR/$name" "vscode/$name"
+    else
+      link_one "$VSCODE_DIR/$name" "vscode/$name"
+    fi
+  done
 }
 
 check_one() {
@@ -311,10 +327,11 @@ env_check() {
 # называет каждый при создании, но не убирает. Старше BAK_DAYS дней — в отчёт,
 # без счёта в drift: удалять или нет, решает пользователь в /doctor. Дата — из имени:
 # mv сохраняет mtime файла, и по нему свежий бэкап старого файла выглядел бы старым.
+# `date -d` — GNU, `date -v` — BSD (macOS).
 BAK_DAYS=30
 backups_check() {
   local cutoff pair d f day dirs=() seen=" " n=0
-  cutoff="$(date -d "$BAK_DAYS days ago" +%Y%m%d 2>/dev/null)" || return 0
+  cutoff="$(date -d "$BAK_DAYS days ago" +%Y%m%d 2>/dev/null || date -v-"$BAK_DAYS"d +%Y%m%d 2>/dev/null)" || return 0
   for pair in "${LINKS[@]}" "${LOCALS[@]}"; do dirs+=("$(dirname "${pair%%|*}")"); done
   [ -z "$VSCODE_DIR" ] || dirs+=("$VSCODE_DIR")
   for d in "${dirs[@]}"; do
@@ -357,8 +374,16 @@ projects_check() {
 }
 
 build_venv() {
-  local home="$RAG_HOME"
+  local home="$RAG_HOME" py=python3
   say "venv для ragsave в $home/venv"
+  # sqlite-vec грузится через enable_load_extension, а у системного python macOS
+  # (/usr/bin/python3) его нет — venv на нём собрался бы, а ragsave упал бы на первом индексе.
+  [ -x "$home/venv/bin/python" ] && py="$home/venv/bin/python"
+  if ! "$py" -c 'import sqlite3, sys; sys.exit(not hasattr(sqlite3.Connection, "enable_load_extension"))' 2>/dev/null; then
+    bad "$py без sqlite3 enable_load_extension — sqlite-vec не загрузить"
+    warn "нужен python с расширениями sqlite (на macOS: brew install python), старый venv — удалить, затем ./install.sh --venv"
+    return 1
+  fi
   if [ -x "$home/venv/bin/python" ]; then
     good "venv уже собран"
   else

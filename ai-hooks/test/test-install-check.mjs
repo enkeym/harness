@@ -302,6 +302,60 @@ check('LOCALS разобран и не смешан с LINKS',
   check('без старых бэкапов строки нет', sandbox().run().out.includes('бэкап'), false);
 }
 
+// macOS: BSD date — `-d` ошибка, `-v-30d` работает; uname — Darwin.
+const REAL_DATE = spawnSync(BASH, ['-c', 'command -v date'], { encoding: 'utf8' }).stdout.trim();
+function fakeScript(sb, name, body) {
+  fs.writeFileSync(path.join(sb.home, 'path', name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+}
+function macSandbox() {
+  const sb = sandbox({ tools: TOOLS.filter((t) => t !== 'date') });
+  fakeScript(sb, 'date', [
+    'case "$1" in',
+    '  -d) echo "date: illegal option -- d" >&2; exit 1 ;;',
+    `  -v-30d) shift; exec ${REAL_DATE} -d "30 days ago" "$@" ;;`,
+    'esac',
+    `exec ${REAL_DATE} "$@"`,
+  ].join('\n'));
+  fakeScript(sb, 'uname', 'echo Darwin');
+  return sb;
+}
+
+{
+  const sb = macSandbox();
+  const old = sb.target('.bashrc.bak-20200101-000000');
+  fs.writeFileSync(old, '');
+  check('BSD date — старый бэкап всё равно назван', sb.run().out.includes(`${old} — бэкап старше 30 дней`), true);
+}
+
+{
+  const sb = macSandbox();
+  const dir = sb.target('Library/Application Support/Code/User');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'settings.json'), 'свои');
+  fs.mkdirSync(path.join(sb.harness, 'vscode', 'snippets'), { recursive: true });
+  for (const f of ['settings.json', 'keybindings.json']) fs.writeFileSync(path.join(sb.harness, 'vscode', f), '');
+  const names = ['settings.json', 'keybindings.json', 'snippets'];
+
+  const before = sb.run();
+  sb.run([]);
+  const after = sb.run();
+
+  check('macOS: --check до install называет VS Code и даёт код 1',
+    [before.status, before.out.includes(`${dir}/settings.json — обычный файл`), before.out.includes(`${dir}/snippets — нет`)], [1, true, true]);
+  check('macOS: install ставит симлинки VS Code в Library/Application Support',
+    names.map((n) => (fs.lstatSync(path.join(dir, n), { throwIfNoEntry: false })?.isSymbolicLink() ? fs.readlinkSync(path.join(dir, n)) : null)), names.map((n) => path.join(sb.harness, 'vscode', n)));
+  check('macOS: прежний settings.json уехал в .bak-<дата>',
+    fs.readdirSync(dir).filter((f) => f.startsWith('settings.json.bak-')).map((f) => read(path.join(dir, f))), ['свои']);
+  check('macOS: --check после install признаёт симлинки VS Code',
+    [after.status, names.every((n) => after.out.includes(`✓ ${dir}/${n}\n`)), after.out.includes(summary(ALL + 3, 0, 0))], [0, true, true]);
+}
+
+{
+  const sb = sandbox();
+  fs.mkdirSync(sb.target('Library/Application Support/Code/User'), { recursive: true });
+  check('не macOS — каталог Library не трогается', sb.run().out.includes('Library'), false);
+}
+
 {
   const sb = sandbox();
   const project = (name, files, cwd = sb.target(name)) => {
@@ -445,6 +499,16 @@ for (const gpu of [true, false]) {
     [res.status, res.calls.find((c) => c.includes('uninstall')), read(req), res.out.includes(gpu ? 'на GPU' : 'на CPU')],
     [0, ['-m', 'pip', 'uninstall', '--quiet', '-y', gpu ? 'onnxruntime' : 'onnxruntime-gpu'],
       gpu ? 'fastembed==0.8.0\nnvidia-cublas==13.8.1.7\nonnxruntime-gpu==1.28.0\n' : 'fastembed==0.8.0\nonnxruntime==1.28.0\n', true]);
+}
+
+{
+  // Системный python macOS: нет enable_load_extension — фейк на `-c` выходит с 1.
+  const sb = sandbox({ fakes: ['python3'] });
+  const res = sb.run(['--venv'], { FAKE_INDEXER_EXIT: '1' });
+  check('--venv: python без расширений sqlite — код 1, подсказка brew, venv не создаётся',
+    [res.status, res.out.includes('без sqlite3 enable_load_extension'), res.out.includes('brew install python'),
+      res.calls.length, fs.existsSync(sb.target('.rag-mcp/venv'))],
+    [1, true, true, 1, false]);
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');
