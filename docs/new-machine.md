@@ -45,10 +45,13 @@ tokensave githooks on   # глобальные git-хуки tokensave
       машины, сохранённые рядом: просмотреть и удалить ненужное.
 - [ ] «дописаны строки из .bashrc.bak-…» — строки прежнего `~/.bashrc` (brew,
       conda, cargo) уехали в `~/.config/harness/env`: проверить, лишнее удалить.
+- [ ] «перенесены настройки из .gitconfig.bak-…» — настройки прежнего
+      `~/.gitconfig`, которых нет в `git/gitconfig`, уехали в `~/.gitconfig.local`.
 
 ## 3. Заполнить значения машины
 
-- [ ] `~/.gitconfig.local` — `[user] name` и `email` (без них git не коммитит).
+- [ ] `~/.gitconfig.local` — `[user] name` и `email`, если install не перенёс
+      их из прежнего `~/.gitconfig` (без них git не коммитит).
 - [ ] `~/.config/harness/env` — `GITLAB_HOST`, `ANTHROPIC_MODEL`, при нужде
       `RAGSAVE_HOME` (его — до `./install.sh`).
 - [ ] `~/.git-credentials` на месте, права `600`.

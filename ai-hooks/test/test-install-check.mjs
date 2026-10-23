@@ -286,6 +286,44 @@ check('LOCALS разобран и не смешан с LINKS',
 }
 
 {
+  const gitSandbox = (tools) => {
+    const sb = sandbox({ tools });
+    const [gitconfig, local] = ['.gitconfig', '.gitconfig.local'].map(sb.target);
+    fs.writeFileSync(path.join(sb.harness, 'git', 'gitconfig'), '[pull]\n\trebase = true\n[include]\n\tpath = ~/.gitconfig.local\n');
+    fs.writeFileSync(local, '[alias]\n\tst = status\n');
+    fs.rmSync(gitconfig);
+    fs.writeFileSync(gitconfig, [
+      '[user]', '\tname = Dev', '\temail = dev@example.com',
+      '[pull]', '\trebase = true',
+      '[alias]', '\tst = status',
+      '[credential]', '\thelper =', '\thelper = manager',
+      '[safe]', '\tdirectory = *',
+      '[include]', '\tpath = ~/.gitconfig.local',
+      '',
+    ].join('\n'));
+    return { sb, local };
+  };
+  const { sb, local } = gitSandbox([...TOOLS, 'git']);
+  const res = sb.run([]);
+  const list = () => spawnSync('git', ['config', '-f', local, '--list'], { encoding: 'utf8' }).stdout;
+  check('install переносит из бэкапа ~/.gitconfig то, чего нет в git/gitconfig и в local, порядок хелперов сохранён', list(), [
+    'alias.st=status', 'user.name=Dev', 'user.email=dev@example.com',
+    'credential.helper=', 'credential.helper=manager', 'safe.directory=*', '',
+  ].join('\n'));
+  check('перенос gitconfig назван в выводе ключами, без значений',
+    [res.out.includes(`${local} — перенесены настройки из .gitconfig.bak-`), res.out.includes('  user.email\n'), res.out.includes('dev@example.com'), res.out.includes('pull.rebase')],
+    [true, true, false, false]);
+  const once = list();
+  sb.run([]);
+  check('повторный install ничего не дописывает в ~/.gitconfig.local', list(), once);
+
+  const nogit = gitSandbox(TOOLS);
+  const out = nogit.sb.run([]).out;
+  check('git нет — ✗ и local не тронут',
+    [out.includes('✗ git не найден — настройки из .gitconfig.bak-'), read(nogit.local)], [true, '[alias]\n\tst = status\n']);
+}
+
+{
   const sb = sandbox();
   const env = sb.target('.config/harness/env');
   fs.writeFileSync(path.join(sb.harness, 'shell', 'bashrc'), "alias ll='ls -alF'\n");

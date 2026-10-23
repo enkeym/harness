@@ -66,7 +66,10 @@ claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless 
 в двух файлах вне git, `install.sh` создаёт их из `local/*.example`, только если
 их ещё нет, и просит заполнить:
 
-- `~/.gitconfig.local` — `[user]` name и email; без них git не даст коммитить;
+- `~/.gitconfig.local` — `[user]` name и email; без них git не даст коммитить.
+  Если на месте `~/.gitconfig` был свой файл, `install.sh` переносит сюда
+  всё, чего нет в общем `git/gitconfig` (имя, почта, хелпер, `safe.directory`,
+  алиасы): подключённый последним, local перекрывает общие значения;
 - `~/.config/harness/env` — `GITLAB_HOST` (хост для `GITLAB_TOKEN`),
   `ANTHROPIC_MODEL`, при нужде `RAGSAVE_HOME` (каталог ragsave вместо
   `~/.rag-mcp`; задать до запуска `install.sh` — в него лягут и симлинки).
@@ -205,7 +208,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
 | `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
 | `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `ANTHROPIC_MODEL`, `RAGSAVE_HOME` | `./install.sh` (из `local/env.example`), заполнить |
-| `~/.gitconfig.local` | git `[user]` этой машины | `./install.sh` (из `local/gitconfig.local.example`), заполнить |
+| `~/.gitconfig.local` | git `[user]` и прочие настройки этой машины | `./install.sh` (из `local/gitconfig.local.example` и прежнего `~/.gitconfig`), заполнить |
 
 ## Тесты
 
