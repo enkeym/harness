@@ -48,7 +48,8 @@ tokensave githooks on   # глобальные git-хуки tokensave
 - [ ] В отчёте `install.sh` нет `✗`. Строки `.bak-<дата>` — прежние файлы
       машины, сохранённые рядом: просмотреть и удалить ненужное.
 - [ ] «дописаны строки из .bashrc.bak-…» — строки прежнего `~/.bashrc` (brew,
-      conda, cargo) уехали в `~/.config/harness/env`: проверить, лишнее удалить.
+      conda, cargo) уехали в `~/.config/harness/env` (у `export` в отчёте только имя, значение —
+      в самом файле): проверить, лишнее удалить.
 - [ ] «перенесены настройки из .gitconfig.bak-…» — настройки прежнего
       `~/.gitconfig`, которых нет в `git/gitconfig`, уехали в `~/.gitconfig.local`.
 

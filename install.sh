@@ -199,6 +199,7 @@ local_one() {
 # `# >>> … >>>`: строка из середины if/case без своего блока сломала бы env.
 # nvm, pnpm и ~/.local/bin shell/bashrc ставит сам — nvm лениво, и копия
 # `. nvm.sh` из бэкапа вернула бы его загрузку на каждый шелл.
+# В выводе у `export NAME=…` только имя: в значениях бывают токены (GITLAB_TOKEN).
 # Регэкспы без обратных слэшей: awk -v раскрывает в значении escape-последовательности.
 SETUP_RE='^(export +[A-Za-z_][A-Za-z0-9_]*=|PATH=|eval |alias |([[].*[]] *&& *)?([.]|source) )'
 BASHRC_OWN='NVM_DIR|nvm[.]sh|PNPM_HOME|[.]local/bin|harness/env|bash_env'
@@ -215,7 +216,13 @@ bashrc_migrate() {
   [ -n "$lines" ] || return 0
   printf '\n# Перенесено install.sh из ~/%s: строк нет в shell/bashrc.\n%s\n' "$(basename "$bak")" "$lines" >>"$env"
   warn "$env — дописаны строки из $(basename "$bak"), которых нет в shell/bashrc:"
-  while IFS= read -r line; do warn "  $line"; done <<<"$lines"
+  while IFS= read -r line; do
+    if [[ $line =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+      warn "  export ${BASH_REMATCH[1]}"
+    else
+      warn "  $line"
+    fi
+  done <<<"$lines"
   fixed=$((fixed + 1))
 }
 

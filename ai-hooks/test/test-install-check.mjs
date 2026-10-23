@@ -272,14 +272,16 @@ check('LOCALS разобран и не смешан с LINKS',
   fs.writeFileSync(bashrc, [
     'case $- in', '    *i*) ;;', '      *) return;;', 'esac',
     "alias ll='ls -alF'", 'export GITLAB_HOST=""', 'if true; then', '    export INSIDE=1', 'fi',
-    brew, '. "$HOME/.cargo/env"', conda,
+    brew, '. "$HOME/.cargo/env"', 'export API_TOKEN="s3cret"', conda,
     'export NVM_DIR="$HOME/.nvm"', '[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"', 'export PATH="$HOME/.local/bin:$PATH"',
   ].join('\n') + '\n');
   const res = sb.run([]);
-  const moved = [brew, '. "$HOME/.cargo/env"', conda].join('\n');
+  const moved = [brew, '. "$HOME/.cargo/env"', 'export API_TOKEN="s3cret"', conda].join('\n');
   check('install переносит строки настройки из бэкапа ~/.bashrc в env',
     read(env).replace(/^# Перенесено install\.sh из ~\/\.bashrc\.bak-[\d-]+: .*\n/m, ''), `export GITLAB_HOST=""\n\n${moved}\n`);
-  check('перенос назван в выводе', [res.out.includes(`${env} — дописаны строки из .bashrc.bak-`), res.out.includes(`  ${brew}\n`)], [true, true]);
+  check('перенос назван в выводе, у export — только имя',
+    [res.out.includes(`${env} — дописаны строки из .bashrc.bak-`), res.out.includes(`  ${brew}\n`), res.out.includes('  export API_TOKEN\n'), res.out.includes('s3cret')],
+    [true, true, true, false]);
   const once = read(env);
   sb.run([]);
   check('повторный install ничего не дописывает', read(env), once);
