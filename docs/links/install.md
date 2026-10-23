@@ -59,3 +59,8 @@ paths:
 - `mcp/servers.json` → `ai-hooks/bin/mcp-serve.sh` (аргумент — имя сервера);
   регистрирует в Claude `bin/mcp-sync.mjs`. Новый сервер в JSON без ветки
   `case "$kind"` в `mcp-serve.sh` не стартует.
+- `onnxruntime-gpu` в `ragsave/requirements.txt` ↔ `--no-deps` и `pip uninstall
+  onnxruntime` в `install.sh:build_venv` ↔ зависимость fastembed от `onnxruntime`.
+  Обе сборки пишут в один пакет: снял `--no-deps` — pip доставит CPU-сборку
+  поверх, и `ragsave/ragsave/embedder.py:_use_cuda` не найдёт CUDA. Новая
+  зависимость при `--no-deps` не подтянется сама — пин в `requirements.txt`.

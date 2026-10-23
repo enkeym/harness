@@ -1437,6 +1437,48 @@ def test_progress_bar() -> None:
                str(beats[:3]))
 
 
+def test_device() -> None:
+    from ragsave.embedder import _use_cuda
+
+    print("\n--- выбор GPU/CPU ---")
+
+    class FakeOrt:
+        def __init__(self, providers: list[str]) -> None:
+            self.providers, self.preloaded = providers, 0
+
+        def get_available_providers(self) -> list[str]:
+            return self.providers
+
+        def preload_dlls(self) -> None:
+            self.preloaded += 1
+
+    gpu, cpu = ["CUDAExecutionProvider", "CPUExecutionProvider"], ["CPUExecutionProvider"]
+    original = config.EMBED_DEVICE
+    try:
+        config.EMBED_DEVICE = "auto"
+        ort = FakeOrt(gpu)
+        check("auto с CUDA — GPU", _use_cuda(ort), True)
+        check("CUDA-библиотеки подгружены до сессии", ort.preloaded, 1)
+        ort = FakeOrt(cpu)
+        check("auto без CUDA — CPU", _use_cuda(ort), False)
+        check("без CUDA библиотеки не грузятся", ort.preloaded, 0)
+
+        config.EMBED_DEVICE = "cpu"
+        ort = FakeOrt(gpu)
+        check("cpu при живой CUDA — CPU", _use_cuda(ort), False)
+        check("cpu не трогает CUDA-библиотеки", ort.preloaded, 0)
+
+        config.EMBED_DEVICE = "cuda"
+        try:
+            _use_cuda(FakeOrt(cpu))
+            raised = False
+        except RuntimeError:
+            raised = True
+        check_true("cuda без CUDA падает, а не уходит на CPU", raised)
+    finally:
+        config.EMBED_DEVICE = original
+
+
 def main() -> int:
     # Живой демон машины тестам не нужен: test_daemon включает свой на временном сокете.
     config.DAEMON = False
@@ -1456,6 +1498,7 @@ def main() -> int:
     test_daemon()
     test_fts_query()
     test_progress_bar()
+    test_device()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")
     return 1 if FAILED else 0
 

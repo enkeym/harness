@@ -25,7 +25,14 @@ mcp==2.0.0
 mcp-types==2.0.0
 mmh3==5.2.1
 numpy==2.5.1
-onnxruntime==1.28.0
+nvidia-cublas==13.8.1.7
+nvidia-cuda-nvrtc==13.4.92
+nvidia-cuda-runtime==13.4.92
+nvidia-cudnn-cu13==9.27.0.42
+nvidia-cufft==12.4.0.43
+nvidia-curand==10.4.4.72
+nvidia-nvjitlink==13.4.92
+onnxruntime-gpu==1.28.0
 opentelemetry-api==1.44.0
 packaging==26.2
 pillow==12.3.0

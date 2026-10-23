@@ -392,7 +392,8 @@ def serve(embedder: Any = None, idle: float | None = None, warm: bool = False) -
             begun = time.monotonic()
             try:
                 engine.warm()
-                _say(f"модель загружена за {time.monotonic() - begun:.0f} с")
+                _say(f"модель загружена за {time.monotonic() - begun:.0f} с, "
+                     f"{embedder.device}")
             except Exception:  # noqa: BLE001 — не прогрелись: модель загрузит первый запрос
                 traceback.print_exc()
         while True:

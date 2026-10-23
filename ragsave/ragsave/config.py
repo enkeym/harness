@@ -71,6 +71,11 @@ EMBED_PARALLEL = _env_int("RAGSAVE_PARALLEL", None)
 # Потоки ONNX внутри одной инференции; пусто — выбор onnxruntime.
 EMBED_THREADS = _env_int("RAGSAVE_THREADS", None)
 
+# Где считает модель. auto — на GPU, если onnxruntime-gpu видит CUDA, иначе
+# CPU; cpu — только CPU (VRAM занята другим); cuda — GPU обязателен, без него
+# загрузка модели падает, а не уходит молча на CPU.
+EMBED_DEVICE = os.environ.get("RAGSAVE_DEVICE", "auto").strip().lower() or "auto"
+
 # Через сколько секунд простоя MCP-сервер выгружает модель; 0 — держать
 # всегда. Сервер свой у каждой сессии, и без выгрузки три сессии после
 # одного поиска держат ~4,5 ГБ; цена — холодный поиск (1,5–3 с) после паузы.

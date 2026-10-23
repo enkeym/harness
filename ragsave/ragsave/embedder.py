@@ -20,7 +20,7 @@ from typing import Iterable, Iterator, Sequence
 from . import config, daemon
 
 
-def _import_onnxruntime_quietly() -> None:
+def _import_onnxruntime_quietly():
     """Импорт onnxruntime без его шума в stderr (daemon.log, sync.log).
 
     Уже на импорте C++-часть ищет GPU и в WSL печатает warning мимо Python —
@@ -29,7 +29,7 @@ def _import_onnxruntime_quietly() -> None:
     onnxruntime пишет только ошибки (severity 3).
     """
     if "onnxruntime" in sys.modules:
-        return
+        return sys.modules["onnxruntime"]
     sys.stderr.flush()
     saved, devnull = os.dup(2), os.open(os.devnull, os.O_WRONLY)
     try:
@@ -40,6 +40,25 @@ def _import_onnxruntime_quietly() -> None:
         os.close(saved)
         os.close(devnull)
     onnxruntime.set_default_logger_severity(3)
+    return onnxruntime
+
+
+def _use_cuda(ort) -> bool:
+    """Считать ли на GPU — по config.EMBED_DEVICE и провайдерам onnxruntime.
+
+    CUDA-библиотеки onnxruntime-gpu ставит pip-пакетами nvidia-*, вне путей
+    загрузчика: без preload_dlls сессия молча откатывается на CPU.
+    """
+    if config.EMBED_DEVICE == "cpu":
+        return False
+    if "CUDAExecutionProvider" not in ort.get_available_providers():
+        if config.EMBED_DEVICE == "cuda":
+            raise RuntimeError(
+                "RAGSAVE_DEVICE=cuda, но onnxruntime без CUDA: нужен onnxruntime-gpu"
+            )
+        return False
+    ort.preload_dlls()
+    return True
 
 
 class Embedder:
@@ -54,6 +73,8 @@ class Embedder:
         self._use_daemon = use_daemon
         self._daemon_refused = False
         self._engine: str | None = None
+        # cuda/cpu — где считает загруженная модель; None — ещё не грузилась.
+        self.device: str | None = None
         # Модели семейства e5 обучены с префиксами роли: без них
         # асимметричный поиск (короткий запрос → длинный абзац) деградирует.
         self._needs_prefix = "e5" in self._model_name.lower()
@@ -73,7 +94,7 @@ class Embedder:
         return self._engine
 
     def _load(self):
-        _import_onnxruntime_quietly()
+        cuda = _use_cuda(_import_onnxruntime_quietly())
         from fastembed import TextEmbedding
 
         # fastembed предупреждает о смене pooling e5 на каждой загрузке — её и
@@ -81,11 +102,14 @@ class Embedder:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message=r".*now uses mean pooling",
                                     category=UserWarning)
-            return TextEmbedding(
+            model = TextEmbedding(
                 model_name=self._model_name,
                 cache_dir=config.MODEL_CACHE,
                 threads=config.EMBED_THREADS,
+                cuda=cuda,
             )
+        self.device = "cuda" if cuda else "cpu"
+        return model
 
     def _ensure(self):
         if self._model is None:

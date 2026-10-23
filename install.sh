@@ -7,7 +7,7 @@
 #
 #   ./install.sh          создать/починить симлинки
 #   ./install.sh --check  только отчёт, ничего не менять
-#   ./install.sh --venv   собрать venv для ragsave (~250 МБ) и поставить зависимости
+#   ./install.sh --venv   собрать venv для ragsave (~2,6 ГБ с CUDA) и поставить зависимости
 #
 # Идемпотентно: повторный запуск ничего не ломает. Реальный файл на месте
 # симлинка не удаляется, а уезжает в <имя>.bak-<дата>. Локальные файлы
@@ -202,7 +202,11 @@ build_venv() {
     good "venv создан"
   fi
   "$home/venv/bin/python" -m pip install --quiet --upgrade pip
-  "$home/venv/bin/python" -m pip install --quiet -r "$HARNESS/ragsave/requirements.txt"
+  # requirements.txt — полный freeze с onnxruntime-gpu вместо onnxruntime, которого
+  # просит fastembed: без --no-deps pip доставит CPU-сборку поверх, а обе пишут в
+  # один пакет onnxruntime. CPU-сборку из старого venv — убрать по той же причине.
+  "$home/venv/bin/python" -m pip uninstall --quiet -y onnxruntime 2>/dev/null || true
+  "$home/venv/bin/python" -m pip install --quiet --no-deps -r "$HARNESS/ragsave/requirements.txt"
   good "зависимости установлены"
   say "Модель intfloat/multilingual-e5-large (2.24 ГБ) скачается сама"
   say "при первом запуске в $home/models."
