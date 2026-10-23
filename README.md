@@ -202,7 +202,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | Что | Почему | Как получить |
 | --- | --- | --- |
 | `~/.rag-mcp/models` (3.4 ГБ) | модель fastembed, качается сама | первый запуск `ragsave` |
-| `~/.rag-mcp/venv` (2,6 ГБ с CUDA) | воспроизводится из `ragsave/requirements.txt` | `./install.sh --venv` |
+| `~/.rag-mcp/venv` (2,6 ГБ с CUDA) | воспроизводится из `ragsave/requirements.txt`; без `nvidia-smi` — CPU-сборка `onnxruntime` без пакетов `nvidia-*` | `./install.sh --venv` |
 | `~/.claude.json` | регистрация MCP вперемешку с историей проектов | `./install.sh` (из `mcp/servers.json`) |
 | рантайм `~/.claude` (`projects/`, `sessions/`, `history.jsonl`, `state/`) | локальное состояние машины | создаётся само |
 | `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно, без `tokensave install` (см. «Раскатка на новой машине») |

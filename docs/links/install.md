@@ -86,3 +86,6 @@ paths:
   Обе сборки пишут в один пакет: снял `--no-deps` — pip доставит CPU-сборку
   поверх, и `ragsave/ragsave/embedder.py:_use_cuda` не найдёт CUDA. Новая
   зависимость при `--no-deps` не подтянется сама — пин в `requirements.txt`.
+  Без `nvidia-smi` `build_venv` правит список на лету: строки `nvidia-*` вон,
+  `onnxruntime-gpu==X` → `onnxruntime==X`. Переименуют пакеты nvidia или
+  разойдутся версии сборок — CPU-машина получит GPU-пакеты или ошибку pip.

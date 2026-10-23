@@ -7,7 +7,7 @@
 #
 #   ./install.sh          создать/починить симлинки
 #   ./install.sh --check  только отчёт, ничего не менять
-#   ./install.sh --venv   собрать venv для ragsave (~2,6 ГБ с CUDA) и поставить зависимости
+#   ./install.sh --venv   собрать venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка) и поставить зависимости
 #
 # Идемпотентно: повторный запуск ничего не ломает. Реальный файл на месте
 # симлинка не удаляется, а уезжает в <имя>.bak-<дата>. Локальные файлы
@@ -310,10 +310,20 @@ build_venv() {
   "$home/venv/bin/python" -m pip install --quiet --upgrade pip
   # requirements.txt — полный freeze с onnxruntime-gpu вместо onnxruntime, которого
   # просит fastembed: без --no-deps pip доставит CPU-сборку поверх, а обе пишут в
-  # один пакет onnxruntime. CPU-сборку из старого venv — убрать по той же причине.
-  "$home/venv/bin/python" -m pip uninstall --quiet -y onnxruntime 2>/dev/null || true
-  "$home/venv/bin/python" -m pip install --quiet --no-deps -r "$HARNESS/ragsave/requirements.txt"
-  good "зависимости установлены"
+  # один пакет onnxruntime. Сборку другого вида из старого venv — убрать по той же причине.
+  # Без NVIDIA (nvidia-smi нет или драйвер не отвечает) GPU-сборка бесполезна:
+  # ставим CPU-сборку той же версии без пакетов nvidia-* (~2 ГБ).
+  local req="$HARNESS/ragsave/requirements.txt" other=onnxruntime kind="GPU (onnxruntime-gpu)"
+  if ! nvidia-smi -L >/dev/null 2>&1; then
+    other=onnxruntime-gpu kind="CPU (onnxruntime): nvidia-smi не нашёл GPU"
+  fi
+  "$home/venv/bin/python" -m pip uninstall --quiet -y "$other" 2>/dev/null || true
+  if [ "$other" = onnxruntime ]; then
+    "$home/venv/bin/python" -m pip install --quiet --no-deps -r "$req"
+  else
+    "$home/venv/bin/python" -m pip install --quiet --no-deps -r <(sed -E '/^nvidia-/d; s/^onnxruntime-gpu==/onnxruntime==/' "$req")
+  fi
+  good "зависимости установлены, эмбеддинги на $kind"
   say "Модель intfloat/multilingual-e5-large (2.24 ГБ) скачается сама"
   say "при первом запуске в $home/models."
 }

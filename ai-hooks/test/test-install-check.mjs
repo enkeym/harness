@@ -388,5 +388,21 @@ check('LOCALS разобран и не смешан с LINKS',
   check('неизвестный режим — ничего не меняет', changes(before, sb.snap()), []);
 }
 
+// --venv: venv уже собран (фейк на месте python), pip — тот же фейк.
+for (const gpu of [true, false]) {
+  const sb = sandbox({ fakes: gpu ? ['nvidia-smi'] : [] });
+  const py = sb.target('.rag-mcp/venv/bin/python');
+  fs.mkdirSync(path.dirname(py), { recursive: true });
+  fs.symlinkSync(FAKE, py);
+  fs.mkdirSync(path.join(sb.harness, 'ragsave'), { recursive: true });
+  fs.writeFileSync(path.join(sb.harness, 'ragsave', 'requirements.txt'), 'fastembed==0.8.0\nnvidia-cublas==13.8.1.7\nonnxruntime-gpu==1.28.0\n');
+  const req = path.join(sb.home, 'req.txt');
+  const res = sb.run(['--venv'], { FAKE_INDEXER_REQ: req });
+  check(`--venv ${gpu ? 'с GPU — onnxruntime-gpu и nvidia-*, CPU-сборка снята' : 'без nvidia-smi — CPU-сборка той же версии без nvidia-*, GPU-сборка снята'}`,
+    [res.status, res.calls.find((c) => c.includes('uninstall')), read(req), res.out.includes(gpu ? 'на GPU' : 'на CPU')],
+    [0, ['-m', 'pip', 'uninstall', '--quiet', '-y', gpu ? 'onnxruntime' : 'onnxruntime-gpu'],
+      gpu ? 'fastembed==0.8.0\nnvidia-cublas==13.8.1.7\nonnxruntime-gpu==1.28.0\n' : 'fastembed==0.8.0\nonnxruntime==1.28.0\n', true]);
+}
+
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);
