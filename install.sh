@@ -255,23 +255,37 @@ tokensave_hook_check() {
 
 # `tokensave install` пишет поверх харнеса: свою MCP-запись вместо mcp-serve.sh
 # (ловит mcp-sync --check), файлы правил — и заносит агента в installed_agents.
-# После смены версии любая команда tokensave тихо переустанавливает этих
-# агентов, и всё повторяется.
+# После смены версии любая команда tokensave (и `tokensave init`) тихо
+# переустанавливает этих агентов, и всё повторяется. Install-режим чистит оба
+# следа: без агентов в state.toml tokensave больше ничего не переписывает.
+# `tokensave uninstall` не годится — он же вырезает хуки из claude/settings.json.
 tokensave_install_check() {
-  local f agents
+  local f agents state="$HOME/.tokensave/state.toml"
   f="$HOME/.claude/rules/tokensave.md"
-  if [ -e "$f" ]; then
+  if [ -e "$f" ] && [ "$MODE" = "--check" ]; then
     bad "$f — след tokensave install: правила tokensave уже в skills"
     drift=$((drift + 1))
+  elif [ -e "$f" ]; then
+    mv "$f" "$f.bak-$STAMP"
+    warn "$f — след tokensave install, сохранён как $(basename "$f").bak-$STAMP"
+    fixed=$((fixed + 1))
   fi
   agents="$(awk '/^installed_agents/ { f = 1 }
     f { while (match($0, /"[^"]+"/)) { s = s substr($0, RSTART + 1, RLENGTH - 2) " "; $0 = substr($0, RSTART + RLENGTH) } }
     f && /]/ { exit }
-    END { printf "%s", s }' "$HOME/.tokensave/state.toml" 2>/dev/null)" || true
+    END { printf "%s", s }' "$state" 2>/dev/null)" || true
   [ -z "$agents" ] && return 0
-  bad "tokensave install записал агентов: ${agents% } — после обновления tokensave перепишет их конфиги"
-  warn "откат: tokensave uninstall --agent <имя>, затем git checkout claude/settings.json и ./install.sh"
-  drift=$((drift + 1))
+  if [ "$MODE" = "--check" ]; then
+    bad "tokensave install записал агентов: ${agents% } — после обновления tokensave перепишет их конфиги"
+    warn "откат: ./install.sh, затем git -C $HARNESS diff claude/settings.json — tokensave пишет в него сквозь симлинк"
+    drift=$((drift + 1)); return
+  fi
+  # Массив бывает многострочным: пропускаем до закрывающей скобки.
+  awk '/^installed_agents/ { print "installed_agents = []"; skip = !/]/; next }
+    skip { if (/]/) skip = 0; next }
+    { print }' "$state" >"$state.tmp-$STAMP" && mv "$state.tmp-$STAMP" "$state"
+  good "installed_agents очищен (было: ${agents% }) — tokensave больше не перепишет конфиги"
+  fixed=$((fixed + 1))
 }
 
 # /model и /config пишут "model" в claude/settings.json через симлинк, и каждое

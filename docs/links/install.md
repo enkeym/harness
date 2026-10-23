@@ -31,10 +31,13 @@ paths:
   буквально. `tokensave install`/`reinstall` переписывают хуки своим путём.
 - `tokensave install` ↔ файлы, которые он пишет поверх харнеса: MCP-запись
   `tokensave` в `~/.claude.json`, `~/.claude/rules/tokensave.md`, `installed_agents` в
-  `~/.tokensave/state.toml` (по нему тихий reinstall после смены версии).
+  `~/.tokensave/state.toml` (по нему тихий reinstall после смены версии и на
+  `tokensave init`), `claude/settings.json` — сквозь симлинк, правка видна только
+  в `git status` харнеса.
   Ловят `bin/mcp-sync.mjs --check`, `install.sh:machine_paths_check` и
-  `install.sh:tokensave_install_check`; новый файл, который начнёт писать
-  install, проверка не увидит.
+  `install.sh:tokensave_install_check`; чистят `./install.sh` (MCP, правила,
+  агенты) и `git checkout` — settings.json, порядок в `/doctor`. Новый файл,
+  который начнёт писать install, проверка не увидит.
 - Шаблоны `local/*.example` ↔ `install.sh:LOCALS` ↔ кто их читает:
   `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`), `git/gitconfig`
   (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в

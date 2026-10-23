@@ -245,6 +245,20 @@ check('LOCALS разобран и не смешан с LINKS',
   const one = sandbox();
   fs.writeFileSync(one.target('.tokensave/state.toml'), state('["claude"]'));
   check('installed_agents в одну строку — агент назван', one.run().out.includes('записал агентов: claude —'), true);
+
+  for (const agents of ['[\n    "claude",\n]', '["claude"]']) {
+    const fix = sandbox();
+    const stateFile = fix.target('.tokensave/state.toml');
+    fs.writeFileSync(stateFile, state(agents));
+    const fixRules = fix.target('.claude/rules/tokensave.md');
+    fs.writeFileSync(fixRules, 'правила tokensave');
+    const res = fix.run([]);
+    const baks = fs.readdirSync(path.dirname(fixRules)).filter((n) => n.startsWith('tokensave.md.bak-'));
+    check(`install чистит следы tokensave install (${JSON.stringify(agents)}): агентов нет, правила в .bak`,
+      [read(stateFile), fs.existsSync(fixRules), baks.length, res.out.includes('installed_agents очищен (было: claude)')],
+      [state('[]'), false, 1, true]);
+    check(`после чистки (${JSON.stringify(agents)}) --check без следов`, fix.run().out.includes(summary(ALL, 0, 0)), true);
+  }
 }
 
 {

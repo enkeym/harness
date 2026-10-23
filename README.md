@@ -92,8 +92,10 @@ tokensave 7.12.1 в песочном HOME):
   serve` мимо `mcp-serve.sh`, появляется `~/.claude/rules/tokensave.md` (дубль
   правил в каждой сессии);
 - агент заносится в `installed_agents` (`~/.tokensave/state.toml`), и после
-  каждой смены версии любая команда tokensave тихо повторяет install для них
-  (то же делает `tokensave reinstall`).
+  каждой смены версии любая команда tokensave, `tokensave init` в том числе, тихо
+  повторяет install для них (то же делает `tokensave reinstall`);
+- хуки и `mcp__tokensave__*` дописываются в `~/.claude/settings.json` — сквозь
+  симлинк, то есть прямо в `claude/settings.json` харнеса (проверено на 7.15.0).
 
 Поэтому на новой машине:
 
@@ -110,16 +112,17 @@ tokensave 7.12.1 в песочном HOME):
 `tokensave doctor` после этого покажет ✘ «MCP server args missing "serve"» и
 «rules file not found» и посоветует `tokensave install` — это ожидаемо, совет
 не выполнять. Следы уже случившегося install (файлы правил, агенты в
-`installed_agents`, чужая MCP-запись) ловит `./install.sh --check`. Откат:
+`installed_agents`, чужая MCP-запись) ловит `./install.sh --check`, правку
+settings.json — `git status`. Откат — `/doctor` или руками:
 
 ```bash
-tokensave uninstall --agent claude     # убирает правила и installed_agents
-git checkout claude/settings.json      # uninstall вырезал из него хуки и права
-./install.sh                           # вернуть MCP-запись tokensave
+git diff claude/settings.json          # только строки tokensave?
+git checkout claude/settings.json      # тогда вернуть свой файл
+./install.sh                           # MCP-запись, правила в .bak, installed_agents = []
 ```
 
-Перед `git checkout` стоит смотреть `git diff` этого файла: своя незакоммиченная
-правка там потеряется.
+`tokensave uninstall` для отката не нужен: он вырезает из settings.json и
+свои хуки, которые харнес держит намеренно.
 
 MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), подробности — в
 [`mcp/servers.md`](mcp/servers.md).

@@ -1,8 +1,8 @@
 ---
 name: doctor
-description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook, a startup settings warning, install drift — from logs and state, and proposes a fix. User-invoked as /doctor."
+description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook, a startup settings warning, install drift, settings overwritten by tokensave — from logs and state, and proposes or restores a fix. User-invoked as /doctor."
 disable-model-invocation: true
-allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls -t *), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/harness/install.sh --check), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/harness *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read
+allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls -t *), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/harness/install.sh --check), Bash(~/harness/install.sh), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/harness *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read, Edit
 argument-hint: "[what broke, in your own words | session [sid]]"
 ---
 
@@ -73,6 +73,7 @@ Then, per symptom: `~/.claude/state/`.
 | The session "forgot" a rule | edits to CLAUDE.md or hooks are only picked up by a new session |
 | Yellow warning at startup | the `claude -p` line names the rule and the settings file; fix that rule |
 | A setting or skill edit stopped reaching git | `install.sh --check`: `/config` replaced a symlink with a file. `./install.sh` restores it, the file goes to `.bak-<date>` |
+| tokensave hooks, rules or MCP entry came back after `tokensave init` or an upgrade | section 5 |
 | Guards broke right after a harness edit | `git -C ~/harness status`: an uncommitted edit is live in every session; the red test names it |
 
 ## 3. What to do with a finding
@@ -117,3 +118,19 @@ Each item ends as ok, failure or not met, with the line that proves it:
 
 A failure → reproduce it by feeding the hook its JSON on stdin, then fix it
 with a test as in section 3.
+
+## 5. Settings overwritten by tokensave
+
+`installed_agents` in `~/.tokensave/state.toml` makes `tokensave init` and any
+command after an upgrade rerun `install`, writing through the symlink into
+`~/harness/claude/settings.json`. Restore without asking, never via
+`tokensave uninstall` (it strips the harness's own tokensave hooks):
+
+1. `git -C ~/harness diff claude/settings.json`: all hunks tokensave's
+   (`tokensave hook-*` entries and their `matcher`, `mcp__tokensave__*`, key
+   order) → `checkout` the file; the user's lines mixed in → revert only
+   tokensave's with `Edit`. `model` is not a change.
+2. `~/harness/install.sh` — symlinks, MCP entry, rules file to `.bak-<date>`,
+   `installed_agents = []`.
+3. `install.sh --check` and `git status` clean; restored settings load in the
+   next session — say so.
