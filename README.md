@@ -98,6 +98,8 @@ tokensave 7.12.1 в песочном HOME):
 Поэтому на новой машине:
 
 1. Поставить бинарь tokensave (в `/usr/local/bin`, иначе поправить путь хуков).
+   Источник — релизы <https://github.com/aovestdipaperino/tokensave>; обновление
+   поставленного бинаря — `tokensave upgrade` (качает оттуда же).
    `tokensave install` и `reinstall` не запускать — агентам они запрещены
    (`Bash(tokensave *install*)` в `permissions.deny`), хотя `tokensave doctor` их
    советует.
