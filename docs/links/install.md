@@ -42,6 +42,16 @@ paths:
   `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`), `git/gitconfig`
   (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в
   шаблоне; переименовал файл — install создаёт один, shell ищет другой.
+- `install.sh:bashrc_migrate` ↔ имя бэкапа `link_one` (`~/.bashrc.bak-$STAMP`)
+  ↔ что ставит `shell/bashrc` сам (список `own`: nvm, pnpm, `~/.local/bin`).
+  Сменил имя бэкапа — перенос молча не запустится; новая строка PATH в
+  `shell/bashrc` без записи в `own` — старая её копия из бэкапа задвоится в env.
+  Порядок: после `LOCALS`, иначе на новой машине env ещё нет.
+- `install.sh:env_check` ↔ `skills/doctor/reference/repair.md` (Machine env): doctor удаляет
+  строки по тексту причины (`дубль строки`, `это уже ставит shell/bashrc`,
+  `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
+  `SETUP_RE` и `BASHRC_OWN` общие с `bashrc_migrate`: что перенесено, то и
+  проверяется.
 - Голое имя команды в `mcp/servers.json` (`foo-mcp`) ↔ PATH оболочки,
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь. Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —

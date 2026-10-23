@@ -263,6 +263,64 @@ check('LOCALS разобран и не смешан с LINKS',
 
 {
   const sb = sandbox();
+  const [bashrc, env] = ['.bashrc', '.config/harness/env'].map(sb.target);
+  fs.writeFileSync(path.join(sb.harness, 'shell', 'bashrc'), "alias ll='ls -alF'\n");
+  fs.writeFileSync(env, 'export GITLAB_HOST=""\n');
+  const brew = 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"';
+  const conda = '# >>> conda initialize >>>\nif [ -f x ]; then\n    . x\nfi\n# <<< conda initialize <<<';
+  fs.rmSync(bashrc);
+  fs.writeFileSync(bashrc, [
+    'case $- in', '    *i*) ;;', '      *) return;;', 'esac',
+    "alias ll='ls -alF'", 'export GITLAB_HOST=""', 'if true; then', '    export INSIDE=1', 'fi',
+    brew, '. "$HOME/.cargo/env"', conda,
+    'export NVM_DIR="$HOME/.nvm"', '[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"', 'export PATH="$HOME/.local/bin:$PATH"',
+  ].join('\n') + '\n');
+  const res = sb.run([]);
+  const moved = [brew, '. "$HOME/.cargo/env"', conda].join('\n');
+  check('install переносит строки настройки из бэкапа ~/.bashrc в env',
+    read(env).replace(/^# Перенесено install\.sh из ~\/\.bashrc\.bak-[\d-]+: .*\n/m, ''), `export GITLAB_HOST=""\n\n${moved}\n`);
+  check('перенос назван в выводе', [res.out.includes(`${env} — дописаны строки из .bashrc.bak-`), res.out.includes(`  ${brew}\n`)], [true, true]);
+  const once = read(env);
+  sb.run([]);
+  check('повторный install ничего не дописывает', read(env), once);
+}
+
+{
+  const sb = sandbox();
+  const env = sb.target('.config/harness/env');
+  fs.writeFileSync(path.join(sb.harness, 'shell', 'bashrc'), "alias ll='ls -alF'\n");
+  fs.mkdirSync(path.join(sb.home, 'tools', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(sb.home, 'tools', 'env'), '');
+  fs.writeFileSync(env, [
+    'export GITLAB_HOST=""',
+    'eval "$(/nowhere/brew shellenv)"',
+    'export PATH="$HOME/tools/bin:$HOME/gone:$PATH"',
+    '. "$HOME/tools/env"',
+    '[ -f ~/missing.sh ] && . ~/missing.sh',
+    'export GITLAB_HOST=""',
+    "alias ll='ls -alF'",
+    'export PNPM_HOME="$HOME/.local/share/pnpm"',
+    '# >>> conda initialize >>>', 'if [ -f x ]; then', 'fi', '# <<< conda initialize <<<',
+    '# >>> mamba initialize >>>', 'if [ -f x ]; then', 'fi', '# <<< mamba initialize <<<',
+    '',
+  ].join('\n'));
+  const before = sb.snap();
+  const res = sb.run();
+  const flagged = [...res.out.matchAll(/^ {2}! .*env:(\d+) — (.*)$/gm)].map(([, n, why]) => `${n}: ${why}`);
+  check('env_check: мёртвые пути, дубли и строки shell/bashrc — по строкам', flagged, [
+    '2: нет бинаря /nowhere/brew',
+    `3: нет каталога ${sb.home}/gone в PATH`,
+    `5: нет файла ${sb.home}/missing.sh`,
+    '6: дубль строки 1',
+    '7: это уже ставит shell/bashrc',
+    '8: это уже ставит shell/bashrc',
+  ]);
+  check('env_check: +1 к вниманию, код 1, файл не тронут',
+    [res.status, res.out.includes(summary(ALL, 1, 0)), changes(before, sb.snap())], [1, true, []]);
+}
+
+{
+  const sb = sandbox();
   const res = sb.run();
   check('внешних бинарей нет — названы, код не меняют',
     [res.status, res.out.includes('claude — не найден'), res.out.includes('tokensave — не найден'), res.out.includes('python3 — не найден')],

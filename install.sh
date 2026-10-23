@@ -192,6 +192,81 @@ local_one() {
   fixed=$((fixed + 1))
 }
 
+# Установщики (brew, conda, cargo, sdkman) дописывают себя в ~/.bashrc, а link_one
+# увозит его в бэкап — PATH к ним молча пропадает. Строки настройки из бэкапа,
+# которых нет в shell/bashrc и в env, дописываются в ~/.config/harness/env: его
+# подключают и ~/.bashrc, и ~/.bash_env. Только строки верхнего уровня и блоки
+# `# >>> … >>>`: строка из середины if/case без своего блока сломала бы env.
+# nvm, pnpm и ~/.local/bin shell/bashrc ставит сам — nvm лениво, и копия
+# `. nvm.sh` из бэкапа вернула бы его загрузку на каждый шелл.
+# Регэкспы без обратных слэшей: awk -v раскрывает в значении escape-последовательности.
+SETUP_RE='^(export +[A-Za-z_][A-Za-z0-9_]*=|PATH=|eval |alias |([[].*[]] *&& *)?([.]|source) )'
+BASHRC_OWN='NVM_DIR|nvm[.]sh|PNPM_HOME|[.]local/bin|harness/env|bash_env'
+bashrc_migrate() {
+  local bak="$HOME/.bashrc.bak-$STAMP" env="$HOME/.config/harness/env" lines line
+  [ -f "$bak" ] && [ -f "$env" ] || return 0
+  lines="$(awk -v bak="$bak" -v own="$BASHRC_OWN" -v setup="$SETUP_RE" '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    FILENAME != bak { known[trim($0)] = 1; next }
+    blk { if (!drop) print; if ($0 ~ /^# <<< .* <<</) blk = 0; next }
+    /^# >>> .* >>>/ { blk = 1; drop = (trim($0) in known); if (!drop) print; next }
+    $0 ~ setup { if (!(trim($0) in known) && $0 !~ own) print }
+  ' "$HARNESS/shell/bashrc" "$env" "$bak")" || true
+  [ -n "$lines" ] || return 0
+  printf '\n# Перенесено install.sh из ~/%s: строк нет в shell/bashrc.\n%s\n' "$(basename "$bak")" "$lines" >>"$env"
+  warn "$env — дописаны строки из $(basename "$bak"), которых нет в shell/bashrc:"
+  while IFS= read -r line; do warn "  $line"; done <<<"$lines"
+  fixed=$((fixed + 1))
+}
+
+# Мусор в env: перенос из бэкапов разных машин, ручные вставки, удалённый brew.
+# Только отчёт — какие строки убрать, решает /doctor. Смотрятся строки настройки
+# верхнего уровня (SETUP_RE) вне блоков `# >>> … >>>`: повтор строки внутри
+# двух блоков (`fi`) — не дубль. Мёртвый путь — бинарь в `eval "$(… …)"`, файл
+# в `.`/`source`, каталог в PATH; раскрываются только $HOME, ${HOME} и ~.
+env_check() {
+  local env="$HOME/.config/harness/env" hits n line kind p
+  [ -f "$env" ] || return 0
+  hits="$(awk -v env="$env" -v own="$BASHRC_OWN" -v setup="$SETUP_RE" '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    FILENAME != env { known[trim($0)] = 1; next }
+    /^# >>> .* >>>/ { blk = 1; next }
+    blk { if ($0 ~ /^# <<< .* <<</) blk = 0; next }
+    $0 !~ setup { next }
+    { t = trim($0) }
+    t in first { print FNR "|dup|" first[t]; next }
+    { first[t] = FNR }
+    t in known || t ~ own { print FNR "|own|"; next }
+    match(t, /^eval "[$][(][^ )"]+/) { print FNR "|bin|" substr(t, 9, RLENGTH - 8); next }
+    match(t, /([.]|source) +"?[^ "]+/) {
+      s = substr(t, RSTART, RLENGTH); sub(/^([.]|source) +"?/, "", s); print FNR "|file|" s; next
+    }
+    /PATH=/ {
+      s = t; sub(/.*PATH="?/, "", s); sub(/".*/, "", s)
+      n = split(s, part, ":"); for (i = 1; i <= n; i++) if (part[i] !~ /^[$][{]?PATH/) print FNR "|dir|" part[i]
+    }
+  ' "$HARNESS/shell/bashrc" "$env")" || true
+  n=0
+  while IFS='|' read -r line kind p; do
+    [ -n "$line" ] || continue
+    p="${p/#\~/$HOME}"; p="${p//\$\{HOME\}/$HOME}"; p="${p//\$HOME/$HOME}"
+    case "$kind" in
+      dup) warn "$env:$line — дубль строки $p" ;;
+      own) warn "$env:$line — это уже ставит shell/bashrc" ;;
+      bin) [ "${p#/}" != "$p" ] && [ ! -x "$p" ] && warn "$env:$line — нет бинаря $p" || continue ;;
+      file) [ "${p#/}" != "$p" ] && [ ! -e "$p" ] && warn "$env:$line — нет файла $p" || continue ;;
+      dir) [ "${p#/}" != "$p" ] && [ ! -d "$p" ] && warn "$env:$line — нет каталога $p в PATH" || continue ;;
+    esac
+    n=$((n + 1))
+  done <<<"$hits"
+  if [ "$n" -eq 0 ]; then
+    good "$env — без дублей и мёртвых путей"
+    return 0
+  fi
+  warn "убрать эти строки из $env — /doctor чистит их сам"
+  drift=$((drift + 1))
+}
+
 build_venv() {
   local home="$RAG_HOME"
   say "venv для ragsave в $home/venv"
@@ -368,6 +443,7 @@ case "$MODE" in
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
+    env_check
     mcp_sync --check
     externals
     say
@@ -383,6 +459,8 @@ case "$MODE" in
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
+    bashrc_migrate
+    env_check
     mcp_sync
     externals
     say
