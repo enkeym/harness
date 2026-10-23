@@ -21,7 +21,7 @@ claude mcp list
 ~/harness/install.sh --check
 git -C ~/harness status --short && git -C ~/harness log --oneline @{u}..
 for t in ~/.ai-hooks/test/test-*.mjs; do node "$t" >/tmp/doctor-test.out 2>&1 || { echo "RED $t"; tail -5 /tmp/doctor-test.out; }; done
-jq -rs --arg since "$(date -u -d '1 day ago' +%FT%TZ)" 'map(select(.ts > $since)) | group_by(.hook, .decision)[] | [.[0].hook, .[0].decision, length, (map(.ms // 0) | max)] | @tsv' ~/.ai-hooks/logs/hooks.jsonl | column -t
+jq -rs '(now - 86400 | todate) as $since | map(select(.ts > $since)) | group_by(.hook, .decision)[] | [.[0].hook, .[0].decision, length, (map(.ms // 0) | max)] | @tsv' ~/.ai-hooks/logs/hooks.jsonl | column -t
 tail -60 ~/.ai-hooks/logs/hooks.jsonl
 tail -40 ~/.ai-hooks/logs/errors.log
 ```
