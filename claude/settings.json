@@ -47,7 +47,11 @@
     "deny": [
       "Agent",
       "mcp__tokensave__tokensave_field_sites",
-      "Bash(tokensave *install*)"
+      "Bash(tokensave install*)",
+      "Bash(tokensave reinstall*)",
+      "Bash(tokensave uninstall*)",
+      "Bash(tokensave claude-install*)",
+      "Bash(tokensave claude-uninstall*)"
     ],
     "defaultMode": "default"
   },

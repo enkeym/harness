@@ -103,7 +103,8 @@ tokensave 7.12.1 в песочном HOME):
    Источник — релизы <https://github.com/aovestdipaperino/tokensave>; обновление
    поставленного бинаря — `tokensave upgrade` (качает оттуда же).
    `tokensave install` и `reinstall` не запускать — агентам они запрещены
-   (`Bash(tokensave *install*)` в `permissions.deny`), хотя `tokensave doctor` их
+   (`Bash(tokensave install*)`, `reinstall*`, `uninstall*` и алиасы `claude-*`
+   в `permissions.deny`; маска `*install*` ловила и `tokensave …; ./install.sh`), хотя `tokensave doctor` их
    советует.
 2. `./install.sh` — хуки, права, MCP и правила придут из репозитория.
 3. `tokensave githooks on` — глобальные git-хуки в `~/.config/git/hooks` (куда уже
