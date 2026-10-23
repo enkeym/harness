@@ -111,7 +111,7 @@ test/test-impact-map.mjs        # чекер карты: битые ссылки
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
 test/test-resume-hint.mjs       # цепочка передач до последнего звена; последнее звено, отказ без звена, промпт после передачи, чужой slug — молчат
 test/test-security.mjs          # что deny, что ask (push), что проходит молча
-test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вставки), промпт человека в транскрипте, ask → allow через dispatch
+test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вопросы, вставки), промпт человека в транскрипте, ask → allow через dispatch
 test/test-security-bypass.mjs   # обёртки, git, find -exec, ssh — чем гард обходят
 test/test-cleanup.mjs           # свёртка журнала: сумма, идемпотентность, dry-run
 test/test-scratch.mjs           # черновики /tmp: созданное удаляется, чужое, репозиторий и каталог Claude Code — нет
@@ -438,7 +438,8 @@ git-корень `CLAUDE_PROJECT_DIR` (нет — `cwd`), пути сравни�
 `stash drop|clear`), `deploy` («задеплой», «опубликуй», «релиз» — publish-скрипты, `npm|cargo publish`,
 `twine`, `docker push`, docker с прод-конфигом, `gh|glab release`, terraform/pulumi/helm/ansible/vercel/fly/…),
 `migrate` («накати», «миграция» — prisma/typeorm/knex/sequelize). Отрицание в той же клаузе
-(«не пушь», «без пуша», «пушить не надо», «don't push») разрешения не даёт; блоки ```…``` и
+(«не пушь», «без пуша», «пушить не надо», «don't push») разрешения не даёт, предложение
+с `?` на конце («запушил?», «почему не задеплоил?») — тоже: вопрос не просьба; блоки ```…``` и
 `<pasted_content>` и строки `>` вырезаются — вставка не говорит за пользователя.
 Источник — последняя запись `type: user` с `origin.kind: human` в `transcript_path`
 (не `isMeta`): своего файла состояния нет, агенту нечего подделать скриптом;

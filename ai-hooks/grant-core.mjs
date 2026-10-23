@@ -59,6 +59,12 @@ function normalize(text) {
   return text.toLowerCase().replace(/ё/g, 'е');
 }
 
+// Вопрос — не просьба: «запушил?», «почему не задеплоил?» согласия не дают.
+// Предложение, кончающееся на `?`, выпадает целиком; «запушь, ок?» спросит.
+function statements(text) {
+  return text.split(/(?<=[.!?\n])/).filter((s) => !/\?\s*$/.test(s)).join('\n');
+}
+
 // Клаузы: отрицание из одной («не трогай main») не гасит слово другой («и запушь»).
 function clauses(text) {
   return normalize(text).split(/[.,;:!?()\n]+|\s(?:и|но|а|потом|затем|then|and|but)\s/);
@@ -82,7 +88,7 @@ function phraseNegated(clause, index) {
 // Промпт → отсортированный список категорий.
 export function grantsIn(prompt) {
   const cats = new Set();
-  for (const clause of clauses(ownWords(prompt))) {
+  for (const clause of clauses(statements(ownWords(prompt)))) {
     const words = wordsOf(clause);
     words.forEach((word, i) => {
       for (const [cat, stems] of Object.entries(WORD_STEMS)) {
