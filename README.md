@@ -40,6 +40,8 @@ cd ~/harness
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
 
+Полный порядок с проверками — чек-лист [`docs/new-machine.md`](docs/new-machine.md).
+
 Playwright MCP глобально не регистрируется — только в проекте, где нужен
 `/test-browser`, и вне его git. Пакет и браузер ставятся той же node из nvm, что
 в PATH агентов:
@@ -129,7 +131,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 1. `./install.sh` — симлинки и MCP-серверы. Отчёт покажет, что встало, что
    уехало в бэкап.
 2. `./install.sh --venv` — venv для ragsave. Долго, качает пакеты.
-3. `claude mcp list` — все три сервера из `mcp/servers.json` должны быть
+3. `claude mcp list` — оба сервера из `mcp/servers.json` должны быть
    `✔ Connected`.
 4. `node ai-hooks/test/test-guards.mjs` и соседние тесты — зелёные.
 5. `./install.sh --check` — итоговая проверка, включая внешние зависимости.
