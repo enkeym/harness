@@ -105,6 +105,10 @@ paths:
   Без `nvidia-smi` `build_venv` правит список на лету: строки `nvidia-*` вон,
   `onnxruntime-gpu==X` → `onnxruntime==X`. Переименуют пакеты nvidia или
   разойдутся версии сборок — CPU-машина получит GPU-пакеты или ошибку pip.
+  Чужую сборку `build_venv` находит в `pip list --format=freeze` и после её удаления
+  ставит свою с `--force-reinstall`: обе делят каталог `onnxruntime/`. На CPU-пути
+  тот же список даёт пакеты `nvidia-*` на удаление. Сменится формат `pip list` —
+  чужая сборка останется, а `import onnxruntime` упадёт на venv с обеими.
 - Проверка `sqlite3.Connection.enable_load_extension` в `install.sh:build_venv` ↔
   загрузка sqlite-vec в `ragsave/ragsave/store.py`. ragsave перейдёт на другой способ
   загрузки — проверка зря откажет python macOS; уберёшь проверку — venv на

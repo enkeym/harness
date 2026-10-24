@@ -398,16 +398,34 @@ build_venv() {
   # просит fastembed: без --no-deps pip доставит CPU-сборку поверх, а обе пишут в
   # один пакет onnxruntime. Сборку другого вида из старого venv — убрать по той же причине.
   # Без NVIDIA (nvidia-smi нет или драйвер не отвечает) GPU-сборка бесполезна:
-  # ставим CPU-сборку той же версии без пакетов nvidia-* (~2 ГБ).
+  # ставим CPU-сборку той же версии без пакетов nvidia-* (~2 ГБ), а оставшиеся
+  # от прежней GPU-сборки удаляем.
   local req="$HARNESS/ragsave/requirements.txt" other=onnxruntime kind="GPU (onnxruntime-gpu)"
+  local installed own
   if ! nvidia-smi -L >/dev/null 2>&1; then
     other=onnxruntime-gpu kind="CPU (onnxruntime): nvidia-smi не нашёл GPU"
   fi
-  "$home/venv/bin/python" -m pip uninstall --quiet -y "$other" 2>/dev/null || true
+  installed=$("$home/venv/bin/python" -m pip list --format=freeze 2>/dev/null || true)
+  own=$(grep -E '^onnxruntime-gpu==' "$req")
+  [ "$other" = onnxruntime-gpu ] && own="onnxruntime==${own#onnxruntime-gpu==}"
   if [ "$other" = onnxruntime ]; then
     "$home/venv/bin/python" -m pip install --quiet --no-deps -r "$req"
   else
     "$home/venv/bin/python" -m pip install --quiet --no-deps -r <(sed -E '/^nvidia-/d; s/^onnxruntime-gpu==/onnxruntime==/' "$req")
+  fi
+  # Чужая сборка удаляет общий каталог onnxruntime/ вместе с файлами своей: стояли
+  # обе (fastembed дотянул CPU поверх GPU) — pip install -r свою не тронул бы, она
+  # уже числится установленной, и import onnxruntime падал бы. Поэтому своя
+  # переустанавливается после удаления чужой.
+  if grep -qiE "^${other//-/[-_]}==" <<<"$installed"; then
+    "$home/venv/bin/python" -m pip uninstall --quiet -y "$other"
+    "$home/venv/bin/python" -m pip install --quiet --no-deps --force-reinstall "$own"
+  fi
+  if [ "$other" = onnxruntime-gpu ]; then
+    local nvidia
+    nvidia=$(grep -ioE '^nvidia-[^=]+' <<<"$installed" || true)
+    # shellcheck disable=SC2086 # имена пакетов без пробелов, по одному в строке
+    [ -n "$nvidia" ] && "$home/venv/bin/python" -m pip uninstall --quiet -y $nvidia
   fi
   good "зависимости установлены, эмбеддинги на $kind"
   say "Модель intfloat/multilingual-e5-large (2.24 ГБ) скачается сама"

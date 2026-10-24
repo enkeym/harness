@@ -502,8 +502,9 @@ function macSandbox() {
   check('неизвестный режим — ничего не меняет', changes(before, sb.snap()), []);
 }
 
-// --venv: venv уже собран (фейк на месте python), pip — тот же фейк.
-for (const gpu of [true, false]) {
+// --venv: venv уже собран (фейк на месте python), pip — тот же фейк; `pip list`
+// отвечает пакетами старого venv.
+function venvRun(gpu, installed) {
   const sb = sandbox({ fakes: gpu ? ['nvidia-smi'] : [] });
   const py = sb.target('.rag-mcp/venv/bin/python');
   fs.mkdirSync(path.dirname(py), { recursive: true });
@@ -511,11 +512,32 @@ for (const gpu of [true, false]) {
   fs.mkdirSync(path.join(sb.harness, 'ragsave'), { recursive: true });
   fs.writeFileSync(path.join(sb.harness, 'ragsave', 'requirements.txt'), 'fastembed==0.8.0\nnvidia-cublas==13.8.1.7\nonnxruntime-gpu==1.28.0\n');
   const req = path.join(sb.home, 'req.txt');
-  const res = sb.run(['--venv'], { FAKE_INDEXER_REQ: req });
-  check(`--venv ${gpu ? 'с GPU — onnxruntime-gpu и nvidia-*, CPU-сборка снята' : 'без nvidia-smi — CPU-сборка той же версии без nvidia-*, GPU-сборка снята'}`,
-    [res.status, res.calls.find((c) => c.includes('uninstall')), read(req), res.out.includes(gpu ? 'на GPU' : 'на CPU')],
-    [0, ['-m', 'pip', 'uninstall', '--quiet', '-y', gpu ? 'onnxruntime' : 'onnxruntime-gpu'],
-      gpu ? 'fastembed==0.8.0\nnvidia-cublas==13.8.1.7\nonnxruntime-gpu==1.28.0\n' : 'fastembed==0.8.0\nonnxruntime==1.28.0\n', true]);
+  const res = sb.run(['--venv'], { FAKE_INDEXER_REQ: req, FAKE_INDEXER_LIST: installed.map((p) => `${p}\n`).join('') });
+  // Вызовы pip после `pip install -r`: удаление чужого и переустановка своего.
+  const after = res.calls.slice(res.calls.findIndex((c) => c.includes('-r')) + 1).map((c) => c.slice(1).join(' '));
+  return { ...res, req: read(req), after };
+}
+
+for (const gpu of [true, false]) {
+  const res = venvRun(gpu, ['fastembed==0.8.0', gpu ? 'onnxruntime-gpu==1.28.0' : 'onnxruntime==1.28.0']);
+  check(`--venv ${gpu ? 'с GPU — onnxruntime-gpu и nvidia-*' : 'без nvidia-smi — CPU-сборка той же версии без nvidia-*'}, чужой сборки нет — ничего не удаляется`,
+    [res.status, res.req, res.after, res.out.includes(gpu ? 'на GPU' : 'на CPU')],
+    [0, gpu ? 'fastembed==0.8.0\nnvidia-cublas==13.8.1.7\nonnxruntime-gpu==1.28.0\n' : 'fastembed==0.8.0\nonnxruntime==1.28.0\n', [], true]);
+}
+
+{
+  const res = venvRun(true, ['onnxruntime==1.28.0', 'onnxruntime-gpu==1.28.0', 'nvidia-cublas==13.8.1.7']);
+  check('--venv с GPU, в venv обе сборки — CPU снята, своя переустановлена поверх общего каталога',
+    [res.status, res.after],
+    [0, ['pip uninstall --quiet -y onnxruntime', 'pip install --quiet --no-deps --force-reinstall onnxruntime-gpu==1.28.0']]);
+}
+
+{
+  const res = venvRun(false, ['fastembed==0.8.0', 'onnxruntime_gpu==1.28.0', 'nvidia-cublas==13.8.1.7', 'nvidia-cudnn-cu12==9.1.0']);
+  check('--venv GPU→CPU — GPU-сборка снята, CPU переустановлена, nvidia-* удалены',
+    [res.status, res.after],
+    [0, ['pip uninstall --quiet -y onnxruntime-gpu', 'pip install --quiet --no-deps --force-reinstall onnxruntime==1.28.0',
+      'pip uninstall --quiet -y nvidia-cublas nvidia-cudnn-cu12']]);
 }
 
 {

@@ -6,7 +6,8 @@
 // ещё дописывает туда свой рабочий каталог — так bin/mcp-serve.sh проверяет,
 // в каком корне поднят сервер. С FAKE_INDEXER_ENV — свой RAGSAVE_THREADS (null — не задан).
 // С FAKE_INDEXER_REQ — содержимое файла после `-r`: install.sh --venv отдаёт pip
-// список через <(…), и прочесть его может только сам процесс.
+// список через <(…), и прочесть его может только сам процесс. С FAKE_INDEXER_LIST —
+// ответ на `pip list`: пакеты старого venv.
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -15,5 +16,6 @@ fs.appendFileSync(process.env.FAKE_INDEXER_CALLS, `${JSON.stringify(args)}\n`);
 const req = args.indexOf('-r');
 if (process.env.FAKE_INDEXER_REQ && req >= 0) fs.appendFileSync(process.env.FAKE_INDEXER_REQ, fs.readFileSync(args[req + 1], 'utf8'));
 if (process.env.FAKE_INDEXER_CWD) fs.appendFileSync(process.env.FAKE_INDEXER_CWD, `${process.cwd()}\n`);
-process.stdout.write(`fake ${args.join(' ')}\n`);
+const list = process.env.FAKE_INDEXER_LIST;
+process.stdout.write(list !== undefined && args.includes('list') ? list : `fake ${args.join(' ')}\n`);
 process.exit(Number(process.env.FAKE_INDEXER_EXIT || 0));
