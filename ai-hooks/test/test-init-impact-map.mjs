@@ -73,6 +73,17 @@ function run(script, dir) {
   check('без индекса каталога нет', !fs.existsSync(path.join(dir, 'docs/links')));
 }
 
+// Индекс tokensave в родительском каталоге — граф чужой, проект не индексирован.
+{
+  const parent = project({ authors: [] });
+  const dir = path.join(parent, 'child');
+  fs.mkdirSync(dir);
+  git(dir, ['init', '-q']);
+  const { code, out } = run(SCRIPT, dir);
+  check('индекс родителя не делает проект индексированным',
+    code === 0 && out.includes('нет индекса tokensave или ragsave') && !fs.existsSync(path.join(dir, 'docs/links')), out.trim());
+}
+
 // Только ragsave — карта заводится, кандидатов seed соберёт через git grep.
 {
   const dir = project({ tokensave: false, rag: true });

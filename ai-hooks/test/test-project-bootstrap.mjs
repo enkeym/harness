@@ -38,8 +38,12 @@ const check = (name, ok, detail = '') => {
   if (!ok) failed++;
 };
 
-// Недельная метка лежит под HOME теста; сброс — «прошла неделя».
-const resetWeekly = () => fs.rmSync(path.join(tmp, '.claude', 'state', 'bootstrap'), { recursive: true, force: true });
+// Метки лежат под HOME теста; «прошло 8 дней» — сдвиг mtime всех меток назад.
+const STATE = path.join(tmp, '.claude', 'state', 'bootstrap');
+const eightDaysLater = () => {
+  const past = new Date(Date.now() - 8 * 24 * 3600 * 1000);
+  for (const f of fs.readdirSync(STATE)) fs.utimesSync(path.join(STATE, f), past, past);
+};
 
 const first = run(repo) || '';
 check('без индекса: про CLAUDE.md молчит', !/CLAUDE\.md/.test(first), first);
@@ -69,30 +73,32 @@ check('первая сессия: недельного пункта карты �
 check('повтор: CLAUDE.md молчит насовсем', !/CLAUDE\.md/.test(run(fresh) || ''));
 fs.rmSync(fresh, { recursive: true, force: true });
 
-// Индекс есть, карты нет — напоминание о /impact-map, раз в неделю.
-const indexed = path.join(tmp, 'indexed');
-fs.mkdirSync(path.join(indexed, '.ragsave'), { recursive: true });
-execFileSync('git', ['-C', indexed, 'init', '-q']);
-fs.writeFileSync(path.join(indexed, 'CLAUDE.md'), '# x');
-fs.writeFileSync(path.join(indexed, '.ragsave', 'rag.db'), '');
-check('ragsave без карты: напоминает /impact-map', /impact-map/.test(run(indexed) || ''));
-check('повтор: карта молчит неделю', run(indexed) === null);
+// Индекс есть, карты нет — /impact-map один раз на проект, без недельного повтора.
+function mapRepo(name, db) {
+  const dir = path.join(tmp, name);
+  fs.mkdirSync(path.join(dir, path.dirname(db)), { recursive: true });
+  execFileSync('git', ['-C', dir, 'init', '-q']);
+  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# x');
+  fs.writeFileSync(path.join(dir, db), '');
+  return dir;
+}
+for (const db of ['.ragsave/rag.db', '.tokensave/tokensave.db']) {
+  const dir = mapRepo(`map-${path.basename(db)}`, db);
+  check(`${db} без карты: первая сессия предлагает /impact-map`, /impact-map/.test(run(dir) || ''));
+  check(`${db}: повтор молчит`, run(dir) === null);
+  eightDaysLater();
+  check(`${db}: и через 8 дней карта не возвращается`, run(dir) === null);
+}
 
-resetWeekly();
-fs.mkdirSync(path.join(indexed, 'docs', 'links'), { recursive: true });
-fs.writeFileSync(path.join(indexed, 'docs', 'links', 'INDEX.md'), '# x');
-check('карта есть: молчит', run(indexed) === null);
+const mapped = mapRepo('mapped', '.ragsave/rag.db');
+fs.mkdirSync(path.join(mapped, 'docs', 'links'), { recursive: true });
+fs.writeFileSync(path.join(mapped, 'docs', 'links', 'INDEX.md'), '# x');
+check('карта есть: молчит', run(mapped) === null);
 
-fs.rmSync(path.join(indexed, 'docs'), { recursive: true });
-fs.rmSync(path.join(indexed, '.ragsave'), { recursive: true });
-fs.mkdirSync(path.join(indexed, '.tokensave'));
-fs.writeFileSync(path.join(indexed, '.tokensave', 'tokensave.db'), '');
-check('tokensave без карты: напоминает /impact-map', /impact-map/.test(run(indexed) || ''));
-
-resetWeekly();
-fs.mkdirSync(path.join(indexed, '.claude'));
-fs.writeFileSync(path.join(indexed, '.claude', 'bootstrap-ignore'), 'impact-map\n');
-check('bootstrap-ignore: про карту молчит', run(indexed) === null);
+const ignoring = mapRepo('ignoring', '.tokensave/tokensave.db');
+fs.mkdirSync(path.join(ignoring, '.claude'));
+fs.writeFileSync(path.join(ignoring, '.claude', 'bootstrap-ignore'), 'impact-map\n');
+check('bootstrap-ignore: про карту молчит', run(ignoring) === null);
 
 // Достройка второго индекса. Фейк уходит в фон: сначала случаи без вызова,
 // последним — с вызовом; в файле вызовов должна оказаться только его строка.
@@ -114,11 +120,15 @@ run(indexedRepo('both', ['.tokensave/tokensave.db', '.ragsave/rag.db']), fakeEnv
 run(indexedRepo('disabled', ['.tokensave/tokensave.db', '.ragsave-disable']), fakeEnv);
 const one = indexedRepo('one', ['.ragsave/rag.db']);
 run(one, fakeEnv);
-for (let i = 0; i < 50 && !fs.existsSync(calls); i++) sleep(100);
+// Оба индекса, но init tokensave оборвался — need_ts скрипта это умеет.
+const dirty = indexedRepo('dirty', ['.tokensave/tokensave.db', '.tokensave/dirty', '.ragsave/rag.db']);
+run(dirty, fakeEnv);
+const callLines = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []);
+for (let i = 0; i < 50 && callLines().length < 2; i++) sleep(100);
 sleep(300);  // время на лишний вызов, если он был
-const lines = fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [];
-check('один индекс: project-init --detach <корень>; оба, ни одного, .ragsave-disable — без вызова',
-  lines.length === 1 && lines[0] === JSON.stringify(['--detach', one]), lines.join(' | '));
+const lines = callLines().sort();
+check('один индекс или .tokensave/dirty: project-init --detach <корень>; оба, ни одного, .ragsave-disable — без вызова',
+  JSON.stringify(lines) === JSON.stringify([['--detach', dirty], ['--detach', one]].map((c) => JSON.stringify(c)).sort()), lines.join(' | '));
 
 fs.rmSync(tmp, { recursive: true, force: true });
 process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки прошли\n');

@@ -10,7 +10,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRootOr } from '../state-core.mjs';
-import { projectRoot } from '../guard-core.mjs';
 import { hasIndex, MAP_DIR, INDEX_NAME } from '../links-core.mjs';
 
 const LEGACY = ['docs/implicit-links.md', '.claude/implicit-links.md'];
@@ -27,7 +26,7 @@ const INDEX_SKELETON = `# Карта скрытых связей — индек�
 const root = repoRootOr(process.argv[2] || process.cwd());
 const say = (line) => process.stdout.write(`${line}\n`);
 
-if (!projectRoot(root) && !hasIndex(root)) {
+if (!hasIndex(root)) {
   say(`карта: в ${root} нет индекса tokensave или ragsave — impact через grep, карта не нужна`);
   process.exit(0);
 }

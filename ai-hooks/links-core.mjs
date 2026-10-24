@@ -17,12 +17,24 @@ export function mapDirOf(root) {
   return fs.existsSync(dir) ? dir : null;
 }
 
-// Индексы, при которых карта нужна: есть чем собрать кандидатов (seed) и есть
-// кому её подключать. Без индекса impact идёт через grep, карты нет.
-const INDEX_DBS = [path.join('.tokensave', 'tokensave.db'), path.join('.ragsave', 'rag.db')];
+// Индексы ровно в корне проекта, без поиска вверх: индекс родительского
+// каталога — чужой граф. dirty — метка оборванного init tokensave (её же смотрит
+// bin/project-init.sh:need_ts), ragsaveOff — проект отказался от ragsave.
+export function indexesOf(root) {
+  const has = (...p) => fs.existsSync(path.join(root, ...p));
+  return {
+    tokensave: has('.tokensave', 'tokensave.db'),
+    ragsave: has('.ragsave', 'rag.db'),
+    dirty: has('.tokensave', 'dirty'),
+    ragsaveOff: has('.ragsave-disable'),
+  };
+}
 
+// Индекс, при котором карта нужна: есть чем собрать кандидатов (seed) и есть
+// кому её подключать. Без индекса impact идёт через grep, карты нет.
 export function hasIndex(root) {
-  return INDEX_DBS.some((db) => fs.existsSync(path.join(root, db)));
+  const { tokensave, ragsave } = indexesOf(root);
+  return tokensave || ragsave;
 }
 
 // Файлы доменов относительно каталога карты со слэшами вперёд: `tracking.md`
@@ -38,8 +50,12 @@ export function domainFiles(mapDir) {
 // Frontmatter файла домена в формате .claude/rules: `paths:` и список глобов.
 // Нет frontmatter или нет `paths:` → null: файл достижим только через индекс.
 // Пустой список — отдельный случай, чекер о нём сообщает.
+// CRLF (файл правили из Windows-редактора) приводится к LF, иначе frontmatter
+// не распознаётся и домен молча не подключается.
+const lf = (text) => text.replace(/\r\n/g, '\n');
+
 export function pathsOf(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---\n/);
+  const m = lf(text).match(/^---\n([\s\S]*?)\n---\n/);
   if (!m) return null;
   const lines = m[1].split('\n');
   const start = lines.findIndex((l) => /^paths:\s*$/.test(l));
@@ -55,5 +71,5 @@ export function pathsOf(text) {
 
 // Тело файла домена без frontmatter — то, что стоит показывать модели.
 export function bodyOf(text) {
-  return text.replace(/^---\n[\s\S]*?\n---\n\s*/, '');
+  return lf(text).replace(/^---\n[\s\S]*?\n---\n\s*/, '');
 }

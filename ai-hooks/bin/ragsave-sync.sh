@@ -27,19 +27,31 @@ repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || ex
 rag_bin="${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}"  # переменная — подмена в тестах
 [ -x "$rag_bin" ] || exit 0
 
-# Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория.
+# Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория
+# (или рядом с индексом подкаталога, см. ниже).
 [ -f "$repo_root/.ragsave-disable" ] && exit 0
 
-# Индекса нет — выходим. Первичный init хуком не запускается: решение
-# «индексировать этот репозиторий» принимает человек, командой `ragsave init`.
-# Каталог .ragsave здесь тоже не создаётся — пустой каталог ничего не значит,
-# а появлялся он в любом репозитории, где просто открыли сессию.
-[ -f "$repo_root/.ragsave/rag.db" ] || exit 0
+# Индекс — ближайший .ragsave/rag.db вверх от каталога сессии, не выше корня
+# репозитория: тот же, что обслуживает MCP (mcp-serve.sh:find_root), — у подкаталога
+# монорепо свой индекс. Нет ни одного — выходим. Первичный init хуком не
+# запускается: решение «индексировать этот репозиторий» принимает человек,
+# командой `ragsave init`. Каталог .ragsave здесь тоже не создаётся — пустой
+# каталог ничего не значит, а появлялся он в любом репозитории, где просто
+# открыли сессию.
+root=""
+dir="$(cd "$project_dir" 2>/dev/null && pwd -P)" || exit 0
+while :; do
+  [ -f "$dir/.ragsave/rag.db" ] && { root="$dir"; break; }
+  { [ "$dir" = "$repo_root" ] || [ "$dir" = / ]; } && break
+  dir="$(dirname "$dir")"
+done
+[ -n "$root" ] || exit 0
+[ -f "$root/.ragsave-disable" ] && exit 0
 
-log="$repo_root/.ragsave/sync.log"
+log="$root/.ragsave/sync.log"
 
 # Сироты sync.log.<pid> прерванных синков: живой синк сутки не идёт.
-find "$repo_root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>/dev/null
+find "$root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>/dev/null
 
 # Каждый запуск пишет в свой файл: `>"$log"` обнулял лог идущего синка ещё до
 # проверки замка. Занятый замок (код 3) — лог удаляется, ragsave сам оставил
@@ -62,6 +74,6 @@ $detach bash -c '
   [ "$code" = 3 ] && { rm -f "$tmp"; exit 0; }
   [ "$code" = 0 ] || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"
   mv -f "$tmp" "$log"
-' _ "$repo_root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" "$low_io" </dev/null >/dev/null 2>&1 &
+' _ "$root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" "$low_io" </dev/null >/dev/null 2>&1 &
 
 exit 0

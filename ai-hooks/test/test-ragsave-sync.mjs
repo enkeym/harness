@@ -64,6 +64,22 @@ function sandbox({ db = true } = {}) {
   return { home, root, dir, run, readCalls, waitCalls, errors };
 }
 
+// Монорепо: индекс подкаталога — тот, что обслуживает MCP (ближайший вверх от
+// каталога сессии); подкаталог без своего индекса синкает корень.
+{
+  const sb = sandbox();
+  const pkg = path.join(sb.root, 'packages', 'api');
+  fs.mkdirSync(path.join(pkg, '.ragsave'), { recursive: true });
+  fs.mkdirSync(path.join(pkg, 'src'));
+  fs.writeFileSync(path.join(pkg, '.ragsave', 'rag.db'), '');
+  sb.run({}, [path.join(pkg, 'src')]);
+  check('сессия в подкаталоге с .ragsave/rag.db → sync <подкаталог>', sb.waitCalls(1), [['sync', pkg, '--quiet']]);
+  const web = path.join(sb.root, 'packages', 'web');
+  fs.mkdirSync(web);
+  sb.run({}, [web]);
+  check('подкаталог без своего индекса → sync <корень>', sb.waitCalls(2).slice(1), [['sync', sb.root, '--quiet']]);
+}
+
 // Сценарии, где вызова быть не должно: копятся и проверяются после одной паузы —
 // сломанная проверка запустила бы бинарь в фоне, уже после выхода скрипта.
 const silent = [];

@@ -5,19 +5,21 @@
 // пропусков: нет CLAUDE.md, нет husky, нет CI для GitHub-remote, нет
 // карты неявных связей в проекте с индексом tokensave/ragsave.
 // Что с этим делать — решает скилл hooks-guards, о пропусках хук только сообщает.
-// Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI, husky и карту
+// Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI и husky
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
-// про CLAUDE.md и карту в первую сессию с индексом (момент инициализации
-// tokensave/ragsave) — одним пунктом, метка постоянная.
+// про CLAUDE.md и карту — один раз, в первую сессию с индексом (момент
+// инициализации tokensave/ragsave), одним пунктом, метка постоянная. Карта
+// позже — /impact-map руками.
 //
-// Ещё хук достраивает индекс: есть ровно один из двух — init прошёл мимо
-// обёртки shell или прогон bin/project-init.sh оборвался, — и тот же скрипт
-// уходит в фон за вторым.
+// Ещё хук достраивает индекс: есть ровно один из двух или init tokensave
+// оставил .tokensave/dirty — init прошёл мимо обёртки shell или прогон
+// bin/project-init.sh оборвался, — и тот же скрипт уходит в фон доделать.
 //
 // Отсутствие бывает осознанным: проект может не хотеть CLAUDE.md или husky.
 // Тогда `.claude/bootstrap-ignore` в корне перечисляет по строке на пункт
 // (`husky`, `ci`, `dependabot`, `impact-map`), и о них хук молчит. Без этого
 // недельное напоминание про намеренно отсутствующее превращается в шум.
+// Для карты пункт убирает её и из единственного первого пункта.
 // CLAUDE.md в список не входит: он и так выдаётся один раз.
 
 import fs from 'node:fs';
@@ -25,7 +27,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
 import { isHarnessConfigPath } from '../guard-core.mjs';
-import { hasIndex, mapDirOf } from '../links-core.mjs';
+import { hasIndex, indexesOf, mapDirOf } from '../links-core.mjs';
 import { statePath, projectKey, isEntryPoint } from '../state-core.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -94,12 +96,13 @@ function projectRoot(cwd) {
   return root && root !== HOME ? root : null;
 }
 
-// Ровно один индекс → project-init.sh в фоне строит второй. Только tokensave
-// при .ragsave-disable — так и задумано.
+// Ровно один индекс или .tokensave/dirty → project-init.sh в фоне доделывает (та же
+// пара, что need_ts/need_rag скрипта). Ни одного — проект не решили индексировать;
+// только tokensave при .ragsave-disable — так и задумано.
 function completeIndex(root) {
-  const tokensave = exists(root, '.tokensave', 'tokensave.db');
-  const ragsave = exists(root, '.ragsave', 'rag.db');
-  if (tokensave === ragsave || (tokensave && exists(root, '.ragsave-disable'))) return;
+  const { tokensave, ragsave, dirty, ragsaveOff } = indexesOf(root);
+  if (!tokensave && !ragsave) return;
+  if (tokensave && !dirty && (ragsave || ragsaveOff)) return;
   try {
     fs.accessSync(PROJECT_INIT_CMD, fs.constants.X_OK);
   } catch {
@@ -117,8 +120,8 @@ export function bootstrapContext(root) {
   const indexed = hasIndex(root);
   const noClaudeMd = !exists(root, 'CLAUDE.md');
   const noMap = indexed && !ignored.has('impact-map') && !mapDirOf(root);
-  // Первая сессия с индексом: оба пропуска одним пунктом, недельный пункт
-  // карты в неё не входит, а его неделя отсчитывается отсюда.
+  // Первая сессия с индексом: оба пропуска одним пунктом и больше никогда;
+  // неделя пунктов husky и CI отсчитывается отсюда.
   const initSession = indexed && (noClaudeMd || noMap) && firstTime(root, 'init');
   if (initSession) {
     const gaps = [noClaudeMd && 'no project CLAUDE.md', noMap && 'no map of implicit links (/impact-map)'].filter(Boolean);
@@ -132,7 +135,6 @@ export function bootstrapContext(root) {
     if (!ignored.has('dependabot') && /github\.com/.test(remote) && !exists(root, '.github', 'dependabot.yml')) weekly.push('no .github/dependabot.yml');
     if (!ignored.has('ci') && /gitlab/.test(remote) && !exists(root, '.gitlab-ci.yml')) weekly.push('GitLab remote without .gitlab-ci.yml');
   }
-  if (noMap && !initSession) weekly.push('index present, no map of implicit links (/impact-map)');
 
   const items = [...always];
   if ((weekly.length || initSession) && !remindedRecently(root)) items.push(...weekly);

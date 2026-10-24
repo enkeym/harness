@@ -100,6 +100,16 @@ function run(dir, env = {}) {
   check('без индексов — код 1', code === 1 && out.includes('нет индекса tokensave или ragsave'), out.trim());
 }
 
+// Индекс tokensave в родительском каталоге — чужой граф, поиска по нему нет.
+{
+  const parent = project({ rag: false });
+  const dir = path.join(parent, 'child');
+  fs.mkdirSync(dir);
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  const { code, out } = run(dir);
+  check('индекс родителя — код 1, проект не индексирован', code === 1 && out.includes('нет индекса tokensave или ragsave'), out.trim());
+}
+
 // Только ragsave — стороны из git grep без символа, упоминания вне кода из
 // него же; ragsave не зовётся (бинарь-заглушка отсутствует — пометки нет).
 {

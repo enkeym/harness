@@ -142,6 +142,14 @@ const dir = project();
   check('путь вне paths: молчит', out === '', out);
 }
 
+// Домен с CRLF (правка из Windows-редактора) подключается так же.
+{
+  const crlf = project();
+  fs.writeFileSync(path.join(crlf, 'docs/links/orders.md'), ORDERS.replace(/\n/g, '\r\n'));
+  const out = run(crlf, 'Edit', { file_path: path.join(crlf, 'src/orders/service.ts') });
+  check('домен с CRLF подключается без frontmatter', out.includes('order.paid') && !out.includes('paths:'), out);
+}
+
 // Нет карты или нет пути во входе — тишина, без ошибок.
 {
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'links-context-bare-'));

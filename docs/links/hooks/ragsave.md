@@ -30,9 +30,14 @@ paths:
   (`ragsave/ragsave/daemon.py`) синк считает в нём, на всех ядрах.
 - Состояние индексов для достройки — `.tokensave/tokensave.db`, `.tokensave/dirty`
   (метка прерванного `tokensave init`, внешний бинарь), `.ragsave/rag.db` и
-  `.ragsave-disable` в `ai-hooks/bin/project-init.sh` ↔ `ai-hooks/links-core.mjs:hasIndex`
-  и `ai-hooks/bin/ragsave-sync.sh`. tokensave сменил имя метки — оборванный
-  init больше не долечивается достройкой.
+  `.ragsave-disable` в `ai-hooks/bin/project-init.sh` ↔ `ai-hooks/links-core.mjs:indexesOf`
+  (берут `project-bootstrap.mjs:completeIndex`, `bin/seed-impact-map.mjs`,
+  `bin/init-impact-map.mjs`) и `ai-hooks/bin/ragsave-sync.sh`. tokensave сменил имя
+  метки — оборванный init больше не долечивается достройкой.
+- Корень индекса ragsave — ближайший `.ragsave/rag.db` вверх от каталога сессии:
+  `ai-hooks/bin/mcp-serve.sh:find_root` (до `$HOME`) ↔ цикл в `ai-hooks/bin/ragsave-sync.sh`
+  (до корня git). Разошлись — MCP ищет по индексу подкаталога монорепо, а синк
+  его не обновляет никогда.
 - Кто зовёт достройку — путь `~/.ai-hooks/bin/project-init.sh` и флаг `--detach` в
   `__project_init` (обёртки `tokensave`/`ragsave`, один и тот же код в `shell/bashrc` и
   `shell/zshenv`) и в `ai-hooks/claude/project-bootstrap.mjs:completeIndex` (та же пара

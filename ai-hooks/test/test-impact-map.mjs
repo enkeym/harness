@@ -135,6 +135,14 @@ const PATHS = '---\npaths:\n  - "src/orders*"\n  - "src/mail.ts"\n---\n\n';
   check('глоб без файлов ловится',
     moved.code === 1 && moved.out.includes('глоб src/billing/** не совпал'), moved.out.trim());
 
+  // CRLF из Windows-редактора: frontmatter тот же, глобы проверяются.
+  const crlf = run(project({
+    ...files,
+    'docs/links/orders.md': `---\npaths:\n  - "src/orders*"\n  - "src/billing/**"\n---\n${ORDERS}`.replace(/\n/g, '\r\n'),
+  }));
+  check('домен с CRLF: глоб без файлов ловится',
+    crlf.code === 1 && crlf.out.includes('глоб src/billing/** не совпал'), crlf.out.trim());
+
   const empty = run(project({ ...files, 'docs/links/orders.md': `---\npaths:\n---\n${ORDERS}` }));
   check('пустой paths: ловится', empty.code === 1 && empty.out.includes('paths: пустой'), empty.out.trim());
 

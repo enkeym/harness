@@ -57,5 +57,10 @@ paths:
   список в `ai-hooks/README.md` и файлы `.claude/bootstrap-ignore` в чужих
   проектах. Переименовал пункт — отключённое напоминание снова приходит везде,
   README учит старому имени.
+- «Карта один раз» — постоянная метка `init-<projectKey>` в
+  `ai-hooks/claude/project-bootstrap.mjs:bootstrapContext` ↔ строка `/impact-map` в
+  `claude/CLAUDE.md` (предлагать, только когда хук назвал пропуск) и
+  `skills/hooks-guards/SKILL.md`. Вернёшь в CLAUDE.md условие «индекс есть, `docs/links/` нет» —
+  агент снова предлагает карту в каждой сессии мимо метки.
 - Списки инструментов правки tokensave в `ask-core`/`skill-core` — `hooks/guards/security.md`;
   формы коммита и `keepHeredoc` — `hooks/guards/shell.md`.

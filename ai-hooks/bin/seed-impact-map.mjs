@@ -21,13 +21,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { repoRootOr } from '../state-core.mjs';
-import { projectRoot } from '../guard-core.mjs';
-import { hasIndex, MAP_DIR } from '../links-core.mjs';
+import { indexesOf, hasIndex, MAP_DIR } from '../links-core.mjs';
 
 const TOKENSAVE = process.env.AI_HOOKS_TOKENSAVE_CMD || 'tokensave';
 const LIMIT = 500;
 const RAGSAVE = process.env.AI_HOOKS_RAGSAVE_CMD || 'ragsave';
-const RAG_DB = path.join('.ragsave', 'rag.db');
 const RAG_LIMIT = 20;
 // Каждый вызов ragsave грузит модель эмбеддингов (~4 с) — литералов на прогон
 // столько, чтобы фон сессии уложился в несколько минут.
@@ -108,8 +106,9 @@ const KINDS = [
 const root = repoRootOr(process.argv[2] || process.cwd());
 const say = (line) => process.stdout.write(`${line}\n`);
 
-const graph = Boolean(projectRoot(root));
-if (!graph && !hasIndex(root)) {
+const indexes = indexesOf(root);
+const graph = indexes.tokensave;
+if (!hasIndex(root)) {
   say(`кандидаты: в ${root} нет индекса tokensave или ragsave — impact через grep, карта не нужна`);
   process.exit(1);
 }
@@ -338,7 +337,7 @@ for (const kind of KINDS) {
 // их править. Литералы с одной стороной первыми: их вторая сторона, если
 // есть, вне графа.
 const literals = [...sides.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([l]) => l);
-const asked = graph && fs.existsSync(path.join(root, RAG_DB)) ? literals.slice(0, RAG_LITERALS_MAX) : [];
+const asked = graph && indexes.ragsave ? literals.slice(0, RAG_LITERALS_MAX) : [];
 let ragMissing = false;
 const notes = [];
 const mentions = new Map();
