@@ -23,14 +23,14 @@ command after an upgrade rerun `install`, writing through the symlink into
 line of that file to drop, as `env:<line> — <reason>`.
 
 1. `Read` the file. Remove with `Edit`, without asking: `дубль строки` (keep
-   the first), `это уже ставит shell/bashrc`, a dead path whose tool is gone
+   the first), `это уже ставит харнесс`, a dead path whose tool is gone
    from the machine. A dead path to a tool that moved (brew under another
    prefix) → fix the path instead.
 2. A comment `# Перенесено install.sh …` left with nothing under it goes too.
    Lines `--check` does not name stay — it reads only top-level setup lines.
 3. A tool missing from PATH with no line anywhere → `grep -n <tool>
    ~/.bashrc.bak-*`; the line found goes into the env file, not into
-   `shell/bashrc` — that one is shared by every machine.
+   `shell/bashrc` or `shell/harness.bash` — those are shared by every machine.
 4. Rerun `install.sh --check`; the env applies in a new terminal and a new
    session — say so.
 

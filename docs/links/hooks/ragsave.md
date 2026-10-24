@@ -3,7 +3,7 @@ paths:
   - "ragsave/ragsave/**"
   - "ai-hooks/bin/ragsave-sync.sh"
   - "ai-hooks/bin/project-init.sh"
-  - "shell/bashrc"
+  - "shell/harness.bash"
   - "shell/zshenv"
   - "ai-hooks/bin/background.sh"
   - "ai-hooks/bin/log-error.sh"
@@ -39,7 +39,7 @@ paths:
   (до корня git). Разошлись — MCP ищет по индексу подкаталога монорепо, а синк
   его не обновляет никогда.
 - Кто зовёт достройку — путь `~/.ai-hooks/bin/project-init.sh` и флаг `--detach` в
-  `__project_init` (обёртки `tokensave`/`ragsave`, один и тот же код в `shell/bashrc` и
+  `__project_init` (обёртки `tokensave`/`ragsave`, один и тот же код в `shell/harness.bash` и
   `shell/zshenv`) и в `ai-hooks/claude/project-bootstrap.mjs:completeIndex` (та же пара
   «ровно один индекс», что `need_ts`/`need_rag` скрипта) ↔ `install.sh:projects_check`
   и `skills/doctor/reference/repair.md`, называющие один init. Переименовал скрипт или флаг —

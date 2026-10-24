@@ -43,7 +43,8 @@
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness
 cd ~/harness
-./install.sh            # симлинки, локальные файлы из шаблонов, MCP-серверы
+./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы
+./install.sh --personal # только машина автора: ~/.bashrc, git, клавиши, VS Code
 ./install.sh --venv     # venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка)
 tokensave githooks on   # глобальные git-хуки tokensave
 ```
@@ -51,23 +52,24 @@ tokensave githooks on   # глобальные git-хуки tokensave
 - [ ] В отчёте `install.sh` нет `✗`. Строки `.bak-<дата>` — прежние файлы
       машины, сохранённые рядом: просмотреть и удалить ненужное. Через 30
       дней их назовёт `install.sh --check`, а `/doctor` спросит и удалит.
-- [ ] «дописаны строки из .bashrc.bak-…» — строки прежнего `~/.bashrc` (brew,
+- [ ] Ядро дописало в свой `~/.bashrc` блок `# >>> harness >>>` — остальное в нём не тронуто.
+- [ ] `--personal`: «дописаны строки из .bashrc.bak-…» — строки прежнего `~/.bashrc` (brew,
       conda, cargo) уехали в `~/.config/harness/env` (у `export` в отчёте только имя, значение —
       в самом файле): проверить, лишнее удалить.
-- [ ] «перенесены настройки из .gitconfig.bak-…» — настройки прежнего
+- [ ] `--personal`: «перенесены настройки из .gitconfig.bak-…» — настройки прежнего
       `~/.gitconfig`, которых нет в `git/gitconfig`, уехали в `~/.gitconfig.local`.
 
 ## 3. Заполнить значения машины
 
-- [ ] `~/.gitconfig.local` — `[user] name` и `email`, если install не перенёс
+- [ ] `--personal`: `~/.gitconfig.local` — `[user] name` и `email`, если install не перенёс
       их из прежнего `~/.gitconfig` (без них git не коммитит).
-- [ ] `~/.config/harness/env` — `GITLAB_HOST`, `ANTHROPIC_MODEL`, при нужде
+- [ ] `~/.config/harness/env` — `GITLAB_HOST`, по желанию `ANTHROPIC_MODEL`, при нужде
       `RAGSAVE_HOME` (его — до `./install.sh`).
 - [ ] `~/.git-credentials` на месте, права `600`.
 
 ## 4. Перезапуск
 
-- [ ] Закрыть и открыть терминал — `~/.bashrc` экспортирует `BASH_ENV`, без
+- [ ] Закрыть и открыть терминал — блок харнесса в `~/.bashrc` экспортирует `BASH_ENV`, без
       этого Bash-тул агента не увидит `GITLAB_TOKEN`.
 - [ ] Новая сессия `claude` из нового терминала — правила, скиллы и хуки
       читаются только при старте сессии.

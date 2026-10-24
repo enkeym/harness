@@ -1,4 +1,3 @@
-upload_enabled = true
 watcher_debounce = "2s"
 extraction_timeout_secs = 60
 wildcard_permissions = true

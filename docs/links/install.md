@@ -50,13 +50,21 @@ paths:
   `install.sh:tokensave_install_check`; чистят `./install.sh` (MCP, правила,
   агенты) и `git checkout` — settings.json, порядок в `/doctor`. Новый файл,
   который начнёт писать install, проверка не увидит.
+- Ядро и личное: `install.sh:PERSONAL_LINKS`/`PERSONAL_LOCALS`/`PERSONAL_REPORTS`
+  вливаются в `LINKS`/`LOCALS`/`REPORTS` только с `--personal` или меткой
+  `~/.config/harness/personal` (её ждут `/doctor` с `install.sh --check` и тесты
+  `test-install-check.mjs`, читающие оба массива). Без личного `bashrc_hook`
+  дописывает в чужой `~/.bashrc` блок `# >>> harness >>>` ↔ тот же блок в
+  `shell/bashrc` ↔ цель `~/.config/harness/bashrc` → `shell/harness.bash` в `LINKS`:
+  сменил заголовок в одном месте — блок допишется второй раз или `shell_migrate`
+  перенесёт его в env. Новая строка ядра — в `shell/harness.bash`, не в `shell/bashrc`.
 - Шаблоны `local/*.example` ↔ `install.sh:LOCALS` ↔ кто их читает:
-  `shell/bashrc`, `shell/bash_env` (`~/.config/harness/env`; zsh — через `shell/zshenv`), `git/gitconfig`
+  `shell/harness.bash`, `shell/bash_env` (`~/.config/harness/env`; zsh — через `shell/zshenv`), `git/gitconfig`
   (`[include]` `~/.gitconfig.local`). Новая переменная машины — строка в
   шаблоне; переименовал файл — install создаёт один, shell ищет другой.
 - `install.sh:shell_migrate` ↔ имена бэкапов `link_one` (`~/.bashrc.bak-$STAMP`,
-  `~/.zshenv.bak-$STAMP`) ↔ что ставят `shell/bashrc` и `shell/zshenv` сами (список
-  `own`: nvm, pnpm, `~/.local/bin`; строка `brew shellenv` — дословной копией в `shell/zshenv`).
+  `~/.zshenv.bak-$STAMP`) ↔ что ставят `shell/bashrc`, `shell/harness.bash` и `shell/zshenv` сами (список
+  `own`: `~/.local/bin` ядра, nvm и pnpm — только с личным; строка `brew shellenv` — дословной копией в `shell/zshenv`).
   Сменил имя бэкапа — перенос молча не запустится; новая строка PATH в
   `shell/bashrc` или `shell/zshenv` без записи в `own` — старая её копия из бэкапа
   задвоится в env. env читают и bash, и zsh: zsh-синтаксис из `.zshenv` в нём
@@ -77,7 +85,7 @@ paths:
   файл. Сменил каталог в `git/gitconfig` — прежнее значение с машины начнёт
   предупреждать; формулировка `не перенесён` ↔ repair.md (Configured machine).
 - `install.sh:env_check` ↔ `skills/doctor/reference/repair.md` (Machine env): doctor удаляет
-  строки по тексту причины (`дубль строки`, `это уже ставит shell/bashrc`,
+  строки по тексту причины (`дубль строки`, `это уже ставит харнесс`,
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
   `SETUP_RE` и `BASHRC_OWN` общие с `shell_migrate`: что перенесено, то и
   проверяется.

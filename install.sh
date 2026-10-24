@@ -5,9 +5,10 @@
 # Симлинки, а не копии: правка в рабочем каталоге сразу видна git'у, и не нужен
 # отдельный шаг «синхронизировать обратно» — именно он и разъезжается.
 #
-#   ./install.sh          создать/починить симлинки
-#   ./install.sh --check  только отчёт, ничего не менять
-#   ./install.sh --venv   собрать venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка) и поставить зависимости
+#   ./install.sh             создать/починить симлинки ядра (и личного, если оно включено)
+#   ./install.sh --personal  то же плюс личные настройки автора харнесса (PERSONAL_*)
+#   ./install.sh --check     только отчёт, ничего не менять
+#   ./install.sh --venv      собрать venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка) и поставить зависимости
 #
 # Идемпотентно: повторный запуск ничего не ломает. Реальный файл на месте
 # симлинка не удаляется, а уезжает в <имя>.bak-<дата>. Локальные файлы
@@ -18,6 +19,16 @@ set -euo pipefail
 HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 MODE="${1:-install}"
+# Личное включает --personal один раз: метка держит выбор, и повторные
+# ./install.sh и --check (их зовёт /doctor) ведут личные цели наравне с ядром.
+# Удалить метку — выключить личное (симлинки остаются, их убирают руками).
+PERSONAL_MARK="$HOME/.config/harness/personal"
+PERSONAL=0
+if [ "$MODE" = "--personal" ]; then
+  MODE=install PERSONAL=1
+elif [ -f "$PERSONAL_MARK" ]; then
+  PERSONAL=1
+fi
 # Каталог ragsave — тот же, что у bin/ragsave: он ищет там и venv, и код (PYTHONPATH).
 RAG_HOME="${RAGSAVE_HOME:-$HOME/.rag-mcp}"
 
@@ -29,30 +40,40 @@ warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
 bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; }
 
 # target|source — цель в системе и путь относительно корня репозитория.
+# Ядро: без него харнесс не работает. Чужой ~/.bashrc оно не заменяет — дописывает
+# блок подключения ~/.config/harness/bashrc (bashrc_hook).
 LINKS=(
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md"
   "$HOME/.claude/skills|skills"
   "$HOME/.claude/rules/core.md|rules/core.md"
   "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
-  "$HOME/.claude/keybindings.json|claude/keybindings.json"
   "$HOME/.ai-hooks|ai-hooks"
   "$RAG_HOME/ragsave|ragsave/ragsave"
   "$RAG_HOME/tests|ragsave/tests"
   "$RAG_HOME/README.md|ragsave/README.md"
   "$HOME/.local/bin/ragsave|bin/ragsave"
-  "$HOME/.bashrc|shell/bashrc"
+  "$HOME/.config/harness/bashrc|shell/harness.bash"
   "$HOME/.bash_env|shell/bash_env"
   "$HOME/.zshenv|shell/zshenv"
+  "$HOME/.tokensave/config.toml|tokensave/config.toml"
+)
+
+# Личное автора: приглашение и алиасы, глобальный git, клавиши Claude Code
+# и VS Code. Только с --personal или меткой: на чужой машине эти файлы свои.
+PERSONAL_LINKS=(
+  "$HOME/.claude/keybindings.json|claude/keybindings.json"
+  "$HOME/.bashrc|shell/bashrc"
   "$HOME/.gitconfig|git/gitconfig"
   "$HOME/.gitignore_global|git/gitignore_global"
-  "$HOME/.tokensave/config.toml|tokensave/config.toml"
 )
 
 # target|шаблон — значения этой машины вне git. Копия, а не симлинк: заполненный
 # файл не должен попасть в репозиторий, а существующий — быть затёртым шаблоном.
 LOCALS=(
   "$HOME/.config/harness/env|local/env.example"
+)
+PERSONAL_LOCALS=(
   "$HOME/.gitconfig.local|local/gitconfig.local.example"
 )
 
@@ -132,6 +153,7 @@ vscode_one() {
 VSCODE_DIR=""
 vscode_links() {
   local name
+  [ "$PERSONAL" = 1 ] || return 0
   VSCODE_DIR="$(vscode_dir)"
   [ -n "$VSCODE_DIR" ] || return 0
   for name in "${VSCODE_LINKS[@]}"; do
@@ -231,14 +253,19 @@ local_one() {
 # дописываются в ~/.config/harness/env: его подключают ~/.bashrc и ~/.bash_env,
 # а через него и ~/.zshenv. Только строки верхнего уровня и блоки
 # `# >>> … >>>`: строка из середины if/case без своего блока сломала бы env.
-# nvm, pnpm и ~/.local/bin shell/bashrc ставит сам — nvm лениво, и копия
-# `. nvm.sh` из бэкапа вернула бы его загрузку на каждый шелл.
+# ~/.local/bin ставит ядро (shell/harness.bash), nvm и pnpm — личный shell/bashrc:
+# nvm лениво, и копия `. nvm.sh` из бэкапа вернула бы его загрузку
+# на каждый шелл. Без личного свои nvm и pnpm в env — не дубль.
 # В выводе у `export NAME=…` только имя: в значениях бывают токены (GITLAB_TOKEN).
 # Регэкспы без обратных слэшей: awk -v раскрывает в значении escape-последовательности.
 SETUP_RE='^(export +[A-Za-z_][A-Za-z0-9_]*=|PATH=|eval |alias |([[].*[]] *&& *)?([.]|source) )'
-BASHRC_OWN='NVM_DIR|nvm[.]sh|PNPM_HOME|[.]local/bin|harness/env|bash_env'
+BASHRC_OWN='[.]local/bin|harness/env|harness/bashrc|bash_env'
+[ "$PERSONAL" = 1 ] && BASHRC_OWN="NVM_DIR|nvm[.]sh|PNPM_HOME|$BASHRC_OWN"
+# $2 — свой файл харнесса, дальше — что он подключает: их строки тоже свои.
 shell_migrate() {
-  local bak="$HOME/$1.bak-$STAMP" own_file="$2" env="$HOME/.config/harness/env" lines line
+  local bak="$HOME/$1.bak-$STAMP" own_file="$2" env="$HOME/.config/harness/env" lines line f known=()
+  shift
+  for f in "$@"; do known+=("$HARNESS/$f"); done
   [ -f "$bak" ] && [ -f "$env" ] || return 0
   lines="$(awk -v bak="$bak" -v own="$BASHRC_OWN" -v setup="$SETUP_RE" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -246,7 +273,7 @@ shell_migrate() {
     blk { if (!drop) print; if ($0 ~ /^# <<< .* <<</) blk = 0; next }
     /^# >>> .* >>>/ { blk = 1; drop = (trim($0) in known); if (!drop) print; next }
     $0 ~ setup { if (!(trim($0) in known) && $0 !~ own) print }
-  ' "$HARNESS/$own_file" "$env" "$bak")" || true
+  ' "${known[@]}" "$env" "$bak")" || true
   [ -n "$lines" ] || return 0
   printf '\n# Перенесено install.sh из ~/%s: строк нет в %s.\n%s\n' "$(basename "$bak")" "$own_file" "$lines" >>"$env"
   warn "$env — дописаны строки из $(basename "$bak"), которых нет в $own_file:"
@@ -310,12 +337,49 @@ gitconfig_migrate() {
 # dir — свои и изменённые элементы верхнего уровня без скрытых.
 REPORTS=(
   "$HOME/.claude/settings.json|claude/settings.json|json"
-  "$HOME/.claude/keybindings.json|claude/keybindings.json|json"
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md|text"
   "$HOME/.claude/skills|skills|dir"
   "$HOME/.claude/commands|claude/commands|dir"
   "$HOME/.tokensave/config.toml|tokensave/config.toml|text"
 )
+PERSONAL_REPORTS=(
+  "$HOME/.claude/keybindings.json|claude/keybindings.json|json"
+)
+
+# Дальше все проходы (раскатка, отчёты, бэкапы, машинные пути) идут по общим
+# массивам: личное включено — его цели в них, иначе не существуют для скрипта.
+if [ "$PERSONAL" = 1 ]; then
+  LINKS+=("${PERSONAL_LINKS[@]}")
+  LOCALS+=("${PERSONAL_LOCALS[@]}")
+  REPORTS+=("${PERSONAL_REPORTS[@]}")
+fi
+personal_label() {
+  if [ "$PERSONAL" = 1 ]; then printf 'ядро и личное'; else printf 'только ядро (личное — ./install.sh --personal)'; fi
+}
+
+# Чужой ~/.bashrc не заменяется: ядро дописывает в него один блок, подключающий
+# shell/harness.bash (~/.local/bin, BASH_ENV, env, обёртки init). Тот же блок стоит
+# в личном shell/bashrc — ~/.bashrc-симлинк на него не трогается: допись ушла
+# бы сквозь симлинк в репозиторий. Блок ищется по строке-заголовку.
+BASHRC_BLOCK='# >>> harness >>>
+[ -f "$HOME/.config/harness/bashrc" ] && . "$HOME/.config/harness/bashrc"
+# <<< harness <<<'
+bashrc_hook() {
+  local rc="$HOME/.bashrc"
+  # С личным ~/.bashrc ведёт LINKS: не симлинк — его уже назвал check_one.
+  [ "$PERSONAL" = 1 ] && return 0
+  [ "$(readlink -f "$rc")" = "$(readlink -f "$HARNESS/shell/bashrc")" ] && return 0
+  if grep -qxF '# >>> harness >>>' "$rc" 2>/dev/null; then
+    good "$rc — подключает ядро харнесса"; ok=$((ok + 1)); return
+  fi
+  if [ "$MODE" = "--check" ]; then
+    warn "$rc — не подключает ~/.config/harness/bashrc, ./install.sh допишет блок"
+    drift=$((drift + 1)); return
+  fi
+  printf '\n%s\n' "$BASHRC_BLOCK" >>"$rc"
+  good "$rc — дописан блок подключения ядра харнесса"
+  fixed=$((fixed + 1))
+}
 backup_report() {
   local entry target src kind old own lines x name n=0
   for entry in "${REPORTS[@]}"; do
@@ -365,9 +429,11 @@ backup_report() {
 # верхнего уровня (SETUP_RE) вне блоков `# >>> … >>>`: повтор строки внутри
 # двух блоков (`fi`) — не дубль. Мёртвый путь — бинарь в `eval "$(… …)"`, файл
 # в `.`/`source`, каталог в PATH; раскрываются только $HOME, ${HOME} и ~.
+# Свои строки — ядра, а с личным и shell/bashrc: без него nvm и pnpm ставит env.
 env_check() {
-  local env="$HOME/.config/harness/env" hits n line kind p
+  local env="$HOME/.config/harness/env" hits n line kind p known=("$HARNESS/shell/harness.bash")
   [ -f "$env" ] || return 0
+  [ "$PERSONAL" = 1 ] && known+=("$HARNESS/shell/bashrc")
   hits="$(awk -v env="$env" -v own="$BASHRC_OWN" -v setup="$SETUP_RE" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     FILENAME != env { known[trim($0)] = 1; next }
@@ -386,14 +452,14 @@ env_check() {
       s = t; sub(/.*PATH="?/, "", s); sub(/".*/, "", s)
       n = split(s, part, ":"); for (i = 1; i <= n; i++) if (part[i] !~ /^[$][{]?PATH/) print FNR "|dir|" part[i]
     }
-  ' "$HARNESS/shell/bashrc" "$env")" || true
+  ' "${known[@]}" "$env")" || true
   n=0
   while IFS='|' read -r line kind p; do
     [ -n "$line" ] || continue
     p="${p/#\~/$HOME}"; p="${p//\$\{HOME\}/$HOME}"; p="${p//\$HOME/$HOME}"
     case "$kind" in
       dup) warn "$env:$line — дубль строки $p" ;;
-      own) warn "$env:$line — это уже ставит shell/bashrc" ;;
+      own) warn "$env:$line — это уже ставит харнесс" ;;
       bin) [ "${p#/}" != "$p" ] && [ ! -x "$p" ] && warn "$env:$line — нет бинаря $p" || continue ;;
       file) [ "${p#/}" != "$p" ] && [ ! -e "$p" ] && warn "$env:$line — нет файла $p" || continue ;;
       dir) [ "${p#/}" != "$p" ] && [ ! -d "$p" ] && warn "$env:$line — нет каталога $p в PATH" || continue ;;
@@ -691,8 +757,9 @@ externals() {
 
 case "$MODE" in
   --check)
-    say "Проверка симлинков харнеса ($HARNESS):"
+    say "Проверка симлинков харнеса ($HARNESS), $(personal_label):"
     for pair in "${LINKS[@]}"; do wanted "${pair%%|*}" && check_one "${pair%%|*}" "${pair##*|}"; done
+    bashrc_hook
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
@@ -710,12 +777,16 @@ case "$MODE" in
     build_venv
     ;;
   install)
-    say "Раскатка харнеса из $HARNESS:"
+    say "Раскатка харнеса из $HARNESS, $(personal_label):"
+    if [ "$PERSONAL" = 1 ] && [ ! -f "$PERSONAL_MARK" ]; then
+      mkdir -p "$(dirname "$PERSONAL_MARK")" && : >"$PERSONAL_MARK"
+    fi
     for pair in "${LINKS[@]}"; do wanted "${pair%%|*}" && link_one "${pair%%|*}" "${pair##*|}"; done
+    bashrc_hook
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
-    shell_migrate .bashrc shell/bashrc
+    shell_migrate .bashrc shell/bashrc shell/harness.bash
     shell_migrate .zshenv shell/zshenv
     gitconfig_migrate
     backup_report
@@ -730,7 +801,7 @@ case "$MODE" in
     say "Дальше: ./install.sh --venv. MCP-серверы правятся в mcp/servers.json."
     ;;
   *)
-    say "Использование: ./install.sh [--check|--venv]"
+    say "Использование: ./install.sh [--personal|--check|--venv]"
     exit 2
     ;;
 esac

@@ -14,7 +14,7 @@ if [ -x /opt/homebrew/bin/brew ]; then
   esac
 fi
 
-# ~/.local/bin — там лежит ragsave, как и в shell/bashrc.
+# ~/.local/bin — там лежит ragsave, как и в shell/harness.bash.
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
   *) export PATH="$HOME/.local/bin:$PATH" ;;
@@ -24,7 +24,7 @@ esac
 [ -f "$HOME/.bash_env" ] && . "$HOME/.bash_env"
 
 # Ручной `tokensave init` / `ragsave init` достраивает второй индекс в фоне —
-# как и в shell/bashrc, код тот же.
+# как и в shell/harness.bash, код тот же.
 __project_init() {
   local dir="$PWD" arg
   shift

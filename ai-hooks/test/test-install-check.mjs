@@ -23,9 +23,14 @@ const pairs = (name) => {
   return [...block.matchAll(/^\s*"\$(HOME|RAG_HOME)\/([^|"]+)\|([^"]+)"$/gm)]
     .map(([, base, target, src]) => ({ target: base === 'RAG_HOME' ? `.rag-mcp/${target}` : target, src }));
 };
-const LINKS = pairs('LINKS');
-const LOCALS = pairs('LOCALS');
+// Ядро и личное (--personal): песочница по умолчанию с меткой личного — цели обоих.
+const CORE_LINKS = pairs('LINKS');
+const CORE_LOCALS = pairs('LOCALS');
+const LINKS = [...CORE_LINKS, ...pairs('PERSONAL_LINKS')];
+const LOCALS = [...CORE_LOCALS, ...pairs('PERSONAL_LOCALS')];
 const ALL = LINKS.length + LOCALS.length;
+const CORE = CORE_LINKS.length + CORE_LOCALS.length;
+const MARK = '.config/harness/personal';
 // mkdir/mv/ln/rm/cp --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
 const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'diff', 'mkdir', 'mv', 'ln', 'rm', 'cp'];
 const BASH = spawnSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
@@ -62,7 +67,7 @@ const changes = (before, after) => [
   ...after.filter((x) => !before.includes(x)).map((x) => `+ ${x}`),
 ];
 
-function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
+function sandbox({ settings = '{}', tools = TOOLS, fakes = [], personal = true } = {}) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'install-check-')));
   const harness = path.join(home, 'harness');
   for (const { src } of LINKS) {
@@ -86,14 +91,21 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
   }
   for (const f of fakes) fs.symlinkSync(FAKE, path.join(bin, f));
 
-  // Все цели — верные симлинки; сценарий портит нужные.
+  // Все цели — верные симлинки; сценарий портит нужные. Без личного
+  // ~/.bashrc свой и уже подключает ядро.
   const target = (t) => path.join(home, t);
-  for (const { target: t, src } of LINKS) {
+  if (personal) {
+    fs.mkdirSync(path.dirname(target(MARK)), { recursive: true });
+    fs.writeFileSync(target(MARK), '');
+  } else {
+    fs.writeFileSync(target('.bashrc'), 'свой bashrc\n# >>> harness >>>\n');
+  }
+  for (const { target: t, src } of personal ? LINKS : CORE_LINKS) {
     fs.mkdirSync(path.dirname(target(t)), { recursive: true });
     fs.symlinkSync(path.join(harness, src), target(t));
   }
   // Локальные файлы — уже заполненные копии.
-  for (const { target: t } of LOCALS) {
+  for (const { target: t } of personal ? LOCALS : CORE_LOCALS) {
     fs.mkdirSync(path.dirname(target(t)), { recursive: true });
     fs.writeFileSync(target(t), 'свои значения');
   }
@@ -115,6 +127,8 @@ check('LINKS: $RAG_HOME — ~/.rag-mcp', LINKS.some((l) => l.target === '.rag-mc
 check('LOCALS разобран и не смешан с LINKS',
   [LOCALS.map((l) => l.target), LINKS.some((l) => l.src.startsWith('local/'))],
   [['.config/harness/env', '.gitconfig.local'], false]);
+check('ядро без личного: ~/.bashrc, ~/.gitconfig, клавиши и ~/.gitconfig.local — только в PERSONAL_*',
+  [...CORE_LINKS, ...CORE_LOCALS].filter((l) => ['.bashrc', '.gitconfig', '.gitignore_global', '.claude/keybindings.json', '.gitconfig.local'].includes(l.target)), []);
 
 {
   const sb = sandbox();
@@ -577,8 +591,8 @@ for (const [dir, warned] of [['~/.githooks', true], ['~/.config/git/hooks', fals
     `3: нет каталога ${sb.home}/gone в PATH`,
     `5: нет файла ${sb.home}/missing.sh`,
     '6: дубль строки 1',
-    '7: это уже ставит shell/bashrc',
-    '8: это уже ставит shell/bashrc',
+    '7: это уже ставит харнесс',
+    '8: это уже ставит харнесс',
   ]);
   check('env_check: +1 к вниманию, код 1, файл не тронут',
     [res.status, res.out.includes(summary(ALL, 1, 0)), changes(before, sb.snap())], [1, true, []]);
@@ -611,8 +625,52 @@ for (const [dir, warned] of [['~/.githooks', true], ['~/.config/git/hooks', fals
   const sb = sandbox();
   const before = sb.snap();
   const res = sb.run(['--bogus']);
-  check('неизвестный режим — код 2 и usage', [res.status, res.out.includes('Использование: ./install.sh [--check|--venv]')], [2, true]);
+  check('неизвестный режим — код 2 и usage', [res.status, res.out.includes('Использование: ./install.sh [--personal|--check|--venv]')], [2, true]);
   check('неизвестный режим — ничего не меняет', changes(before, sb.snap()), []);
+}
+
+// Только ядро: чужая машина со своими ~/.bashrc, ~/.gitconfig и клавишами Claude Code.
+{
+  const sb = sandbox({ personal: false });
+  check('ядро на месте — код 0, счёт без личного, блок в ~/.bashrc засчитан',
+    [sb.run().status, sb.run().out.includes(summary(CORE + 1, 0, 0)), sb.run().out.includes('только ядро (личное — ./install.sh --personal)')], [0, true, true]);
+}
+
+{
+  const sb = sandbox({ personal: false });
+  const [bashrc, gitconfig, keys, gitLocal] = ['.bashrc', '.gitconfig', '.claude/keybindings.json', '.gitconfig.local'].map(sb.target);
+  fs.writeFileSync(bashrc, 'свой bashrc\n');
+  fs.writeFileSync(gitconfig, '[user]\n\tname = Dev\n');
+  fs.writeFileSync(keys, '{"bindings": []}');
+  const check1 = sb.run();
+  check('ядро: --check называет ~/.bashrc без блока, свои gitconfig и клавиши не трогает',
+    [check1.status, check1.out.includes(`${bashrc} — не подключает ~/.config/harness/bashrc`), /gitconfig|keybindings/.test(check1.out)], [1, true, false]);
+  sb.run([]);
+  sb.run([]);
+  check('ядро: install дописывает блок в свой ~/.bashrc один раз, личное не ставит',
+    [read(bashrc).startsWith('свой bashrc\n'), read(bashrc).split('# >>> harness >>>').length - 1, read(gitconfig), read(keys),
+      fs.existsSync(gitLocal), fs.existsSync(sb.target(MARK)), fs.readdirSync(sb.home).some((n) => n.includes('.bak-'))],
+    [true, 1, '[user]\n\tname = Dev\n', '{"bindings": []}', false, false, false]);
+  check('ядро: блок подключает ~/.config/harness/bashrc', read(bashrc).includes('. "$HOME/.config/harness/bashrc"'), true);
+  check('ядро: --check после install — код 0', [sb.run().status, sb.run().out.includes(summary(CORE + 1, 0, 0))], [0, true]);
+
+  fs.rmSync(bashrc);
+  sb.run([]);
+  check('ядро: нет ~/.bashrc — install создаёт его с одним блоком', read(bashrc).trim().split('\n').length, 3);
+
+  const res = sb.run(['--personal']);
+  check('--personal: метка, личные симлинки, прежние файлы в .bak, local из шаблона',
+    [fs.existsSync(sb.target(MARK)), fs.readlinkSync(bashrc), fs.readlinkSync(gitconfig), read(gitLocal), res.out.includes('ядро и личное')],
+    [true, path.join(sb.harness, 'shell', 'bashrc'), path.join(sb.harness, 'git', 'gitconfig'), 'шаблон local/gitconfig.local.example', true]);
+  check('после --personal обычный --check ведёт личное по метке', sb.run().out.includes(summary(ALL, 0, 0)), true);
+}
+
+{
+  const sb = sandbox({ personal: false });
+  const env = sb.target('.config/harness/env');
+  fs.writeFileSync(env, 'export PNPM_HOME="$HOME/.local/share/pnpm"\nexport PATH="$HOME/.local/bin:$PATH"\n');
+  const flagged = [...sb.run().out.matchAll(/^ {2}! .*env:(\d+) — (.*)$/gm)].map(([, n, why]) => `${n}: ${why}`);
+  check('ядро: свой pnpm в env не дубль, ~/.local/bin — дубль ядра', flagged, ['2: это уже ставит харнесс']);
 }
 
 // --venv: venv уже собран (фейк на месте python), pip — тот же фейк; `pip list`

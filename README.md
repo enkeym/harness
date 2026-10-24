@@ -18,15 +18,15 @@
 | --- | --- | --- |
 | `rules/` | `~/.claude/rules/core.md` | `core.md` — общие правила: гейты, выбор инструментов, таблица скиллов |
 | `skills/` | `~/.claude/skills` | скиллы |
-| `claude/` | `~/.claude/{CLAUDE.md,commands,settings*.json}` | только Claude Code: `CLAUDE.md`, слэш-команды, настройки и хуки; инструмент `Agent` запрещён |
+| `claude/` | `~/.claude/{CLAUDE.md,commands,settings.json}`, `keybindings.json` — личное | только Claude Code: `CLAUDE.md`, слэш-команды, настройки и хуки; инструмент `Agent` запрещён |
 | `ai-hooks/` | `~/.ai-hooks` | security-guard, ask-guard, shell-гард, фоновая синхронизация ragsave, statusline, тесты |
 | `ragsave/` | `~/.rag-mcp/{ragsave,tests,README.md}` | MCP-сервер смыслового поиска: код, тесты, зафиксированные зависимости |
 | `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
 | `mcp/` | `~/.claude.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов |
-| `shell/` | `~/.bashrc`, `~/.bash_env`, `~/.zshenv` | шелл: PATH для node/pnpm/ragsave, ленивый nvm, `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env`; `~/.zshenv` даёт то же zsh через `~/.bash_env` |
-| `git/` | `~/.gitconfig`, `~/.gitignore_global` | глобальный git: `credential.helper store`, identity через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
+| `shell/` | ядро: `~/.config/harness/bashrc` (блок подключения дописывается в свой `~/.bashrc`), `~/.bash_env`, `~/.zshenv`; личное — `~/.bashrc` | шелл: ядро (`shell/harness.bash`) — `~/.local/bin`, `BASH_ENV`, обёртки `init`; личный `shell/bashrc` — PS1, алиасы, pnpm, ленивый nvm, ssh-agent; `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env`; `~/.zshenv` даёт то же zsh через `~/.bash_env` |
+| `git/` | `~/.gitconfig`, `~/.gitignore_global` — личное | глобальный git: `credential.helper store`, identity через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
-| `vscode/` | `%APPDATA%\Code\User\{settings.json,keybindings.json,snippets}` — Windows-симлинки на `\\wsl.localhost\…`, только под WSL | VS Code в Windows: настройки (`keyboard.dispatch: keyCode` — сочетания в любой раскладке), клавиши, сниппеты |
+| `vscode/` | `%APPDATA%\Code\User\{settings.json,keybindings.json,snippets}` — Windows-симлинки на `\\wsl.localhost\…`, только под WSL; личное | VS Code в Windows: настройки (`keyboard.dispatch: keyCode` — сочетания в любой раскладке), клавиши, сниппеты |
 
 История `claude-config` и `ai-hooks` втянута через `git subtree`, так что
 `git log` по этим каталогам показывает всю прежнюю историю.
@@ -36,9 +36,16 @@
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness   # каталог любой
 cd ~/harness
-./install.sh            # симлинки, локальные файлы из шаблонов, MCP-серверы
+./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы
 ./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
 ```
+
+Ядро не трогает свои `~/.bashrc`, `~/.gitconfig`, `~/.gitignore_global`,
+`~/.claude/keybindings.json` и VS Code: в `~/.bashrc` дописывается один блок
+`# >>> harness >>>`. Личные настройки автора (приглашение, алиасы, git,
+клавиши, VS Code) — `./install.sh --personal`: он оставляет метку
+`~/.config/harness/personal`, и дальше `./install.sh` и `--check` ведут их сами;
+удалить метку — выключить.
 
 Полный порядок с проверками — чек-лист [`docs/new-machine.md`](docs/new-machine.md).
 
@@ -66,15 +73,15 @@ claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless 
 в двух файлах вне git, `install.sh` создаёт их из `local/*.example`, только если
 их ещё нет, и просит заполнить:
 
-- `~/.gitconfig.local` — `[user]` name и email; без них git не даст коммитить.
+- `~/.gitconfig.local` (личное) — `[user]` name и email; без них git не даст коммитить.
   Если на месте `~/.gitconfig` был свой файл, `install.sh` переносит сюда
   всё, чего нет в общем `git/gitconfig` (имя, почта, хелпер, `safe.directory`,
   алиасы): подключённый последним, local перекрывает общие значения;
 - `~/.config/harness/env` — `GITLAB_HOST` (хост для `GITLAB_TOKEN`),
-  `ANTHROPIC_MODEL`, при нужде `RAGSAVE_HOME` (каталог ragsave вместо
+  по желанию `ANTHROPIC_MODEL` (в шаблоне закомментирован), при нужде `RAGSAVE_HOME` (каталог ragsave вместо
   `~/.rag-mcp`; задать до запуска `install.sh` — в него лягут и симлинки).
 
-Машина уже настроена — `~/.claude/{settings.json,keybindings.json,CLAUDE.md,skills,commands}`
+Машина уже настроена — `~/.claude/{settings.json,CLAUDE.md,skills,commands}` (с `--personal` и `keybindings.json`)
 и `~/.tokensave/config.toml` свои: `install.sh` увозит их в `.bak-<дата>` и
 перечисляет, чего из этого нет в харнессе — ключи и хуки settings.json (под `env`
 только имена), привязки клавиш, свои и изменённые скиллы и команды, число своих
@@ -200,11 +207,11 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 сразу видна `git status` в этом репозитории, и нет отдельного шага
 «синхронизировать обратно» — именно он всегда и разъезжается. Реальный файл,
 оказавшийся на месте симлинка, не удаляется, а уезжает в `<имя>.bak-<дата>`.
-Из бэкапа `~/.bashrc` строки настройки, которых нет в `shell/bashrc`
+С `--personal` из бэкапа `~/.bashrc` строки настройки, которых нет в `shell/bashrc`
 (`export`, `PATH=`, `eval`, `source`, `alias` верхнего уровня и блоки
 `# >>> … >>>`, — так себя прописывают brew, conda, cargo), дописываются в
 `~/.config/harness/env`: иначе PATH к ним пропал бы молча. nvm, pnpm и
-`~/.local/bin` не переносятся — их ставит `shell/bashrc`.
+`~/.local/bin` не переносятся — их ставят `shell/bashrc` и `shell/harness.bash`.
 
 ## Проверка состояния
 
@@ -237,8 +244,8 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
 | `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
-| `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `ANTHROPIC_MODEL`, `RAGSAVE_HOME` | `./install.sh` (из `local/env.example`), заполнить |
-| `~/.gitconfig.local` | git `[user]` и прочие настройки этой машины | `./install.sh` (из `local/gitconfig.local.example` и прежнего `~/.gitconfig`), заполнить |
+| `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `RAGSAVE_HOME`, по желанию `ANTHROPIC_MODEL` | `./install.sh` (из `local/env.example`), заполнить |
+| `~/.gitconfig.local` | git `[user]` и прочие настройки этой машины | `./install.sh --personal` (из `local/gitconfig.local.example` и прежнего `~/.gitconfig`), заполнить |
 
 ## Тесты
 

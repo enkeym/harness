@@ -202,7 +202,7 @@ tokensave такого скрипта не требует: его сервер
 хуки не индексируют.
 
 Один init — уже решение, второй индекс достраивает `bin/project-init.sh`
-в фоне. Зовут его обёртки `tokensave`/`ragsave` из `shell/bashrc` и
+в фоне. Зовут его обёртки `tokensave`/`ragsave` из `shell/harness.bash` и
 `shell/zshenv` сразу после успешного `init` (каталог — последний
 аргумент-каталог, иначе `$PWD`) и `claude/project-bootstrap.mjs` на SessionStart, если
 индекс ровно один — страховка для init мимо обёртки и прогона,
