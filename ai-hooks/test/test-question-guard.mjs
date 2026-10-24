@@ -160,7 +160,17 @@ check('тернарник `a ? b` в прозе — пропуск', run([prompt
 
 // last_assistant_message свежее транскрипта.
 check('last_assistant_message — block',
-  blocked(run([prompt('x'), say('Готово.')], { last_assistant_message: 'Готово. Пушить?' })));
+  blocked(run([prompt('x'), call('Bash'), result('Bash'), say('Готово.')], { last_assistant_message: 'Готово. Пушить?' })));
+
+// Приветствие: первый ход без инструментов, одна строка (2fce19fd).
+const hello = 'Привет! Чем могу помочь в web_groza? Ветка `dev`, рабочее дерево чистое.';
+check('приветствие первым ходом — пропуск', run([prompt('привет'), say(hello)]) === null);
+check('приветствие после /clear — пропуск', run([prompt('<command-name>/clear</command-name>'),
+  prompt('привет'), say(hello)]) === null);
+check('одна строка после инструмента в первом ходе — block', blocked(run([prompt('x'),
+  call('Bash'), result('Bash'), say('Ветка чистая. Что делаем?')])));
+check('две строки в первом ходе — block', blocked(run([prompt('x'),
+  say('Привет!\n\nЧем могу помочь?')])));
 
 // Правка или коммит без вопроса — не повод держать ход; вопрос после правки — block.
 check('правка в репозитории и «Готово.» — пропуск', run([prompt('x'),

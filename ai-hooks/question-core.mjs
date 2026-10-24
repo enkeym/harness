@@ -16,6 +16,10 @@
 // (HAND один раз, HARD каждый ход): совет о передаче модель пропускала.
 // Ход с правкой без вопроса не блокируется: блок на каждой правке держал ходы,
 // где спрашивать было нечего, — вопрос ищут только регэкспы.
+//
+// Приветствие не судится: первый ход сессии без инструментов, ответ одной строкой
+// («Привет! Чем могу помочь в web_groza?», 2fce19fd) — решения он не ждёт, а блок
+// показывался человеку как «Stop hook error» и тратил ещё один ход.
 
 import { contextUsed, level, noticeText, isWork, sessionWorked, stopNoticeDue, transcriptLines } from './context-core.mjs';
 
@@ -74,19 +78,26 @@ function isPrompt(rec) {
   return Array.isArray(content) && !content.some((b) => b?.type === 'tool_result');
 }
 
-// Последний ход: текст последнего текстового блока ассистента, был ли вызов меню
-// и была ли работа — правка в репозитории или коммит, как её считает context-core.
+const parse = (line) => { try { return JSON.parse(line); } catch { return null; } };
+
+// Последний ход: текст последнего текстового блока ассистента, был ли вызов меню,
+// была ли работа — правка в репозитории или коммит, как её считает context-core,
+// были ли вообще инструменты и первый ли это ход (до него ассистент молчал;
+// `/clear` пишется репликой человека, поэтому считаются ответы, а не промпты).
 export function lastTurn(lines, cwd) {
   let text = null;
   let menu = false;
   let worked = false;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let rec;
-    try { rec = JSON.parse(lines[i]); } catch { continue; }
+  let tools = false;
+  let i = lines.length - 1;
+  for (; i >= 0; i--) {
+    const rec = parse(lines[i]);
+    if (!rec) continue;
     if (isPrompt(rec)) break;
     if (rec.type !== 'assistant' || !Array.isArray(rec.message?.content)) continue;
     for (const block of rec.message.content) {
       if (block?.type !== 'tool_use') continue;
+      tools = true;
       if (MENU_TOOLS.has(block.name)) menu = true;
       else if (!worked && isWork(block.name, block.input, cwd)) worked = true;
     }
@@ -95,7 +106,9 @@ export function lastTurn(lines, cwd) {
       if (blocks.length) text = blocks[blocks.length - 1].text;
     }
   }
-  return { text, menu, worked };
+  let first = true;
+  for (i--; i >= 0 && first; i--) if (parse(lines[i])?.type === 'assistant') first = false;
+  return { text, menu, worked, tools, first };
 }
 
 // Строки прозы с номером абзаца: без код-блоков, инлайн-кода, цитат и
@@ -148,7 +161,7 @@ export function pendingQuestion(text) {
 // не блокирует), затем текст.
 export function questionVerdict(input) {
   if (!input || input.stop_hook_active || !input.transcript_path) return null;
-  const { text, menu, worked } = lastTurn(transcriptLines(input.transcript_path), input.cwd);
+  const { text, menu, worked, tools, first } = lastTurn(transcriptLines(input.transcript_path), input.cwd);
   if (menu) return null;
   const used = contextUsed(input.transcript_path);
   const stage = level(used?.tokens);
@@ -158,6 +171,7 @@ export function questionVerdict(input) {
   }
   // last_assistant_message свежее транскрипта: последняя запись может не успеть на диск.
   const last = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : text;
-  const line = last ? pendingQuestion(last) : null;
+  if (!last || (first && !tools && proseLines(last).length === 1)) return null;
+  const line = pendingQuestion(last);
   return line ? `${REASON} Triggered by the line: «${line.slice(0, 200)}».` : null;
 }
