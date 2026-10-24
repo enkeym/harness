@@ -71,7 +71,7 @@ function records(sb) {
   check('commit в ask mode: deny', out.permissionDecision, 'deny');
   const reasons = String(out.permissionDecisionReason).split('\n');
   check('причины ask-guard и skill-gate по порядку таблицы',
-    [reasons.length, reasons[0].startsWith('Запрещено в ask mode'), reasons[1].startsWith('Commit without review')],
+    [reasons.length, reasons[0].startsWith('Refused in ask mode'), reasons[1].startsWith('Commit without review')],
     [2, true, true]);
   check('текст ask гарда безопасности отброшен', out.permissionDecisionReason.includes('security-guard'), false);
   check('журнал: имена проверок, не dispatch',

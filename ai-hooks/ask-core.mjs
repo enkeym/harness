@@ -292,22 +292,22 @@ export function askGuard(toolName, toolInput = {}) {
   const ti = toolInput || {};
 
   if (WRITE_TOOLS.has(name) || TOKENSAVE_WRITE_RE.test(name) || (TOKENSAVE_RENAME_RE.test(name) && ti.dry_run === false)) {
-    return `правка файлов (${name})`;
+    return `file edit (${name})`;
   }
   if (name === 'Bash' || name === 'mcp__ide__executeCode') {
     const payload = name === 'Bash' ? ti.command : ti.code;
-    return bashMutates(payload) ? 'команда меняет состояние' : null;
+    return bashMutates(payload) ? 'the command changes state' : null;
   }
   if (name === 'Artifact' && ARTIFACT_WRITE_ACTIONS.has(ti.action || 'publish')) {
-    return 'публикация артефакта';
+    return 'publishing an artifact';
   }
   if (name === 'Agent' && !READONLY_AGENTS.has(ti.subagent_type || '')) {
-    return `субагент «${ti.subagent_type || 'general-purpose'}» может менять файлы`;
+    return `subagent "${ti.subagent_type || 'general-purpose'}" can change files`;
   }
   return null;
 }
 
 export const ASK_DENY_HINT =
-  'Ask mode: изменения выключены — отвечай в чате. Правку показывай текстом или диффом, ' +
-  'не применяя её. Команды, меняющие состояние (установка, git write, деплой), тоже не запускай; ' +
-  'читать, искать и запускать тесты можно. Выключить режим: /ask-off.';
+  'Ask mode: changes are off, answer in chat. Show an edit as text or a diff without applying it. ' +
+  'Do not run state-changing commands either (install, git write, deploy); ' +
+  'reading, searching and running tests are fine. The user turns the mode off with /ask-off.';

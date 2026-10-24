@@ -9,7 +9,7 @@ import { runHook } from './hook-io.mjs';
 export function check(input) {
   if (!isOn(input.cwd, input.session_id)) return null;
   const what = askGuard(input.tool_name, input.tool_input);
-  return what ? { decision: 'deny', reason: `Запрещено в ask mode: ${what}. ${ASK_DENY_HINT}` } : null;
+  return what ? { decision: 'deny', reason: `Refused in ask mode: ${what}. ${ASK_DENY_HINT}` } : null;
 }
 
 if (isEntryPoint(import.meta.url)) runHook(check, 'PreToolUse');
