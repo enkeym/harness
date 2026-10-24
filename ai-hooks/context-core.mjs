@@ -260,12 +260,12 @@ export function oversizedPlan(plan) {
   const stacked = (text.match(/^## Состояние/gm)?.length ?? 0) > 1 || STALE_HEADING.test(text);
   if (!stacked && text.length <= PLAN_LIMIT) return null;
   const what = stacked
-    ? 'В плане наслоен прежний снимок передачи'
-    : `План ${k(text.length)} символов при пределе ${k(PLAN_LIMIT)}`;
-  return `${what} — новая сессия оплатит его на каждом запросе. Перепиши файл плана: `
-    + 'один снимок, собранный заново, до 3000 символов; закоммиченный шаг — хеш под '
-    + '`## Состояние`; без разделов «прежнее», «устарело», «что сделано»; в брифе — '
-    + 'оставшиеся шаги (скилл `handoff`). Затем снова ExitPlanMode. Предел: AI_HOOKS_PLAN_LIMIT.';
+    ? 'The plan stacks an earlier handoff snapshot'
+    : `The plan is ${k(text.length)} chars, limit ${k(PLAN_LIMIT)}`;
+  return `${what} — the new session pays for it on every request. Rewrite the plan file: `
+    + 'one snapshot built from scratch, up to 3000 chars; a committed step is a hash under '
+    + '`## Состояние`; no «прежнее», «устарело», «что сделано» sections; the brief keeps '
+    + 'only the remaining steps (skill `handoff`). Then ExitPlanMode again. Limit: AI_HOOKS_PLAN_LIMIT.';
 }
 
 // Шесть текстов: порог × была ли в сессии работа. Фаза на текст не влияет:
@@ -291,31 +291,31 @@ export function oversizedPlan(plan) {
 // мелкая правка доделываются здесь и кончаются итогом. Безусловная передача
 // «и когда шагов не осталось» предлагала перенос сессии, в которой переносить нечего.
 // Критерий — факты, не ощущение: шаг плана, проверка, ждущее решение.
-const DONE = 'Задача закрыта или осталась мелкая правка — доделай и закончи ход итогом, без переноса.';
-const ASK_MOVE = 'вопрос AskUserQuestion: «Перенести в новую сессию» первым, «Продолжить здесь» '
-  + '(скилл `handoff`).';
-const REST = 'Остались шаги плана или проверка —';
+const DONE = 'Task closed or one small edit left — finish it and end the turn with a summary, no handoff.';
+const ASK_MOVE = 'AskUserQuestion: «Перенести в новую сессию» first, «Продолжить здесь» '
+  + '(skill `handoff`).';
+const REST = 'Plan steps or a check left —';
 const TEXTS = {
   worked: {
-    soft: `Доведи текущий шаг до коммита. ${DONE} ${REST} после коммита ${ASK_MOVE}`,
-    hand: `Доведи текущий шаг, следующий не начинай. ${DONE} ${REST} закончи ход `
-      + 'передачей по скиллу `handoff`.',
-    hard: `Новую работу не начинай. ${DONE} Остальное доведи или назови `
-      + 'незавершённым и закончи ход передачей по скиллу `handoff`.',
+    soft: `Finish the current step up to its commit. ${DONE} ${REST} after the commit ${ASK_MOVE}`,
+    hand: `Finish the current step, don't start the next. ${DONE} ${REST} end the turn `
+      + 'with a handoff per skill `handoff`.',
+    hard: `Start no new work. ${DONE} Finish the rest or name it `
+      + 'unfinished and end the turn with a handoff per skill `handoff`.',
   },
   idle: {
-    soft: 'Правок нет. Читай символом или диапазоном, прочитанное повторно не открывай. '
-      + `Работу продолжай, передачу не собирай. ${REST} после шага ${ASK_MOVE}`,
-    hand: 'Правок нет. Дочитай только необходимое и выдай вывод. Вопрос исчерпан — без '
-      + 'переноса. Впереди правки — разбей задачу на шаги и закончи ход передачей. '
-      + `Обсуждение идёт — ${ASK_MOVE}`,
-    hard: 'Правок нет. Дочитай необходимое и выдай вывод; не хватает — скажи пользователю, '
-      + `что задачу надо сузить. Вопрос исчерпан — без переноса; обсуждение идёт — ${ASK_MOVE}`,
+    soft: 'No edits. Read by symbol or range, don\'t reopen what you already read. '
+      + `Keep working, don't build a handoff. ${REST} after the step ${ASK_MOVE}`,
+    hand: 'No edits. Read only what is needed and give the conclusion. Question settled — no '
+      + 'handoff. Edits ahead — split into steps, end the turn with a handoff. '
+      + `Still discussing — ${ASK_MOVE}`,
+    hard: 'No edits. Read what is needed and give the conclusion; not enough — tell the user '
+      + `the task must be narrowed. Question settled — no handoff; discussion ongoing — ${ASK_MOVE}`,
   },
 };
 
 export function noticeText(stage, tokens, { worked = false } = {}) {
-  return `context-meter: ${k(tokens)} токенов. ${TEXTS[worked ? 'worked' : 'idle'][stage]}`;
+  return `context-meter: ${k(tokens)} tokens. ${TEXTS[worked ? 'worked' : 'idle'][stage]}`;
 }
 
 // Новая просьба пользователя после HAND. «Доведи текущий шаг» на ходу
@@ -326,18 +326,18 @@ export function noticeText(stage, tokens, { worked = false } = {}) {
 // если передача всё равно впереди, и от ~17, если нет. Просьба после 120k — медиана
 // 10 вызовов, p75 — 26; каждая пятая укладывается в три. Отсюда граница —
 // одно уже прочитанное место: такую правку дешевле сделать здесь.
-const SMALL_REQUEST = 'Новая просьба: ответ или мелкая правка (одно место, уже прочитанное) — сделай '
-  + 'здесь и закончи ход итогом.';
+const SMALL_REQUEST = 'New request: an answer or a small edit (one place, already read) — do it '
+  + 'here and end the turn with a summary.';
 const NEW_REQUEST = {
-  hand: `${SMALL_REQUEST} Другую работу не начинай: неясное уточни, внеси просьбу `
-    + 'первым пунктом «Дальше» и закончи ход передачей по скиллу `handoff`.',
+  hand: `${SMALL_REQUEST} Start no other work: clarify what is unclear, put the request `
+    + 'first under «Дальше» and end the turn with a handoff per skill `handoff`.',
   // До HAND перенос решает пользователь: без текста на SOFT сессия молча отвечала
   // на каждую новую просьбу вплоть до HAND.
-  soft: `${SMALL_REQUEST} Другую работу до начала — ${ASK_MOVE}`,
+  soft: `${SMALL_REQUEST} Other work, before starting it — ${ASK_MOVE}`,
 };
 
 function requestText(stage, tokens) {
-  return `context-meter: ${k(tokens)} токенов. ${NEW_REQUEST[stage]}`;
+  return `context-meter: ${k(tokens)} tokens. ${NEW_REQUEST[stage]}`;
 }
 
 // null — молчим. Иначе порог, занятость и текст для additionalContext.

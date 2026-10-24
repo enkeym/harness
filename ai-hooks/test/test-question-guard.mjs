@@ -170,7 +170,7 @@ check('правка и вопрос текстом — block', blocked(run([prom
   edit(path.join(REPO, 'a.ts')), result('Edit'), say('Поправил.\n\nПушить?')])));
 
 // Ход за порогом контекста без меню: причина — текст context-meter для этого порога.
-const ctxBlocked = (out, word) => out?.decision === 'block' && out.reason.startsWith('Ход кончился без меню')
+const ctxBlocked = (out, word) => out?.decision === 'block' && out.reason.startsWith('The turn ended without a menu')
   && out.reason.includes(word);
 check('HAND и коммит в ходе — block с передачей', ctxBlocked(run([prompt('x'), commit(), result('Bash'),
   sayAt(HAND + 20_000, 'Шаг закоммичен.')]), 'handoff'));

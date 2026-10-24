@@ -59,12 +59,12 @@ const LIST_ITEM_RE = /^\s*(?:\d+[.)]|[-*•]|[a-zа-я]\))\s+\S/i;
 // Столько пунктов подряд в хвосте — уже список вариантов.
 const MIN_OPTIONS = 2;
 
-export const REASON = 'Ответ кончается вопросом пользователю или ожиданием его решения текстом. '
-  + 'Правило core.md: вопрос — только через AskUserQuestion, варианты — в options, '
-  + 'рекомендуемый первым. Задай его сейчас через AskUserQuestion. Вопрос риторический '
-  + 'и ответа не ждёт — перепиши концовку без него.';
+export const REASON = 'The reply ends with a question to the user or waits for their decision in text. '
+  + 'core.md rule: a question goes only through AskUserQuestion, choices in options, '
+  + 'the recommended one first. Ask it now through AskUserQuestion. A rhetorical question '
+  + 'that expects no answer — rewrite the ending without it.';
 
-export const CONTEXT_REASON = 'Ход кончился без меню, а контекст за порогом.';
+export const CONTEXT_REASON = 'The turn ended without a menu while the context is past the threshold.';
 
 // Реплика человека открывает ход: не служебная вставка и не результат инструмента.
 function isPrompt(rec) {
@@ -159,5 +159,5 @@ export function questionVerdict(input) {
   // last_assistant_message свежее транскрипта: последняя запись может не успеть на диск.
   const last = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : text;
   const line = last ? pendingQuestion(last) : null;
-  return line ? `${REASON} Сработало на строке: «${line.slice(0, 200)}».` : null;
+  return line ? `${REASON} Triggered by the line: «${line.slice(0, 200)}».` : null;
 }

@@ -166,24 +166,24 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const first = contextNotice({ transcript_path: file, session_id: 's-soft' });
   check('105k: сработало как soft', first.stage, 'soft');
   check('105k: токены в тексте', /105k/.test(first.text), true);
-  check('105k: сказано закрыть шаг коммитом', /коммит/.test(first.text), true);
+  check('105k: сказано закрыть шаг коммитом', /commit/.test(first.text), true);
   // «Новый не начинай» без конца хода толкал закончить его прозой «лучше в новой сессии».
   check('105k: после коммита — вопрос о переносе',
-    /вопрос AskUserQuestion: «Перенести в новую сессию» первым/.test(first.text), true);
-  check('105k: блок передачи сам не собирает', /\(скилл `handoff`\)/.test(first.text), true);
+    /AskUserQuestion: «Перенести в новую сессию» first/.test(first.text), true);
+  check('105k: блок передачи сам не собирает', /\(skill `handoff`\)/.test(first.text), true);
   // Перенос закрытой задачи — пустая сессия; мелкую правку дешевле доделать здесь.
   check('105k: закрытая задача или мелкая правка — без переноса',
-    /Задача закрыта или осталась мелкая правка[^.]*без переноса/.test(first.text), true);
-  check('105k: перенос — когда остались шаги', /Остались шаги плана/.test(first.text), true);
+    /Task closed or one small edit left[^.]*no handoff/.test(first.text), true);
+  check('105k: перенос — когда остались шаги', /Plan steps or a check left/.test(first.text), true);
   check('soft посреди хода второй раз молчит',
     contextNotice({ transcript_path: file, session_id: 's-soft' }, { phase: 'step' }), null);
   // Без текста на SOFT сессия молча отвечала на каждую новую просьбу до 150k.
   const next = contextNotice({ transcript_path: file, session_id: 's-soft' });
-  check('следующий промпт после soft: текст о новой просьбе', /Новая просьба/.test(next?.text), true);
+  check('следующий промпт после soft: текст о новой просьбе', /New request/.test(next?.text), true);
   check('новая просьба на soft: другая работа — вопрос о переносе, без передачи',
-    /Другую работу до начала — вопрос AskUserQuestion: «Перенести в новую сессию» первым/.test(next?.text)
+    /Other work, before starting it — AskUserQuestion: «Перенести в новую сессию» first/.test(next?.text)
       && !/«Дальше»/.test(next?.text), true);
-  check('и на каждом следующем промпте', /Новая просьба/.test(contextNotice({ transcript_path: file, session_id: 's-soft' })?.text), true);
+  check('и на каждом следующем промпте', /New request/.test(contextNotice({ transcript_path: file, session_id: 's-soft' })?.text), true);
 }
 
 // --- второй порог звучит поверх первого, третий — поверх второго
@@ -199,23 +199,23 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('рост до 160k: звучит hand', second.stage, 'hand');
   check('160k: назван скилл handoff', /handoff/.test(second.text), true);
   check('160k: процедуру скилла не пересказывает', /EnterPlanMode|ExitPlanMode|AskUserQuestion/.test(second.text), false);
-  check('160k: блока в чат не просит', /чат/.test(second.text), false);
+  check('160k: блока в чат не просит', /chat/.test(second.text), false);
   check('160k: про /clear не просит', /\/clear/.test(second.text), false);
   check('hand посреди хода второй раз молчит',
     contextNotice({ transcript_path: hand, session_id: 's-esc' }, { phase: 'step' }), null);
   // Новая просьба после HAND: «доведи текущий шаг» модель принимала за «сделай её здесь».
   const next = contextNotice({ transcript_path: hand, session_id: 's-esc' });
-  check('следующий промпт после hand: текст о новой просьбе', /Новая просьба/.test(next?.text), true);
-  check('новая просьба: мелкая правка — здесь', /мелкая правка \(одно место, уже прочитанное\) — сделай здесь/.test(next?.text), true);
+  check('следующий промпт после hand: текст о новой просьбе', /New request/.test(next?.text), true);
+  check('новая просьба: мелкая правка — здесь', /small edit \(one place, already read\) — do it here/.test(next?.text), true);
   check('новая просьба: остальное — в «Дальше» и передача',
-    /Другую работу не начинай[^.]*«Дальше»[^.]*передачей по скиллу `handoff`/.test(next?.text), true);
-  check('и на каждом следующем промпте', /Новая просьба/.test(contextNotice({ transcript_path: hand, session_id: 's-esc' })?.text), true);
+    /Start no other work[^.]*«Дальше»[^.]*handoff per skill `handoff`/.test(next?.text), true);
+  check('и на каждом следующем промпте', /New request/.test(contextNotice({ transcript_path: hand, session_id: 's-esc' })?.text), true);
 
   const third = contextNotice({ transcript_path: hard, session_id: 's-esc' });
   check('рост до 240k: звучит hard', third.stage, 'hard');
   check('240k: повторяется каждый ход', contextNotice({ transcript_path: hard, session_id: 's-esc' }).stage, 'hard');
   check('240k: и на третий ход тоже', contextNotice({ transcript_path: hard, session_id: 's-esc' }).stage, 'hard');
-  check('240k: не начинать новую работу', /[Нн]овую работу не начинай/.test(third.text), true);
+  check('240k: не начинать новую работу', /Start no new work/.test(third.text), true);
 
   // откат ниже порога (новый ход дешевле предыдущего) младший порог не будит
   check('спуск к 160k после hard: молчит', contextNotice({ transcript_path: hand, session_id: 's-esc' }), null);
@@ -234,7 +234,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   check('первая сессия слышит', contextNotice({ transcript_path: file, session_id: 's-a' }).stage, 'hand');
   check('вторая сессия тоже слышит', contextNotice({ transcript_path: file, session_id: 's-b' }).stage, 'hand');
   check('первая без правок: первый промпт — вывод, второй — новая просьба',
-    /Новая просьба/.test(contextNotice({ transcript_path: file, session_id: 's-a' })?.text), true);
+    /New request/.test(contextNotice({ transcript_path: file, session_id: 's-a' })?.text), true);
 }
 
 // --- хук: доносит текст и не падает на мусоре
@@ -261,8 +261,8 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   work('s-step-soft');
   const n = contextNotice({ transcript_path: file, session_id: 's-step-soft' }, { phase: 'step' });
   check('105k посреди хода: soft', n.stage, 'soft');
-  check('105k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
-  check('105k посреди хода: вопрос о переносе — только после коммита', /после коммита вопрос AskUserQuestion/.test(n.text), true);
+  check('105k посреди хода: шаг довести', /Finish the current step/.test(n.text), true);
+  check('105k посреди хода: вопрос о переносе — только после коммита', /after the commit AskUserQuestion/.test(n.text), true);
 }
 
 // --- посреди хода на втором пороге: довести шаг до коммита с пушем, и только
@@ -273,17 +273,17 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const input = { transcript_path: file, session_id: 's-step' };
   const n = contextNotice(input, { phase: 'step' });
   check('160k посреди хода: hand', n.stage, 'hand');
-  check('160k посреди хода: шаг довести', /Доведи текущий шаг/.test(n.text), true);
-  check('160k посреди хода: коммит сам не навязывает', /коммит/.test(n.text), false);
+  check('160k посреди хода: шаг довести', /Finish the current step/.test(n.text), true);
+  check('160k посреди хода: коммит сам не навязывает', /commit/.test(n.text), false);
   check('160k посреди хода: назван скилл handoff', /handoff/.test(n.text), true);
-  check('160k посреди хода: следующий шаг — новой сессии', /следующий не начинай/.test(n.text), true);
+  check('160k посреди хода: следующий шаг — новой сессии', /don't start the next/.test(n.text), true);
   check('160k посреди хода: остались шаги — ход кончается передачей',
-    /Остались шаги плана[^.]*закончи ход передачей/.test(n.text), true);
+    /Plan steps or a check left[^.]*end the turn with a handoff/.test(n.text), true);
   check('160k посреди хода: задача закрыта — итог, без переноса',
-    /Задача закрыта[^.]*итогом, без переноса/.test(n.text), true);
+    /Task closed[^.]*summary, no handoff/.test(n.text), true);
   check('тот же порог посреди хода второй раз молчит',
     contextNotice(input, { phase: 'step' }), null);
-  check('на следующем промпте — текст о новой просьбе', /Новая просьба/.test(contextNotice(input)?.text), true);
+  check('на следующем промпте — текст о новой просьбе', /New request/.test(contextNotice(input)?.text), true);
 }
 
 // --- первый HAND на ходу пользователя в сессии с правками: промпт и есть новая
@@ -293,7 +293,7 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   work('s-prompt-hand');
   const n = contextNotice({ transcript_path: file, session_id: 's-prompt-hand' });
   check('первый HAND на промпте с правками: hand', n.stage, 'hand');
-  check('первый HAND на промпте с правками: текст о новой просьбе', /Новая просьба/.test(n.text), true);
+  check('первый HAND на промпте с правками: текст о новой просьбе', /New request/.test(n.text), true);
 }
 
 // --- верхний порог посреди хода повторяется по росту контекста, а не на каждом
@@ -343,29 +343,29 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const sid = 's-idle';
 
   const first = contextNotice({ transcript_path: soft, session_id: sid }, { phase: 'step' });
-  check('без правок: работу бросать не велят', /Работу продолжай/.test(first.text), true);
+  check('без правок: работу бросать не велят', /Keep working/.test(first.text), true);
   check('без правок: при оставшихся шагах — вопрос о переносе',
-    /Остались шаги плана.*AskUserQuestion/.test(first.text), true);
-  check('без правок: коммит не просят', /коммит/.test(first.text), false);
-  check('без правок: сказано сузить чтение', /символом или диапазоном/.test(first.text), true);
+    /Plan steps or a check left.*AskUserQuestion/.test(first.text), true);
+  check('без правок: коммит не просят', /commit/.test(first.text), false);
+  check('без правок: сказано сузить чтение', /by symbol or range/.test(first.text), true);
 
   const second = contextNotice({ transcript_path: hand, session_id: sid }, { phase: 'step' });
-  check('без правок на 160k: коммит не просят', /коммит/.test(second.text), false);
+  check('без правок на 160k: коммит не просят', /commit/.test(second.text), false);
   check('без правок на 160k: вывод выдаётся, а не обрывается',
-    /Дочитай только необходимое и выдай вывод/.test(second.text), true);
+    /Read only what is needed and give the conclusion/.test(second.text), true);
   check('без правок на 160k: перенос предлагают вопросом, рекомендуемым первым',
-    /вопрос AskUserQuestion: «Перенести в новую сессию» первым/.test(second.text), true);
-  check('без правок на 160k: перенос — по handoff', /\(скилл `handoff`\)/.test(second.text), true);
+    /AskUserQuestion: «Перенести в новую сессию» first/.test(second.text), true);
+  check('без правок на 160k: перенос — по handoff', /\(skill `handoff`\)/.test(second.text), true);
   check('без правок на 160k: вопрос исчерпан — без переноса',
-    /Вопрос исчерпан[^.]*без переноса/.test(second.text), true);
+    /Question settled[^.]*no handoff/.test(second.text), true);
   // Сбор данных под крупную задачу съел порог до первой правки: правки впереди,
   // а каждая здесь оплатит всё прочитанное.
   check('без правок на 160k: впереди правки — шаги и передача без вопроса',
-    /Впереди правки — разбей задачу на шаги и закончи ход передачей\./.test(second.text), true);
+    /Edits ahead — split into steps, end the turn with a handoff\./.test(second.text), true);
 
   const third = contextNotice({ transcript_path: hard, session_id: sid }, { phase: 'step' });
   check('без правок на 240k: разрешено сказать пользователю',
-    /скажи пользователю, что задачу надо сузить/.test(third.text), true);
+    /tell the user the task must be narrowed/.test(third.text), true);
   check('без правок на 240k: блок из выводов тоже просят', /handoff/.test(third.text), true);
 
   // появилась правка — и требование меняется на передачу
@@ -382,15 +382,15 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
   const hand = transcript('idle-then-work', [assistant(160_000)]);
   const input = { transcript_path: hand, session_id: sid };
 
-  check('без правок на 160k: передачу не просят', /Правок нет/.test(contextNotice(input).text), true);
+  check('без правок на 160k: передачу не просят', /No edits/.test(contextNotice(input).text), true);
   check('без правок повтор молчит', contextNotice(input, { phase: 'step' }), null);
 
   work(sid);
   const after = contextNotice(input, { phase: 'step' });
   check('первая правка после HAND: тот же порог звучит снова', after?.stage, 'hand');
-  check('первая правка после HAND: просят передачу', /следующий не начинай/.test(after?.text), true);
+  check('первая правка после HAND: просят передачу', /don't start the next/.test(after?.text), true);
   check('и дальше не повторяется', contextNotice(input, { phase: 'step' }), null);
-  check('на следующем промпте — текст о новой просьбе', /Новая просьба/.test(contextNotice(input)?.text), true);
+  check('на следующем промпте — текст о новой просьбе', /New request/.test(contextNotice(input)?.text), true);
 
   const softSid = 's-idle-soft-then-work';
   const soft = transcript('idle-soft-then-work', [assistant(105_000)]);
@@ -414,10 +414,10 @@ check('220k при 1M-окне — это 22%, и всё равно hard', level
       }
     }
   }
-  check('ни один текст не просит скрывать', texts.filter((t) => /не сообщай|указание тебе/.test(t)).length, 0);
+  check('ни один текст не просит скрывать', texts.filter((t) => /не сообщай|указание тебе|don't tell|instruction to you/.test(t)).length, 0);
   check('каждый текст называет хук-источник', texts.every((t) => /^context-meter: /.test(t)), true);
   check('каждый текст не длиннее 300 символов', texts.filter((t) => t.length > 300), []);
-  check('ни один текст не объясняет', texts.filter((t) => /потому что|иначе|прочла бы/.test(t)), []);
+  check('ни один текст не объясняет', texts.filter((t) => /потому что|иначе|прочла бы|because|otherwise/.test(t)), []);
 }
 
 // --- отметка работы: чтение ею не считается, правка и коммит — считаются
