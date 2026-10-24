@@ -43,9 +43,9 @@ _MODELS: dict[str, int] = {
 DEFAULT_MODEL = "intfloat/multilingual-e5-large"
 EMBED_MODEL = os.environ.get("RAGSAVE_MODEL", DEFAULT_MODEL)
 EMBED_DIM = _MODELS.get(EMBED_MODEL, 384)
-MODEL_CACHE = os.environ.get(
-    "RAGSAVE_MODEL_CACHE", str(Path.home() / ".rag-mcp" / "models")
-)
+# Каталог ragsave (venv, модели, сокет демона) — тот же, что у bin/ragsave.
+RAGSAVE_HOME = Path(os.environ.get("RAGSAVE_HOME") or Path.home() / ".rag-mcp")
+MODEL_CACHE = os.environ.get("RAGSAVE_MODEL_CACHE", str(RAGSAVE_HOME / "models"))
 
 
 def _env_int(name: str, default: int | None) -> int | None:
@@ -86,7 +86,7 @@ IDLE_UNLOAD = max(0, _env_int("RAGSAVE_IDLE_UNLOAD", 600) or 0)
 # Рядом с сокетом лежат замок от двойного старта и лог демона.
 DAEMON = os.environ.get("RAGSAVE_DAEMON", "1").strip() != "0"
 DAEMON_SOCKET = os.environ.get(
-    "RAGSAVE_DAEMON_SOCKET", str(Path.home() / ".rag-mcp" / "embed.sock")
+    "RAGSAVE_DAEMON_SOCKET", str(RAGSAVE_HOME / "embed.sock")
 )
 # Сколько ждать сокет поднятого демона; не дождались — поиск падает с DaemonFailed.
 DAEMON_START_WAIT = 3.0

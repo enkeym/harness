@@ -17,7 +17,6 @@
       "Bash(node ~/.ai-hooks/bin/usage-report.mjs:*)",
       "mcp__playwright__*",
       "Edit(~/.ai-hooks/**)",
-      "Edit(~/harness/**)",
       "Bash(git status *)",
       "Bash(git log *)",
       "Bash(git diff *)",
@@ -40,8 +39,6 @@
       "Bash(grep *)",
       "Bash(jq *)",
       "Bash(wc *)",
-      "Bash(python.exe -m pytest *)",
-      "Bash(sc.exe query *)",
       "Edit(//tmp/**)"
     ],
     "deny": [
@@ -72,7 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/local/bin/tokensave",
+            "command": "tokensave",
             "args": [
               "hook-pre-tool-use"
             ]
@@ -96,7 +93,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/local/bin/tokensave",
+            "command": "tokensave",
             "args": [
               "hook-stop"
             ]
@@ -133,7 +130,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/local/bin/tokensave",
+            "command": "tokensave",
             "args": [
               "hook-prompt-submit"
             ]

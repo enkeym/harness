@@ -63,10 +63,17 @@ LOCALS=(
 # обычного симлинка, и его ставят те же link_one/check_one, что и LINKS.
 VSCODE_LINKS=(settings.json keybindings.json snippets)
 
-is_wsl() { command -v cmd.exe >/dev/null && command -v wslpath >/dev/null; }
+# WSL — по признакам самого WSL, а не по cmd.exe в PATH: с appendWindowsPath=false
+# его там нет, а Windows-симлинки VS Code всё равно нужны — cmd.exe берётся с диска C.
+# WSLInterop-late — имя файла у новых версий WSL с systemd.
+CMD_EXE="$(command -v cmd.exe 2>/dev/null || echo /mnt/c/Windows/System32/cmd.exe)"
+is_wsl() {
+  { [ -n "${WSL_DISTRO_NAME:-}" ] || [ -e /proc/sys/fs/binfmt_misc/WSLInterop ] || [ -e /proc/sys/fs/binfmt_misc/WSLInterop-late ]; } &&
+    [ -x "$CMD_EXE" ] && command -v wslpath >/dev/null
+}
 
 # cmd.exe из каталога WSL ругается на UNC-путь первой строкой вывода — запуск из /mnt/c.
-wincmd() { (cd /mnt/c && cmd.exe /c "$@") 2>&1 | tr -d '\r'; }
+wincmd() { (cd /mnt/c && "$CMD_EXE" /c "$@") 2>&1 | tr -d '\r'; }
 
 # Цель Windows-симлинка изнутри WSL не прочитать — её показывает `dir /AL`.
 win_link_target() {
@@ -442,6 +449,9 @@ projects_check() {
     done
     cwd="${cwd#\"cwd\":\"}"; cwd="${cwd%\"}"
     [ -n "$cwd" ] && [ "$cwd" != "$HOME" ] && [ -e "$cwd/.git" ] || continue
+    # Диск Windows из WSL (drvfs, 9p): inotify не видит правок из Windows, а
+    # SQLite-индексы в WAL на нём ненадёжны и медленны.
+    case "$cwd" in /mnt/[a-z]/*) warn "$cwd — на диске Windows: индексы и синк там ненадёжны, держать проект в ФС WSL (~/…)" ;; esac
     need=""
     [ -d "$cwd/.tokensave" ] || need="tokensave init $cwd"
     [ -n "$need" ] || [ -f "$cwd/.ragsave/rag.db" ] || [ -e "$cwd/.ragsave-disable" ] || need="cd $cwd && ragsave init"
@@ -466,6 +476,13 @@ build_venv() {
   if [ -x "$home/venv/bin/python" ]; then
     good "venv уже собран"
   else
+    # Debian/Ubuntu вырезают ensurepip из python3: venv без пакета python3-venv
+    # падает на полпути и оставляет каталог без pip.
+    if ! python3 -c 'import ensurepip' 2>/dev/null; then
+      bad "python3 без ensurepip — venv не собрать"
+      warn "Debian/Ubuntu: sudo apt install python3-venv, затем ./install.sh --venv"
+      return 1
+    fi
     python3 -m venv "$home/venv"
     good "venv создан"
   fi
@@ -538,13 +555,18 @@ machine_paths_check() {
   drift=$((drift + 1))
 }
 
-# Хуки tokensave в settings.json зовут бинарь по абсолютному пути: так их пишет
-# `tokensave install`, и `tokensave doctor` сверяет именно путь — голое имя он считает
-# поломкой. На машине, где tokensave лежит в другом месте, хуки молча не стартуют.
+# Хуки tokensave в settings.json зовут бинарь голым именем в exec-форме
+# (command + args): Claude Code ищет его в PATH, `tokensave doctor` такую запись
+# принимает. Абсолютный путь пишет `tokensave install` — на машине, где tokensave
+# лежит в другом месте, такие хуки молча не стартуют.
 tokensave_hook_check() {
   local hook_bin
-  hook_bin="$(grep -oE '"command": *"[^"]*/tokensave"' "$HARNESS/claude/settings.json" 2>/dev/null | head -1 | sed -E 's/.*"([^"]*)"$/\1/')" || true
+  hook_bin="$(grep -oE '"command": *"([^"]*/)?tokensave"' "$HARNESS/claude/settings.json" 2>/dev/null | head -1 | sed -E 's/.*"([^"]*)"$/\1/')" || true
   [ -z "$hook_bin" ] && return 0
+  if [ "$hook_bin" = tokensave ]; then
+    good "хуки tokensave в claude/settings.json зовут tokensave из PATH: $(command -v tokensave)"
+    return 0
+  fi
   if [ "$hook_bin" = "$(command -v tokensave)" ]; then
     good "хуки tokensave в claude/settings.json зовут $hook_bin"
     return 0
@@ -641,6 +663,7 @@ externals() {
   say
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
+  command -v node      >/dev/null && good "node $(node --version 2>/dev/null)" || bad "node — не найден: без него хуки и гарды харнесса молча не работают"
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || tokensave_missing
   command -v tokensave >/dev/null && tokensave_hook_check
   tokensave_install_check

@@ -11,7 +11,8 @@ paths:
 - Цели симлинков `install.sh` ↔ зашитые пути у потребителей:
   `~/.local/bin/ragsave` — запускают `ai-hooks/bin/mcp-serve.sh`,
   `ai-hooks/bin/ragsave-sync.sh`; `$RAG_HOME` — `RAGSAVE_HOME` в `bin/ragsave`
-  (и venv, и `PYTHONPATH`, и модели);
+  (и venv, и `PYTHONPATH`, и модели) и `ragsave/ragsave/config.py:RAGSAVE_HOME`
+  (модели и сокет демона);
   `~/.ai-hooks` — пути хуков в `claude/settings.json`, вызов `log-error.sh` в
   `ai-hooks/bin/ragsave-sync.sh`.
   Сменил цель в `install.sh` одну — хуки, MCP и фоновые синки падают молча.
@@ -29,12 +30,14 @@ paths:
   `vscode/keybindings.json` (`ctrl+alt+a`) зовёт
   `~/.ai-hooks/bin/ask-mode.mjs` через `!` Claude Code: переименуешь скрипт —
   сочетание молча сломается.
-- Путь к бинарю tokensave в хуках `claude/settings.json` ↔
-  `install.sh:tokensave_hook_check` и `tokensave doctor`: оба сверяют путь
-  буквально. `tokensave install`/`reinstall` переписывают хуки своим путём.
-  `ai-hooks/bin/mcp-serve.sh` берёт бинарь из PATH (запасной —
-  `/usr/local/bin`): с бинарём вне `/usr/local/bin` MCP работает, а хуки нет —
-  это ловит только `tokensave_hook_check`.
+- Хуки tokensave в `claude/settings.json` — голое `tokensave` в exec-форме
+  (`command` + `args`) ↔ `install.sh:tokensave_hook_check` и `tokensave doctor`.
+  doctor принимает только exec-форму с именем `tokensave`: строку с аргументами
+  он переписывает абсолютным путём, обёртку с другим именем не узнаёт и дописывает
+  рядом свои хуки (проверено на песочном HOME) — оба раза сквозь симлинк в харнесс.
+  `tokensave install`/`reinstall` переписывают хуки абсолютным путём —
+  `tokensave_hook_check` сверяет его с PATH. Claude Code ищет имя в PATH своего
+  процесса: без каталога tokensave в нём хуки молча не стартуют.
 - `install.sh:tokensave_missing` ↔ ключи `last_installed_version` /
   `previous_version` в `~/.tokensave/state.toml`: переименует tokensave — версия
   молча пропадёт из подсказки.
@@ -97,6 +100,12 @@ paths:
   `~/.claude/projects/*/*.jsonl` ↔ `.ragsave-disable` у `ragsave-sync`.
   Claude Code переименует поле — проекты без индекса молча пропадут из отчёта.
   Формулировка `нет индекса:` ↔ repair.md (Projects without an index).
+  Предупреждение `на диске Windows` — только для `cwd` вида `/mnt/<буква>/`:
+  другой automount root в `/etc/wsl.conf` проверка не увидит.
+- `install.sh:is_wsl` ↔ `WSL_DISTRO_NAME` или `/proc/sys/fs/binfmt_misc/WSLInterop[-late]`
+  и `CMD_EXE` (`cmd.exe` из PATH, иначе `/mnt/c/Windows/System32`). Тесты
+  `test-install-check.mjs` держат WSL выключенным только отсутствием `wslpath` в
+  их PATH: добавишь его в `TOOLS` — тест install полезет mklink в настоящий VS Code.
 - Голое имя команды в `mcp/servers.json` (`foo-mcp`) ↔ PATH оболочки,
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь. Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —

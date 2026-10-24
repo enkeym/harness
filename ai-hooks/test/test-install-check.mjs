@@ -244,6 +244,11 @@ check('LOCALS разобран и не смешан с LINKS',
   const sameBin = path.join(same.home, 'path', 'tokensave');
   fs.writeFileSync(path.join(same.harness, 'claude', 'settings.json'), hooks(sameBin));
   check('хуки tokensave зовут найденный бинарь — ✓', same.run().out.includes(`✓ хуки tokensave в claude/settings.json зовут ${sameBin}`), true);
+  const bare = sandbox({ settings: hooks('tokensave'), fakes: ['tokensave'] });
+  const bareRes = bare.run();
+  check('хуки tokensave зовут голое имя — ✓ с путём из PATH, код 0',
+    [bareRes.status, bareRes.out.includes(`✓ хуки tokensave в claude/settings.json зовут tokensave из PATH: ${path.join(bare.home, 'path', 'tokensave')}`)],
+    [0, true]);
 }
 
 {

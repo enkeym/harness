@@ -18,15 +18,18 @@
 ## 1. Установить вручную
 
 - [ ] `git`, `curl`, `jq` (без `jq` не задаётся git-фильтр `nomodel`).
-- [ ] `python3` и `python3-venv` (на Ubuntu `python3 -m venv` без него падает).
+- [ ] `python3` и `python3-venv` (на Ubuntu `python3 -m venv` без него падает;
+      `--venv` проверяет это до сборки).
+- [ ] WSL: проекты — в ФС WSL (`~/…`), не на `/mnt/c`: на диске Windows
+      inotify не видит правок из Windows, а SQLite-индексы ненадёжны
+      (`install.sh` такие назовёт).
 - [ ] nvm и node (сейчас v24) — `nvm install 24 && nvm alias default 24`;
       `~/.bashrc` берёт node по default-алиасу nvm.
 - [ ] Claude Code: установить, запустить `claude` и залогиниться —
       появится `~/.claude.json`, без него MCP-серверы не зарегистрируются.
 - [ ] tokensave — бинарь из релизов
-      <https://github.com/aovestdipaperino/tokensave> в `/usr/local/bin/tokensave`.
-      MCP найдёт его и в другом каталоге PATH, хуки — нет: поправить `command`
-      хуков в `claude/settings.json` (`install.sh --check` назовёт оба пути).
+      <https://github.com/aovestdipaperino/tokensave> в любой каталог PATH
+      (`/usr/local/bin`, `~/.cargo/bin`): хуки и MCP ищут его по имени.
       Версию прежней машины — `previous_version` в её
       `~/.tokensave/state.toml`. **`tokensave install` /
       `reinstall` не запускать**, даже если `tokensave doctor` советует.
@@ -41,7 +44,7 @@
 git clone git@github.com:enkeym/harness.git ~/harness
 cd ~/harness
 ./install.sh            # симлинки, локальные файлы из шаблонов, MCP-серверы
-./install.sh --venv     # venv для ragsave (~250 МБ)
+./install.sh --venv     # venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка)
 tokensave githooks on   # глобальные git-хуки tokensave
 ```
 

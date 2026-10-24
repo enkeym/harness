@@ -294,7 +294,7 @@ ragsave reindex
 | `RAGSAVE_DEVICE`   | `auto` — GPU, если `onnxruntime-gpu` видит CUDA и сессия на ней поднялась, иначе CPU (статус демона показывает фактическое); `cpu`; `cuda` — без живого GPU загрузка падает |
 | `RAGSAVE_IDLE_UNLOAD` | секунд простоя, после которых MCP-сервер выгружает свою модель, а демон выходит (600; 0 — держать) |
 | `RAGSAVE_DAEMON` | `0` — без общего демона: каждый процесс грузит модель сам (отладка) |
-| `RAGSAVE_DAEMON_SOCKET` | сокет демона (`~/.rag-mcp/embed.sock`); рядом `embed.lock` и `daemon.log` |
+| `RAGSAVE_DAEMON_SOCKET` | сокет демона (`$RAGSAVE_HOME/embed.sock`, по умолчанию `~/.rag-mcp`); рядом `embed.lock` и `daemon.log` |
 
 `RAGSAVE_PARALLEL` — data-parallel режим fastembed: пул процессов поднимается
 на весь проход, каждый грузит модель заново. При 24 GB в WSL и MCP-сервере,

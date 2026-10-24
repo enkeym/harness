@@ -1,3 +1,9 @@
+# LF везде: клон через Git for Windows (core.autocrlf=true) получил бы CRLF, и
+# bash ломался бы на каждом .sh и хуке. Двоичные файлы text=auto не трогает.
+* text=auto eol=lf
+# Настройки VS Code пишет сам VS Code в Windows, с CRLF: как есть.
+vscode/*.json -text
+
 # /model пишет "model" в settings.json через симлинк ~/.claude; фильтр nomodel
 # (задаёт install.sh) вырезает ключ, и смена модели не видна git.
 claude/settings.json filter=nomodel

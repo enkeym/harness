@@ -105,9 +105,11 @@ Windows-симлинки через `mklink`. Без прав администр
 - Фоновый синк ragsave без `setsid`/`ionice` идёт под `taskpolicy -b`, бэкапы и
   `/doctor` обходятся без GNU `date`.
 
-Хуки tokensave в `claude/settings.json` зовут `/usr/local/bin/tokensave` —
-так их пишет `tokensave install`, и `tokensave doctor` сверяет именно путь.
-Бинарь в другом месте (Homebrew) — `--check` назовёт оба пути. MCP-сервер
+Хуки tokensave в `claude/settings.json` зовут `tokensave` голым именем в
+exec-форме (`command` + `args`): Claude Code ищет его в PATH, `tokensave doctor`
+такую запись принимает и не переписывает (строковую форму с аргументами он
+«чинит» в абсолютный путь — сквозь симлинк, правкой харнесса). Абсолютный путь
+в хуках оставляет `tokensave install` — `--check` сверит его с PATH. MCP-сервер
 (`ai-hooks/bin/mcp-serve.sh`) берёт tokensave из PATH, `/usr/local/bin` — запасной.
 Бинаря нет — `--check` назовёт релизы и версию, что стояла на машине
 (`~/.tokensave/state.toml`).
