@@ -151,3 +151,17 @@ if [ $? -eq 2 ]; then
     rm -f "$SSH_AUTH_SOCK"
     ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
 fi
+
+# Ручной `tokensave init` / `ragsave init` — решение индексировать проект:
+# второй индекс project-init.sh достраивает в фоне и сам печатает об этом
+# строку. Каталог — последний аргумент-каталог после init, иначе текущий.
+# Тот же код — в shell/zshenv.
+__project_init() {
+  local dir="$PWD" arg
+  shift
+  for arg in "$@"; do [ -d "$arg" ] && dir="$arg"; done
+  [ -x "$HOME/.ai-hooks/bin/project-init.sh" ] && "$HOME/.ai-hooks/bin/project-init.sh" --detach "$dir"
+  return 0
+}
+tokensave() { command tokensave "$@" || return; [ "${1:-}" = init ] && __project_init "$@"; return 0; }
+ragsave() { command ragsave "$@" || return; [ "${1:-}" = init ] && __project_init "$@"; return 0; }

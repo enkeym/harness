@@ -66,7 +66,7 @@ claude/tool-args.mjs            # адаптер Claude: PreToolUse(tokensave_re
 claude/ask-guard.mjs            # адаптер Claude: PreToolUse(*) — запрет изменений в ask mode
 claude/ask-reminder.mjs         # правило ask mode в промпт (UserPromptSubmit)
 claude/statusline.mjs           # каталог, ветка, модель, ctx, цена /model, индикатор ask mode
-claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI (SessionStart)
+claude/project-bootstrap.mjs    # чего не хватает проекту: CLAUDE.md, husky, CI; один индекс → project-init (SessionStart)
 claude/usage-log.mjs            # токены, стоимость, инструменты, скиллы по сессии → logs/usage.jsonl (Stop)
 context-core.mjs                # замер занятости окна, пороги в токенах и их тексты
 claude/context-meter.mjs        # порог на ходу пользователя (UserPromptSubmit)
@@ -110,7 +110,7 @@ test/test-statusline.mjs        # статусная строка: ~, ветка
 test/env-isolate.mjs            # первым импортом в тестах хуков: журналы, состояние, TMPDIR и git-хуки в temp, удаляется при выходе
 test/test-links-context.mjs     # пункты с файлом/каталогом/глобом, счётчик, указатель, раз на сессию; чтение молчит
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
-test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore
+test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore, вызов project-init при одном индексе
 test/test-resume-hint.mjs       # цепочка передач до последнего звена; последнее звено, отказ без звена, промпт после передачи, чужой slug — молчат
 test/test-security.mjs          # что deny, что ask (push), что проходит молча
 test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вопросы, вставки), промпт человека в транскрипте, ask → allow через dispatch
@@ -195,11 +195,21 @@ tokensave такого скрипта не требует: его сервер
 Адаптеры не содержат логики — только перевод формата хука в вызов
 `guard-core`. Меняешь правило — меняешь `guard-core.mjs`.
 
-## Индексация только ручная
+## Индексацию начинает человек
 
-`ragsave-sync.sh` поддерживает **уже существующий** индекс. Первичный
-`tokensave init` / `ragsave init` не запускает никто, кроме человека, и каталоги
-`.tokensave` / `.ragsave` хуки не создают.
+`ragsave-sync.sh` поддерживает **уже существующий** индекс. Первый
+`tokensave init` или `ragsave init` запускает только человек: проект без индекса
+хуки не индексируют.
+
+Один init — уже решение, второй индекс достраивает `bin/project-init.sh`
+в фоне. Зовут его обёртки `tokensave`/`ragsave` из `shell/bashrc` и
+`shell/zshenv` сразу после успешного `init` (каталог — последний
+аргумент-каталог, иначе `$PWD`) и `claude/project-bootstrap.mjs` на SessionStart, если
+индекс ровно один — страховка для init мимо обёртки и прогона,
+оборванного выключением WSL. Проект с tokensave и `.ragsave-disable` достраивать
+нечего. Ход — `logs/project-init.log`, сбои — `errors.log`. Карту связей и CLAUDE.md
+скрипт не пишет: на них нужен агент, project-bootstrap предлагает оба в первую
+сессию.
 
 Автоматический init нельзя было отменить и он не отличал проект от контейнера:
 `~/main` — сам git-репозиторий с вложенными проектами, и сессия, открытая в нём,
@@ -529,8 +539,11 @@ husky, CI и dependabot для GitHub-remote,
 скилл `hooks-guards`: каждый пропуск предлагается одной строкой в первом
 ответе (для карты — `/impact-map`), сам агент ничего не создаёт.
 Про husky/CI/карту хук напоминает раз в неделю на проект (метки в
-`~/.claude/state/bootstrap/`), про CLAUDE.md — один раз на проект, и только
-в проекте с индексом (момент инициализации); метка постоянная.
+`~/.claude/state/bootstrap/`). Первая сессия с индексом (момент инициализации)
+получает один пункт с обоими пропусками — CLAUDE.md и карта, метка постоянная;
+неделя до напоминания про карту отсчитывается от неё. При ровно одном индексе
+хук ещё запускает `bin/project-init.sh --detach <корень>` (см. «Индексацию
+начинает человек»).
 
 Отсутствие бывает осознанным. `<проект>/.claude/bootstrap-ignore` перечисляет
 по строке на пункт (`husky`, `ci`, `dependabot`, `impact-map`, `#` —
@@ -914,3 +927,6 @@ node ~/.ai-hooks/test/test-statusline.mjs
 `test/fixtures/`: `fake-tokensave.mjs` и `fake-ragsave.mjs` отвечают на поиск
 seed-impact-map, `fake-indexer.mjs` записывает вызовы фоновых синков,
 `fake-init.mjs` — вызовы project-init под именем симлинка и создаёт БД индекса.
+`AI_HOOKS_PROJECT_INIT_CMD` — скрипт, который зовёт project-bootstrap (по умолчанию
+`~/.ai-hooks/bin/project-init.sh`); `env-isolate.mjs` ставит его несуществующим, иначе
+любой тест с настоящим HOME запустил бы настоящий init.

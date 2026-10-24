@@ -392,8 +392,8 @@ function macSandbox() {
   project('home', [], sb.home);
   const out = sb.run().out;
   const line = (name) => out.split('\n').find((l) => l.includes(`${sb.target(name)} — нет индекса`)) ?? '';
-  check('--check называет git-проекты сессий без индекса и команду на каждый',
-    [line('bare').endsWith(`нет индекса: tokensave init ${sb.target('bare')}; cd ${sb.target('bare')} && ragsave init`),
+  check('--check называет git-проекты сессий без индекса и одну команду на каждый',
+    [line('bare').endsWith(`нет индекса: tokensave init ${sb.target('bare')}`),
       line('ragonly').endsWith(`нет индекса: tokensave init ${sb.target('ragonly')}`),
       line('tsonly'), line('full'), line('nogit'), out.includes(`${sb.home} — нет индекса`), out.includes(summary(ALL, 0, 0))],
     [true, true, '', '', '', false, true]);

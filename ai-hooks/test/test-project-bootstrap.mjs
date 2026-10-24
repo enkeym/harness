@@ -2,6 +2,7 @@
 // Тест SessionStart-хука project-bootstrap: пустой node-репозиторий с GitHub
 // remote даёт полный список пропусков, вне репозитория хук молчит,
 // а недельная метка не мешает первому напоминанию (каталог метки временный).
+// При одном индексе хук зовёт project-init.sh --detach — вместо него фейк.
 
 import './env-isolate.mjs';
 import { execFileSync } from 'node:child_process';
@@ -12,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SCRIPT = path.join(ROOT, 'claude', 'project-bootstrap.mjs');
+const FAKE_INIT = path.join(ROOT, 'test', 'fixtures', 'fake-indexer.mjs');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bootstrap-test-'));
 const repo = path.join(tmp, 'repo');
@@ -21,11 +23,11 @@ execFileSync('git', ['-C', repo, 'remote', 'add', 'origin', 'https://github.com/
 fs.writeFileSync(path.join(repo, 'package.json'), '{}');
 fs.writeFileSync(path.join(repo, '.env'), 'A=1\n');
 
-function run(cwd) {
+function run(cwd, env = {}) {
   const out = execFileSync('node', [SCRIPT], {
     input: JSON.stringify({ session_id: 't', cwd, hook_event_name: 'SessionStart', source: 'startup' }),
     encoding: 'utf8',
-    env: { ...process.env, HOME: tmp, AI_HOOKS_STATE_DIR: '' },  // недельная метка — под HOME песочницы
+    env: { ...process.env, HOME: tmp, AI_HOOKS_STATE_DIR: '', ...env },  // недельная метка — под HOME песочницы
   });
   return out.trim() ? JSON.parse(out).hookSpecificOutput.additionalContext : null;
 }
@@ -60,7 +62,10 @@ const fresh = path.join(tmp, 'fresh');
 fs.mkdirSync(path.join(fresh, '.tokensave'), { recursive: true });
 execFileSync('git', ['-C', fresh, 'init', '-q']);
 fs.writeFileSync(path.join(fresh, '.tokensave', 'tokensave.db'), '');
-check('индекс без CLAUDE.md: говорит', /CLAUDE\.md/.test(run(fresh) || ''));
+const freshFirst = run(fresh) || '';
+check('первая сессия: CLAUDE.md и /impact-map одним пунктом',
+  /just indexed: [^;]*CLAUDE\.md[^;]*\/impact-map/.test(freshFirst), freshFirst);
+check('первая сессия: недельного пункта карты нет', freshFirst.split('impact-map').length === 2, freshFirst);
 check('повтор: CLAUDE.md молчит насовсем', !/CLAUDE\.md/.test(run(fresh) || ''));
 fs.rmSync(fresh, { recursive: true, force: true });
 
@@ -88,6 +93,32 @@ resetWeekly();
 fs.mkdirSync(path.join(indexed, '.claude'));
 fs.writeFileSync(path.join(indexed, '.claude', 'bootstrap-ignore'), 'impact-map\n');
 check('bootstrap-ignore: про карту молчит', run(indexed) === null);
+
+// Достройка второго индекса. Фейк уходит в фон: сначала случаи без вызова,
+// последним — с вызовом; в файле вызовов должна оказаться только его строка.
+const calls = path.join(tmp, 'init-calls');
+const fakeEnv = { AI_HOOKS_PROJECT_INIT_CMD: FAKE_INIT, FAKE_INDEXER_CALLS: calls };
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function indexedRepo(name, dbs) {
+  const dir = path.join(tmp, name);
+  fs.mkdirSync(dir);
+  execFileSync('git', ['-C', dir, 'init', '-q']);
+  for (const db of dbs) {
+    fs.mkdirSync(path.join(dir, path.dirname(db)), { recursive: true });
+    fs.writeFileSync(path.join(dir, db), '');
+  }
+  return execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+}
+run(indexedRepo('none', []), fakeEnv);
+run(indexedRepo('both', ['.tokensave/tokensave.db', '.ragsave/rag.db']), fakeEnv);
+run(indexedRepo('disabled', ['.tokensave/tokensave.db', '.ragsave-disable']), fakeEnv);
+const one = indexedRepo('one', ['.ragsave/rag.db']);
+run(one, fakeEnv);
+for (let i = 0; i < 50 && !fs.existsSync(calls); i++) sleep(100);
+sleep(300);  // время на лишний вызов, если он был
+const lines = fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [];
+check('один индекс: project-init --detach <корень>; оба, ни одного, .ragsave-disable — без вызова',
+  lines.length === 1 && lines[0] === JSON.stringify(['--detach', one]), lines.join(' | '));
 
 fs.rmSync(tmp, { recursive: true, force: true });
 process.stdout.write(failed ? `\n${failed} FAIL\n` : '\nвсе проверки прошли\n');

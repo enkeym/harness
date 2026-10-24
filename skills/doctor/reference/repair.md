@@ -50,8 +50,9 @@ a harness target or in the VS Code folder, as `<path> — бэкап старш�
 ## Projects without an index
 
 `--check` names each git project with Claude sessions that lacks `.tokensave/`
-or `.ragsave/rag.db`, as `<path> — нет индекса: <commands>`. Creating an index
-is the user's call: `AskUserQuestion` per project — run the named commands
+or `.ragsave/rag.db`, as `<path> — нет индекса: <command>`. Creating an index
+is the user's call: `AskUserQuestion` per project — run the named command
 (recommended), turn ragsave off with an empty `.ragsave-disable` in the
-project root, or leave it. Run the commands after the answer with
-`run_in_background: true` — a large project takes minutes.
+project root, or leave it. Run the command after the answer with
+`run_in_background: true` — a large project takes minutes. One init is
+enough: `project-init.sh` builds the other index in the background.

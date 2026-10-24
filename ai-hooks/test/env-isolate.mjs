@@ -27,6 +27,10 @@ const gitConfigs = Number(process.env.GIT_CONFIG_COUNT) || 0;
 process.env[`GIT_CONFIG_KEY_${gitConfigs}`] = 'core.hooksPath';
 process.env[`GIT_CONFIG_VALUE_${gitConfigs}`] = path.join(dir, 'git-hooks');
 process.env.GIT_CONFIG_COUNT = String(gitConfigs + 1);
+// project-bootstrap при одном индексе запускает ~/.ai-hooks/bin/project-init.sh,
+// а тот — настоящие tokensave и ragsave init. Пути нет: тест со своим фейком
+// задаёт его сам.
+process.env.AI_HOOKS_PROJECT_INIT_CMD = path.join(dir, 'no-project-init');
 // Сессия живого Claude Code, из которого запущен тест: иначе ask-mode.mjs
 // в тестах писал бы режим под её session_id, а не под ключ теста.
 delete process.env.CLAUDE_CODE_SESSION_ID;

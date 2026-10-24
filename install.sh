@@ -353,7 +353,8 @@ backups_check() {
 # без .tokensave/ и .ragsave/, а хуки сами индекс не создают. Путь — из поля cwd
 # транскрипта: имя каталога в ~/.claude/projects не раскодируется (любой
 # не алфанумерик → -). Только git-репозитории кроме $HOME; .ragsave-disable снимает
-# ragsave. Индекс создаёт пользователь — отчёт без счёта в drift.
+# ragsave. Индекс создаёт пользователь — отчёт без счёта в drift. Команда одна:
+# второй индекс достраивает bin/project-init.sh (обёртки shell, SessionStart).
 projects_check() {
   local d t cwd need n=0
   for d in "$HOME/.claude/projects"/*/; do
@@ -367,12 +368,12 @@ projects_check() {
     [ -n "$cwd" ] && [ "$cwd" != "$HOME" ] && [ -e "$cwd/.git" ] || continue
     need=""
     [ -d "$cwd/.tokensave" ] || need="tokensave init $cwd"
-    [ -f "$cwd/.ragsave/rag.db" ] || [ -e "$cwd/.ragsave-disable" ] || need="${need:+$need; }cd $cwd && ragsave init"
+    [ -n "$need" ] || [ -f "$cwd/.ragsave/rag.db" ] || [ -e "$cwd/.ragsave-disable" ] || need="cd $cwd && ragsave init"
     [ -n "$need" ] || continue
     warn "$cwd — нет индекса: $need"
     n=$((n + 1))
   done
-  [ "$n" -eq 0 ] || warn "проекты без индекса — /doctor предложит команды, индекс создаёт пользователь"
+  [ "$n" -eq 0 ] || warn "проекты без индекса — /doctor предложит команды, индекс создаёт пользователь, второй достроится сам"
 }
 
 build_venv() {

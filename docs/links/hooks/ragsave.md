@@ -3,6 +3,8 @@ paths:
   - "ragsave/ragsave/**"
   - "ai-hooks/bin/ragsave-sync.sh"
   - "ai-hooks/bin/project-init.sh"
+  - "shell/bashrc"
+  - "shell/zshenv"
   - "ai-hooks/bin/background.sh"
   - "ai-hooks/bin/log-error.sh"
 ---
@@ -31,6 +33,14 @@ paths:
   `.ragsave-disable` в `ai-hooks/bin/project-init.sh` ↔ `ai-hooks/links-core.mjs:hasIndex`
   и `ai-hooks/bin/ragsave-sync.sh`. tokensave сменил имя метки — оборванный
   init больше не долечивается достройкой.
+- Кто зовёт достройку — путь `~/.ai-hooks/bin/project-init.sh` и флаг `--detach` в
+  `__project_init` (обёртки `tokensave`/`ragsave`, один и тот же код в `shell/bashrc` и
+  `shell/zshenv`) и в `ai-hooks/claude/project-bootstrap.mjs:completeIndex` (та же пара
+  «ровно один индекс», что `need_ts`/`need_rag` скрипта) ↔ `install.sh:projects_check`
+  и `skills/doctor/reference/repair.md`, называющие один init. Переименовал скрипт или флаг —
+  второй индекс молча не строится, а doctor всё равно называет одну команду.
+  Фейк в тестах — `AI_HOOKS_PROJECT_INIT_CMD`, `ai-hooks/test/env-isolate.mjs` ставит его
+  несуществующим: уберёшь — тесты с настоящим HOME запустят настоящий init.
 - Демон поднимает только `ragsave/ragsave/embedder.py:Embedder.embed_query`
   (`start=True`), поток синка — нет ↔ `nice -n 19` в `ai-hooks/bin/ragsave-sync.sh`.
   Дал синку поднимать демон — демон и весь поиск живут под `nice 19`.
