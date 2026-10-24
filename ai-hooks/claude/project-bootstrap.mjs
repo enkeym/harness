@@ -12,9 +12,9 @@
 //
 // Отсутствие бывает осознанным: проект может не хотеть CLAUDE.md или husky.
 // Тогда `.claude/bootstrap-ignore` в корне перечисляет по строке на пункт
-// (`claude-md`, `husky`, `ci`, `dependabot`, `impact-map`),
-// и о них хук молчит. Без этого напоминание про намеренно удалённый файл
-// превращается в постоянный шум, ради устранения которого хук и писался.
+// (`husky`, `ci`, `dependabot`, `impact-map`), и о них хук молчит. Без этого
+// недельное напоминание про намеренно отсутствующее превращается в шум.
+// CLAUDE.md в список не входит: он и так выдаётся один раз.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -91,7 +91,7 @@ export function bootstrapContext(cwd) {
   const always = [];
   const weekly = [];
 
-  if (!ignored.has('claude-md') && hasIndex(root) && !exists(root, 'CLAUDE.md') && firstTime(root, 'init')) {
+  if (hasIndex(root) && !exists(root, 'CLAUDE.md') && firstTime(root, 'init')) {
     always.push('проект только что проиндексирован, CLAUDE.md проекта нет');
   }
 

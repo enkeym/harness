@@ -62,10 +62,6 @@ execFileSync('git', ['-C', fresh, 'init', '-q']);
 fs.writeFileSync(path.join(fresh, '.tokensave', 'tokensave.db'), '');
 check('индекс без CLAUDE.md: говорит', /CLAUDE\.md/.test(run(fresh) || ''));
 check('повтор: CLAUDE.md молчит насовсем', !/CLAUDE\.md/.test(run(fresh) || ''));
-resetWeekly();
-fs.mkdirSync(path.join(fresh, '.claude'));
-fs.writeFileSync(path.join(fresh, '.claude', 'bootstrap-ignore'), 'claude-md\n');
-check('bootstrap-ignore: про CLAUDE.md молчит', !/CLAUDE\.md/.test(run(fresh) || ''));
 fs.rmSync(fresh, { recursive: true, force: true });
 
 // Индекс есть, карты нет — напоминание о /impact-map, раз в неделю.
