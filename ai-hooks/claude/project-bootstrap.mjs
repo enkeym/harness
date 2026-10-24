@@ -7,7 +7,8 @@
 // Что с этим делать — решает скилл hooks-guards, хук только сообщает факты.
 // Молчит вне репозитория, в $HOME и в конфигах агентов. Про CI, husky и карту
 // напоминает не чаще раза в неделю на проект (иначе подсказка станет фоном);
-// про CLAUDE.md — каждый раз, пока файла нет.
+// про CLAUDE.md — один раз на проект и только в проекте с индексом (момент
+// инициализации tokensave/ragsave), метка постоянная.
 //
 // Отсутствие бывает осознанным: проект может не хотеть CLAUDE.md или husky.
 // Тогда `.claude/bootstrap-ignore` в корне перечисляет по строке на пункт
@@ -68,6 +69,17 @@ function remindedRecently(root) {
   return false;
 }
 
+// Постоянная метка: пункт выдаётся один раз на проект, без срока давности.
+function firstTime(root, kind) {
+  const file = path.join(STATE_DIR, `${kind}-${projectKey(root)}`);
+  if (fs.existsSync(file)) return false;
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(file, new Date().toISOString());
+  } catch { /* без метки напомним ещё раз — не страшно */ }
+  return true;
+}
+
 export function bootstrapContext(cwd) {
   const start = path.resolve(cwd || process.cwd());
   if (start === HOME || isHarnessConfigPath(start)) return null;
@@ -79,7 +91,9 @@ export function bootstrapContext(cwd) {
   const always = [];
   const weekly = [];
 
-  if (!ignored.has('claude-md') && !exists(root, 'CLAUDE.md')) always.push('нет CLAUDE.md проекта');
+  if (!ignored.has('claude-md') && hasIndex(root) && !exists(root, 'CLAUDE.md') && firstTime(root, 'init')) {
+    always.push('проект только что проиндексирован, CLAUDE.md проекта нет');
+  }
 
   if (isNode) {
     if (!ignored.has('husky') && !exists(root, '.husky')) weekly.push('нет husky (pre-commit: lint-staged + tsc)');

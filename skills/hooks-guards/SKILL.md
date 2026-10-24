@@ -116,8 +116,8 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   domain's `paths:`), each once per session, plus "N more items"; none → one pointer line.
   Check the edit against them, add the missing link there. A slice only: the impact pass
   before the commit reads the whole domain and `INDEX.md` (a domain without `paths:`).
-- `project-bootstrap` reports a missing project `CLAUDE.md`, husky, CI, dependabot, or an impact
-  map in an indexed project: offer in one line in the first reply (`/impact-map` for the map).
+- `project-bootstrap` reports husky, CI, dependabot, an impact map, and once per indexed project a
+  missing `CLAUDE.md`: offer in one line in the first reply (`/impact-map` for the map).
   Silent hook = deliberate skip (`<project>/.claude/bootstrap-ignore`).
 
 ## When something is broken

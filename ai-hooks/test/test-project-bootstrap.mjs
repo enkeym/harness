@@ -40,7 +40,7 @@ const check = (name, ok, detail = '') => {
 const resetWeekly = () => fs.rmSync(path.join(tmp, '.claude', 'state', 'bootstrap'), { recursive: true, force: true });
 
 const first = run(repo) || '';
-check('нет CLAUDE.md', /CLAUDE\.md/.test(first), first);
+check('без индекса: про CLAUDE.md молчит', !/CLAUDE\.md/.test(first), first);
 check('без индекса: про карту связей молчит', !/impact-map/.test(first));
 check('.env без примера не упоминается', !/\.env/.test(first), first);
 check('нет husky', /husky/.test(first));
@@ -48,21 +48,25 @@ check('нет CI для GitHub', /workflows/.test(first));
 check('нет dependabot', /dependabot/.test(first));
 
 const second = run(repo) || '';
-check('повтор: CLAUDE.md напоминается снова', /CLAUDE\.md/.test(second));
 check('повтор: husky/CI молчат неделю', !/husky|workflows/.test(second), second);
 
 fs.writeFileSync(path.join(repo, 'CLAUDE.md'), '# x');
 check('всё на месте: хук молчит', run(repo) === null);
 
-// Осознанный отказ: удалённый CLAUDE.md не должен напоминать о себе вечно.
-fs.rmSync(path.join(repo, 'CLAUDE.md'));
-check('CLAUDE.md удалён — хук говорит', /CLAUDE\.md/.test(run(repo) || ''));
-
-fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
-fs.writeFileSync(path.join(repo, '.claude', 'bootstrap-ignore'), '# осознанно\nclaude-md\n');
-check('bootstrap-ignore: про CLAUDE.md молчит', run(repo) === null);
-
 check('вне репозитория: молчит', run(tmp) === null);
+
+// Инициализация: индекс появился, CLAUDE.md нет — один раз на проект, дальше молчит.
+const fresh = path.join(tmp, 'fresh');
+fs.mkdirSync(path.join(fresh, '.tokensave'), { recursive: true });
+execFileSync('git', ['-C', fresh, 'init', '-q']);
+fs.writeFileSync(path.join(fresh, '.tokensave', 'tokensave.db'), '');
+check('индекс без CLAUDE.md: говорит', /CLAUDE\.md/.test(run(fresh) || ''));
+check('повтор: CLAUDE.md молчит насовсем', !/CLAUDE\.md/.test(run(fresh) || ''));
+resetWeekly();
+fs.mkdirSync(path.join(fresh, '.claude'));
+fs.writeFileSync(path.join(fresh, '.claude', 'bootstrap-ignore'), 'claude-md\n');
+check('bootstrap-ignore: про CLAUDE.md молчит', !/CLAUDE\.md/.test(run(fresh) || ''));
+fs.rmSync(fresh, { recursive: true, force: true });
 
 // Индекс есть, карты нет — напоминание о /impact-map, раз в неделю.
 const indexed = path.join(tmp, 'indexed');
