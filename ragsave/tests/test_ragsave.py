@@ -1438,19 +1438,31 @@ def test_progress_bar() -> None:
 
 
 def test_device() -> None:
-    from ragsave.embedder import _use_cuda
+    from types import SimpleNamespace
+
+    from ragsave import embedder
+    from ragsave.embedder import Embedder, _use_cuda
 
     print("\n--- выбор GPU/CPU ---")
 
     class FakeOrt:
-        def __init__(self, providers: list[str]) -> None:
-            self.providers, self.preloaded = providers, 0
+        def __init__(self, providers: list[str], broken: bool = False) -> None:
+            self.providers, self.preloaded, self.broken = providers, 0, broken
 
         def get_available_providers(self) -> list[str]:
             return self.providers
 
         def preload_dlls(self) -> None:
             self.preloaded += 1
+            if self.broken:
+                raise OSError("libcudnn.so.9: cannot open shared object file")
+
+    def raises(fn) -> bool:
+        try:
+            fn()
+        except RuntimeError:
+            return True
+        return False
 
     gpu, cpu = ["CUDAExecutionProvider", "CPUExecutionProvider"], ["CPUExecutionProvider"]
     original = config.EMBED_DEVICE
@@ -1462,6 +1474,7 @@ def test_device() -> None:
         ort = FakeOrt(cpu)
         check("auto без CUDA — CPU", _use_cuda(ort), False)
         check("без CUDA библиотеки не грузятся", ort.preloaded, 0)
+        check("auto: preload_dlls упал — CPU, не падение", _use_cuda(FakeOrt(gpu, broken=True)), False)
 
         config.EMBED_DEVICE = "cpu"
         ort = FakeOrt(gpu)
@@ -1469,13 +1482,48 @@ def test_device() -> None:
         check("cpu не трогает CUDA-библиотеки", ort.preloaded, 0)
 
         config.EMBED_DEVICE = "cuda"
-        try:
-            _use_cuda(FakeOrt(cpu))
-            raised = False
-        except RuntimeError:
-            raised = True
-        check_true("cuda без CUDA падает, а не уходит на CPU", raised)
+        check_true("cuda без CUDA падает, а не уходит на CPU",
+                   raises(lambda: _use_cuda(FakeOrt(cpu))))
+        check_true("cuda: preload_dlls упал — падение",
+                   raises(lambda: _use_cuda(FakeOrt(gpu, broken=True))))
     finally:
+        config.EMBED_DEVICE = original
+
+    # CUDA в сборке есть, но сессия села на CPU (мёртвый драйвер): устройство —
+    # по сессии, а не по запрошенному.
+    def fake_model(providers: list[str] | None):
+        session = None if providers is None else SimpleNamespace(get_providers=lambda: providers)
+        return SimpleNamespace(model=SimpleNamespace(model=session))
+
+    saved = (embedder._import_onnxruntime_quietly, embedder._use_cuda)
+    import fastembed
+    saved_te = fastembed.TextEmbedding
+    try:
+        embedder._import_onnxruntime_quietly = lambda: None
+        embedder._use_cuda = lambda ort: True
+        session_providers: list = [cpu]
+        fastembed.TextEmbedding = lambda **kwargs: fake_model(session_providers[0])
+
+        config.EMBED_DEVICE = "auto"
+        enc = Embedder(use_daemon=False)
+        enc.warmup()
+        check("auto: сессия на CPU — device cpu", enc.device, "cpu")
+        session_providers[0] = gpu
+        enc = Embedder(use_daemon=False)
+        enc.warmup()
+        check("auto: сессия на GPU — device cuda", enc.device, "cuda")
+        session_providers[0] = None
+        enc = Embedder(use_daemon=False)
+        enc.warmup()
+        check("сессии не видно — по запрошенному", enc.device, "cuda")
+
+        config.EMBED_DEVICE = "cuda"
+        session_providers[0] = cpu
+        check_true("cuda: сессия на CPU — падение",
+                   raises(lambda: Embedder(use_daemon=False).warmup()))
+    finally:
+        embedder._import_onnxruntime_quietly, embedder._use_cuda = saved
+        fastembed.TextEmbedding = saved_te
         config.EMBED_DEVICE = original
 
 

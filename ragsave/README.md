@@ -291,7 +291,7 @@ ragsave reindex
 | `RAGSAVE_BATCH`    | фрагментов на вызов модели (32)                              |
 | `RAGSAVE_PARALLEL` | процессов-воркеров модели; каждый держит свою копию (~3 GB) |
 | `RAGSAVE_THREADS`  | потоков ONNX в одной инференции (по умолчанию решает ORT)   |
-| `RAGSAVE_DEVICE`   | `auto` — GPU, если `onnxruntime-gpu` видит CUDA, иначе CPU; `cpu`; `cuda` — без GPU загрузка падает |
+| `RAGSAVE_DEVICE`   | `auto` — GPU, если `onnxruntime-gpu` видит CUDA и сессия на ней поднялась, иначе CPU (статус демона показывает фактическое); `cpu`; `cuda` — без живого GPU загрузка падает |
 | `RAGSAVE_IDLE_UNLOAD` | секунд простоя, после которых MCP-сервер выгружает свою модель, а демон выходит (600; 0 — держать) |
 | `RAGSAVE_DAEMON` | `0` — без общего демона: каждый процесс грузит модель сам (отладка) |
 | `RAGSAVE_DAEMON_SOCKET` | сокет демона (`~/.rag-mcp/embed.sock`); рядом `embed.lock` и `daemon.log` |

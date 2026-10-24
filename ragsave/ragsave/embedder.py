@@ -47,7 +47,9 @@ def _use_cuda(ort) -> bool:
     """Считать ли на GPU — по config.EMBED_DEVICE и провайдерам onnxruntime.
 
     CUDA-библиотеки onnxruntime-gpu ставит pip-пакетами nvidia-*, вне путей
-    загрузчика: без preload_dlls сессия молча откатывается на CPU.
+    загрузчика: без preload_dlls сессия молча откатывается на CPU. Провайдер
+    в списке значит только сборку onnxruntime-gpu — живой ли GPU, скажет
+    сессия (_session_device).
     """
     if config.EMBED_DEVICE == "cpu":
         return False
@@ -57,8 +59,29 @@ def _use_cuda(ort) -> bool:
                 "RAGSAVE_DEVICE=cuda, но onnxruntime без CUDA: нужен onnxruntime-gpu"
             )
         return False
-    ort.preload_dlls()
+    try:
+        ort.preload_dlls()
+    except (OSError, RuntimeError) as exc:
+        if config.EMBED_DEVICE == "cuda":
+            raise RuntimeError(
+                f"RAGSAVE_DEVICE=cuda, но CUDA-библиотеки не загрузились: {exc}"
+            ) from exc
+        return False
     return True
+
+
+def _session_device(model, requested: str) -> str:
+    """Где на деле считает загруженная модель — по провайдерам её сессии ONNX.
+
+    fastembed при мёртвом драйвере или чужой версии CUDA лишь печатает warning
+    и уходит на CPU. Сессия лежит в TextEmbedding.model.model; не нашлась
+    (другая версия fastembed, ленивая загрузка) — считаем по запрошенному.
+    """
+    session = getattr(getattr(model, "model", None), "model", None)
+    get_providers = getattr(session, "get_providers", None)
+    if get_providers is None:
+        return requested
+    return "cuda" if "CUDAExecutionProvider" in get_providers() else "cpu"
 
 
 class Embedder:
@@ -108,7 +131,12 @@ class Embedder:
                 threads=config.EMBED_THREADS,
                 cuda=cuda,
             )
-        self.device = "cuda" if cuda else "cpu"
+        self.device = _session_device(model, "cuda" if cuda else "cpu")
+        if config.EMBED_DEVICE == "cuda" and self.device != "cuda":
+            raise RuntimeError(
+                "RAGSAVE_DEVICE=cuda, но сессия ONNX ушла на CPU: драйвер или "
+                "версия CUDA не подходят onnxruntime-gpu"
+            )
         return model
 
     def _ensure(self):
