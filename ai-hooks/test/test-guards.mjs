@@ -172,6 +172,14 @@ bash('jq по .json из индекса → deny', 'deny', 'jq . client/src/data
 bash('jq по не-json файлу → deny', 'deny', 'jq -R . client/src/App.tsx');
 bash('jq -n без файлов → allow', 'allow', "jq -n '1 + 1'");
 
+// ---- cd в цепочке меняет каталог; glob раскрывается в файлы ----
+bash('cd в подкаталог && cat относительного файла → deny', 'deny', 'cd client && cat src/App.tsx');
+bash('cat по glob → deny', 'deny', 'cat client/src/*.tsx');
+bash('cd && cat по glob → deny', 'deny', 'cd client/src && cat *.tsx');
+bash('cd && ls по glob → allow', 'allow', 'cd client && ls src/*.tsx');
+bash('glob без совпадений → allow', 'allow', 'cat client/src/*.nomatch');
+bash('cd в вычисляемый путь — каталог прежний → allow', 'allow', 'cd "$D" && cat App.tsx');
+
 // ---- текст отказа называет инструмент, который пройдёт ----
 const why = (command) => guardBash(command, PROJECT, CLAUDE_LABELS) || '';
 check('cat файла из индекса → tokensave_read', /tokensave_read/.test(why('cat client/src/App.tsx')), true);

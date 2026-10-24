@@ -190,6 +190,30 @@ function pathCandidates(text) {
   return new Set(String(text).match(/[\w@.\-/\\]*\.\w+/g) || []);
 }
 
+// Слова с `*`/`?` в последнем компоненте пути раскрываются в файлы каталога:
+// `cat dto/*.ts` читает файлы, а regexp пути видит в нём только `.ts`.
+function globFiles(toks, cwd) {
+  const out = [];
+  for (const t of toks) {
+    const base = path.basename(t);
+    if (!/[*?]/.test(base) || /[*?[]/.test(path.dirname(t))) continue;
+    const re = new RegExp(`^${base.replace(/[.+^${}()|\\[\]]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`);
+    const dir = path.resolve(cwd || process.cwd(), path.dirname(t));
+    try {
+      for (const name of fs.readdirSync(dir)) if (re.test(name) && !name.startsWith('.')) out.push(path.join(path.dirname(t), name));
+    } catch { /* каталога нет */ }
+  }
+  return out;
+}
+
+// Каталог следующих сегментов цепочки после `cd <литерал>`; вычисляемый путь
+// (`$x`, подстановка, glob) оставляет прежний — fail-open, как весь гард.
+function cdTarget(toks, cwd) {
+  const arg = toks.slice(commandIndex(toks) + 1).find((t) => t !== '--' && !/^-[LP]+$/.test(t));
+  if (!arg || /[$`*?[]/.test(arg.replace(/^\$\{?HOME\}?(?=\/|$)/, ''))) return cwd;
+  return path.resolve(cwd || process.cwd(), arg.replace(/^(~|\$\{?HOME\}?)(?=\/|$)/, HOME));
+}
+
 function isFile(cwd, p) {
   try {
     return fs.statSync(path.resolve(cwd || process.cwd(), p)).isFile();
@@ -382,8 +406,10 @@ function cdIntoTranscripts(toks, cwd) {
 // Возвращает причину запрета или null. Любая неожиданность → null (fail-open).
 // keepHeredoc: тело `node <<EOF … EOF` — часть сегмента интерпретатора, иначе
 // путь внутри него распадался бы на безобидные строки.
-export function guardBash(command, cwd, labels) {
+export function guardBash(command, startCwd, labels) {
   if (!command) return null;
+  // cwd меняют `cd`/`pushd` в цепочке: `cd server/src && cat dto/a.ts` читает файл проекта.
+  let cwd = startCwd;
   try {
     if (HOOK_OFF_RE.test(command)) return grepReason('Turning the tokensave hook off through `TOKENSAVE_DISABLE_GREP_HOOK`');
 
@@ -391,6 +417,7 @@ export function guardBash(command, cwd, labels) {
       const toks = tokenize(seg);
       const cmd = baseCommand(commandName(toks));
       if ((cmd === 'cd' || cmd === 'pushd') && cdIntoTranscripts(toks, cwd)) return transcriptsReason();
+      if (cmd === 'cd' || cmd === 'pushd') cwd = cdTarget(toks, cwd);
 
       const body = shellBody(cmd, toks, seg);
       const inner = body && guardBash(body, cwd, labels);
@@ -415,7 +442,7 @@ export function guardBash(command, cwd, labels) {
       const diffsNull = (cmd === 'diff' || (toks[sub] === 'diff' && toks.includes('--no-index'))) && toks.includes('/dev/null');
       const grepped = GREP_CMDS.has(cmd) ? grepPrintedFiles(toks) : null;
       if (READ_CMDS.has(cmd) || (FILTER_CMDS.has(cmd) && !inPlace) || diffsNull || grepped) {
-        const hit = [...(grepped ?? pathCandidates(seg))].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
+        const hit = [...(grepped ?? [...pathCandidates(seg), ...globFiles(toks, cwd)])].find((c) => isFile(cwd, c) && !isScratch(cwd, c));
         if (hit) return readReason(hit, fileTools(cwd, hit, labels));
       }
 
