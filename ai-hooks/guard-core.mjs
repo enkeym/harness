@@ -385,7 +385,7 @@ function cdIntoTranscripts(toks, cwd) {
 export function guardBash(command, cwd, labels) {
   if (!command) return null;
   try {
-    if (HOOK_OFF_RE.test(command)) return grepReason('снятие хука tokensave через `TOKENSAVE_DISABLE_GREP_HOOK`');
+    if (HOOK_OFF_RE.test(command)) return grepReason('Turning the tokensave hook off through `TOKENSAVE_DISABLE_GREP_HOOK`');
 
     for (const { text: seg } of segments(command, { keepHeredoc: true })) {
       const toks = tokenize(seg);
@@ -398,7 +398,7 @@ export function guardBash(command, cwd, labels) {
 
       const sub = cmd === 'git' ? gitSubcommandAt(toks) : -1;
       if (toks[sub] === 'grep' && projectRoot(cwd) && !gitGrepOutsideIndex(toks, sub + 1, cwd)) {
-        return grepReason('`git grep` по рабочему дереву индексированного проекта (по другой ревизии — `git grep … <sha|ветка>`, ревизия словом, не `$переменной`)');
+        return grepReason('`git grep` over the working tree of an indexed project (another revision — `git grep … <sha|branch>`, the revision as a literal word, not a `$variable`)');
       }
       if (toks[sub] === 'show' || toks[sub] === 'cat-file') {
         const hit = gitShowsWorkingFile(toks, sub + 1, cwd);
@@ -426,7 +426,7 @@ export function guardBash(command, cwd, labels) {
 
       if (SCRIPT_EDITORS.has(cmd)) {
         const hit = anyFile(seg, cwd);
-        if (hit) return evalReason(hit, fileTools(cwd, hit, labels), 'редактор');
+        if (hit) return evalReason(hit, fileTools(cwd, hit, labels), 'an editor');
       }
 
       if (WRITE_CMDS.has(cmd) || inPlace) {
@@ -463,11 +463,11 @@ export function guardExec(code, cwd, labels) {
 }
 
 function readReason(file, labels) {
-  return `Файл \`${file}\` через shell не читают — ${labels.read}.`;
+  return `File \`${file}\` is not read through the shell — ${labels.read}.`;
 }
 
 function copyReason(file, labels) {
-  return `Копия \`${file}\` в /tmp — то же чтение через shell. Файл читают сам: ${labels.read}.`;
+  return `A copy of \`${file}\` into /tmp is the same shell read. Read the file itself: ${labels.read}.`;
 }
 
 // Файл из индекса: Read запрещён роутером чтения, а Edit без Read не работает —
@@ -545,31 +545,31 @@ export function guardRead(filePath, cwd, labels, sessionId) {
   const fileRoot = projectRoot(cwd, filePath);
   const foreign = path.resolve(fileRoot) === path.resolve(sessionRoot)
     ? ''
-    : `Файл другого проекта: каждому вызову tokensave добавь graph_root: "${fileRoot}". `;
+    : `File of another project: add graph_root: "${fileRoot}" to every tokensave call. `;
   return (
-    `Файл в индексе tokensave. ${foreign}Вместо ${labels.read}: tokensave_body / tokensave_signature (символ), ` +
-    'tokensave_read (файл; диапазон — `mode: "lines", lines: "A-B"`, без `mode` придёт весь файл), tokensave_context (обзор). ' +
-    `tokensave ответил ошибкой или пусто — процитируй ответ и повтори ${labels.read}: ` +
-    'повтор той же цели в течение 3 минут проходит.'
+    `File is in the tokensave index. ${foreign}Instead of ${labels.read}: tokensave_body / tokensave_signature (symbol), ` +
+    'tokensave_read (file; a range — `mode: "lines", lines: "A-B"`, without `mode` the whole file comes back), tokensave_context (overview). ' +
+    `tokensave answered with an error or empty — quote the answer and repeat ${labels.read}: ` +
+    'a repeat on the same target within 3 minutes passes.'
   );
 }
 
 function editReason(file, labels) {
-  return `Файл \`${file}\` через shell не правят — ${labels.edit}.`;
+  return `File \`${file}\` is not edited through the shell — ${labels.edit}.`;
 }
 
 function transcriptsReason() {
-  return '`cd` в ~/.claude/projects: имена каталогов там начинаются с `-` (`-home-…`), и относительный путь '
-    + 'или glob `*/…` оттуда ls, jq, xargs примут за опцию. Пиши пути абсолютными без cd: '
+  return '`cd` into ~/.claude/projects: directory names there start with `-` (`-home-…`), and ls, jq, xargs '
+    + 'take a relative path or a `*/…` glob from there for an option. Write absolute paths without cd: '
     + '`~/.claude/projects/-home-…/<sid>.jsonl`, `~/.claude/projects/*/<sid>.jsonl`.';
 }
 
 function grepReason(what) {
-  return `${what} — обход хука tokensave, отказ окончательный. Символ: tokensave_search / `
-    + 'tokensave_signature_search; использования: tokensave_callers; текст: tokensave_search с literal: true; '
-    + 'доки, конфиги, yml: rag_search.';
+  return `${what} bypasses the tokensave hook, the refusal is final. Symbol: tokensave_search / `
+    + 'tokensave_signature_search; usages: tokensave_callers; text: tokensave_search with literal: true; '
+    + 'docs, configs, yml: rag_search.';
 }
 
-function evalReason(file, labels, via = 'интерпретатор') {
-  return `Файл \`${file}\` через ${via} не читают и не правят — ${labels.read} / ${labels.edit}.`;
+function evalReason(file, labels, via = 'an interpreter') {
+  return `File \`${file}\` is neither read nor edited through ${via} — ${labels.read} / ${labels.edit}.`;
 }

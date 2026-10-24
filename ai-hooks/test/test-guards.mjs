@@ -347,7 +347,7 @@ repo('git show HEAD~1:<файл> → allow', 'allow', 'git show HEAD~1:client/sr
 repo('git show HEAD --stat → allow', 'allow', 'git show HEAD --stat');
 repo('git show HEAD:<каталог> → allow', 'allow', 'git show HEAD:client/src');
 check('отказ git show HEAD: называет tokensave_read', /tokensave_read/.test(guardBash('git show HEAD:client/src/App.tsx', REPO, CLAUDE_LABELS) || ''), true);
-check('отказ git grep называет ревизию', /<sha\|ветка>/.test(guardBash('git grep -n foo', REPO, CLAUDE_LABELS) || ''), true);
+check('отказ git grep называет ревизию', /<sha\|branch>/.test(guardBash('git grep -n foo', REPO, CLAUDE_LABELS) || ''), true);
 fs.rmSync(REPO, { recursive: true, force: true });
 
 // ---- легитимные инструменты над теми же путями ----
