@@ -328,8 +328,8 @@ function dotenvPrintsSecret(toks) {
 function secretReason(file) {
   return {
     level: DENY,
-    reason: `\`${file}\` — хранилище секретов, чтение запрещено. ` +
-      'Имя переменной — из `.env.example`; значение — запроси у пользователя.',
+    reason: `\`${file}\` is a secret store; reading it is refused. ` +
+      'Take the variable name from `.env.example`; ask the user for the value.',
   };
 }
 
@@ -790,14 +790,14 @@ function secretOutputVerdict(cmd, toks, w, at) {
   }
   if (cmd === 'gh' && (pair(w, 'auth', 'token')
     || (pair(w, 'auth', 'status') && toks.some((t) => t === '-t' || t === '--show-token')))) {
-    return deny('`gh auth token` печатает токен GitHub. Значение — запроси у пользователя.');
+    return deny('`gh auth token` prints the GitHub token. Ask the user for the value.');
   }
   if (cmd === 'gcloud' && w.some((x) => /^print-(access|identity)-token$/.test(x))) {
-    return deny('`gcloud … print-access-token` печатает токен. Значение — запроси у пользователя.');
+    return deny('`gcloud … print-access-token` prints a token. Ask the user for the value.');
   }
   if (cmd === 'aws') {
     if (anyWord(w, 'export-credentials', 'get-session-token', 'get-login-password', 'get-authorization-token')) {
-      return deny('`aws` печатает учётные данные. Значение — запроси у пользователя.');
+      return deny('`aws` prints credentials. Ask the user for the value.');
     }
     if (pair(w, 'configure', 'get') || pair(w, 'secretsmanager', 'get-secret-value')
       || (pair(w, 'ssm', 'get-parameter', 'get-parameters') && toks.includes('--with-decryption'))) {
@@ -1087,11 +1087,11 @@ function segmentVerdict({ raw, seg, toks, cmd, piped, fromFetch, script }, depth
   if (GREP_CMDS.has(cmd) && grepWithoutInclude(toks)) {
     return {
       level: DENY,
-      reason: 'рекурсивный grep без `--include` на расширения кода читает и `.env` в дереве. ' +
-        'В проекте с `.tokensave/` символ ищет `tokensave_search`, точную строку — ' +
-        '`tokensave_search` с `literal: true` (grep по коду там останавливает хук tokensave ' +
-        'и с `--include`); доки, конфиги, yml, инфраструктуру — `rag_search`; вне индексов ' +
-        'укажи файлы: `--include=*.ts` (можно несколько).',
+      reason: 'a recursive grep without `--include` on code extensions also reads `.env` in the tree. ' +
+        'In a project with `.tokensave/` a symbol is found by `tokensave_search`, an exact string by ' +
+        '`tokensave_search` with `literal: true` (grep over code there is stopped by the tokensave hook ' +
+        'even with `--include`); docs, configs, yml, infrastructure by `rag_search`; outside the indexes ' +
+        'name the files: `--include=*.ts` (repeatable).',
     };
   }
 
@@ -1175,8 +1175,8 @@ export function guardReadSecurity(filePath) {
   const shown = real ? `${filePath}\` → \`${real}` : filePath;
   return {
     level: DENY,
-    reason: `\`${shown}\` — хранилище секретов, чтение запрещено. ` +
-      'Структура — `.env.example`; значение — запроси у пользователя.',
+    reason: `\`${shown}\` is a secret store; reading it is refused. ` +
+      'Take the structure from `.env.example`; ask the user for the value.',
   };
 }
 

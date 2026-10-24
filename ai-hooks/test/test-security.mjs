@@ -147,7 +147,7 @@ check('отказ grep называет rag_search для доков и конф
 check('отказ grep ведёт точную строку в tokensave_search literal',
   /tokensave_search.*literal: true/.test(guardBashSecurity('grep -rn foo src')?.reason || ''), true);
 check('отказ grep даёт --include только вне индекса',
-  /вне индекс[а-я]*[^.]*--include/.test(guardBashSecurity('grep -rn foo src')?.reason || ''), true);
+  /outside the index[a-z]*[^.]*--include/.test(guardBashSecurity('grep -rn foo src')?.reason || ''), true);
 check('grep -Rni без --include', bash('grep -Rni token'), 'deny');
 check('grep --recursive без --include', bash('grep --recursive foo src'), 'deny');
 check('egrep -r без --include', bash('egrep -r "a|b" .'), 'deny');

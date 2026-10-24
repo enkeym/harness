@@ -35,7 +35,7 @@ export function check(input) {
   if (!verdict) return null;
   return {
     decision: verdict.level,
-    reason: (verdict.level === DENY ? 'security-guard, запрет: ' : 'security-guard: ') + verdict.reason,
+    reason: (verdict.level === DENY ? 'security-guard, refused: ' : 'security-guard: ') + verdict.reason,
   };
 }
 
