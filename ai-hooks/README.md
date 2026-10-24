@@ -91,6 +91,8 @@ claude/scratch.mjs              # адаптер Claude: PreToolUse(Bash|Write) 
 bin/ask-mode.mjs                # переключатель: on | off | toggle | reset | default
 bin/mcp-serve.sh                # запуск MCP tokensave/ragsave с явно выбранным проектом
 bin/ragsave-sync.sh             # смысловой (RAG) индекс: sync существующего
+bin/project-init.sh             # достройка недостающего индекса: tokensave init → ragsave init, замок на проект
+bin/background.sh               # общее фоновых задач: setsid и ionice или их замены на macOS (подключается через `.`)
 claude/links-context.mjs        # пункты карты связей с правленым файлом в контекст, когда он в paths: домена (не гард)
 links-core.mjs                  # карта связей на диске: каталог, файлы доменов, paths: — общее хука и чекера
 bin/init-impact-map.mjs         # первая карта: где лежит по авторству репозитория, скелет INDEX.md
@@ -125,6 +127,7 @@ test/test-tool-share.mjs        # доля инструментов: грани�
 test/test-mcp-sync.mjs          # bin/mcp-sync.mjs: --check без записи, перерегистрация в Claude
 test/test-log-error.mjs         # errors.log: формат, чистка хвоста, пропуск конкурентного sync, ротация
 test/test-ragsave-sync.mjs      # ragsave-sync: вызов `sync --quiet`, отказ в errors.log, занятый замок не трогает sync.log, выбор каталога и бинаря, тихие выходы
+test/test-project-init.mjs      # project-init: порядок шагов, пропуск готового и .ragsave-disable, dirty → sync, замок живой/мёртвый/старый, сбой шага, --detach
 test/test-mcp-serve.mjs         # mcp-serve: выбор корня по индексу, отказ без индекса и в $HOME, argv и cwd сервера
 test/test-install-check.mjs     # install.sh --check: отчёт о симлинках без записи, итог и код выхода, пути без машины, локальные файлы из шаблонов, хуки tokensave, mcp-sync
 ```
@@ -884,6 +887,7 @@ node ~/.ai-hooks/test/test-tool-share.mjs
 node ~/.ai-hooks/test/test-mcp-sync.mjs
 node ~/.ai-hooks/test/test-log-error.mjs
 node ~/.ai-hooks/test/test-ragsave-sync.mjs
+node ~/.ai-hooks/test/test-project-init.mjs
 node ~/.ai-hooks/test/test-mcp-serve.mjs
 node ~/.ai-hooks/test/test-install-check.mjs
 node ~/.ai-hooks/test/test-context-meter.mjs
@@ -903,9 +907,10 @@ node ~/.ai-hooks/test/test-statusline.mjs
 глобальное умолчание не меняет.
 
 Внешние бинари тесты подменяют переменными: `AI_HOOKS_TOKENSAVE_CMD` —
-`bin/seed-impact-map.mjs`, `bin/mcp-serve.sh` (по умолчанию `tokensave`
-из PATH, у mcp-serve с запасным `/usr/local/bin/tokensave`);
+`bin/seed-impact-map.mjs`, `bin/mcp-serve.sh`, `bin/project-init.sh` (по умолчанию `tokensave`
+из PATH, у mcp-serve и project-init с запасным `/usr/local/bin/tokensave`);
 `AI_HOOKS_RAGSAVE_CMD` — `bin/seed-impact-map.mjs`, `bin/ragsave-sync.sh`,
-`bin/mcp-serve.sh` (по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
+`bin/mcp-serve.sh`, `bin/project-init.sh` (по умолчанию `ragsave` и `~/.local/bin/ragsave`). Фейки лежат в
 `test/fixtures/`: `fake-tokensave.mjs` и `fake-ragsave.mjs` отвечают на поиск
-seed-impact-map, `fake-indexer.mjs` записывает вызовы фоновых синков.
+seed-impact-map, `fake-indexer.mjs` записывает вызовы фоновых синков,
+`fake-init.mjs` — вызовы project-init под именем симлинка и создаёт БД индекса.

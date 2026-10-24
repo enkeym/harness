@@ -2,6 +2,8 @@
 paths:
   - "ragsave/ragsave/**"
   - "ai-hooks/bin/ragsave-sync.sh"
+  - "ai-hooks/bin/project-init.sh"
+  - "ai-hooks/bin/background.sh"
   - "ai-hooks/bin/log-error.sh"
 ---
 
@@ -19,10 +21,16 @@ paths:
   `rag_status`. Переименовал в одном месте — статус снова показывает живой
   автосинк, которого нет.
 - Лимит потоков фонового синка — `RAGSAVE_THREADS` (по умолчанию 6) в
-  `ai-hooks/bin/ragsave-sync.sh` ↔ `ragsave/ragsave/config.py:EMBED_THREADS`.
+  `ai-hooks/bin/ragsave-sync.sh` и `ragsave init` в `ai-hooks/bin/project-init.sh` ↔
+  `ragsave/ragsave/config.py:EMBED_THREADS`.
   Переименовал переменную в одном месте — синк снова занимает все ядра.
   Лимит и `nice` действуют, только пока демона нет: при живом демоне
   (`ragsave/ragsave/daemon.py`) синк считает в нём, на всех ядрах.
+- Состояние индексов для достройки — `.tokensave/tokensave.db`, `.tokensave/dirty`
+  (метка прерванного `tokensave init`, внешний бинарь), `.ragsave/rag.db` и
+  `.ragsave-disable` в `ai-hooks/bin/project-init.sh` ↔ `ai-hooks/links-core.mjs:hasIndex`
+  и `ai-hooks/bin/ragsave-sync.sh`. tokensave сменил имя метки — оборванный
+  init больше не долечивается достройкой.
 - Демон поднимает только `ragsave/ragsave/embedder.py:Embedder.embed_query`
   (`start=True`), поток синка — нет ↔ `nice -n 19` в `ai-hooks/bin/ragsave-sync.sh`.
   Дал синку поднимать демон — демон и весь поиск живут под `nice 19`.

@@ -49,18 +49,8 @@ find "$repo_root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>
 # потоков ONNX — не больше 6 (без лимита onnxruntime берёт все ядра на час
 # при переиндексации после смены ветки). RAGSAVE_THREADS из окружения главнее.
 # Лимит и nice — только синку: демон, поднятый warm, живёт дольше синка и
-# считает поиск всех сессий.
-# На macOS нет ни setsid, ни ionice. Без setsid — обычный фон `&`: вывод уже в
-# /dev/null, хук его не ждёт. Без ionice — taskpolicy -b (фоновый QoS macOS:
-# и CPU, и IO), нет и его — один nice.
-detach=""
-command -v setsid >/dev/null 2>&1 && detach=setsid
-low_io=""
-if command -v ionice >/dev/null 2>&1; then
-  low_io="ionice -c 3"
-elif command -v taskpolicy >/dev/null 2>&1; then
-  low_io="taskpolicy -b"
-fi
+# считает поиск всех сессий. setsid, ionice и их замены на macOS — background.sh.
+. "${BASH_SOURCE%/*}/background.sh"
 $detach bash -c '
   root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; low_io="$6"; tmp="$log.$$"
   if [ "$warm" = 1 ]; then
