@@ -252,10 +252,12 @@ shell_migrate() {
 # ~/.gitconfig.local, дописывается в local через `git config --add`: порядок
 # многозначных ключей (сброс `helper =` перед своим хелпером) сохраняется, а
 # local подключается последним — значение разработчика перекрывает общее.
-# include самого local пропускается: он подключил бы себя же. В выводе только
-# ключи: в значениях бывают токены (http.extraheader, url с user:token@).
+# include самого local пропускается: он подключил бы себя же. core.hooksPath не
+# переносится: local перекрыл бы им каталог хуков харнеса, и git-хуки tokensave
+# молча выключились бы — свои хуки из того каталога разбирает /doctor. В выводе
+# только ключи: в значениях бывают токены (http.extraheader, url с user:token@).
 gitconfig_migrate() {
-  local bak="$HOME/.gitconfig.bak-$STAMP" loc="$HOME/.gitconfig.local" entry key val moved=()
+  local bak="$HOME/.gitconfig.bak-$STAMP" loc="$HOME/.gitconfig.local" entry key val own hooks="" moved=()
   [ -f "$bak" ] && [ -f "$loc" ] || return 0
   if ! command -v git >/dev/null; then
     bad "git не найден — настройки из $(basename "$bak") не перенесены в $loc"
@@ -266,11 +268,17 @@ gitconfig_migrate() {
     # Ключ без значения (`[core] bare`) — булево true.
     if [ "$key" = "$entry" ]; then val=true; else val="${entry#*$'\n'}"; fi
     case "$key" in include.path|includeif.*.path) case "$val" in *.gitconfig.local) continue ;; esac ;; esac
+    if [ "$key" = core.hookspath ]; then
+      own="$(git config -f "$HARNESS/git/gitconfig" --get core.hooksPath 2>/dev/null)" || true
+      [ "${val/#\~/$HOME}" = "${own/#\~/$HOME}" ] || hooks="$val"
+      continue
+    fi
     git config -f "$HARNESS/git/gitconfig" --fixed-value --get-all "$key" "$val" >/dev/null 2>&1 && continue
     git config -f "$loc" --fixed-value --get-all "$key" "$val" >/dev/null 2>&1 && continue
     git config -f "$loc" --add "$key" "$val"
     moved+=("$key")
   done < <(git config -f "$bak" -z --list 2>/dev/null)
+  [ -z "$hooks" ] || warn "core.hooksPath = $hooks из $(basename "$bak") не перенесён: он выключил бы git-хуки tokensave — свои хуки оттуда переносит /doctor"
   [ "${#moved[@]}" -gt 0 ] || return 0
   warn "$loc — перенесены настройки из $(basename "$bak"), которых нет в git/gitconfig:"
   for entry in "${moved[@]}"; do warn "  $entry"; done

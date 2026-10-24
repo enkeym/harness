@@ -437,6 +437,19 @@ function macSandbox() {
     [out.includes('✗ git не найден — настройки из .gitconfig.bak-'), read(nogit.local)], [true, '[alias]\n\tst = status\n']);
 }
 
+for (const [dir, warned] of [['~/.githooks', true], ['~/.config/git/hooks', false]]) {
+  const sb = sandbox({ tools: [...TOOLS, 'git'] });
+  const [gitconfig, local] = ['.gitconfig', '.gitconfig.local'].map(sb.target);
+  fs.writeFileSync(path.join(sb.harness, 'git', 'gitconfig'), '[core]\n\thooksPath = ~/.config/git/hooks\n');
+  fs.writeFileSync(local, '');
+  fs.rmSync(gitconfig);
+  fs.writeFileSync(gitconfig, `[core]\n\thooksPath = ${dir}\n`);
+  const res = sb.run([]);
+  check(`core.hooksPath = ${dir} из бэкапа не переносится в local, ${warned ? 'предупреждение с каталогом' : 'тихо'}`,
+    [read(local), res.out.includes(`core.hooksPath = ${dir} из .gitconfig.bak-`), res.out.includes('core.hookspath')],
+    ['', warned, false]);
+}
+
 {
   const sb = sandbox();
   const env = sb.target('.config/harness/env');

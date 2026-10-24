@@ -65,6 +65,11 @@ paths:
   выше — общий файл перебьёт имя и хелпер; многозначный ключ
   (`credential.helper`) не перекрывается, а добавляется к общему.
   Порядок: после `LOCALS`, иначе на новой машине local ещё нет.
+  `core.hooksPath` из бэкапа в local не идёт ↔ `core.hooksPath` в `git/gitconfig`
+  ↔ проверка `post-checkout` в `install.sh:externals`: перекрытый local каталог
+  хуков молча выключил бы git-хуки tokensave, а `externals` смотрит только на
+  файл. Сменил каталог в `git/gitconfig` — прежнее значение с машины начнёт
+  предупреждать; формулировка `не перенесён` ↔ repair.md (Configured machine).
 - `install.sh:env_check` ↔ `skills/doctor/reference/repair.md` (Machine env): doctor удаляет
   строки по тексту причины (`дубль строки`, `это уже ставит shell/bashrc`,
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
