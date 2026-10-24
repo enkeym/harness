@@ -4,8 +4,6 @@
 	excludesfile = ~/.gitignore_global
 	hooksPath = ~/.config/git/hooks
 	autocrlf = input
-[credential]
-	helper = store
 [credential "https://github.com"]
 	helper =
 	helper = !gh auth git-credential

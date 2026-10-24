@@ -746,13 +746,26 @@ externals() {
   fi
   command -v python3   >/dev/null && good "python3 $(python3 --version 2>&1 | awk '{print $2}')" || bad "python3 — не найден (нужен для ragsave)"
   [ -x "$RAG_HOME/venv/bin/python" ] && good "venv ragsave собран" || warn "venv ragsave не собран — ./install.sh --venv"
-  # gitconfig ссылается на глобальные git-хуки tokensave (chain-repo-hook +
+  # Личный git/gitconfig ссылается на глобальные git-хуки tokensave (chain-repo-hook +
   # auto-init); без них git молча работает без хуков. Ставит их `tokensave
-  # githooks on` — он пишет только в каталог хуков, в отличие от `tokensave install`.
-  [ -x "$HOME/.config/git/hooks/post-checkout" ] && good "глобальные git-хуки tokensave на месте" || warn "глобальных git-хуков tokensave нет — tokensave githooks on"
-  # Токен для MR берётся из ~/.git-credentials (credential.helper = store);
-  # без файла GITLAB_TOKEN выйдет пустым — агент отдаст описание MR в чат.
-  [ -f "$HOME/.git-credentials" ] && good "~/.git-credentials есть (источник GITLAB_TOKEN)" || warn "~/.git-credentials нет — GITLAB_TOKEN будет пустым, MR через API недоступен"
+  # githooks on` — он пишет только в каталог хуков, если core.hooksPath уже
+  # задан, в отличие от `tokensave install`. Чужой hooksPath (husky и т. п.) или
+  # его отсутствие — не наше дело, молчим.
+  local hooks
+  hooks="$(git config --global --includes --get core.hooksPath 2>/dev/null)" || true
+  if [ "${hooks/#\~/$HOME}" = "$HOME/.config/git/hooks" ]; then
+    [ -x "$HOME/.config/git/hooks/post-checkout" ] && good "глобальные git-хуки tokensave на месте" || warn "глобальных git-хуков tokensave нет — tokensave githooks on"
+  fi
+  # Токен для MR берётся из ~/.git-credentials; без файла GITLAB_TOKEN выйдет
+  # пустым — агент отдаст описание MR в чат. Хелпер store харнесс не задаёт
+  # (он личный, в ~/.gitconfig.local): без него git не читает файл при push.
+  if [ -f "$HOME/.git-credentials" ]; then
+    good "~/.git-credentials есть (источник GITLAB_TOKEN)"
+    git config --global --includes --get-regexp '^credential\..*helper$' 2>/dev/null | grep -q ' store$' \
+      || warn "~/.git-credentials есть, но credential.helper store не задан — git его не читает; хелпер для своего хоста — в ~/.gitconfig.local (пример в local/gitconfig.local.example)"
+  else
+    warn "~/.git-credentials нет — GITLAB_TOKEN будет пустым, MR через API недоступен"
+  fi
 }
 
 case "$MODE" in

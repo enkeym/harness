@@ -6,12 +6,14 @@ desktop.ini
 
 # IDE
 .idea/
-.vscode/
 
 # AI-агенты и локальные инструменты (глобально для всех репозиториев)
-# Паттерн без префикса (например .claude/, а не project/.claude/) — игнор в любой папке дерева.
+# Паттерн без префикса (например .cursor/, а не project/.cursor/) — игнор в любой папке дерева.
 # Настройка: git config --global core.excludesfile ~/.gitignore_global
-.claude/
+# .claude/ и .vscode/ целиком здесь нет: в них бывают общие настройки проекта
+# (settings.json, skills, launch.json), которые коммитят. Личное Claude Code — да.
+.claude/settings.local.json
+CLAUDE.local.md
 .codegraph/
 .cursor/
 .gemini/
@@ -41,13 +43,11 @@ __pycache__/
 .env
 .env.local
 
-# Logs / Temp
-*.log
+# Temp
 *.tmp
 
-# Build artifacts
-dist/
-build/
+# *.log, dist/, build/ здесь нет: у части репозиториев это исходники или
+# фикстуры, а глобальный игнор молча выкинул бы их из коммита.
 
 # Правил одного проекта здесь не бывает: файл применяется ко всем
 # репозиториям сразу, включая будущие и чужие, и однажды молча выкинет из

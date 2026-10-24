@@ -81,9 +81,17 @@ paths:
   Порядок: после `LOCALS`, иначе на новой машине local ещё нет.
   `core.hooksPath` из бэкапа в local не идёт ↔ `core.hooksPath` в `git/gitconfig`
   ↔ проверка `post-checkout` в `install.sh:externals`: перекрытый local каталог
-  хуков молча выключил бы git-хуки tokensave, а `externals` смотрит только на
-  файл. Сменил каталог в `git/gitconfig` — прежнее значение с машины начнёт
+  хуков молча выключил бы git-хуки tokensave. `externals` проверяет файл, только
+  если `core.hooksPath` — ровно `~/.config/git/hooks`, иначе молчит. Сменил каталог в
+  `git/gitconfig` — поправь и `externals`, а прежнее значение с машины начнёт
   предупреждать; формулировка `не перенесён` ↔ repair.md (Configured machine).
+  Ключ должен остаться в `git/gitconfig`: `tokensave githooks on` без него пишет
+  абсолютный путь сквозь симлинк `~/.gitconfig` в репозиторий, а local не читает.
+- Хелпера `store` в `git/gitconfig` нет ↔ пример `[credential "<хост>"]` в
+  `local/gitconfig.local.example` ↔ предупреждение `credential.helper store не задан`
+  в `install.sh:externals` (`--get-regexp` по `credential.*helper`, значение `store`).
+  `shell/bash_env` читает `~/.git-credentials` сам, без git: без хелпера
+  `GITLAB_TOKEN` есть, а push по https просит пароль.
 - `install.sh:env_check` ↔ `skills/doctor/reference/repair.md` (Machine env): doctor удаляет
   строки по тексту причины (`дубль строки`, `это уже ставит харнесс`,
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.

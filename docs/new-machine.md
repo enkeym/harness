@@ -46,8 +46,12 @@ cd ~/harness
 ./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы
 ./install.sh --personal # только машина автора: ~/.bashrc, git, клавиши, VS Code
 ./install.sh --venv     # venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка)
-tokensave githooks on   # глобальные git-хуки tokensave
+tokensave githooks on   # только после --personal: git-хуки tokensave в его hooksPath
 ```
+
+Без `--personal` `tokensave githooks on` задаёт глобальный `core.hooksPath`, и git
+перестаёт читать `.git/hooks` всех репозиториев (husky и т. п.). Там — по проекту:
+`tokensave githooks on --local` в его каталоге.
 
 - [ ] В отчёте `install.sh` нет `✗`. Строки `.bak-<дата>` — прежние файлы
       машины, сохранённые рядом: просмотреть и удалить ненужное. Через 30
@@ -65,7 +69,9 @@ tokensave githooks on   # глобальные git-хуки tokensave
       их из прежнего `~/.gitconfig` (без них git не коммитит).
 - [ ] `~/.config/harness/env` — `GITLAB_HOST`, по желанию `ANTHROPIC_MODEL`, при нужде
       `RAGSAVE_HOME` (его — до `./install.sh`).
-- [ ] `~/.git-credentials` на месте, права `600`.
+- [ ] `~/.git-credentials` на месте, права `600`; в `~/.gitconfig.local` — хелпер
+      `store` для своего GitLab (пример в `local/gitconfig.local.example`), иначе
+      push по https просит пароль.
 
 ## 4. Перезапуск
 

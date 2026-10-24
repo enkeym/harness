@@ -24,7 +24,7 @@
 | `bin/` | `~/.local/bin/ragsave`; `mcp-sync.mjs` запускается из репозитория | обёртка запуска `ragsave`, синхронизация MCP |
 | `mcp/` | `~/.claude.json` через `bin/mcp-sync.mjs` | `servers.json` — единый список MCP-серверов |
 | `shell/` | ядро: `~/.config/harness/bashrc` (блок подключения дописывается в свой `~/.bashrc`), `~/.bash_env`, `~/.zshenv`; личное — `~/.bashrc` | шелл: ядро (`shell/harness.bash`) — `~/.local/bin`, `BASH_ENV`, обёртки `init`; личный `shell/bashrc` — PS1, алиасы, pnpm, ленивый nvm, ssh-agent; `BASH_ENV` — переменные для неинтерактивного Bash-тула агента (`GITLAB_TOKEN` для `$GITLAB_HOST` из `~/.git-credentials`, без копии секрета); оба подключают `~/.config/harness/env`; `~/.zshenv` даёт то же zsh через `~/.bash_env` |
-| `git/` | `~/.gitconfig`, `~/.gitignore_global` — личное | глобальный git: `credential.helper store`, identity через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.claude/`, `.tokensave`, `.ragsave` и прочих агентских каталогов, `hooksPath` на хуки tokensave |
+| `git/` | `~/.gitconfig`, `~/.gitignore_global` — личное | глобальный git: identity и хелпер `store` для своего GitLab через `[include]` из `~/.gitconfig.local`, глобальный ignore для `.tokensave`, `.ragsave` и прочих агентских каталогов (из `.claude/` — только `settings.local.json`: остальное в нём коммитят), `hooksPath` на хуки tokensave |
 | `tokensave/` | `~/.tokensave/config.toml` | глобальный конфиг tokensave: `wildcard_permissions` (от него зависит правило `mcp__tokensave__*`), дебаунс вотчера, таймаут экстракции |
 | `vscode/` | `%APPDATA%\Code\User\{settings.json,keybindings.json,snippets}` — Windows-симлинки на `\\wsl.localhost\…`, только под WSL; личное | VS Code в Windows: настройки (`keyboard.dispatch: keyCode` — сочетания в любой раскладке), клавиши, сниппеты |
 
@@ -147,8 +147,11 @@ tokensave 7.12.1 в песочном HOME):
    в `permissions.deny`; маска `*install*` ловила и `tokensave …; ./install.sh`), хотя `tokensave doctor` их
    советует.
 2. `./install.sh` — хуки, права, MCP и правила придут из репозитория.
-3. `tokensave githooks on` — глобальные git-хуки в `~/.config/git/hooks` (куда уже
-   смотрит `core.hooksPath` из `git/gitconfig`). Конфиги агентов он не трогает.
+3. После `--personal` — `tokensave githooks on`: глобальные git-хуки в
+   `~/.config/git/hooks`, куда уже смотрит `core.hooksPath` из `git/gitconfig`. Без
+   него команда сама задаёт глобальный `core.hooksPath`, и git перестаёт читать
+   `.git/hooks` всех репозиториев — там `tokensave githooks on --local` в каталоге
+   проекта. Конфиги агентов он не трогает.
 
 `tokensave doctor` после этого покажет ✘ «MCP server args missing "serve"» и
 «rules file not found» и посоветует `tokensave install` — это ожидаемо, совет
@@ -187,7 +190,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 - `claude` должен быть установлен и залогинен — учётных данных в
   репозитории нет и не будет;
 - `tokensave` — сторонний бинарь, ставится отдельно, без `tokensave install`; git-хуки —
-  `tokensave githooks on`;
+  `tokensave githooks on` (без `--personal` — `--local` в проекте);
 - **перезапуск сессии.** `CLAUDE.md`, `settings.json` и хуки читаются при старте
   сессии. Агент, который только что всё разложил, работает ещё по пустому
   конфигу — правила подхватит только следующая сессия;
@@ -243,7 +246,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.config/git/hooks` | глобальные git-хуки генерирует сам `tokensave` (chain-repo-hook, auto-init) | `tokensave githooks on` |
 | `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
-| `~/.git-credentials` | хранилище `credential.helper store`; из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
+| `~/.git-credentials` | хранилище `credential.helper store` (хелпер — в `~/.gitconfig.local`, пример в `local/gitconfig.local.example`); из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
 | `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `RAGSAVE_HOME`, по желанию `ANTHROPIC_MODEL` | `./install.sh` (из `local/env.example`), заполнить |
 | `~/.gitconfig.local` | git `[user]` и прочие настройки этой машины | `./install.sh --personal` (из `local/gitconfig.local.example` и прежнего `~/.gitconfig`), заполнить |
 

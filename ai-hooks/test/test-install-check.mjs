@@ -564,6 +564,22 @@ for (const [dir, warned] of [['~/.githooks', true], ['~/.config/git/hooks', fals
     ['', warned, false]);
 }
 
+for (const [hooks, warned] of [['~/.config/git/hooks', true], ['~/.husky', false], ['', false]]) {
+  const sb = sandbox({ tools: [...TOOLS, 'git'] });
+  fs.writeFileSync(path.join(sb.harness, 'git', 'gitconfig'), hooks ? `[core]\n\thooksPath = ${hooks}\n` : '');
+  check(`hooksPath ${hooks || 'не задан'} — ${warned ? 'хуки tokensave проверяются' : 'externals молчит'}`,
+    sb.run().out.includes('глобальных git-хуков tokensave нет'), warned);
+}
+
+for (const [helper, warned] of [['', true], ['[credential "https://gitlab.example.com"]\n\thelper = store\n', false]]) {
+  const sb = sandbox({ tools: [...TOOLS, 'git'] });
+  fs.writeFileSync(path.join(sb.harness, 'git', 'gitconfig'), '[include]\n\tpath = ~/.gitconfig.local\n');
+  fs.writeFileSync(sb.target('.gitconfig.local'), helper);
+  fs.writeFileSync(sb.target('.git-credentials'), '');
+  check(`~/.git-credentials ${warned ? 'без хелпера store — предупреждение' : 'и store для хоста в local — тихо'}`,
+    sb.run().out.includes('credential.helper store не задан'), warned);
+}
+
 {
   const sb = sandbox();
   const env = sb.target('.config/harness/env');
