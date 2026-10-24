@@ -114,7 +114,7 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   check('сообщение: однострочный -m', bad('git commit -q -m "fix: x"'), false);
   check('сообщение: не коммит', bad("cat <<'EOF'\na\nb\nEOF"), false);
   check('сообщение: merge -m без пустой строки', bad('git merge -m "merge: x\n- body" feature'), true);
-  check('сообщение: причина цитирует заголовок', commitMessageProblem("git commit -F - <<'EOF'\nfix: x\nbody\nEOF")?.includes('«fix: x»'), true);
+  check('сообщение: причина цитирует заголовок', commitMessageProblem("git commit -F - <<'EOF'\nfix: x\nbody\nEOF")?.includes('"fix: x"'), true);
 
   check('имя: plugin:skill', skillName('plugin:skill-authoring'), 'skill-authoring');
   check('имя: scoped', skillName('apps/web:deploy'), 'deploy');
@@ -185,7 +185,7 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   loadViaTool('sid-g', 'git-flow');
   check('все три → allow', gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -')), 'allow');
   const r3 = gate('sid-g', 'Bash', bash("git commit -F - <<'EOF'\nfix: x\n- body\nEOF"));
-  check('все три, заголовок без пустой строки → deny', decision(r3) === 'deny' && r3.includes('пустой строки'), true);
+  check('все три, заголовок без пустой строки → deny', decision(r3) === 'deny' && r3.includes('blank line'), true);
 }
 
 // --- выключатели и fail-open ---

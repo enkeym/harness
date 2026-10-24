@@ -49,7 +49,7 @@ export const GATES = [
   {
     id: 'instructions',
     requires: ['skill-authoring'],
-    what: 'правка файла инструкций (SKILL.md, reference/, commands/*.md, CLAUDE.md)',
+    what: 'editing an instruction file (SKILL.md, reference/, commands/*.md, CLAUDE.md)',
     matches: (toolName, toolInput, cwd) => isInstructionFile(editedFile(toolName, toolInput, cwd))
       || (toolName === 'Bash' && bashWrites(toolInput?.command, cwd).some(isInstructionFile)),
   },
@@ -160,8 +160,8 @@ export function commitMessageProblem(command) {
       const lines = msg.replace(/^\s*\n/, '').split('\n');
       if (lines.length > 1 && lines[1].trim() !== '') {
         return (
-          `В сообщении коммита нет пустой строки после заголовка «${lines[0].trim().slice(0, 80)}»: ` +
-          'git склеит заголовок с телом в одну строку. Вставь пустую строку второй строкой и повтори git commit.'
+          `The commit message has no blank line after the subject "${lines[0].trim().slice(0, 80)}": ` +
+          'git would join the subject and body into one line. Make the second line blank and rerun git commit.'
         );
       }
     }
@@ -222,12 +222,12 @@ export function denyReason(gap) {
   const load = gap.missing.map((s) => `Skill(${s})`).join(', ');
   if (gap.id === 'commit') {
     return (
-      `Коммит без ревью: в этой сессии не загружены ${gap.missing.join(', ')}. ` +
-      `Загрузи ${load}, прогони дифф по чек-листам, затем повтори git commit.`
+      `Commit without review: ${gap.missing.join(', ')} not loaded in this session. ` +
+      `Load ${load}, run the diff through the checklists, then rerun git commit.`
     );
   }
   return (
-    `${gap.what[0].toUpperCase()}${gap.what.slice(1)} требует скилла ${gap.missing.join(', ')} — ` +
-    `в этой сессии он не загружен. Загрузи ${load} и повтори правку.`
+    `${gap.what[0].toUpperCase()}${gap.what.slice(1)} requires the skill ${gap.missing.join(', ')}, ` +
+    `not loaded in this session. Load ${load} and retry the edit.`
   );
 }
