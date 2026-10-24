@@ -76,10 +76,10 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 - Stop hook blocks once a turn without `AskUserQuestion`/`ExitPlanMode`: HAND once,
   HARD every turn (do what the meter's text says); last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite), or open questions stated in the last two paragraphs ("Открытыми остаются вопросы: …").
-- `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a
-  stacked snapshot: rewrite the plan file per `handoff`, then exit again.
-- `resume-hint` on resume: work moved through handoff to the named session — changes after
-  the handoff are its, not unknown; user writes here → repeat its `/resume <id>` in one line.
+- `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a stacked snapshot: rewrite the plan file per `handoff`, then exit again.
+- `resume-hint` on resume: work moved through handoff to the named session — changes after the handoff are its, not unknown; user writes here → repeat its `/resume <id>` in one line.
+- `handoff-mark` (approved `ExitPlanMode` snapshot) → `handoff-pickup` (SessionStart `startup|clear`, same repo, ≤12 h) gives
+  it to the new session once: «продолжи» after `/clear` suffices; a prompt in the marking session (`handoff-drop`) clears the mark.
 
 ## Shell guard
 
@@ -93,7 +93,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   run). Clipping: `output-clip`.
 - It splits commands like the security guard: `&`, `$(…)`, backticks, `( … )`, `then`,
   `sudo -u x`, `xargs`, `bash -c`/`eval` don't hide a `cat`, and a heredoc body stays with
-  its `node`/`python`. `grep`/`rg` with a pattern and pipes reading stdin pass.
+  its `node`/`python`; a literal `cd` in the chain moves the base for later segments and `*`/`?` in the last path component expands. `grep`/`rg` with a pattern and pipes reading stdin pass.
 - `grep`/`rg`/`ag` over indexed code is refused by tokensave's own `hook-pre-tool-use`; its off
   switch (`TOKENSAVE_DISABLE_GREP_HOOK`) and `git grep` over the working tree are denied by
   `bash-router` — tokensave answers. `git grep … <sha|branch>` off HEAD passes, `$var` doesn't.

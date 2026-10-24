@@ -95,11 +95,13 @@ const TABLE = {
   ],
   PostToolUse: [
     ['context-step', ALL],
+    ['handoff-mark', /^ExitPlanMode$/],
     ['links-context', new RegExp(`^(Edit|Write|MultiEdit|${EDIT_MCP}(str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol))$`)],
   ],
   UserPromptSubmit: [
     // Первым: стёртый промпт не помечает скилл и не несёт контекст.
     ['paste-guard', ALL],
+    ['handoff-drop', ALL],
     ['skill-track', ALL],
     ['ask-reminder', ALL],
     ['context-meter', ALL],

@@ -52,6 +52,9 @@ paths:
 - Лимиты — `ai-hooks/context-core.mjs:PASTE_LIMIT` (40k) и `PLAN_LIMIT` (12k) ↔ те же
   числа в `ai-hooks/README.md` (оба) и `OVERVIEW.md` (вставка). Сменил константу — доки обещают
   старый порог отказа.
+- Признак снимка — `ai-hooks/handoff-core.mjs:isSnapshot` (`## Состояние` и `## Дальше`) ↔ шаблон
+  снимка в `skills/handoff/SKILL.md` и `oversizedPlan` в `ai-hooks/context-core.mjs`. Переименовал
+  заголовок в одном месте — `handoff-mark` не ставит метку, «продолжи» после `/clear` молчит.
 - Пункты `.claude/bootstrap-ignore` (`husky`, `ci`, `dependabot`,
   `impact-map`) — `ai-hooks/claude/project-bootstrap.mjs:bootstrapContext` ↔
   список в `ai-hooks/README.md` и файлы `.claude/bootstrap-ignore` в чужих

@@ -75,6 +75,9 @@ claude/paste-guard.mjs          # промпт длиннее предела —
 claude/plan-guard.mjs           # план длиннее предела или с наслоенным снимком — не выходит (PreToolUse: ExitPlanMode)
 handoff-core.mjs                # цепочка передач handoff между транскриптами: последнее звено
 claude/resume-hint.mjs          # открыли звено цепочки — команда /resume последнего (SessionStart: resume)
+claude/handoff-mark.mjs         # одобренный ExitPlanMode со снимком — метка для следующей сессии корня (PostToolUse: ExitPlanMode)
+claude/handoff-pickup.mjs       # метка есть — снимок в контексте новой сессии один раз (SessionStart: startup|clear)
+claude/handoff-drop.mjs         # промпт в пометившей сессии — метка снята (UserPromptSubmit)
 question-core.mjs               # конец хода без меню: работа, порог контекста, вопрос текстом
 claude/question-guard.mjs       # адаптер Claude: Stop — такой ход не завершается (block)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
@@ -111,6 +114,7 @@ test/env-isolate.mjs            # первым импортом в тестах 
 test/test-links-context.mjs     # пункты с файлом/каталогом/глобом, счётчик, указатель, раз на сессию; чтение молчит
 test/test-impact-map.mjs        # чекер карты: битые ссылки, глобы без файлов, индекс и подкаталоги доменов
 test/test-project-bootstrap.mjs # пропуски проекта, недельный дроссель, bootstrap-ignore, вызов project-init при одном индексе
+test/test-handoff-pending.mjs   # метка снимка: отдаётся один раз; обычный план, чужой корень, та же сессия, протухшая метка, промпт в пометившей сессии — молчат
 test/test-resume-hint.mjs       # цепочка передач до последнего звена; последнее звено, отказ без звена, промпт после передачи, чужой slug — молчат
 test/test-security.mjs          # что deny, что ask (push), что проходит молча
 test/test-grants.mjs            # промпт → категории (RU/EN, отрицания, вопросы, вставки), промпт человека в транскрипте, ask → allow через dispatch
@@ -790,6 +794,18 @@ claude.ai 1.3k, встроенные 1.8k), 2.7k инструкции (`core.md`
 этим связям (`handoff-core.mjs:successorOf`) до последнего звена и отдаёт
 пользователю `systemMessage` с `/resume <id>`, модели — то же в контексте.
 Промпт пользователя после передачи — работа продолжена здесь, хук молчит.
+
+**Передача без очистки.** Диалог `ExitPlanMode` через Remote Control (телефон)
+контекст не очищает: инструмент отвечает «User has approved your plan» в той же
+сессии (mebel, 24.10.2026). `claude/handoff-mark.mjs` на `PostToolUse(ExitPlanMode)`
+пишет метку `{repoRoot, planPath, sessionId, at}` в `state/handoff-pending/`,
+если план — снимок (`## Состояние` и `## Дальше`). `claude/handoff-pickup.mjs` на
+`SessionStart(startup|clear)` того же корня в пределах 12 часов отдаёт путь
+снимка в `additionalContext` и снимает метку: пользователю после `/clear`
+хватает «продолжи». `claude/handoff-drop.mjs` на `UserPromptSubmit` снимает метку,
+если промпт пришёл в пометившей сессии. Не проверено вживую: срабатывает ли
+`PostToolUse(ExitPlanMode)` при выборе «очистить контекст» в терминале (тогда
+снимок придёт и в первом промпте — дубль).
 
 **Ограничитель вывода.** `claude/output-clip.mjs` на `PreToolUse(Bash)` заменяет
 команду на `bin/clip-output.sh <метка> -- '<команда>'`, если она из шумных

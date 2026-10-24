@@ -46,10 +46,10 @@ the files the next step needs. The hook says which case it is; follow it.
       step in one line at the top of `## Состояние`. A snapshot already in
       the file (often the brief's file) is replaced, never kept below as
       `Состояние (прежнее)`, `устарело`, `что сделано в N`.
-   3. `ExitPlanMode` — its dialog is where the user clears the context and
-      continues; print nothing after it.
-4. The snapshot is stale after the next commit — rerun `/handoff`, don't
-   trust the old one.
+   3. `ExitPlanMode` — its dialog is where the user clears the context. Result
+      "approved" in this same session = not cleared (Remote Control): end the turn
+      with `/clear`, then `продолжи по @~/.claude/plans/<file>.md`; else print nothing.
+4. The snapshot is stale after the next commit — rerun `/handoff`.
 
 ## Snapshot (Russian, only sections that apply)
 
@@ -111,7 +111,7 @@ Start from the snapshot, not from a fresh survey — re-reading everything it
 already names is what makes a split session cost more than the long one it
 replaced:
 
-- The snapshot is in context after the dialog; the old plan it links under
+- The snapshot is in context after the dialog or via `handoff-pickup` («продолжи»); the old plan it links under
   `Дальше` is `Read` only when a step in it is next (outside the
   repository, no router applies). A pasted block naming a plan file → it is
   in context through the `@` in the first prompt; missing there → `Read` it

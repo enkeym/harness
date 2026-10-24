@@ -13,11 +13,18 @@
 // не знает о работе, сделанной после передачи («этого в текущей сессии я не
 // делал» — dual-vpn, 14.10.2026). successorOf находит последнее звено.
 //
+// Передача без очистки: диалог ExitPlanMode через Remote Control (телефон)
+// контекст не очищает — инструмент отвечает «User has approved your plan» в той
+// же сессии (mebel, 24.10.2026, четыре сессии подряд). Тогда снимок помечается
+// (markPending), и следующая сессия того же корня после /clear или запуска
+// получает его в контексте (takePending): пользователю хватает «продолжи».
+//
 // Модуль чистый — без stdin и вывода.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { transcriptLines } from './context-core.mjs';
+import { statePath, readJSON, writeJSON, repoRootOr, projectKey } from './state-core.mjs';
 
 // Отказ в старой сессии и первая запись новой расходятся на миллисекунды;
 // запас — на медленный старт.
@@ -129,6 +136,48 @@ export function successorOf(transcriptPath) {
     lastAt = Math.max(lastAt, time(rec));
   }
   return { id: path.basename(file, '.jsonl'), title, lastAt, hops: seen.size - 1 };
+}
+
+// Текст плана ExitPlanMode: tool_input.plan, без него — файл planFilePath.
+export function planOf(toolInput) {
+  const ti = toolInput || {};
+  if (typeof ti.plan === 'string') return ti.plan;
+  try { return fs.readFileSync(ti.planFilePath, 'utf8'); } catch { return ''; }
+}
+
+// Снимок, а не обычный план: заголовки раздела Snapshot скилла handoff.
+// Обычный план, одобренный без очистки, — работа в этой же сессии, не передача.
+const isSnapshot = (text) => /^## Состояние/m.test(text) && /^## Дальше/m.test(text);
+
+// Снимок старше — уже не «только что передали», а забытая метка.
+const PENDING_TTL_MS = 12 * 3600 * 1000;
+const pendingFile = (cwd) => statePath('handoff-pending', `${projectKey(cwd)}.json`);
+
+// Одобренный ExitPlanMode со снимком: метка для следующей сессии корня.
+export function markPending({ cwd, sessionId, planPath, plan, now = Date.now() }) {
+  if (!planPath || !isSnapshot(plan)) return false;
+  return writeJSON(pendingFile(cwd), { repoRoot: repoRootOr(cwd), planPath, sessionId, at: now });
+}
+
+// Промпт в сессии, что пометила снимок: работу продолжили здесь, метка не нужна.
+export function dropPending(cwd, sessionId) {
+  const file = pendingFile(cwd);
+  if (readJSON(file, null)?.sessionId !== sessionId) return false;
+  try { fs.unlinkSync(file); } catch { /* уже снята */ }
+  return true;
+}
+
+// Путь снимка для новой сессии корня или null. Метка снимается при любом
+// исходе: снимок отдаётся один раз, а удаливший первым при параллельном старте
+// двух сессий — единственный получатель.
+export function takePending(cwd, sessionId, now = Date.now()) {
+  const file = pendingFile(cwd);
+  const mark = readJSON(file, null);
+  if (!mark || mark.sessionId === sessionId) return null;
+  try { fs.unlinkSync(file); } catch { return null; }
+  const fresh = now - mark.at >= 0 && now - mark.at < PENDING_TTL_MS;
+  if (!fresh || mark.repoRoot !== repoRootOr(cwd) || !fs.existsSync(String(mark.planPath))) return null;
+  return mark.planPath;
 }
 
 const pad = (n) => String(n).padStart(2, '0');
