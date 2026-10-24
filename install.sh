@@ -138,6 +138,13 @@ vscode_links() {
   done
 }
 
+# ~/.zshenv читает только zsh: без него и без прежнего файла цель пропускается,
+# чтобы не класть в HOME лишнего. Поставят zsh — следующий ./install.sh её создаст.
+wanted() {
+  [ "$1" = "$HOME/.zshenv" ] || return 0
+  command -v zsh >/dev/null || [ -e "$1" ] || [ -L "$1" ]
+}
+
 check_one() {
   local target="$1" src="$HARNESS/$2"
 
@@ -662,7 +669,7 @@ externals() {
 case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS):"
-    for pair in "${LINKS[@]}"; do check_one "${pair%%|*}" "${pair##*|}"; done
+    for pair in "${LINKS[@]}"; do wanted "${pair%%|*}" && check_one "${pair%%|*}" "${pair##*|}"; done
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
@@ -681,7 +688,7 @@ case "$MODE" in
     ;;
   install)
     say "Раскатка харнеса из $HARNESS:"
-    for pair in "${LINKS[@]}"; do link_one "${pair%%|*}" "${pair##*|}"; done
+    for pair in "${LINKS[@]}"; do wanted "${pair%%|*}" && link_one "${pair%%|*}" "${pair##*|}"; done
     git_filter
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done

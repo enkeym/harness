@@ -101,6 +101,7 @@ Windows-симлинки через `mklink`. Без прав администр
   подключает `~/.bash_env` — Bash-тул Claude Code видит `GITLAB_TOKEN` и env
   машины — и `brew shellenv` для запуска без login-шелла. Прежний `~/.zshenv`
   уезжает в бэкап, его строки настройки (`. "$HOME/.cargo/env"`) — в env.
+  Без zsh и без прежнего `~/.zshenv` цель пропускается — и в install, и в `--check`.
 - Фоновый синк ragsave без `setsid`/`ionice` идёт под `taskpolicy -b`, бэкапы и
   `/doctor` обходятся без GNU `date`.
 

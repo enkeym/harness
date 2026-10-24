@@ -158,6 +158,26 @@ check('LOCALS разобран и не смешан с LINKS',
 
 {
   const sb = sandbox();
+  const zshenv = sb.target('.zshenv');
+  fs.rmSync(zshenv);
+  const res = sb.run();
+  check('без zsh и ~/.zshenv — --check не считает его расхождением',
+    [res.status, res.out.includes(summary(ALL - 1, 0, 0)), res.out.includes(`${zshenv} — нет`)], [0, true, false]);
+  sb.run(['install']);
+  check('без zsh install не создаёт ~/.zshenv', fs.existsSync(zshenv), false);
+}
+
+{
+  const sb = sandbox({ fakes: ['zsh'] });
+  const zshenv = sb.target('.zshenv');
+  fs.rmSync(zshenv);
+  check('zsh есть — --check называет отсутствующий ~/.zshenv', sb.run().out.includes(`${zshenv} — нет`), true);
+  sb.run(['install']);
+  check('zsh есть — install ставит ~/.zshenv', fs.readlinkSync(zshenv), path.join(sb.harness, 'shell', 'zshenv'));
+}
+
+{
+  const sb = sandbox();
   const res = sb.run(['--check'], { FAKE_INDEXER_EXIT: '1' });
   check('mcp-sync --check расходится — код 1 и +1 к вниманию', [res.status, res.out.includes(summary(ALL, 1, 0))], [1, true]);
 }

@@ -59,6 +59,9 @@ paths:
   задвоится в env. env читают и bash, и zsh: zsh-синтаксис из `.zshenv` в нём
   сломает bash.
   Порядок: после `LOCALS`, иначе на новой машине env ещё нет.
+- `install.sh:wanted` ↔ цель `~/.zshenv` в `LINKS`: без `zsh` в PATH и без
+  прежнего файла её не ставят ни install, ни `--check`. Переименуешь цель — проверка
+  молча перестанет срабатывать, и `~/.zshenv` снова появится на машине без zsh.
 - `install.sh:gitconfig_migrate` ↔ имя бэкапа `link_one` (`~/.gitconfig.bak-$STAMP`)
   ↔ `[include]` `~/.gitconfig.local` последним в `git/gitconfig`: только так
   перенесённое значение разработчика перекрывает общее. Сдвинешь `[include]`
