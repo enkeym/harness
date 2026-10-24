@@ -285,6 +285,67 @@ gitconfig_migrate() {
   fixed=$((fixed + 1))
 }
 
+# На уже настроенной машине link_one увозит в бэкап то, что Claude Code и
+# tokensave читали раньше: свои скиллы и команды, глобальный CLAUDE.md, ключи
+# settings.json и keybindings.json. Здесь — что из этого своё, чего нет в
+# харнессе. install сверяет бэкап этого запуска, --check — живую цель, пока она
+# обычный файл или каталог. Только отчёт без счёта в drift (код 1 даёт
+# check_one): в claude/settings.json и skills/ пишет /doctor с ответа
+# пользователя — в репозиторий не должны уехать машинные пути и токены из env.
+# target|источник|вид: json — bin/claude-diff.mjs, text — число своих строк,
+# dir — свои и изменённые элементы верхнего уровня без скрытых.
+REPORTS=(
+  "$HOME/.claude/settings.json|claude/settings.json|json"
+  "$HOME/.claude/keybindings.json|claude/keybindings.json|json"
+  "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md|text"
+  "$HOME/.claude/skills|skills|dir"
+  "$HOME/.claude/commands|claude/commands|dir"
+  "$HOME/.tokensave/config.toml|tokensave/config.toml|text"
+)
+backup_report() {
+  local entry target src kind old own lines x name n=0
+  for entry in "${REPORTS[@]}"; do
+    IFS='|' read -r target src kind <<<"$entry"
+    own="$HARNESS/$src" old="$target.bak-$STAMP" lines=""
+    [ "$MODE" = "--check" ] && old="$target"
+    # Нет источника — его уже назвали link_one/check_one.
+    [ -e "$old" ] && [ ! -L "$old" ] && [ -e "$own" ] || continue
+    case "$kind" in
+      json)
+        if ! command -v node >/dev/null; then
+          warn "$old — node не найден, свои ключи не сравнены с $src"
+          n=$((n + 1)); continue
+        fi
+        lines="$(node "$HARNESS/bin/claude-diff.mjs" "$old" "$own")" || true
+        ;;
+      text)
+        # diff выходит с 1 на различии, grep -c — с 1 на нуле совпадений.
+        x="$(diff "$own" "$old" | grep -c '^>')" || true
+        [ "${x:-0}" -gt 0 ] || continue
+        warn "$old — отличается от харнесса ($src), строк своих: $x"
+        n=$((n + 1)); continue
+        ;;
+      dir)
+        [ -d "$old" ] && [ -d "$own" ] || continue
+        for x in "$old"/*; do
+          [ -e "$x" ] || continue
+          name="$(basename "$x")"
+          if [ ! -e "$own/$name" ]; then
+            lines+="свой: $name"$'\n'
+          elif [ -n "$(diff -rq "$own/$name" "$x" 2>&1)" ]; then
+            lines+="изменён: $name"$'\n'
+          fi
+        done
+        ;;
+    esac
+    [ -n "$lines" ] || continue
+    warn "$old — своё, чего нет в харнессе ($src):"
+    while IFS= read -r x; do [ -z "$x" ] || warn "  $x"; done <<<"$lines"
+    n=$((n + 1))
+  done
+  [ "$n" -eq 0 ] || warn "своё из прежних настроек — /doctor перенесёт каждый пункт в харнесс или оставит в бэкапе"
+}
+
 # Мусор в env: перенос из бэкапов разных машин, ручные вставки, удалённый brew.
 # Только отчёт — какие строки убрать, решает /doctor. Смотрятся строки настройки
 # верхнего уровня (SETUP_RE) вне блоков `# >>> … >>>`: повтор строки внутри
@@ -606,6 +667,7 @@ case "$MODE" in
     vscode_links
     for pair in "${LOCALS[@]}"; do local_one "${pair%%|*}" "${pair##*|}"; done
     env_check
+    backup_report
     backups_check
     projects_check
     mcp_sync --check
@@ -626,6 +688,7 @@ case "$MODE" in
     shell_migrate .bashrc shell/bashrc
     shell_migrate .zshenv shell/zshenv
     gitconfig_migrate
+    backup_report
     env_check
     backups_check
     projects_check

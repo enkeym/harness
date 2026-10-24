@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const INSTALL = path.join(path.dirname(ROOT), 'install.sh');
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-indexer.mjs');
+const CLAUDE_DIFF = path.join(path.dirname(ROOT), 'bin', 'claude-diff.mjs');
 // Пары target|source из массива install.sh; $RAG_HOME без RAGSAVE_HOME — ~/.rag-mcp.
 const pairs = (name) => {
   const block = fs.readFileSync(INSTALL, 'utf8').match(new RegExp(`^${name}=\\(\\n([\\s\\S]*?)^\\)`, 'm'))[1];
@@ -26,7 +27,7 @@ const LINKS = pairs('LINKS');
 const LOCALS = pairs('LOCALS');
 const ALL = LINKS.length + LOCALS.length;
 // mkdir/mv/ln/rm/cp --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
-const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'mkdir', 'mv', 'ln', 'rm', 'cp'];
+const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'diff', 'mkdir', 'mv', 'ln', 'rm', 'cp'];
 const BASH = spawnSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
 
 let failed = 0;
@@ -75,6 +76,7 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [] } = {}) {
   }
   fs.mkdirSync(path.join(harness, 'bin'), { recursive: true });
   fs.symlinkSync(FAKE, path.join(harness, 'bin', 'mcp-sync.mjs'));
+  fs.symlinkSync(CLAUDE_DIFF, path.join(harness, 'bin', 'claude-diff.mjs'));
   fs.symlinkSync(INSTALL, path.join(harness, 'install.sh'));
 
   const bin = path.join(home, 'path');
@@ -435,6 +437,79 @@ function macSandbox() {
   const out = nogit.sb.run([]).out;
   check('git нет — ✗ и local не тронут',
     [out.includes('✗ git не найден — настройки из .gitconfig.bak-'), read(nogit.local)], [true, '[alias]\n\tst = status\n']);
+}
+
+// Настроенная машина: свои settings.json, скиллы и CLAUDE.md вместо симлинков.
+function configuredSandbox(tools) {
+  const sb = sandbox({
+    tools,
+    settings: JSON.stringify({ permissions: { allow: ['Bash(ls *)'] }, hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node ~/.ai-hooks/claude/stop.mjs' }] }] } }),
+  });
+  const [settings, skills, claudeMd] = ['.claude/settings.json', '.claude/skills', '.claude/CLAUDE.md'].map(sb.target);
+  fs.rmSync(path.join(sb.harness, 'skills'));
+  for (const name of ['doctor', 'git-flow']) {
+    fs.mkdirSync(path.join(sb.harness, 'skills', name), { recursive: true });
+    fs.writeFileSync(path.join(sb.harness, 'skills', name, 'SKILL.md'), `# ${name}\n`);
+  }
+  fs.writeFileSync(path.join(sb.harness, 'claude', 'CLAUDE.md'), '# rules\n');
+  for (const t of [settings, skills, claudeMd]) fs.rmSync(t);
+  fs.writeFileSync(settings, JSON.stringify({
+    model: 'opus',
+    env: { SECRET_TOKEN: 'xyz' },
+    permissions: { allow: ['Bash(ls *)', 'Bash(make *)'] },
+    hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node ~/.ai-hooks/claude/stop.mjs' }] }], PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '~/bin/guard.sh' }] }] },
+  }));
+  for (const [name, text] of [['my-skill', 'my'], ['doctor', 'changed'], ['git-flow', '# git-flow\n'], ['.cache', '']]) {
+    fs.mkdirSync(path.join(skills, name), { recursive: true });
+    fs.writeFileSync(path.join(skills, name, 'SKILL.md'), text);
+  }
+  fs.writeFileSync(claudeMd, '# rules\nmy rule 1\nmy rule 2\n');
+  return sb;
+}
+const REPORT = [
+  '  env.SECRET_TOKEN\n', '  permissions.allow: Bash(make *)\n', '  hooks.PreToolUse[Bash]: ~/bin/guard.sh\n',
+  '  свой: my-skill\n', '  изменён: doctor\n', 'строк своих: 2', '/doctor перенесёт каждый пункт',
+];
+const reported = (out) => REPORT.filter((s) => !out.includes(s));
+const LEAKS = ['xyz', 'model', 'git-flow', '.cache', 'Bash(ls *)', 'stop.mjs'];
+
+{
+  const sb = configuredSandbox();
+  const before = sb.snap();
+  const res = sb.run();
+  check('--check на настроенной машине — своё названо заранее, код 1, HOME не тронут',
+    [reported(res.out), res.status, changes(before, sb.snap())], [[], 1, []]);
+  check('--check: значения env, model, общие скиллы, скрытые и общие ключи не названы',
+    LEAKS.filter((s) => res.out.includes(s)), []);
+  check('--check: отчёт не добавляет к вниманию — только три обычных файла', res.out.includes(summary(ALL - 3, 3, 0)), true);
+}
+
+{
+  const sb = configuredSandbox();
+  const res = sb.run([]);
+  const baks = fs.readdirSync(sb.target('.claude')).filter((n) => n.includes('.bak-'));
+  check('install на настроенной машине — тот же отчёт по .bak-<дата>, без значений',
+    [reported(res.out), LEAKS.filter((s) => res.out.includes(s)), res.out.includes(`${sb.target('.claude/settings.json')}.bak-`)], [[], [], true]);
+  check('install: своё осталось в бэкапах, в харнесс не записано',
+    [baks.map((n) => n.replace(/\.bak-.*/, '')).sort(), fs.existsSync(path.join(sb.harness, 'skills', 'my-skill'))],
+    [['CLAUDE.md', 'settings.json', 'skills'], false]);
+  check('--check после install — всё симлинки, отчёта нет', sb.run().out.includes('/doctor перенесёт'), false);
+}
+
+{
+  const sb = configuredSandbox(TOOLS.filter((t) => t !== 'node'));
+  const out = sb.run().out;
+  check('node нет — json не сравнён, каталоги и текст — да',
+    [out.includes('settings.json — node не найден, свои ключи не сравнены'), out.includes('свой: my-skill'), out.includes('строк своих: 2')],
+    [true, true, true]);
+}
+
+{
+  const sb = sandbox();
+  const settings = sb.target('.claude/settings.json');
+  fs.rmSync(settings);
+  fs.writeFileSync(settings, '{ broken');
+  check('битый settings.json — сравнить руками', sb.run().out.includes('settings.json не разобран как JSON — сравнить руками'), true);
 }
 
 for (const [dir, warned] of [['~/.githooks', true], ['~/.config/git/hooks', false]]) {

@@ -75,6 +75,15 @@ paths:
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
   `SETUP_RE` и `BASHRC_OWN` общие с `shell_migrate`: что перенесено, то и
   проверяется.
+- `install.sh:REPORTS` ↔ цели `LINKS` и имена бэкапов `link_one` (`<цель>.bak-$STAMP`):
+  `backup_report` сверяет бэкап этого запуска, в `--check` — живую цель-не-симлинк.
+  Цель убрали из `LINKS`, а из `REPORTS` нет — отчёт молча пуст; новая цель
+  со своим содержимым без строки в `REPORTS` уедет в бэкап без отчёта.
+  `bin/claude-diff.mjs` ↔ форма `settings.json` (`env`, `hooks.<event>[].hooks[]`
+  с `command`+`args`, `model`) и `keybindings.json` (`bindings[]` с `context`):
+  Claude Code сменит форму — хук или привязка уйдут в отчёт целиком или пропадут.
+  Формулировки (`свой:`, `изменён:`, `строк своих:`, `не разобран как JSON`,
+  `env.<имя>`, `hooks.<event>[<matcher>]:`) ↔ repair.md (Configured machine).
 - `install.sh:backups_check` ↔ формат `STAMP` (`%Y%m%d-…`) и каталоги, куда
   `.bak-` кладут `link_one`, `vscode_one` и чистка правил tokensave: дата берётся
   из имени. Сменил формат `STAMP` или бэкап лёг в новый каталог — старые молча

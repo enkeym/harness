@@ -74,6 +74,15 @@ claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless 
   `ANTHROPIC_MODEL`, при нужде `RAGSAVE_HOME` (каталог ragsave вместо
   `~/.rag-mcp`; задать до запуска `install.sh` — в него лягут и симлинки).
 
+Машина уже настроена — `~/.claude/{settings.json,keybindings.json,CLAUDE.md,skills,commands}`
+и `~/.tokensave/config.toml` свои: `install.sh` увозит их в `.bak-<дата>` и
+перечисляет, чего из этого нет в харнессе — ключи и хуки settings.json (под `env`
+только имена), привязки клавиш, свои и изменённые скиллы и команды, число своих
+строк в `CLAUDE.md`. `./install.sh --check` до раскатки показывает тот же список
+по живым файлам. Сам `install.sh` в репозиторий не пишет: `/doctor` по каждому
+пункту спрашивает — перенести в харнесс (скилл в `skills/`, ключ в
+`claude/settings.json`, хук — скриптом в `ai-hooks/`) или оставить в бэкапе.
+
 VS Code в Windows симлинк из WSL не видит, поэтому `install.sh` создаёт
 Windows-симлинки через `mklink`. Без прав администратора это работает только
 в режиме разработчика (Параметры → Для разработчиков). Если `mklink` не
