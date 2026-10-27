@@ -199,6 +199,7 @@
   },
   "showClearContextOnPlanAccept": true,
   "theme": "dark-ansi",
+  "switchModelsOnFlag": true,
   "remoteControlAtStartup": false,
   "autoMode": {
     "allow": [
