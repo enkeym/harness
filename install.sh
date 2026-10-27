@@ -723,13 +723,31 @@ mcp_sync() {
   fi
 }
 
+# node:sqlite (ai-hooks/guard-core.mjs) без флага --experimental-sqlite: 22.13+ и 23.4+.
+# Версию сравниваем числами (major, minor): строкой «v9» оказалась бы старше «v22».
+node_check() {
+  local ver major minor
+  ver="$(node --version 2>/dev/null)"
+  ver="${ver#v}"
+  major="${ver%%.*}"
+  minor="${ver#*.}"; minor="${minor%%.*}"
+  case "$major$minor" in
+    ''|*[!0-9]*) warn "node: версию не разобрать ($ver) — нужна 22.13+ или 23.4+"; return ;;
+  esac
+  if [ "$major" -gt 23 ] || { [ "$major" -eq 23 ] && [ "$minor" -ge 4 ]; } || { [ "$major" -eq 22 ] && [ "$minor" -ge 13 ]; }; then
+    good "node v$ver"
+  else
+    bad "node v$ver ниже минимума 22.13/23.4 — хуки харнесса падают на импорте node:sqlite; поставь node 22.13+ (nvm install 22)"
+  fi
+}
+
 externals() {
   say
   machine_paths_check
   say
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
-  command -v node      >/dev/null && good "node $(node --version 2>/dev/null)" || bad "node — не найден: без него хуки и гарды харнесса молча не работают"
+  if command -v node >/dev/null; then node_check; else bad "node — не найден: без него хуки и гарды харнесса молча не работают"; fi
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || tokensave_missing
   command -v tokensave >/dev/null && tokensave_hook_check
   tokensave_install_check

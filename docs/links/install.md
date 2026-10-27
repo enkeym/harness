@@ -126,6 +126,10 @@ paths:
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь. Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —
   путь у Claude устарел до следующего `./install.sh`.
+- `install.sh:node_check` (минимум 22.13 / 23.4) ↔ `import 'node:sqlite'` в
+  `ai-hooks/guard-core.mjs`, `README.md` и `ai-hooks/README.md` (то же число).
+  Хук возьмёт новый API Node или сменит модуль — поправь минимум везде, иначе
+  `--check` пропустит версию, на которой хуки падают на импорте.
 - `install.sh:externals` ↔ раскладка пакета `@playwright/mcp`: chromium
   сверяется через `node_modules/playwright/cli.js install --dry-run` внутри
   глобального пакета (ревизия та, что ждёт MCP). Пакет сменит раскладку —

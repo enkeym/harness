@@ -637,6 +637,21 @@ for (const [helper, warned] of [['', true], ['[credential "https://gitlab.exampl
   check('claude и tokensave в PATH — найдены', [res.out.includes('claude fake --version'), res.out.includes(`tokensave: ${path.join(sb.home, 'path', 'tokensave')}`)], [true, true]);
 }
 
+// Версия node: подменный `node` печатает заданную строку на любой вызов.
+const nodeVersion = (ver) => {
+  const sb = sandbox({ tools: TOOLS.filter((t) => t !== 'node') });
+  const fake = path.join(sb.home, 'path', 'node');
+  fs.writeFileSync(fake, `#!/bin/sh\necho ${ver}\n`, { mode: 0o755 });
+  return sb.run().out;
+};
+for (const [ver, ok] of [['v20.0.0', false], ['v22.12.9', false], ['v23.3.0', false], ['v9.0.0', false],
+  ['v22.13.0', true], ['v23.4.0', true], ['v24.18.0', true], ['v100.0.0', true]]) {
+  const out = nodeVersion(ver);
+  check(`node ${ver} — ${ok ? 'принят' : 'старше минимума'}`,
+    [out.includes(`✓ node ${ver}`), out.includes(`✗ node ${ver} ниже минимума 22.13/23.4`)], [ok, !ok]);
+}
+check('версия node не разобрана — предупреждение', nodeVersion('мусор').includes('node: версию не разобрать'), true);
+
 {
   const sb = sandbox();
   const before = sb.snap();

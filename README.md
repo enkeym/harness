@@ -33,6 +33,10 @@
 
 ## Раскатка на новой машине
 
+Нужен Node ≥ 22.13 (или ≥ 23.4): хуки импортируют `node:sqlite`, который без
+флага `--experimental-sqlite` работает только с этих версий. `./install.sh --check`
+помечает более старую версию как ✗.
+
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness   # каталог любой
 cd ~/harness

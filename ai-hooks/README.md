@@ -3,6 +3,10 @@
 Гарды безопасности, ask mode, гейт скиллов, shell-гард, учёт и уборка.
 Логика в `*-core.mjs`, адаптер под формат Claude Code — в `claude/`.
 
+Требуется Node ≥ 22.13 (или ≥ 23.4): `guard-core.mjs` импортирует `node:sqlite`,
+без флага `--experimental-sqlite` он есть только с этих версий. Версию проверяет
+`install.sh:externals`; сами хуки на запуске её не сверяют.
+
 Shell-гард держит одно правило: **shell запускает команды, файлы читает
 `Read`, правит `Edit`/`Write`.** `cat`/`head`/`sort`/`base64`, `sed -n`/`awk` по файлу,
 `grep ''`/`grep .`/`grep -v` по файлу, `diff /dev/null файл`, `git show HEAD:файл`
