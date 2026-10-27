@@ -69,14 +69,14 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   configs outside the index, agent config paths and a session outside a project pass.
   Its edits: `tokensave_str_replace` — `Edit` needs a `Read` first.
 - tokensave errored or answered empty → quote the answer and repeat the same
-  `Read`: a repeat of the same target within 3 minutes passes (breaker,
-  `~/.claude/state/guard-breaker.json`). Don't reach for the shell instead.
+  `Read`: a repeat of the same target within 3 minutes passes (breaker, `~/.claude/state/guard-breaker.json`). Don't reach for the shell instead.
 
 ## question-guard
 
 - Stop hook blocks once a turn without `AskUserQuestion`/`ExitPlanMode`: HAND once,
   also right after another Stop hook's block, HARD every turn (do what the meter's text says); last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite), or open questions stated in the last two paragraphs ("Открытыми остаются вопросы: …").
 - `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a stacked snapshot: rewrite the plan file per `handoff`, then exit again.
+- `model-hint` (PostToolUseFailure on Bash): one check (tsc, test, linter) failed a third time in a row with edits between, on Sonnet, once per session — no fourth guess: two lines on what fails and what was tried, then `AskUserQuestion` «Переключиться на Opus» (user runs `/model opus`) first.
 - `resume-hint` on resume: work moved through handoff to the named session — changes after the handoff are its, not unknown; user writes here → repeat its `/resume <id>` in one line.
 - `handoff-mark` (approved `ExitPlanMode` snapshot) → `handoff-pickup` (SessionStart `startup|clear`, same repo, ≤12 h) gives
   it to the new session once: «продолжи» after `/clear` suffices; a prompt in the marking session (`handoff-drop`) clears the mark.
@@ -122,7 +122,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 
 ## When something is broken
 
-1. `~/.ai-hooks/logs/hooks.jsonl` — one line per check decision (`deny`, `ask`, `block`, `slow`,
+1. `~/.ai-hooks/logs/hooks.jsonl` — one line per check decision (`deny`, `ask`, `block`, `hint`, `slow`,
    `crash`) with `sid`, `target`, `ms`; allowed calls are not written. The per-session trace of
    "what blocked, what came next"; `slow` of `claude/dispatch.mjs` (one process per event) names `dispatch`.
 2. `~/.ai-hooks/logs/errors.log` — background task failures and hook crashes

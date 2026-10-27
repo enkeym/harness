@@ -4,6 +4,8 @@ paths:
   - "ai-hooks/skill-core.mjs"
   - "ai-hooks/question-core.mjs"
   - "ai-hooks/context-core.mjs"
+  - "ai-hooks/model-hint-core.mjs"
+  - "ai-hooks/claude/model-hint.mjs"
   - "ai-hooks/claude/ask-*.mjs"
   - "ai-hooks/claude/statusline.mjs"
   - "ai-hooks/claude/question-guard.mjs"
@@ -65,5 +67,11 @@ paths:
   `claude/CLAUDE.md` (предлагать, только когда хук назвал пропуск) и
   `skills/hooks-guards/SKILL.md`. Вернёшь в CLAUDE.md условие «индекс есть, `docs/links/` нет» —
   агент снова предлагает карту в каждой сессии мимо метки.
+- Подсказка `/model opus` — `ai-hooks/model-hint-core.mjs:noteCheck` (провал — событие
+  `PostToolUseFailure`, правка — любой инструмент, кроме Bash, модель — `contextUsed().model`) ↔
+  matcher `model-hint` в `ai-hooks/claude/dispatch.mjs:TABLE` (`EDIT_TOOLS` и Bash; на
+  `PostToolUseFailure` — Bash) и регистрация `PostToolUseFailure` в `claude/settings.json`. Вписал в
+  matcher не-правку — серия растёт без правок; Claude Code перестал отдавать ненулевой
+  выход Bash через `PostToolUseFailure` или сменил `message.model` — подсказка молчит.
 - Списки инструментов правки tokensave в `ask-core`/`skill-core` — `hooks/guards/security.md`;
   формы коммита и `keepHeredoc` — `hooks/guards/shell.md`.

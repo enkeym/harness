@@ -203,7 +203,7 @@ function records(sb) {
 // --- регистрация: наши хуки события — один вызов диспетчера ---
 {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'claude', 'settings.json'), 'utf8'));
-  for (const event of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop']) {
+  for (const event of ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'Stop']) {
     // ragsave-sync.sh — не проверка диспетчера: фоновая индексация своим процессом.
     const ours = settings.hooks[event].flatMap((g) => g.hooks).map((h) => h.command).filter((c) => /\.ai-hooks\/.*\.mjs/.test(c));
     check(`settings.json ${event}: только диспетчер`, ours, [`node "$HOME/.ai-hooks/claude/dispatch.mjs" ${event}`]);

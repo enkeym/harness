@@ -61,7 +61,7 @@ state-core.mjs             # единый корень рантайм-состо
 ask-core.mjs                # ask mode: состояние режима и что считается изменением
 hooklog-core.mjs                # журнал решений хуков → logs/hooks.jsonl, захват падений
 claude/hook-io.mjs              # общий ввод/вывод: runHook, ответ check → JSON события, журнал
-claude/dispatch.mjs             # один node на PreToolUse/PostToolUse/UserPromptSubmit/Stop: matcher'ы, check адаптеров, слияние ответов
+claude/dispatch.mjs             # один node на PreToolUse/PostToolUse/PostToolUseFailure/UserPromptSubmit/Stop: matcher'ы, check адаптеров, слияние ответов
 claude/bash-router.mjs          # адаптер Claude: PreToolUse(Bash|mcp__ide__executeCode)
 claude/read-router.mjs          # адаптер Claude: PreToolUse(Read) — файл из индекса читает tokensave
 tool-args-core.mjs              # угаданные имена параметров tokensave (path у read, file и old_string у правок) → настоящие
@@ -81,6 +81,8 @@ claude/resume-hint.mjs          # открыли звено цепочки — �
 claude/handoff-mark.mjs         # одобренный ExitPlanMode со снимком — метка для следующей сессии корня (PostToolUse: ExitPlanMode)
 claude/handoff-pickup.mjs       # метка есть — снимок в контексте новой сессии один раз (SessionStart: startup|clear)
 claude/handoff-drop.mjs         # промпт в пометившей сессии — метка снята (UserPromptSubmit)
+model-hint-core.mjs             # Sonnet трижды подряд провалил одну проверку с правками между попытками → подсказка /model opus
+claude/model-hint.mjs           # адаптер Claude: PostToolUse(правки, Bash) и PostToolUseFailure(Bash), раз за сессию
 question-core.mjs               # конец хода без меню: работа, порог контекста, вопрос текстом
 claude/question-guard.mjs       # адаптер Claude: Stop — такой ход не завершается (block)
 claude/output-clip.mjs          # шумные команды — через ограничитель вывода (PreToolUse: Bash)
@@ -605,13 +607,13 @@ tokensave) в корне такого репозитория. Файл пров�
 ## Подключение
 
 **Claude Code** — `~/.claude/settings.json`, секция `hooks`. `PreToolUse`,
-`PostToolUse`, `UserPromptSubmit` и `Stop` — один `node ~/.ai-hooks/claude/dispatch.mjs <Event>`
-(на matcher `*` у событий инструмента): старт node ~100 мс, и Bash раньше поднимал
+`PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit` и `Stop` — один `node ~/.ai-hooks/claude/dispatch.mjs <Event>`
+(на matcher `*` у событий инструмента, у `PostToolUseFailure` — `Bash`): старт node ~100 мс, и Bash раньше поднимал
 шесть процессов. Matcher'ы проверок — в
 `TABLE` диспетчера, ниже они в скобках. Каждая проверка судит исходный вход,
 как параллельный хук: deny у кого-то — deny с причинами всех запретивших, правки входа
 отброшены; иначе ask (+ `updatedInput`); иначе `updatedInput`; additionalContext
-склеивается в порядке таблицы. У PreToolUse без deny и ask — ещё `allow` (`permit`,
+склеивается в порядке таблицы, `systemMessage` (поле `message` ответа check, в журнале `hint`) — построчно. У PreToolUse без deny и ask — ещё `allow` (`permit`,
 исключения — в разделе гарда безопасности). `block` (стёртый промпт, незавершённый ход) —
 ответ сразу, проверки ниже по таблице не идут. Падение проверки — `crash` под её именем,
 остальные работают. Адаптеры экспортируют `check(input)` и остаются точками
@@ -648,6 +650,12 @@ Ragsave: `bin/ragsave-sync.sh` на `SessionStart` (с `--warm`) и `Stop`.
 Экономия контекста: `output-clip` на `PreToolUse`
 (matcher `Bash`; его правка входа без причины и в журнал не пишется), `context-step` на `PostToolUse`,
 `context-meter` на `UserPromptSubmit`,
+`model-hint` на `PostToolUse` (matcher тот же, что у `links-context`, плюс `Bash`) и `PostToolUseFailure`
+(matcher `Bash`): третий подряд провал одной проверки (tsc, тест, линтер; ключ — команда с
+ужатыми пробелами) с правками между попытками, модель последней записи — Sonnet →
+пользователю `systemMessage` с `/model opus`, модели — не пробовать четвёртый раз, а предложить
+переключение в меню. Раз за сессию (`state/model-hint-<sid>.json`); повтор без правки не
+считается, успех проверки серию обнуляет. Модель хук не меняет — такого вывода у хука нет.
 `paste-guard` на `UserPromptSubmit` первым в таблице — заблокированный промпт
 остальные проверки не видят (у `tokensave hook-prompt-submit` свой процесс),
 `plan-guard` на `PreToolUse` (matcher `ExitPlanMode`), `resume-hint` на

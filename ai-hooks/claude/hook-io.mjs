@@ -5,7 +5,8 @@
 //
 // Ответ check: null — молчит; { decision: 'deny'|'ask', reason } — решение о
 // вызове; { updatedInput, reason } — исправленный вход; { context } —
-// additionalContext; { block: reason } — промпт стёрт или ход не завершён.
+// additionalContext; { message } — systemMessage пользователю; { block: reason } —
+// промпт стёрт или ход не завершён.
 
 import { setHookContext, logDecision, logSlowIfNeeded, logCrash } from '../hooklog-core.mjs';
 
@@ -50,6 +51,7 @@ export function logVerdict(input, result) {
   if (result.decision) return logDecision(result.decision, { target: targetOf(input), reason: result.reason });
   if (result.updatedInput && result.reason) return logDecision('rewrite', { target: targetOf(input), reason: result.reason });
   if (result.block) return logDecision('block', { reason: result.block });
+  if (result.message) return logDecision('hint', { target: targetOf(input), reason: result.message });
   return false;
 }
 
@@ -65,16 +67,19 @@ export function payloadOf(event, result) {
     out.permissionDecisionReason = result.reason;
   }
   if (result.updatedInput) out.updatedInput = result.updatedInput;
-  return { hookSpecificOutput: out };
+  const payload = { hookSpecificOutput: out };
+  if (result.message) payload.systemMessage = result.message;
+  return payload;
 }
 
 // Точка входа одной проверки. Падение check → crash в журнал и молчание.
-// Медленный проход пишется, только если решения в журнале нет.
+// Медленный проход пишется, только если решения в журнале нет. Без event —
+// событие из входа: проверка висит на нескольких.
 export function runHook(check, event) {
   readInput((input) => {
     let result = null;
     try { result = check(input); } catch (e) { logCrash(e); }
     if (!logVerdict(input, result)) logSlowIfNeeded();
-    finish(payloadOf(event, result));
+    finish(payloadOf(event || input.hook_event_name, result));
   });
 }

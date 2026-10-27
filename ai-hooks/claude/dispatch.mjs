@@ -13,7 +13,7 @@
 //   deny у кого-то   → deny, причины всех запретивших через \n, правки входа отброшены;
 //   ask              → ask (+ updatedInput, если был);
 //   updatedInput     → он; matcher tool-args и output-clip не пересекаются;
-//   context          → через пустую строку в порядке таблицы;
+//   context          → через пустую строку в порядке таблицы; message — построчно;
 //   block            → ответ, остальные проверки события не идут.
 // Падение проверки → crash в журнал под её именем, остальные работают.
 //
@@ -42,6 +42,7 @@ const EDIT_MCP = 'mcp__tokensave__tokensave_';
 const PROJECT_GUARDS = 'ai/hooks/run.mjs';
 const PROJECT_POLICY = 'ai/hooks/policy.mjs';
 const CHOICE_TOOLS = /^(AskUserQuestion|ExitPlanMode|EnterPlanMode)$/;
+const EDIT_TOOLS = new RegExp(`^(Edit|Write|MultiEdit|${EDIT_MCP}(str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol))$`);
 
 const PROJECT_SKIP = new Set(['links-context']);
 // project: { level, reason } | null — вердикт проекта; undefined — не узнать.
@@ -96,7 +97,12 @@ const TABLE = {
   PostToolUse: [
     ['context-step', ALL],
     ['handoff-mark', /^ExitPlanMode$/],
-    ['links-context', new RegExp(`^(Edit|Write|MultiEdit|${EDIT_MCP}(str_replace|multi_str_replace|replace_lines|insert_at|insert_at_symbol|replace_symbol))$`)],
+    ['links-context', EDIT_TOOLS],
+    ['model-hint', new RegExp(`${EDIT_TOOLS.source}|^Bash$`)],
+  ],
+  // Провал инструмента; ненулевой выход Bash — тоже он.
+  PostToolUseFailure: [
+    ['model-hint', /^Bash$/],
   ],
   UserPromptSubmit: [
     // Первым: стёртый промпт не помечает скилл и не несёт контекст.
@@ -122,8 +128,10 @@ function merge(results) {
   const asks = results.filter((r) => r.decision === 'ask');
   if (asks.length) return { decision: 'ask', reason: asks.map((r) => r.reason).join('\n'), updatedInput };
   if (updatedInput) return { updatedInput };
-  const context = results.map((r) => r.context).filter(Boolean).join('\n\n');
-  return context ? { context } : null;
+  const joined = (key, sep) => results.map((r) => r[key]).filter(Boolean).join(sep);
+  const context = joined('context', '\n\n');
+  const message = joined('message', '\n');
+  return context || message ? { context, message } : null;
 }
 
 function permit(event, input, result) {

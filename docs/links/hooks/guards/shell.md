@@ -37,7 +37,7 @@ paths:
   роутер чтения молча пропускает всё, тесты `test-guards.mjs` не заметят: они
   создают таблицу сами.
 - Имена файлов хуков — регистрация по путям `$HOME/.ai-hooks/…` в
-  `claude/settings.json` (PreToolUse/PostToolUse/UserPromptSubmit/Stop — `dispatch.mjs <Event>`), имена проверок в
+  `claude/settings.json` (PreToolUse/PostToolUse/PostToolUseFailure/UserPromptSubmit/Stop — `dispatch.mjs <Event>`), имена проверок в
   `ai-hooks/claude/dispatch.mjs:TABLE` → `./<имя>.mjs` (`cleanup` → `ai-hooks/bin/cleanup.mjs`) и имя `hook` в `hooks.jsonl`. Переименовал или перенёс хук — он
   перестаёт вызываться (из TABLE — с строкой `crash` на каждом вызове), doctor ищет
   старое имя; проверка регистрации только со следующей сессии.

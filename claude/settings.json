@@ -88,6 +88,17 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/claude/dispatch.mjs\" PostToolUseFailure"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
