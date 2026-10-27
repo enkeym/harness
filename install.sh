@@ -747,7 +747,8 @@ node_check() {
 node_shell_check() {
   case "${SHELL:-}" in */zsh) ;; *) return 0 ;; esac
   command -v zsh >/dev/null || return 0
-  if [ -n "$(zsh -c 'command -v node' 2>/dev/null)" ]; then
+  # Чистое окружение: иначе zsh унаследует PATH терминала с уже загруженным nvm.
+  if [ -n "$(env -i HOME="$HOME" USER="${USER:-}" "$(command -v zsh)" -c 'command -v node' 2>/dev/null)" ]; then
     good "node виден неинтерактивному zsh (хуки его найдут)"; return 0
   fi
   bad "node не виден неинтерактивному zsh — хуки харнесса молча не стартуют"

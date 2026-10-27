@@ -32,7 +32,7 @@ const ALL = LINKS.length + LOCALS.length;
 const CORE = CORE_LINKS.length + CORE_LOCALS.length;
 const MARK = '.config/harness/personal';
 // mkdir/mv/ln/rm/cp --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
-const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'diff', 'mkdir', 'mv', 'ln', 'rm', 'cp'];
+const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'diff', 'mkdir', 'mv', 'ln', 'rm', 'cp', 'env'];
 const BASH = spawnSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
 
 let failed = 0;
@@ -652,14 +652,20 @@ for (const [ver, ok] of [['v20.0.0', false], ['v22.12.9', false], ['v23.3.0', fa
 }
 check('версия node не разобрана — предупреждение', nodeVersion('мусор').includes('node: версию не разобрать'), true);
 
-// node в неинтерактивном zsh: подменный zsh печатает путь или ничего.
+// node в неинтерактивном zsh: подменный zsh печатает путь или ничего; при
+// унаследованном окружении ($SHELL задан) он «видит» node всегда — проверка
+// обязана звать zsh в чистом env.
+const driftCount = (out) => Number((out.match(/требуют внимания: (\d+)/) || [])[1] ?? 0);
+const drifts = {};
 for (const [shellNode, ok] of [['/opt/homebrew/bin/node', true], ['', false]]) {
   const sb = sandbox();
-  fs.writeFileSync(path.join(sb.home, 'path', 'zsh'), `#!/bin/sh\necho '${shellNode}'\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(sb.home, 'path', 'zsh'), `#!/bin/sh\n[ -n "$SHELL" ] && echo /leaked/node || echo '${shellNode}'\n`, { mode: 0o755 });
   const res = sb.run(['--check'], { SHELL: '/bin/zsh' });
+  drifts[ok] = driftCount(res.out);
   check(`zsh ${ok ? 'видит' : 'не видит'} node — ${ok ? '✓' : '✗ и drift'}`,
     [res.out.includes('✓ node виден неинтерактивному zsh'), res.out.includes('✗ node не виден неинтерактивному zsh')], [ok, !ok]);
 }
+check('zsh не видит node — drift на 1 больше', drifts[false] - drifts[true], 1);
 {
   const sb = sandbox();
   fs.writeFileSync(path.join(sb.home, 'path', 'zsh'), '#!/bin/sh\necho\n', { mode: 0o755 });
