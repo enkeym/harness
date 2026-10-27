@@ -112,8 +112,8 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
 
 ## Output
 
-Before a commit: fixes one line each; secret/Critical first; then
-`Checked, no issues: <categories>`.
+Before a commit: fixes one line each, secret/Critical first; the checked
+categories go into the trace line of `review-pass.md` step 7.
 
 Requested review — readable in one pass, quoting only the lines a finding hinges on:
 

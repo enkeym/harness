@@ -23,7 +23,7 @@ const env = {
 };
 delete env.AI_HOOKS_SKILL_GATE_OFF;
 
-const { isGitCommit, isInstructionFile, skillName, missingSkills, commitMessageProblem } = await import('../skill-core.mjs');
+const { isGitCommit, isInstructionFile, skillName, missingSkills, commitMessageProblem, readsDiff, editsFile } = await import('../skill-core.mjs');
 
 let failed = 0;
 function check(name, got, want) {
@@ -116,6 +116,17 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   check('сообщение: merge -m без пустой строки', bad('git merge -m "merge: x\n- body" feature'), true);
   check('сообщение: причина цитирует заголовок', commitMessageProblem("git commit -F - <<'EOF'\nfix: x\nbody\nEOF")?.includes('"fix: x"'), true);
 
+  check('diff: git diff HEAD', readsDiff('git diff HEAD'), true);
+  check('diff: --cached после add', readsDiff('git add -A && git diff --cached'), true);
+  check('diff: от базы в файл /tmp', readsDiff('git diff dev...HEAD -- src > /tmp/d'), true);
+  check('diff: --stat — сводка', readsDiff('git diff --stat dev...HEAD'), false);
+  check('diff: --name-only — сводка', readsDiff('git diff --cached --name-only'), false);
+  check('diff: git log не diff', readsDiff('git log -p -1'), false);
+  check('правка: Edit', editsFile('Edit', edit('/home/x/p/a.ts')), true);
+  check('правка: запись в /tmp — нет', editsFile('Bash', bash(`git diff > ${path.join(os.tmpdir(), 'd')}`), tmp), false);
+  check('правка: sed -i — да', editsFile('Bash', bash('sed -i s/a/b/ src/a.ts'), '/home/x/p'), true);
+  check('правка: Read — нет', editsFile('Read', { file_path: '/home/x/p/a.ts' }), false);
+
   check('имя: plugin:skill', skillName('plugin:skill-authoring'), 'skill-authoring');
   check('имя: scoped', skillName('apps/web:deploy'), 'deploy');
 }
@@ -183,7 +194,21 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   const r2 = gate('sid-g', 'Bash', bash('git commit -m x'));
   check('два из трёх → deny, не хватает git-flow', decision(r2) === 'deny' && r2.includes('git-flow') && !r2.includes('review-standards'), true);
   loadViaTool('sid-g', 'git-flow');
-  check('все три → allow', gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -')), 'allow');
+  const r4 = gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -'));
+  check('все три без diff → deny с подсказкой', decision(r4) === 'deny' && r4.includes('git diff'), true);
+  check('diff в той же команде не в счёт', decision(gate('sid-g', 'Bash', bash('git diff HEAD && git commit -m x'))), 'deny');
+  check('сводка --stat → allow, но не в счёт', gate('sid-g', 'Bash', bash('git diff --stat HEAD')), 'allow');
+  check('после --stat коммит → deny', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
+  gate('sid-g', 'Bash', bash('git diff HEAD'));
+  check('все три и diff → allow', gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -')), 'allow');
+  gate('sid-g', 'Edit', edit('/home/x/p/src/a.ts'));
+  check('правка после diff → deny', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
+  run(GATE, { session_id: 'sid-g', agent_id: 'a1', tool_name: 'Bash', tool_input: bash('git diff HEAD'), cwd: tmp });
+  check('diff субагента не в счёт', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
+  gate('sid-g', 'Bash', bash('git diff --cached'));
+  loadViaTool('sid-g', 'review-standards');
+  check('review-standards загружен после diff → deny', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
+  gate('sid-g', 'Bash', bash('git diff --cached'));
   const r3 = gate('sid-g', 'Bash', bash("git commit -F - <<'EOF'\nfix: x\n- body\nEOF"));
   check('все три, заголовок без пустой строки → deny', decision(r3) === 'deny' && r3.includes('blank line'), true);
 }

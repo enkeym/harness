@@ -115,7 +115,7 @@ applied unasked);
 
 ## Output
 
-Before a commit: one line per fix and the answered questions, then the commit.
+Before a commit: fixes and answers one line each, then `review-pass.md` step 7.
 
 Requested review (someone's diff, branch, MR) — spec first, then quality; readable
 in one pass, quoting only the lines a finding hinges on:

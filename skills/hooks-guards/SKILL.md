@@ -52,12 +52,12 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   any `CLAUDE.md` (also via `cp`/`>`/`git checkout --`) until
   `skill-authoring` is loaded, and a commit (`commit`, `commit-tree`, `am`,
   `merge -m`, `--continue`) until `review-standards`, `review-security`,
-  `git-flow` are, or while its message has a non-empty line 2 — empty it and
-  repeat, no amend.
-- The refusal names the missing skill: load it with `Skill(<name>)`, do what
-  it says (the review skills mean running the checklist on the diff, not just
-  loading), then repeat the call. Loaded-state is per session — after `/clear`
-  the skills are gone from your context and from the gate alike.
+  `git-flow` are, while its line 2 is non-empty (empty it, no amend), or
+  while no content `git diff` (not `--stat`) ran in its own call after the
+  last edit and the `review-standards` load.
+- The refusal names the missing skill or step: load with `Skill(<name>)`, run
+  the pass on the diff, repeat the call. Loaded-state is per session — after
+  `/clear` the skills are gone from your context and from the gate alike.
 - A prompt the user started with `/<skill>` counts as loaded.
 
 ## Read router

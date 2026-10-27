@@ -206,6 +206,62 @@ export function loadedSkills(sessionId) {
   return new Set(Object.keys(entry?.skills || {}));
 }
 
+// Ревью перед коммитом — не только загрузка скиллов: в сессиях web_groza модель
+// грузила review-standards и review-security и сразу коммитила, не открыв diff,
+// а /review той же ветки находил то, что проход должен был поймать. Поэтому
+// коммит ждёт чтения diff отдельным вызовом — позже последней правки и загрузки
+// review-standards. Сводки (--stat, --name-only) не в счёт: в них нет кода.
+const DIFF_SUMMARY_RE = /^--(name-only|name-status|stat|shortstat|numstat|dirstat|summary|quiet|exit-code|check)(=|$)/;
+
+export function readsDiff(command) {
+  if (!command) return false;
+  try {
+    return segments(command).some(({ text }) => {
+      const all = tokenize(text);
+      const toks = all.slice(commandIndex(all));
+      const sub = commandName(toks) === 'git' ? gitSubcommandAt(toks) : -1;
+      return sub !== -1 && toks[sub] === 'diff' && !toks.slice(sub + 1).some((t) => DIFF_SUMMARY_RE.test(t));
+    });
+  } catch {
+    return false;
+  }
+}
+
+// Правка файла: инструмент правки или запись через shell мимо временного каталога
+// (`git diff > /tmp/d` — чтение, не правка).
+export function editsFile(toolName, toolInput, cwd) {
+  if (editedFile(toolName, toolInput, cwd)) return true;
+  if (toolName !== 'Bash') return false;
+  const tmp = path.resolve(os.tmpdir());
+  return bashWrites(toolInput?.command, cwd).some((p) => !p.startsWith(tmp + path.sep) && !p.startsWith('/dev/'));
+}
+
+// Отметки работы сессии: edit — последняя правка, diff — последнее чтение diff.
+export function markWork(sessionId, key) {
+  if (!sessionId) return false;
+  const now = Date.now();
+  const state = prune(readJSON(STATE_FILE, {}), now);
+  const entry = state[sessionId] || { t: now, skills: {} };
+  entry.t = now;
+  entry.work = { ...(entry.work || {}), [key]: now };
+  state[sessionId] = entry;
+  return writeJSON(STATE_FILE, state);
+}
+
+// Текст запрета коммиту без прочитанного diff либо null.
+export function unreadDiff(sessionId, command) {
+  if (!isGitCommit(command)) return null;
+  const entry = readJSON(STATE_FILE, {})[sessionId];
+  const diff = entry?.work?.diff || 0;
+  const after = Math.max(entry?.work?.edit || 0, entry?.skills?.['review-standards'] || 0);
+  if (diff > after) return null;
+  return (
+    'Commit without a review pass: no content `git diff` since the last edit and the review-standards load. ' +
+    'Read the diff in its own call (`git diff HEAD`, or `git diff --cached` after `git add`), run ' +
+    'skills/shared/review-pass.md on it, then rerun git commit.'
+  );
+}
+
 // Гейт, который не пройден: { id, what, missing } либо null.
 export function missingSkills(toolName, toolInput, loaded, cwd) {
   for (const gate of GATES) {
