@@ -154,21 +154,29 @@ export function pendingQuestion(text) {
   return null;
 }
 
-// Вход Stop → причина блока или null. Второй Stop подряд (stop_hook_active)
-// пропускается: модель уже получила причину, второй блок — это петля.
+// Вход Stop → причина блока или null.
 //
 // Порядок: порог контекста (HAND один раз за сессию, HARD каждый ход; SOFT
 // не блокирует), затем текст.
+//
+// Второй Stop подряд (stop_hook_active): ход уже держал чей-то блок — наш или
+// чужого хука (ai-kit проекта). Текст и HARD молчат: повтор своего блока —
+// петля. HAND остаётся — он один раз за сессию, повтора не будет, а иначе
+// чужой блок съедал передачу и ход на 158k кончался сводкой (сессия 9dd4ad93).
 export function questionVerdict(input) {
-  if (!input || input.stop_hook_active || !input.transcript_path) return null;
+  if (!input || !input.transcript_path) return null;
+  const again = Boolean(input.stop_hook_active);
+  if (again && !input.session_id) return null;
   const { text, menu, worked, tools, first } = lastTurn(transcriptLines(input.transcript_path), input.cwd);
   if (menu) return null;
   const used = contextUsed(input.transcript_path);
   const stage = level(used?.tokens);
   const didWork = worked || sessionWorked(input.session_id);
-  if (stage && stopNoticeDue(input.session_id, stage, didWork)) {
-    return `${CONTEXT_REASON} ${noticeText(stage, used.tokens, { worked: didWork })}`;
-  }
+  const due = again
+    ? (stage === 'hand' || stage === 'hard') && stopNoticeDue(input.session_id, 'hand', didWork)
+    : stage && stopNoticeDue(input.session_id, stage, didWork);
+  if (due) return `${CONTEXT_REASON} ${noticeText(stage, used.tokens, { worked: didWork })}`;
+  if (again) return null;
   // last_assistant_message свежее транскрипта: последняя запись может не успеть на диск.
   const last = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : text;
   if (!last || (first && !tools && proseLines(last).length === 1)) return null;

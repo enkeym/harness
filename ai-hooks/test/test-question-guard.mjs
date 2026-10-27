@@ -212,6 +212,16 @@ worked('q-hard');
 run([prompt('x'), sayAt(HARD + 1_000, 'Вывод готов.')], { session_id: 'q-hard' });
 check('HARD второй раз — block', ctxBlocked(run([prompt('y'),
   sayAt(HARD + 5_000, 'Вывод готов.')], { session_id: 'q-hard' }), 'handoff'));
+// Чужой стоп-хук (ai-kit проекта) держал ход — HAND всё равно приходит, один раз.
+worked('q-foreign');
+check('HAND после чужого блока (stop_hook_active) — block', ctxBlocked(run([prompt('x'),
+  sayAt(HAND + 8_000, 'Замечание хука закрыто.')], { session_id: 'q-foreign', stop_hook_active: true }), 'handoff'));
+check('HAND после своего блока (stop_hook_active) — пропуск', run([prompt('x'),
+  sayAt(HAND + 9_000, 'Замечание хука закрыто.')], { session_id: 'q-foreign', stop_hook_active: true }) === null);
+check('HARD после блока (stop_hook_active), HAND уже был — пропуск', run([prompt('x'),
+  sayAt(HARD + 1_000, 'Готово.')], { session_id: 'q-foreign', stop_hook_active: true }) === null);
+check('stop_hook_active без session_id — пропуск', run([prompt('x'),
+  sayAt(HAND + 8_000, 'Готово.')], { stop_hook_active: true }) === null);
 check('HAND и ExitPlanMode — пропуск', run([prompt('x'), commit(), result('Bash'), call('ExitPlanMode'),
   result('ExitPlanMode'), sayAt(HAND + 20_000, 'Передача готова.')]) === null);
 

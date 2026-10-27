@@ -34,7 +34,7 @@ for (const cmd of ['npm test', 'npm ci', 'npm run build', 'npx tsc --noEmit', 'p
 
 // --- тихое не трогаем
 for (const cmd of ['ls -la', 'git status --short', 'echo hi', 'node -v', 'git push',
-  'npm view react version', 'git commit -m x', 'mkdir -p out']) {
+  'npm view react version', 'mkdir -p out']) {
   check(`не трогает: ${cmd}`, wrapped(cmd), false);
 }
 
@@ -87,6 +87,17 @@ check('не оборачивает чужую цепочку', wrapped('rm -rf d
 
 // --- фоновая команда читается отдельным вызовом, ограничитель ей помешает
 check('не трогает фоновое', wrapped('npm test', { background: true }), false);
+
+// --- коммит: зелёный лог pre-commit не оседает в контексте
+const heredocCommit = "git add a.ts && git commit -m \"$(cat <<'EOF'\nfeat(x): y\n\nbody > here\nEOF\n)\"";
+for (const cmd of ['git commit -m x', 'git add a.ts b.ts && git commit -m "fix(x): y; z"', heredocCommit,
+  'git add -A && git commit -q -m x && git status --short']) {
+  check(`коммит оборачивается: ${cmd.split('\n')[0]}`, /^CLIP_HEAD=10 CLIP_TAIL=40 \S+clip-output\.sh git commit -- /.test(clipCommand(cmd)), true);
+}
+for (const cmd of ['cd client && git commit -m x', 'git commit -m x | tail -5', 'git add a && git push',
+  'git add a.ts', 'git commit -m x && npm publish', 'git -C x commit -m y']) {
+  check(`коммит не оборачивается: ${cmd}`, wrapped(cmd), false);
+}
 
 // --- двойного оборачивания не бывает
 check('не оборачивает дважды', wrapped(clipCommand('npm test')), false);
@@ -214,6 +225,30 @@ const runClip = (cmd, env = {}) => spawnSync('bash', [CLIP, cmd], {
   const saved = fs.readdirSync(store).filter((f) => f.endsWith('.log'));
   const big = saved.map((f) => fs.statSync(path.join(store, f)).size).some((s) => s > 2000);
   check('файл ограничен по размеру', big, false);
+}
+
+// --- коммит целиком: шумный pre-commit обрезан, сообщение и код возврата — как без обёртки
+{
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'clip-commit-'));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  git('init', '-q');
+  git('config', 'user.email', 't@t');
+  git('config', 'user.name', 't');
+  fs.writeFileSync(path.join(repo, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nseq 1 300\n[ ! -f bad ]\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(repo, 'a.ts'), 'x\n');
+  // env-isolate уводит core.hooksPath в пустой каталог — возвращаем его на хуки репо.
+  const hooksKey = Object.keys(process.env).find((k) => /^GIT_CONFIG_KEY_\d+$/.test(k) && process.env[k] === 'core.hooksPath');
+  const hooksEnv = hooksKey ? { [hooksKey.replace('KEY', 'VALUE')]: path.join(repo, '.git', 'hooks') } : {};
+  const run = (cmd) => spawnSync('bash', ['-c', clipCommand(cmd).replace(/\S+clip-output\.sh/, CLIP)], {
+    cwd: repo, encoding: 'utf8', env: { ...process.env, CLIP_DIR: store, ...hooksEnv },
+  });
+  const ok = run(heredocCommit);
+  check('коммит: успех', ok.status, 0);
+  check('коммит: лог pre-commit обрезан', /пропущено \d+ строк/.test(ok.stdout) && ok.stdout.split('\n').length < 60, true);
+  check('коммит: сообщение с heredoc цело', git('log', '-1', '--format=%B').trim(), 'feat(x): y\n\nbody > here');
+  fs.writeFileSync(path.join(repo, 'bad'), '');
+  check('коммит: упавший pre-commit — не 0', run('git add bad && git commit -m z').status !== 0, true);
+  fs.rmSync(repo, { recursive: true, force: true });
 }
 
 fs.rmSync(store, { recursive: true, force: true });

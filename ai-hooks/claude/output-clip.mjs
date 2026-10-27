@@ -16,6 +16,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import { isEntryPoint } from '../state-core.mjs';
+import { segments } from '../shell-core.mjs';
 import { runHook } from './hook-io.mjs';
 
 const HOME = process.env.HOME || os.homedir();
@@ -95,6 +96,30 @@ function isNoisy(segment) {
   return subs.size === 0 || subs.has(cmd.sub);
 }
 
+// Коммит: pre-commit печатает зелёный лог проверок на сотни строк (web_groza —
+// ~250 строк, ~10k токенов на каждый коммит). `git add … && git commit -m …`
+// составная, но семантику обёртка не меняет: только git add/commit/status, без
+// `cd`, без пайпа, сообщение — в кавычках или через `$(cat <<'EOF' … EOF)`.
+// Окно уже обычного: при успехе нужен хвост, при провале ошибка — в хвосте.
+const COMMIT_SUBS = new Set(['add', 'commit', 'status']);
+const COMMIT_WINDOW = 'CLIP_HEAD=10 CLIP_TAIL=40';
+const HEREDOC_CAT = /^cat\s+<<-?\s*['"]?\w+['"]?(\s|$)/;
+
+function isCommitChain(cmd) {
+  const segs = segments(cmd, { keepHeredoc: true });
+  let commit = false;
+  for (const seg of segs) {
+    if (seg.piped) return false;
+    if (HEREDOC_CAT.test(seg.text)) continue;
+    const tokens = seg.text.split(/\s+/);
+    if (tokens[0] !== 'git') return false;
+    const sub = tokens[1];
+    if (!COMMIT_SUBS.has(sub)) return false;
+    if (sub === 'commit') commit = true;
+  }
+  return commit;
+}
+
 // Одинарные кавычки: внутри них шелл не интерпретирует ничего, кроме самой
 // кавычки — её и экранируем разрывом строки.
 function shellQuote(s) {
@@ -106,6 +131,7 @@ export function clipCommand(command, opts = {}) {
   if (!cmd) return null;
   if (opts.background) return null;
   if (cmd.includes('clip-output.sh')) return null;
+  if (isCommitChain(cmd)) return `${COMMIT_WINDOW} ${CLIP} git commit -- ${shellQuote(cmd)}`;
   if (STREAMING.test(cmd)) return null;
   if (INTERACTIVE.test(cmd)) return null;
   if (COMPLEX.test(cmd)) return null;
