@@ -642,8 +642,9 @@ tokensave) в корне такого репозитория. Файл пров�
 схемы этих инструментов отложены, модель угадывает имена параметров, и сервер
 отвечал «missing required parameter» — 334 ошибки за 22.09–10.10.2026
 (`bin/tool-share.mjs --waste`). Хук отдаёт `updatedInput` с настоящими именами
-без решения о разрешении. Проверки видят исходный вход, поэтому
-security-guard и skill-gate сверяют путь через тот же `normalizeToolInput`.
+без решения о разрешении; `edits` строкой с JSON разбирается в массив — так
+пришли все 63 упавших `multi_str_replace` за 11–27.10. Проверки видят
+исходный вход, поэтому security-guard и skill-gate сверяют путь через тот же `normalizeToolInput`.
 Ragsave: `bin/ragsave-sync.sh` на `SessionStart` (с `--warm`) и `Stop`.
 Карта связей: `links-context` на `PostToolUse`
 (matcher `Edit|Write|MultiEdit|mcp__tokensave__tokensave_str_replace|…_multi_str_replace|…_replace_lines|…_insert_at|…_insert_at_symbol|…_replace_symbol`).

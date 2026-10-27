@@ -1,8 +1,9 @@
 // Имена параметров tokensave. Схемы read и правок отложены (deferred): модель
 // зовёт их без схемы и угадывает имена по Read/Edit — `path` у read вместо
 // `file`, `file` и `old_string` у str_replace вместо `path` и `old_str`, пары
-// replacements объектами. Сервер отвечает «missing required parameter», и
-// каждая ошибка стоит ещё одного вызова API. Здесь угаданное имя становится
+// replacements объектами, `edits` строкой с JSON вместо массива. Сервер
+// отвечает «missing required parameter», и каждая ошибка стоит ещё одного
+// вызова API. Здесь угаданное имя становится
 // настоящим.
 //
 // Модуль чистый. Хук tool-args отдаёт результат в updatedInput, а гарды
@@ -38,6 +39,15 @@ export function normalizeToolInput(toolName, toolInput) {
       delete out[alias];
       changed = true;
     }
+  }
+  if (typeof out.replacements === 'string') {
+    try {
+      const parsed = JSON.parse(out.replacements);
+      if (Array.isArray(parsed)) {
+        out.replacements = parsed;
+        changed = true;
+      }
+    } catch {}
   }
   if (Array.isArray(out.replacements)) {
     const pairs = out.replacements.map(pair);

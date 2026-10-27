@@ -36,6 +36,11 @@ check('str_replace: file, old_string, new_string', normalizeToolInput(EDIT, { fi
 check('multi: edits объектами → replacements парами',
   normalizeToolInput(MULTI, { file: 'a.ts', edits: [{ old_str: 'x', new_str: 'y' }, { old_string: 'p', new_string: 'q' }, ['m', 'n']] }),
   { path: 'a.ts', replacements: [['x', 'y'], ['p', 'q'], ['m', 'n']] });
+check('multi: edits строкой с JSON → массив пар',
+  normalizeToolInput(MULTI, { path: 'a.ts', edits: JSON.stringify([{ old_string: 'x', new_string: 'y' }]) }),
+  { path: 'a.ts', replacements: [['x', 'y']] });
+check('multi: строка не JSON — остаётся строкой',
+  normalizeToolInput(MULTI, { path: 'a.ts', edits: 'x' }), { path: 'a.ts', replacements: 'x' });
 {
   const odd = { path: 'a.ts', replacements: [{ old: 'x' }] };
   check('multi: неразборчивый элемент — тот же объект', normalizeToolInput(MULTI, odd) === odd, true);
