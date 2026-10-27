@@ -43,9 +43,11 @@ the files the next step needs. The hook says which case it is; follow it.
    2. `EnterPlanMode`; write the snapshot below into the file its prompt
       names, `Дальше` pointing at the old plan and its first unticked step,
       or naming the next step itself when there is no plan; name the next
-      step in one line at the top of `## Состояние`. A snapshot already in
-      the file (often the brief's file) is replaced, never kept below as
-      `Состояние (прежнее)`, `устарело`, `что сделано в N`.
+      step in one line at the top of `## Состояние`, as `Следующий шаг
+      (проектирование) — …` when it designs (brief, approach, data model,
+      interface) rather than codes. A snapshot already in the file (often the
+      brief's) is replaced, never kept below as `Состояние (прежнее)`,
+      `устарело`, `что сделано в N`.
    3. `ExitPlanMode` — its dialog is where the user clears the context. Result
       "approved" in this same session = not cleared (Remote Control): end the turn
       with `/clear`, then `продолжи по @~/.claude/plans/<file>.md`; else print nothing.
@@ -103,30 +105,28 @@ project's `CLAUDE.md`, loaded every session.
 
 ## Receiving a handoff
 
-A plan file with `## Состояние`, or a pasted block. Treat it
-as a snapshot: verify `git status`, branch, tests before relying on it. Don't
-echo it back. Repository beats snapshot — say so in one line, continue.
+A plan file with `## Состояние`, or a pasted block. Treat it as a snapshot:
+verify `git status`, branch, tests before relying on it. Don't echo it back.
+Repository beats snapshot — say so in one line, continue. Start from the
+snapshot, not a fresh survey — re-reading what it names makes a split session
+cost more than the long one it replaced:
 
-Start from the snapshot, not from a fresh survey — re-reading everything it
-already names is what makes a split session cost more than the long one it
-replaced:
-
-- The snapshot is in context after the dialog or via `handoff-pickup` («продолжи»); the old plan it links under
-  `Дальше` is `Read` only when a step in it is next (outside the
-  repository, no router applies). A pasted block naming a plan file → it is
-  in context through the `@` in the first prompt; missing there → `Read` it
-  before anything else. Either way steps come from the plan, state
-  from the snapshot; the snapshot wins on state, the plan on steps.
+- The snapshot is in context after the dialog or via `handoff-pickup` («продолжи»); the old plan under
+  `Дальше` is `Read` only when its step is next (outside the repository, no
+  router applies). A pasted block naming a plan file → in context through the
+  `@` in the first prompt, else `Read` it first. Steps come from the plan,
+  state from the snapshot.
 - `Дальше` inside a user-invoked command (`/review`, `/commit`) → `Read` its
   SKILL.md and continue; never ask the user to retype it — the Skill tool
   can't call it, and the user's call already started the run.
+- Next step `(проектирование)` → `EnterPlanMode` before the first read
+  (`opusplan`: Opus plans, Sonnet codes after `ExitPlanMode`).
 - Read what `Карта` names for the first step — symbols through `body`, not
   whole files in ranges; the rest stays a pointer until a step needs it.
 - Don't re-run what `Проверено` lists. Re-check one of its lines only when the
   work changes that behaviour again, or when `git status` contradicts it —
   then say which line and why.
-- A blocked or contradicted line in `Проверено` is a finding: report it in one
-  line instead of quietly redoing the whole check.
+- A blocked or contradicted line in `Проверено` is a finding: one line, not a quiet redo.
 - A pending user decision in the snapshot ("ждёт проверки пользователем",
   "ждать «ок»") is asked through the question tool when its step is
   reached, never written as a closing line of text. "Повторно не спрашивать"
