@@ -113,6 +113,10 @@ Windows-симлинки через `mklink`. Без прав администр
   машины — и `brew shellenv` для запуска без login-шелла. Прежний `~/.zshenv`
   уезжает в бэкап, его строки настройки (`. "$HOME/.cargo/env"`) — в env.
   Без zsh и без прежнего `~/.zshenv` цель пропускается — и в install, и в `--check`.
+- Хуки зовут голый `node` через `$SHELL`. Неинтерактивный zsh читает только
+  `~/.zshenv`, поэтому node из nvm/fnm (их грузит `~/.zshrc`) хукам не виден:
+  `--check` при `$SHELL` = zsh проверяет `zsh -c 'command -v node'` и просит
+  дописать путь node в `~/.config/harness/env`. Brew-node подхватывает `brew shellenv`.
 - Фоновый синк ragsave без `setsid`/`ionice` идёт под `taskpolicy -b`, бэкапы и
   `/doctor` обходятся без GNU `date`.
 

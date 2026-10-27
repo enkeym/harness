@@ -741,13 +741,27 @@ node_check() {
   fi
 }
 
+# Хуки и Bash-тул Claude Code идут через $SHELL без интерактивного ~/.zshrc: node,
+# который ставит nvm/fnm/volta из .zshrc, там не виден, и хуки молча не стартуют
+# (macOS, $SHELL — zsh). Неинтерактивный zsh читает только ~/.zshenv.
+node_shell_check() {
+  case "${SHELL:-}" in */zsh) ;; *) return 0 ;; esac
+  command -v zsh >/dev/null || return 0
+  if [ -n "$(zsh -c 'command -v node' 2>/dev/null)" ]; then
+    good "node виден неинтерактивному zsh (хуки его найдут)"; return 0
+  fi
+  bad "node не виден неинтерактивному zsh — хуки харнесса молча не стартуют"
+  warn "добавить каталог node в PATH в ~/.config/harness/env (его читает ~/.zshenv), например export PATH=\"\$HOME/.nvm/versions/node/<версия>/bin:\$PATH\""
+  drift=$((drift + 1))
+}
+
 externals() {
   say
   machine_paths_check
   say
   say "Внешние зависимости (репозиторием не ставятся):"
   command -v claude    >/dev/null && good "claude $(claude --version 2>/dev/null | head -1)" || bad "claude — не найден"
-  if command -v node >/dev/null; then node_check; else bad "node — не найден: без него хуки и гарды харнесса молча не работают"; fi
+  if command -v node >/dev/null; then node_check; node_shell_check; else bad "node — не найден: без него хуки и гарды харнесса молча не работают"; fi
   command -v tokensave >/dev/null && good "tokensave: $(command -v tokensave)"               || tokensave_missing
   command -v tokensave >/dev/null && tokensave_hook_check
   tokensave_install_check

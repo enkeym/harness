@@ -652,6 +652,21 @@ for (const [ver, ok] of [['v20.0.0', false], ['v22.12.9', false], ['v23.3.0', fa
 }
 check('версия node не разобрана — предупреждение', nodeVersion('мусор').includes('node: версию не разобрать'), true);
 
+// node в неинтерактивном zsh: подменный zsh печатает путь или ничего.
+for (const [shellNode, ok] of [['/opt/homebrew/bin/node', true], ['', false]]) {
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.home, 'path', 'zsh'), `#!/bin/sh\necho '${shellNode}'\n`, { mode: 0o755 });
+  const res = sb.run(['--check'], { SHELL: '/bin/zsh' });
+  check(`zsh ${ok ? 'видит' : 'не видит'} node — ${ok ? '✓' : '✗ и drift'}`,
+    [res.out.includes('✓ node виден неинтерактивному zsh'), res.out.includes('✗ node не виден неинтерактивному zsh')], [ok, !ok]);
+}
+{
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.home, 'path', 'zsh'), '#!/bin/sh\necho\n', { mode: 0o755 });
+  const out = sb.run(['--check'], { SHELL: '/bin/bash' }).out;
+  check('$SHELL не zsh — проверка пропущена', out.includes('неинтерактивному zsh'), false);
+}
+
 {
   const sb = sandbox();
   const before = sb.snap();

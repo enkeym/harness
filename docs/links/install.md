@@ -126,6 +126,10 @@ paths:
   из которой запущен `install.sh`: `bin/mcp-sync.mjs:resolveCommand` пишет
   Claude найденный путь. Запуск без nvm в PATH — сервер пропущен с кодом 1; смена версии node —
   путь у Claude устарел до следующего `./install.sh`.
+- `install.sh:node_shell_check` ↔ `shell/zshenv` и `~/.config/harness/env`: хуки
+  зовут голый `node` через `$SHELL`, а неинтерактивный zsh читает только
+  `~/.zshenv`. Проверка идёт при `$SHELL` = zsh; nvm из `~/.zshrc` ей не виден —
+  путь node кладут в env. Сменится способ запуска хуков — поправь проверку.
 - `install.sh:node_check` (минимум 22.13 / 23.4) ↔ `import 'node:sqlite'` в
   `ai-hooks/guard-core.mjs`, `README.md` и `ai-hooks/README.md` (то же число).
   Хук возьмёт новый API Node или сменит модуль — поправь минимум везде, иначе
