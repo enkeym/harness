@@ -25,11 +25,11 @@ objection is verified by code, docs or a run before it reaches the user.
 ## Brief flow
 
 Fixed order; a brief in chat or outside plan mode is the failure to prevent.
+Past `SOFT` (each Opus turn re-reads the window): `handoff`, `Следующий шаг (проектирование)`.
 
 1. `ToolSearch("select:EnterPlanMode,ExitPlanMode")` — both are deferred.
-2. Reply line: `Задача крупная: <причина> — собираю бриф.` Default `opusplan`
-   plans on Opus itself; after a manual `/model` to plain Sonnet add a line
-   naming `/model opusplan` — a skill cannot switch the model.
+2. Reply line: `Задача крупная: <причина> — собираю бриф.` `opusplan` plans on Opus;
+   after a manual `/model` to plain Sonnet name `/model opusplan` (a skill can't switch).
 3. `EnterPlanMode` before the first read; the brief goes only into the plan
    file it names, never a path picked by hand.
 4. *Reason before asking*, *Questions*, then *The brief* into that file.
