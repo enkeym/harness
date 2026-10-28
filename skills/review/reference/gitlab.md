@@ -44,7 +44,8 @@ curl … "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
 
 ## Drafts
 
-All drafts of one MR in one Bash call, no chat question first —
+Verdict *plan*: the pass and the report sit in plan mode; drafts are written
+only after `ExitPlanMode`. All drafts of one MR in one Bash call, no chat question first —
 security-guard's prompt is the confirmation. One `curl` per finding, Minor
 included, in number order; body = the MR comment of [report.md](report.md)
 through a quoted heredoc:

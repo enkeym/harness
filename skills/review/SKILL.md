@@ -78,10 +78,9 @@ checkout, stash or switch. A missing ref → name it in one line and stop.
   (`незакоммиченные` / `мерж <sha>` / `коммиты <KEY>` / `последние <n>` /
   `от <base>` / `аудит <area>`), files
   and `+/-` totals, the reviewed commits as `--oneline` or `коммиты не смотрел`.
-- Ref other than `HEAD`: read files as `git show <ref>:<path>`, usages as
-  `git grep -n <name> <ref>` — the ref a literal sha or branch, never `$var`.
-  The tokensave graph holds the working tree, not the ref; a ref at `HEAD`'s
-  sha (a branch on it too) is the graph — bash-router refuses both forms there.
+- Ref other than `HEAD`: `git show <ref>:<path>`, `git grep -n <name> <ref>`,
+  the ref a literal sha or branch, never `$var`. The graph holds the working
+  tree; a ref at `HEAD`'s sha is the graph — bash-router refuses both there.
 - Free words after the target are the focus: checked first, full pass still.
 
 ### 1.1 Audit
@@ -95,12 +94,11 @@ upload, webhooks, outbound calls, config first; report per module.
 ### 1.2 Open MRs
 
 Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
-[reference/gitlab.md](reference/gitlab.md), read before the first call. The
-scope is the MR's diff after `git fetch` — the only fetch /review runs; no
-checkout, no typecheck or tests, they go to the not-checked line. One MR per
-session: after its drafts the rest of the queue goes through `handoff`,
-`Дальше` naming this file and the next `!<iid>` — the new session continues
-on its own. Chain rules: *Several MRs* of the reference.
+[reference/gitlab.md](reference/gitlab.md), read before the first call. Scope:
+the MR's diff after `git fetch` — the only fetch /review runs; no checkout,
+typecheck or tests (not-checked line). One MR per session: after its drafts
+the queue goes through `handoff`, `Дальше` naming this file and the next
+`!<iid>`. Chain rules: *Several MRs* of the reference.
 
 ## 2. Pass
 
@@ -113,11 +111,13 @@ commit runs; a fact it leaves open goes to the not-checked line.
   large: one per session, `handoff` carries the unread files.
 - A colleague's branch or MR with an open MR: its comments before the pass —
   *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
+- Mode: `review-dispatch` verdict over the scope (audit: path candidates count
+  as confirmed). **plan** → `EnterPlanMode`, report into the plan file,
+  `ExitPlanMode`, then the menu or MR drafts (`curl -X POST`).
 
 No edits of any kind — not even a certain one-line fix or an impact-map line —
-and no files written, `/tmp` included: a large diff is read as `--stat`, then
-`git diff <range> -- <path>` per file, never redirected; the report goes to
-chat, not to a file. Target `HEAD`: the project's typecheck and linter — a
+and no files written (the plan file aside), `/tmp` included: a large diff is
+read as `--stat`, then `git diff <range> -- <path>` per file. Target `HEAD`: the project's typecheck and linter — a
 script that writes (`--fix`, `--write`) runs as its bare tool without the
 flag — then only the test files the scope adds or changes. Another ref: list
 them in the not-checked line.
