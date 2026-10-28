@@ -199,7 +199,9 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 3. `claude mcp list` — оба сервера из `mcp/servers.json` должны быть
    `✔ Connected`.
 4. `node ai-hooks/test/test-guards.mjs` и соседние тесты — зелёные.
-5. `./install.sh --check` — итоговая проверка, включая внешние зависимости.
+5. `./install.sh` сам заканчивает проверкой: `--check` плюс запуск хука, statusline,
+   `tokensave --version` и импорт зависимостей из venv. Итог — «проверка: всё работает»
+   и код 0, иначе код 1. `./install.sh --check` повторяет её отдельно.
 
 **Чего агент сделать не может, это к человеку:**
 

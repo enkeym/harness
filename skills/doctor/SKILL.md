@@ -28,7 +28,9 @@ tail -40 ~/.ai-hooks/logs/errors.log
 
 The test loop takes ~40 s; a red test outranks any log line as evidence. The
 `jq` line is hook, decision, count, max `ms` over 24 h — a hook whose count
-jumped is where to read the tail.
+jumped is where to read the tail. `install.sh --check` also runs a hook, the
+statusline, `tokensave --version` and the venv imports (`verify`): a `✗` there
+means installed but not working.
 
 From the project directory — settings, auth, indexes:
 

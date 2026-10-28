@@ -20,6 +20,11 @@ paths:
   `/Users/<имя>/` во всех источниках `LINKS`, `DIR_LINKS` и в `vscode/`, кроме каталогов
   `test`, `tests`, `logs`. Путь в новом формате (`$USER`, `/root/`) или новый источник вне
   `LINKS` проверка не увидит; фикстура с чужим HOME вне `test/` — ложное ✗.
+- `install.sh:verify` ↔ имена и вход хуков: образцовый PreToolUse-JSON для
+  `ai-hooks/claude/dispatch.mjs` и вход `statusline.mjs` (`model`, `workspace`),
+  импорт `ragsave, sqlite_vec, fastembed` из venv. Сменился формат входа хука или
+  пакет в `ragsave/requirements.txt` — `verify` даст ложный drift; `final_check` в
+  install зовёт `--check` подпроцессом и возвращает по нему код выхода.
 - `install.sh:VSCODE_LINKS` ↔ `%APPDATA%\Code\User` VS Code в Windows: цель
   симлинка читает `win_link_target` из вывода `dir /AL` (`<SYMLINK>`,
   `<SYMLINKD>`, путь в скобках). Сменится формат `dir` — `--check` выдаст

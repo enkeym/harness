@@ -1009,6 +1009,54 @@ autoinstall() {
   fi
 }
 
+# Итоговая проверка запуском, а не наличием файла: хук отвечает, tokensave стартует,
+# venv импортирует зависимости ragsave. Отсутствующее здесь не считается — о нём уже
+# сказали externals и симлинки; сломанное при этом считается drift.
+verify() {
+  say
+  say "Запуск (не наличие):"
+  local sample line
+  if command -v node >/dev/null; then
+    sample="{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"true\"},\"session_id\":\"install-verify\",\"cwd\":\"$HOME\"}"
+    if [ -f "$HARNESS/ai-hooks/claude/dispatch.mjs" ]; then
+      if printf '%s' "$sample" | node "$HARNESS/ai-hooks/claude/dispatch.mjs" PreToolUse >/dev/null 2>&1; then
+        good "dispatch.mjs: образцовый вызов отвечает кодом 0"
+      else
+        bad "dispatch.mjs: образцовый вызов упал — хуки не работают (node $(node --version 2>/dev/null))"; drift=$((drift + 1))
+      fi
+    fi
+    if [ -f "$HARNESS/ai-hooks/claude/statusline.mjs" ]; then
+      line="$(printf '{"model":{"display_name":"verify"},"workspace":{"current_dir":"%s"}}' "$HOME" | node "$HARNESS/ai-hooks/claude/statusline.mjs" 2>/dev/null)" || line=""
+      if [ -n "$line" ]; then good "statusline.mjs отвечает"; else bad "statusline.mjs молчит или упал"; drift=$((drift + 1)); fi
+    fi
+  fi
+  if command -v tokensave >/dev/null; then
+    if tokensave --version >/dev/null 2>&1; then good "tokensave --version"; else bad "tokensave --version упал"; drift=$((drift + 1)); fi
+  fi
+  if [ -x "$RAG_HOME/venv/bin/python" ]; then
+    if PYTHONPATH="$RAG_HOME" "$RAG_HOME/venv/bin/python" -c 'import ragsave, sqlite_vec, fastembed' >/dev/null 2>&1; then
+      good "venv: ragsave, sqlite_vec, fastembed импортируются"
+    else
+      bad "venv не импортирует ragsave, sqlite_vec, fastembed — ./install.sh --venv"; drift=$((drift + 1))
+    fi
+  fi
+}
+
+# Итог install: тот же отчёт --check (в нём verify и mcp-sync --check) уже после раскатки.
+# Показываем только расхождения; код 1, если они есть или шаг автоустановки не удался.
+final_check() {
+  local out rc=0
+  say
+  out="$("$BASH" "$HARNESS/install.sh" --check 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ] && [ "$missing" -eq 0 ]; then
+    good "проверка: всё работает"
+    return 0
+  fi
+  printf '%s\n' "$out" | grep -E '✗|на месте:' || true
+  bad "проверка: есть расхождения — ./install.sh --check покажет подробности, /doctor предложит починку"
+  return 1
+}
+
 case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS), $(personal_label):"
@@ -1024,6 +1072,7 @@ case "$MODE" in
     projects_check
     mcp_sync --check
     externals
+    verify
     say
     say "на месте: $ok, требуют внимания: $drift, нет источника: $missing"
     [ "$drift" -eq 0 ] && [ "$missing" -eq 0 ]
@@ -1060,6 +1109,7 @@ case "$MODE" in
     fi
     say
     say "MCP-серверы правятся в mcp/servers.json."
+    final_check
     ;;
   *)
     say "Использование: ./install.sh [--yes] [--personal|--check|--venv]"

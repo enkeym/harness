@@ -882,5 +882,45 @@ const PAYLOAD_SUM = createHash('sha256').update('payload').digest('hex');
   check('--check с --yes ничего не ставит', fs.existsSync(sb.target('.local/bin/tokensave')), false);
 }
 
+// Итоговая проверка: install заканчивается отчётом --check и кодом по его итогу;
+// verify запускает хук, а не ищет файл.
+function hookSandbox(dispatchBody) {
+  const sb = sandbox();
+  const dir = path.join(sb.harness, 'ai-hooks', 'claude');
+  fs.rmSync(path.join(sb.harness, 'ai-hooks')); // песочница кладёт туда пустой файл-источник
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'dispatch.mjs'), dispatchBody);
+  fs.writeFileSync(path.join(dir, 'statusline.mjs'), 'process.stdout.write("status\\n");\n');
+  return sb;
+}
+
+{
+  const sb = hookSandbox('process.stdin.resume(); process.stdin.on("end", () => process.exit(0));\n');
+  const res = sb.run([]);
+  check('install на целой раскатке — «проверка: всё работает», код 0',
+    [res.status, res.out.includes('проверка: всё работает')], [0, true]);
+  check('--check показывает, что хук и statusline запущены',
+    [sb.run().out.includes('dispatch.mjs: образцовый вызов отвечает кодом 0'), sb.run().out.includes('statusline.mjs отвечает')], [true, true]);
+  const before = sb.snap();
+  const again = sb.run([]);
+  check('повтор install — код 0, ничего не изменилось', [again.status, changes(before, sb.snap())], [0, []]);
+}
+
+{
+  const sb = hookSandbox('process.exit(3);\n');
+  const res = sb.run(['--check']);
+  check('--check: dispatch.mjs падает — ✗, drift, код 1',
+    [res.status, res.out.includes('✗ dispatch.mjs'), res.out.includes('требуют внимания: 1')], [1, true, true]);
+  const inst = sb.run([]);
+  check('install: падающий хук — «есть расхождения», код 1', [inst.status, inst.out.includes('проверка: есть расхождения')], [1, true]);
+}
+
+{
+  const sb = fetchSandbox('0'.repeat(64));
+  const res = sb.run(['--yes']);
+  check('install: шаг автоустановки не удался (missing > 0) — код 1, расхождения названы',
+    [res.status, res.out.includes('проверка: есть расхождения')], [1, true]);
+}
+
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');
 process.exit(failed ? 1 : 0);
