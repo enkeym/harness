@@ -93,8 +93,8 @@ are examples of how the user asks, not the only trigger.
 | Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | Hand the thread to a fresh session: the context is filling up, or a reset is coming | `handoff`          |
-| Right before a commit: where the review runs, first                                 | `review-dispatch`   |
-| Review a diff, branch or MR — and before a commit when `review-dispatch` says here, in this order | `review-standards`, `review-security` |
+| Right before a commit: which mode the review runs in, first                         | `review-dispatch`   |
+| Review a diff, branch or MR — and before a commit, in this order                  | `review-standards`, `review-security` |
 | Commit, branch, or touch a Jira or MR text — after the two review skills; an MR after `test-coverage` too | `git-flow` |
 | Create, edit or review a skill, an agent file, a rules file, CLAUDE.md or AGENTS.md | `skill-authoring`   |
 
@@ -103,8 +103,8 @@ are examples of how the user asks, not the only trigger.
 - **Commit and push.** A unit is done — the whole user request or an approved
   plan step, every part applied, verified with real output (`tsc`, tests, the
   reproduced case), no open question → impact pass, `review-dispatch`, then
-  (verdict here) `review-standards`, `review-security`, fix findings, commit
-  (verdict clean: handoff, no commit), then run `git push` — neither asked
+  `review-standards`, `review-security` (verdict plan: inside plan mode, fixes
+  after `ExitPlanMode`), fix findings, commit, then run `git push` — neither asked
   in chat. Push once, after the last commit of the whole request, not after each
   plan step. security-guard's dialog is the confirmation; a prompt naming the
   push only skips that dialog, it is not a precondition. One edit of

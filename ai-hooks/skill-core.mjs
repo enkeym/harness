@@ -281,7 +281,7 @@ export function denyReason(gap) {
     if (gap.missing.includes('review-dispatch')) {
       return (
         head +
-        `Load review-dispatch first: a small diff is reviewed here (then the rest of the set), a large or sensitive one goes to a clean session by handoff. Then rerun git commit.`
+        `Load review-dispatch first: it picks where the review runs: here, or inside plan mode for a confirmed sensitive diff (then the rest of the set). Then rerun git commit.`
       );
     }
     return head + `Load ${load}, run the diff through the checklists, then rerun git commit.`;

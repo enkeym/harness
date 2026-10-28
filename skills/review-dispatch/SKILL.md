@@ -1,25 +1,29 @@
 ---
 name: review-dispatch
-description: "Decides before a commit whether the diff is reviewed in this session or in a clean one through a handoff — by size, file kinds and sensitive paths. Load first on every commit, before review-standards and review-security."
+description: "Decides before a commit whether the diff is reviewed in this session as is or inside plan mode (Opus under opusplan) — by file kinds and a content check of sensitive paths. Load first on every commit, before review-standards and review-security."
 ---
 
 # Review dispatch
 
-A small or doc-only diff is reviewed here; a large or sensitive one gets a
-fresh session with no sunk context (never a subagent), through `handoff`. The checklists stay in
-`review-standards` and `review-security`; this skill only picks where they run.
+The review always runs in this session; the checklists stay in `review-standards`
+and `review-security`. This skill only picks the mode: **here** on the current
+model, or **plan** inside plan mode, where opusplan runs Opus. No size
+threshold — a bloated context is `context-meter`'s job.
 
 ## Verdict
 
 1. `git -c core.quotePath=false diff --numstat --no-renames HEAD` plus
-   untracked files (`git ls-files --others --exclude-standard`, lines by
-   `wc -l`). Nothing → no commit, stop.
-2. Per file, in order:
-   - path matches the sensitive pattern → **clean**, whatever the size;
-   - path matches the doc pattern → skipped;
-   - otherwise its added + deleted lines go to the total; a binary file
-     (`-` in numstat) → **clean**.
-3. Total over 30 → **clean**. Otherwise **here**.
+   untracked files (`git ls-files --others --exclude-standard`). Nothing → no
+   commit, stop.
+2. Per file: path matches the doc pattern → skipped; path matches the sensitive
+   pattern → candidate; anything else → ignored.
+3. No candidate → **here**.
+4. Each candidate: read its hunks (`git diff HEAD -- <file>`; an untracked file
+   whole). **plan** when a hunk changes authorization or ownership checks,
+   validation or parsing of external input, secret or crypto handling, a
+   migration, CI or Docker. Only rename, comment, text or test changes →
+   **here**. The path pattern is noisy (`session`, `token` in hook paths), so
+   the hunks decide.
 
 | Pattern   | Matches                                                                                  |
 | --------- | ---------------------------------------------------------------------------------------- |
@@ -31,16 +35,11 @@ fresh session with no sunk context (never a subagent), through `handoff`. The ch
 Load `review-standards`, `review-security`, `git-flow` and run
 [../shared/review-pass.md](../shared/review-pass.md) as usual.
 
-## Clean
+## Plan
 
-No question about the uncommitted state: the clean session reads the tree.
-Load `handoff`, write the snapshot with `Дальше`: `Read
-~/.claude/skills/review/SKILL.md, продолжить на незакоммиченных`; under
-`Состояние` name the verdict reason (size, or the sensitive path) and that the
-commit waits for the review. Do not commit, do not load the two review skills.
-
-## No loop
-
-A session whose snapshot `Дальше` names `~/.claude/skills/review/SKILL.md`
-or `/review`, or that read that file or ran `/review`, gets **here** at any size — a clean session that sent the commit to
-another clean one would never commit.
+1. `EnterPlanMode`.
+2. Load `review-standards`, `review-security`; run the pass of
+   [../shared/review-pass.md](../shared/review-pass.md) read-only.
+3. Write the findings and the fix for each into the plan file, then
+   `ExitPlanMode`.
+4. After approval: apply the fixes, load `git-flow`, commit.

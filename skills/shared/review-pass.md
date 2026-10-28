@@ -6,8 +6,9 @@ run, so a commit and `/review` on the same code find the same defects. What
 follows the pass differs: `/review` reports and edits nothing, a commit fixes
 findings inside its diff by `review-standards` step 8.
 
-1. Before a commit, `review-dispatch` is loaded first; verdict *clean* ends
-   the pass here (handoff). Load `review-standards`, `review-security`, the stack skill of every
+1. Before a commit, `review-dispatch` is loaded first; verdict *plan* runs
+   the pass inside plan mode (findings go to the plan file, fixes after
+   `ExitPlanMode`). Load `review-standards`, `review-security`, the stack skill of every
    touched area (`rules/core.md` Skills table), `test-conventions` when the
    scope has tests. A skill loaded earlier in the session is not a pass done:
    skill-gate checks the load and a `git diff` read, not the steps, so every

@@ -55,7 +55,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   `review-security`, `git-flow` are, while its line 2 is non-empty (empty
   it, no amend), or while no content `git diff` (not `--stat`) ran in its own
   call after the last edit and the `review-standards` load.
-- `review-dispatch` loads first; verdict *clean* = handoff, the gate checks the load only.
+- `review-dispatch` loads first; verdict *plan* = the review pass inside plan mode, the gate checks the load and the `git diff` read only.
 - The refusal names the missing skill or step: `Skill(<name>)`, repeat the
   call. Loaded-state is per session — after `/clear` it is gone from the gate
   and from your context alike. A prompt the user started with `/<skill>` counts.
