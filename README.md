@@ -82,7 +82,7 @@ claude mcp add -s local playwright -- "$(command -v playwright-mcp)" --headless 
   всё, чего нет в общем `git/gitconfig` (имя, почта, хелпер, `safe.directory`,
   алиасы): подключённый последним, local перекрывает общие значения;
 - `~/.config/harness/env` — `GITLAB_HOST` (хост для `GITLAB_TOKEN`),
-  по желанию `ANTHROPIC_MODEL` (в шаблоне закомментирован), при нужде `RAGSAVE_HOME` (каталог ragsave вместо
+  при нужде `RAGSAVE_HOME` (каталог ragsave вместо
   `~/.rag-mcp`; задать до запуска `install.sh` — в него лягут и симлинки).
 
 Машина уже настроена — `~/.claude/{settings.json,CLAUDE.md,skills,commands}` (с `--personal` и `keybindings.json`)
@@ -239,8 +239,10 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 Ключ `model` в `claude/settings.json` в git не попадает: clean-фильтр `nomodel`
 (`.gitattributes`, команда `jq 'del(.model)'` в `.git/config` — её задаёт
 `./install.sh`) вырезает его при `add`/`diff`/`status`. Переключение модели
-оставляет дерево чистым; на свежей машине модель — по умолчанию Claude Code
-или `ANTHROPIC_MODEL` из `~/.config/harness/env`.
+оставляет дерево чистым. Модель сессии по умолчанию — `opusplan` из
+`env.ANTHROPIC_MODEL` того же файла: переменная приоритетнее `model`, так что
+`/model` меняет только свою сессию, а следующая снова стартует с `opusplan`
+(Opus в plan mode — бриф, handoff; Sonnet после `ExitPlanMode`).
 
 ## Чего в репозитории нет
 
@@ -255,7 +257,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |
 | `~/.git-credentials` | хранилище `credential.helper store` (хелпер — в `~/.gitconfig.local`, пример в `local/gitconfig.local.example`); из него `~/.bash_env` берёт `GITLAB_TOKEN` | первый `git push` в GitLab с вводом токена |
-| `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `RAGSAVE_HOME`, по желанию `ANTHROPIC_MODEL` | `./install.sh` (из `local/env.example`), заполнить |
+| `~/.config/harness/env` | значения машины: `GITLAB_HOST`, `RAGSAVE_HOME` | `./install.sh` (из `local/env.example`), заполнить |
 | `~/.gitconfig.local` | git `[user]` и прочие настройки этой машины | `./install.sh --personal` (из `local/gitconfig.local.example` и прежнего `~/.gitconfig`), заполнить |
 
 ## Тесты

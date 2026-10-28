@@ -67,7 +67,7 @@ tokensave githooks on   # только после --personal: git-хуки token
 
 - [ ] `--personal`: `~/.gitconfig.local` — `[user] name` и `email`, если install не перенёс
       их из прежнего `~/.gitconfig` (без них git не коммитит).
-- [ ] `~/.config/harness/env` — `GITLAB_HOST`, по желанию `ANTHROPIC_MODEL`, при нужде
+- [ ] `~/.config/harness/env` — `GITLAB_HOST`, при нужде
       `RAGSAVE_HOME` (его — до `./install.sh`).
 - [ ] `~/.git-credentials` на месте, права `600`; в `~/.gitconfig.local` — хелпер
       `store` для своего GitLab (пример в `local/gitconfig.local.example`), иначе
