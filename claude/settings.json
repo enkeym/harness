@@ -206,9 +206,19 @@
     },
     "claude-sonnet-5-5": {
       "effortLevel": "medium"
+    },
+    "claude-opus-5": {
+      "effortLevel": "medium"
     }
   },
   "showClearContextOnPlanAccept": true,
+  "pluginConfigs": {
+    "cc-plugin-agents-md@builtin": {
+      "options": {
+        "instructionFiles": "claude-md-or-agents-md"
+      }
+    }
+  },
   "theme": "dark-ansi",
   "switchModelsOnFlag": true,
   "remoteControlAtStartup": false,
