@@ -45,11 +45,10 @@ const OPEN_CLOSED_RE = /(?<![\p{L}\p{N}])(?:нет|не остал\p{L}*|зак�
 const OPEN_PARAS = 2;
 // Цитируемое в кавычках — не слова автора: «Жду вашего „ок“» судится без „ок“.
 const QUOTED_RE = /«[^»]*»|„[^“”]*[“”]|"[^"]*"|“[^”]*”/g;
-// Ожидание решения пользователя в форме утверждения. «Подтвердите UAC» — просьба
-// нажать кнопку, пока фоновая установка ждёт, а не решение: меню там лишнее.
+// Ожидание решения пользователя в форме утверждения.
 const AWAIT_RE = new RegExp('(?<![\\p{L}\\p{N}])(?:'
-  + 'как скажете|скажите|напишите|дайте знать|подтвердите(?! uac)'
-  + '|жду (?:вашего|вашей|ваш|ответа|решения|подтверждения(?! uac)|отмашки|команды|ок)'
+  + 'как скажете|скажите|напишите|дайте знать|подтвердите'
+  + '|жду (?:вашего|вашей|ваш|ответа|решения|подтверждения|отмашки|команды|ок)'
   + '|если (?:согласны|хотите|не против|скажете)'
   + '|если (?:нужно|надо)[^.]*могу'
   + '|решать вам|на ваше усмотрение|выбор за вами'
@@ -66,7 +65,8 @@ const MIN_OPTIONS = 2;
 export const REASON = 'The reply ends with a question to the user or waits for their decision in text. '
   + 'core.md rule: a question goes only through AskUserQuestion, choices in options, '
   + 'the recommended one first. Ask it now through AskUserQuestion. A rhetorical question '
-  + 'that expects no answer — rewrite the ending without it.';
+  + 'that expects no answer — rewrite the ending without it. An offer of more work or a wait '
+  + "for the user's action — an option in the menu, or drop it.";
 
 export const CONTEXT_REASON = 'The turn ended without a menu while the context is past the threshold.';
 
@@ -127,9 +127,13 @@ function proseLines(text) {
   return out;
 }
 
+// Строка с UAC не ждёт решения: кнопку жмут, ответа не надо («Установка идёт;
+// если появится запрос UAC — подтвердите его»). Касается только AWAIT_RE: `?` судится.
+const UAC_RE = /(?<![\p{L}\p{N}])uac(?![\p{L}\p{N}])/iu;
+
 const asks = (line) => QUESTION_END_RE.test(line)
   || QUESTION_MID_RE.test(line)
-  || AWAIT_RE.test(line.replace(QUOTED_RE, ''))
+  || (!UAC_RE.test(line) && AWAIT_RE.test(line.replace(QUOTED_RE, '')))
   || OPTIONS_HEAD_RE.test(line);
 
 // Строка, на которой ответ ждёт пользователя, или null. Судится последний абзац

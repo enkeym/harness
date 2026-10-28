@@ -74,7 +74,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 ## question-guard
 
 - Stop hook blocks once a turn without `AskUserQuestion`/`ExitPlanMode`: HAND once,
-  also right after another Stop hook's block, HARD every turn (do what the meter's text says); last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite), or open questions stated in the last two paragraphs ("Открытыми остаются вопросы: …").
+  also right after another Stop hook's block, HARD every turn (do what the meter's text says); last paragraph asking in text (`?`, "Дайте знать", "Варианты:"; rhetorical → rewrite; an offer of more work or a wait for an outside action → menu option or drop it; a line mentioning UAC is not judged for a wait), or open questions stated in the last two paragraphs ("Открытыми остаются вопросы: …").
 - `plan-guard` denies `ExitPlanMode` on a plan past `AI_HOOKS_PLAN_LIMIT` or with a stacked snapshot: rewrite the plan file per `handoff`, then exit again.
 - `model-hint` (PostToolUseFailure on Bash): one check (tsc, test, linter) failed a third time in a row with edits between, on Sonnet, once per session — no fourth guess: two lines on what fails and what was tried, then `AskUserQuestion` «Переключиться на Opus» (user runs `/model opus`) first.
 - `resume-hint` on resume: work moved through handoff to the named session — changes after the handoff are its, not unknown; user writes here → repeat its `/resume <id>` in one line.
@@ -117,7 +117,7 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
   Check the edit against them, add the missing link there. A slice only: the impact pass
   before the commit reads the whole domain and `INDEX.md` (a domain without `paths:`).
 - `project-bootstrap` reports husky and CI weekly, a missing `CLAUDE.md` and impact map once per
-  indexed project, never again: offer in one line in the first reply (`/impact-map` for the map).
+  indexed project, never again: name it as a fact in the first reply (`/impact-map` for the map).
   Silent hook = deliberate skip (`<project>/.claude/bootstrap-ignore`).
 
 ## When something is broken
@@ -131,4 +131,4 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red
    → roll back, don't patch further.
 4. `~/.claude/*` are symlinks into `~/harness/claude/`; Edit/Write refuse them — edit the target.
-5. Deeper diagnosis is `/doctor` — offer it in one line, don't improvise.
+5. Deeper diagnosis is `/doctor` — name it as a fact, don't improvise.
