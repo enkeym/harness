@@ -12,8 +12,8 @@ loaded — this skill decides how one is written.
 
 ## Placement
 
-- Global: `~/.config/harness/repo/skills/<name>/SKILL.md`; `~/.claude/skills` is a symlink,
-  write the repo path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
+- Global: `~/.config/harness/repo/skills/<name>/SKILL.md`; `~/.claude/skills` is a plain
+  directory holding one symlink per skill, write the repo path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
 - Description in double quotes whenever it contains `: ` — frontmatter is
   YAML, an unquoted value is cut there.
 - One area per skill. `Grep` the existing descriptions first: an overlap is
@@ -87,7 +87,9 @@ loaded — this skill decides how one is written.
 4. Body from the template below; run the checklist.
 5. Auto-loaded skill → add its row to the **Skills** table in
    `~/.config/harness/repo/rules/core.md`. Command → the user-invoked line in `CLAUDE.md`.
-6. Commit in `~/.config/harness/repo`: `feat(skills): <what the skill adds>`.
+6. Run `~/.config/harness/repo/install.sh` — it links the new skill or command
+   into `~/.claude/`; until then the session does not see it.
+7. Commit in `~/.config/harness/repo`: `feat(skills): <what the skill adds>`.
 
 ## Checklist
 

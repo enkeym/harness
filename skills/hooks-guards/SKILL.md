@@ -130,5 +130,5 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 3. Design docs: `~/.ai-hooks/README.md`, `~/.rag-mcp/README.md`. Tests:
    `~/.ai-hooks/test/test-*.mjs` — run after any edit under `~/.ai-hooks`; red
    → roll back, don't patch further.
-4. `~/.claude/*` are symlinks into `~/.config/harness/repo/claude/`; Edit/Write refuse them — edit the target.
+4. `~/.claude/*` are symlinks into the repo (`skills/`, `commands/`: one per element); Edit/Write refuse them — edit the target.
 5. Deeper diagnosis is `/doctor` — name it as a fact, don't improvise.

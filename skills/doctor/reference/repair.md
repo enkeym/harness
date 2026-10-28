@@ -37,10 +37,13 @@ line of that file to drop, as `env:<line> — <reason>`.
 ## Configured machine
 
 `./install.sh` on a machine set up before the harness moves `~/.claude/`
-`settings.json`, `keybindings.json`, `CLAUDE.md`, `skills`, `commands` and
+`settings.json`, `keybindings.json`, `CLAUDE.md` and
 `~/.tokensave/config.toml` to `<target>.bak-<date>`, and lists what each held
 beyond the harness under `<file> — своё, чего нет в харнессе (<src>):`;
-`install.sh --check` lists the same from the live target before the move. The
+`install.sh --check` lists the same from the live target before the move.
+`~/.claude/skills` and `~/.claude/commands` stay: the user's own entries lie
+beside the harness's symlinks untouched, and only an entry sharing a harness
+name goes to `<name>.bak-<date>` inside the directory (reported as `изменён: <name>`). The
 report carries no values: read them from `<file>` yourself, and never print an
 `env` value or a credential-like scalar in chat.
 
@@ -52,8 +55,8 @@ report carries no values: read them from `<file>` yourself, and never print an
 
 | Report line | Carry over |
 |---|---|
-| `свой: <name>` under `skills` / `commands` | `Read` + `Write` each file into `skills/<name>/` / `claude/commands/<name>`; run the `skill-authoring` checklist, an auto-loaded skill gets its row in `rules/core.md` |
-| `изменён: <name>` | `diff -r ~/.config/harness/repo/<src>/<name> <file>/<name>`; only the user's lines go into the harness file with `Edit`, the rest stays the harness's |
+| `изменён: <name>` under `skills` / `commands` | `diff -r ~/.config/harness/repo/<src>/<name> ~/.claude/<dir>/<name>.bak-<date>`; only the user's lines go into the harness file with `Edit`, the rest stays the harness's |
+| the user's own skill or command in `~/.claude/skills` / `commands` (not reported — it stays in place) | carry it into the harness only on request: `Read` + `Write` into `skills/<name>/` / `claude/commands/<name>`, the `skill-authoring` checklist, an auto-loaded skill gets its row in `rules/core.md`; then `install.sh` swaps it for a symlink (original to `.bak`) |
 | `env.<NAME>` | a secret (token, key, password) → `export NAME=…` in `~/.config/harness/env`, never into git; otherwise `Edit` `env` in `claude/settings.json` |
 | `permissions.<allow\|deny\|ask>: <rule>` | append to that array in `claude/settings.json`; a machine path in the rule → through `~` |
 | `hooks.<event>[<matcher>]: <command>` | the entry under that event and matcher in `claude/settings.json`; a script it runs → `ai-hooks/` (`Read` + `Write`), called through its interpreter (`node ~/.ai-hooks/<script>`, `bash …`) — an absolute path fails `machine_paths_check` |

@@ -52,9 +52,7 @@ bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; }
 # блок подключения ~/.config/harness/bashrc (bashrc_hook).
 LINKS=(
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md"
-  "$HOME/.claude/skills|skills"
   "$HOME/.claude/rules/core.md|rules/core.md"
-  "$HOME/.claude/commands|claude/commands"
   "$HOME/.claude/settings.json|claude/settings.json"
   "$HOME/.ai-hooks|ai-hooks"
   "$RAG_HOME/ragsave|ragsave/ragsave"
@@ -68,6 +66,15 @@ LINKS=(
   # Стабильный путь к репозиторию: клон лежит где угодно, а скиллы и /doctor
   # зовут ~/.config/harness/repo.
   "$HOME/.config/harness/repo|."
+)
+
+# target|каталог в репозитории — каталоги, где у машины могут быть и свои элементы
+# (скиллы, команды). Каталог остаётся обычным, а симлинк ставится на каждый
+# элемент харнесса (dir_links): свои скиллы и команды лежат рядом и не трогаются.
+# После нового скилла или команды в репозитории нужен ./install.sh.
+DIR_LINKS=(
+  "$HOME/.claude/skills|skills"
+  "$HOME/.claude/commands|claude/commands"
 )
 
 # Личное автора: приглашение и алиасы, глобальный git, клавиши Claude Code
@@ -241,6 +248,68 @@ link_one() {
   fixed=$((fixed + 1))
 }
 
+# Симлинк на каждый элемент каталога харнесса; чужие элементы остаются. Прежний
+# симлинк на каталог целиком заменяется обычным каталогом, висячие симлинки в
+# харнесс (элемент удалён из репозитория) убираются.
+dir_links() {
+  local pair target src dir x name
+  for pair in "${DIR_LINKS[@]}"; do
+    target="${pair%%|*}" src="${pair##*|}" dir="$HARNESS/$src"
+    if [ ! -d "$dir" ]; then
+      bad "$target — нет каталога $src в репозитории"
+      missing=$((missing + 1)); continue
+    fi
+    if [ -L "$target" ]; then
+      if [ "$MODE" = "--check" ]; then
+        warn "$target — симлинк на каталог целиком, ./install.sh заменит его симлинками на элементы"
+        drift=$((drift + 1)); continue
+      fi
+      rm -f "$target"
+      warn "$target — был симлинком на каталог, теперь обычный каталог с симлинками на элементы"
+      fixed=$((fixed + 1))
+    elif [ -e "$target" ] && [ ! -d "$target" ]; then
+      if [ "$MODE" = "--check" ]; then
+        warn "$target — не каталог"
+        drift=$((drift + 1)); continue
+      fi
+      mv "$target" "$target.bak-$STAMP"
+      warn "$target — был обычным файлом, сохранён как $(basename "$target").bak-$STAMP"
+      fixed=$((fixed + 1))
+    fi
+    if [ ! -d "$target" ]; then
+      if [ "$MODE" = "--check" ]; then
+        warn "$target — нет"
+        drift=$((drift + 1)); continue
+      fi
+      mkdir -p "$target"
+    fi
+    for x in "$dir"/*; do
+      [ -e "$x" ] || continue
+      name="$(basename "$x")"
+      if [ "$MODE" = "--check" ]; then
+        check_one "$target/$name" "$src/$name"
+      else
+        link_one "$target/$name" "$src/$name"
+      fi
+    done
+    for x in "$target"/*; do
+      if [ -L "$x" ] && [ ! -e "$x" ]; then
+        case "$(readlink "$x")" in
+          "$HARNESS"/*)
+            if [ "$MODE" = "--check" ]; then
+              warn "$x — висячий симлинк: элемента нет в харнессе, ./install.sh уберёт"
+              drift=$((drift + 1))
+            else
+              rm -f "$x"
+              good "$x — убран: элемента нет в харнессе"
+              fixed=$((fixed + 1))
+            fi ;;
+        esac
+      fi
+    done
+  done
+}
+
 local_one() {
   local target="$1" src="$HARNESS/$2"
   if [ -f "$target" ]; then
@@ -347,7 +416,9 @@ gitconfig_migrate() {
 # check_one): в claude/settings.json и skills/ пишет /doctor с ответа
 # пользователя — в репозиторий не должны уехать машинные пути и токены из env.
 # target|источник|вид: json — bin/claude-diff.mjs, text — число своих строк,
-# dir — свои и изменённые элементы верхнего уровня без скрытых.
+# dir — элементы харнесса, чьё имя занимал свой: он уехал в .bak-<дата> внутри
+# каталога, отчёт называет отличающиеся от харнесса (только install; в --check
+# каталог смешанный, расхождения называет dir_links).
 REPORTS=(
   "$HOME/.claude/settings.json|claude/settings.json|json"
   "$HOME/.claude/CLAUDE.md|claude/CLAUDE.md|text"
@@ -398,6 +469,23 @@ backup_report() {
   for entry in "${REPORTS[@]}"; do
     IFS='|' read -r target src kind <<<"$entry"
     own="$HARNESS/$src" old="$target.bak-$STAMP" lines=""
+    if [ "$kind" = dir ]; then
+      [ "$MODE" = "--check" ] && continue
+      [ -d "$target" ] && [ -d "$own" ] || continue
+      for x in "$target"/*.bak-"$STAMP"; do
+        [ -e "$x" ] || continue
+        name="$(basename "${x%.bak-*}")"
+        if [ -e "$own/$name" ] && [ -n "$(diff -rq "$own/$name" "$x" 2>&1)" ]; then
+          lines+="изменён: $name"$'\n'
+        fi
+      done
+      if [ -n "$lines" ]; then
+        warn "$target — свои элементы с именами харнесса сохранены как *.bak-$STAMP и отличаются от него:"
+        while IFS= read -r x; do [ -z "$x" ] || warn "  $x"; done <<<"$lines"
+        n=$((n + 1))
+      fi
+      continue
+    fi
     [ "$MODE" = "--check" ] && old="$target"
     # Нет источника — его уже назвали link_one/check_one.
     [ -e "$old" ] && [ ! -L "$old" ] && [ -e "$own" ] || continue
@@ -415,18 +503,6 @@ backup_report() {
         [ "${x:-0}" -gt 0 ] || continue
         warn "$old — отличается от харнесса ($src), строк своих: $x"
         n=$((n + 1)); continue
-        ;;
-      dir)
-        [ -d "$old" ] && [ -d "$own" ] || continue
-        for x in "$old"/*; do
-          [ -e "$x" ] || continue
-          name="$(basename "$x")"
-          if [ ! -e "$own/$name" ]; then
-            lines+="свой: $name"$'\n'
-          elif [ -n "$(diff -rq "$own/$name" "$x" 2>&1)" ]; then
-            lines+="изменён: $name"$'\n'
-          fi
-        done
         ;;
     esac
     [ -n "$lines" ] || continue
@@ -496,7 +572,7 @@ BAK_DAYS=30
 backups_check() {
   local cutoff pair d f day dirs=() seen=" " n=0
   cutoff="$(date -d "$BAK_DAYS days ago" +%Y%m%d 2>/dev/null || date -v-"$BAK_DAYS"d +%Y%m%d 2>/dev/null)" || return 0
-  for pair in "${LINKS[@]}" "${LOCALS[@]}"; do dirs+=("$(dirname "${pair%%|*}")"); done
+  for pair in "${LINKS[@]}" "${DIR_LINKS[@]}" "${LOCALS[@]}"; do dirs+=("$(dirname "${pair%%|*}")"); done
   [ -z "$VSCODE_DIR" ] || dirs+=("$VSCODE_DIR")
   for d in "${dirs[@]}"; do
     case "$seen" in *" $d "*) continue ;; esac
@@ -611,7 +687,7 @@ build_venv() {
 # а ai-hooks/logs — рантайм этой машины вне git.
 machine_paths_check() {
   local srcs=() pair src hits line rest
-  for pair in "${LINKS[@]}"; do
+  for pair in "${LINKS[@]}" "${DIR_LINKS[@]}"; do
     # Симлинк на сам репозиторий — не источник: в нём и тесты, и доки с примерами.
     [ "${pair##*|}" = . ] && continue
     src="$HARNESS/${pair##*|}"
@@ -820,6 +896,7 @@ case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS), $(personal_label):"
     for pair in "${LINKS[@]}"; do wanted "${pair%%|*}" && check_one "${pair%%|*}" "${pair##*|}"; done
+    dir_links
     bashrc_hook
     git_filter
     vscode_links
@@ -843,6 +920,7 @@ case "$MODE" in
       mkdir -p "$(dirname "$PERSONAL_MARK")" && : >"$PERSONAL_MARK"
     fi
     for pair in "${LINKS[@]}"; do wanted "${pair%%|*}" && link_one "${pair%%|*}" "${pair##*|}"; done
+    dir_links
     bashrc_hook
     git_filter
     vscode_links

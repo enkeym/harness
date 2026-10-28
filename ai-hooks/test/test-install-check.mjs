@@ -25,11 +25,13 @@ const pairs = (name) => {
 };
 // Ядро и личное (--personal): песочница по умолчанию с меткой личного — цели обоих.
 const CORE_LINKS = pairs('LINKS');
+// Каталоги с симлинком на каждый элемент: в песочнице у каждого один элемент.
+const DIRS = pairs('DIR_LINKS').map((d) => ({ ...d, item: d.src === 'skills' ? 'alpha' : 'ask.md' }));
 const CORE_LOCALS = pairs('LOCALS');
 const LINKS = [...CORE_LINKS, ...pairs('PERSONAL_LINKS')];
 const LOCALS = [...CORE_LOCALS, ...pairs('PERSONAL_LOCALS')];
-const ALL = LINKS.length + LOCALS.length;
-const CORE = CORE_LINKS.length + CORE_LOCALS.length;
+const ALL = LINKS.length + LOCALS.length + DIRS.length;
+const CORE = CORE_LINKS.length + CORE_LOCALS.length + DIRS.length;
 const MARK = '.config/harness/personal';
 // mkdir/mv/ln/rm/cp --check не нужны; они в PATH, чтобы правку, если она случится, поймал снимок.
 const TOOLS = ['date', 'dirname', 'basename', 'readlink', 'grep', 'head', 'sed', 'awk', 'node', 'diff', 'mkdir', 'mv', 'ln', 'rm', 'cp', 'env'];
@@ -76,6 +78,10 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [], personal = true }
     fs.writeFileSync(path.join(harness, src), '');
   }
   fs.writeFileSync(path.join(harness, 'claude', 'settings.json'), settings);
+  for (const { src, item } of DIRS) {
+    fs.mkdirSync(path.join(harness, src), { recursive: true });
+    fs.writeFileSync(path.join(harness, src, item), '');
+  }
   for (const { src } of LOCALS) {
     fs.mkdirSync(path.dirname(path.join(harness, src)), { recursive: true });
     fs.writeFileSync(path.join(harness, src), `шаблон ${src}`);
@@ -104,6 +110,10 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [], personal = true }
   for (const { target: t, src } of personal ? LINKS : CORE_LINKS) {
     fs.mkdirSync(path.dirname(target(t)), { recursive: true });
     fs.symlinkSync(path.join(harness, src), target(t));
+  }
+  for (const { target: t, src, item } of DIRS) {
+    fs.mkdirSync(target(t), { recursive: true });
+    fs.symlinkSync(path.join(harness, src, item), path.join(target(t), item));
   }
   // Локальные файлы — уже заполненные копии.
   for (const { target: t } of personal ? LOCALS : CORE_LOCALS) {
@@ -503,13 +513,14 @@ function configuredSandbox(tools) {
     settings: JSON.stringify({ permissions: { allow: ['Bash(ls *)'] }, hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node ~/.ai-hooks/claude/stop.mjs' }] }] } }),
   });
   const [settings, skills, claudeMd] = ['.claude/settings.json', '.claude/skills', '.claude/CLAUDE.md'].map(sb.target);
-  fs.rmSync(path.join(sb.harness, 'skills'));
+  fs.rmSync(path.join(sb.harness, 'skills'), { recursive: true });
+  fs.rmSync(skills, { recursive: true });
   for (const name of ['doctor', 'git-flow']) {
     fs.mkdirSync(path.join(sb.harness, 'skills', name), { recursive: true });
     fs.writeFileSync(path.join(sb.harness, 'skills', name, 'SKILL.md'), `# ${name}\n`);
   }
   fs.writeFileSync(path.join(sb.harness, 'claude', 'CLAUDE.md'), '# rules\n');
-  for (const t of [settings, skills, claudeMd]) fs.rmSync(t);
+  for (const t of [settings, claudeMd]) fs.rmSync(t);
   fs.writeFileSync(settings, JSON.stringify({
     model: 'opus',
     env: { SECRET_TOKEN: 'xyz' },
@@ -525,10 +536,10 @@ function configuredSandbox(tools) {
 }
 const REPORT = [
   '  env.SECRET_TOKEN\n', '  permissions.allow: Bash(make *)\n', '  hooks.PreToolUse[Bash]: ~/bin/guard.sh\n',
-  '  свой: my-skill\n', '  изменён: doctor\n', 'строк своих: 2', '/doctor перенесёт каждый пункт',
+  'строк своих: 2', '/doctor перенесёт каждый пункт',
 ];
 const reported = (out) => REPORT.filter((s) => !out.includes(s));
-const LEAKS = ['xyz', 'model', 'git-flow', '.cache', 'Bash(ls *)', 'stop.mjs'];
+const LEAKS = ['xyz', 'model', '.cache', 'my-skill', 'Bash(ls *)', 'stop.mjs'];
 
 {
   const sb = configuredSandbox();
@@ -538,27 +549,57 @@ const LEAKS = ['xyz', 'model', 'git-flow', '.cache', 'Bash(ls *)', 'stop.mjs'];
     [reported(res.out), res.status, changes(before, sb.snap())], [[], 1, []]);
   check('--check: значения env, model, общие скиллы, скрытые и общие ключи не названы',
     LEAKS.filter((s) => res.out.includes(s)), []);
-  check('--check: отчёт не добавляет к вниманию — только три обычных файла', res.out.includes(summary(ALL - 3, 3, 0)), true);
+  check('--check: отчёт не добавляет к вниманию — только settings, CLAUDE.md и два скилла каталогом', res.out.includes(summary(ALL - 3, 4, 0)), true);
 }
 
 {
   const sb = configuredSandbox();
   const res = sb.run([]);
   const baks = fs.readdirSync(sb.target('.claude')).filter((n) => n.includes('.bak-'));
+  const skillBaks = fs.readdirSync(sb.target('.claude/skills')).filter((n) => n.includes('.bak-'));
   check('install на настроенной машине — тот же отчёт по .bak-<дата>, без значений',
     [reported(res.out), LEAKS.filter((s) => res.out.includes(s)), res.out.includes(`${sb.target('.claude/settings.json')}.bak-`)], [[], [], true]);
   check('install: своё осталось в бэкапах, в харнесс не записано',
-    [baks.map((n) => n.replace(/\.bak-.*/, '')).sort(), fs.existsSync(path.join(sb.harness, 'skills', 'my-skill'))],
-    [['CLAUDE.md', 'settings.json', 'skills'], false]);
+    [baks.map((n) => n.replace(/\.bak-.*/, '')).sort(), skillBaks.map((n) => n.replace(/\.bak-.*/, '')).sort(), fs.existsSync(path.join(sb.harness, 'skills', 'my-skill'))],
+    [['CLAUDE.md', 'settings.json'], ['doctor', 'git-flow'], false]);
+  check('install: свой скилл на месте, каталог — обычный, скиллы харнесса — симлинки, изменённый именован в отчёте',
+      [fs.lstatSync(sb.target('.claude/skills')).isDirectory(), fs.lstatSync(sb.target('.claude/skills/my-skill')).isDirectory(),
+        fs.lstatSync(sb.target('.claude/skills/doctor')).isSymbolicLink(), res.out.includes('изменён: doctor'), res.out.includes('изменён: git-flow')],
+      [true, true, true, true, false]);
   check('--check после install — всё симлинки, отчёта нет', sb.run().out.includes('/doctor перенесёт'), false);
 }
 
 {
   const sb = configuredSandbox(TOOLS.filter((t) => t !== 'node'));
-  const out = sb.run().out;
+  const out = sb.run([]).out;
   check('node нет — json не сравнён, каталоги и текст — да',
-    [out.includes('settings.json — node не найден, свои ключи не сравнены'), out.includes('свой: my-skill'), out.includes('строк своих: 2')],
+    [out.includes('— node не найден, свои ключи не сравнены'), out.includes('изменён: doctor'), out.includes('строк своих: 2')],
     [true, true, true]);
+}
+
+// Каталоги скиллов и команд: прежний симлинк каталога, висячие ссылки, идемпотентность.
+{
+  const sb = sandbox();
+  const skills = sb.target('.claude/skills');
+  fs.rmSync(skills, { recursive: true });
+  fs.symlinkSync(path.join(sb.harness, 'skills'), skills);
+  const chk = sb.run();
+  check('--check: симлинк каталога — drift', [chk.status, chk.out.includes('симлинк на каталог целиком')], [1, true]);
+  const res = sb.run([]);
+  check('install: симлинк каталога → обычный каталог с симлинком на элемент, без бэкапа',
+    [res.status, fs.lstatSync(skills).isDirectory(), fs.lstatSync(path.join(skills, 'alpha')).isSymbolicLink(),
+      fs.readdirSync(sb.target('.claude')).some((n) => n.includes('.bak-'))], [0, true, true, false]);
+  fs.symlinkSync(path.join(sb.harness, 'skills', 'gone'), path.join(skills, 'gone'));
+  fs.symlinkSync(path.join(sb.home, 'nowhere'), path.join(skills, 'foreign'));
+  const dangling = sb.run();
+  check('--check: висячий симлинк в харнесс — drift', [dangling.status, dangling.out.includes('gone — висячий симлинк')], [1, true]);
+  sb.run([]);
+  check('install: висячий симлинк в харнесс убран, чужой висячий не тронут',
+    [fs.existsSync(path.join(skills, 'gone')) || fs.lstatSync(path.join(skills, 'gone'), { throwIfNoEntry: false }) !== undefined,
+      fs.lstatSync(path.join(skills, 'foreign'), { throwIfNoEntry: false }) !== undefined], [false, true]);
+  const before = sb.snap();
+  const again = sb.run([]);
+  check('install повторно — 0 изменений', [again.status, changes(before, sb.snap()), again.out.includes('создано/починено: 0')], [0, [], true]);
 }
 
 {

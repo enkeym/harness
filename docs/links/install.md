@@ -17,7 +17,7 @@ paths:
   `ai-hooks/bin/ragsave-sync.sh`.
   Сменил цель в `install.sh` одну — хуки, MCP и фоновые синки падают молча.
 - Пути без машины — `install.sh:machine_paths_check` ищет `/home/<имя>/` и
-  `/Users/<имя>/` во всех источниках `LINKS` и в `vscode/`, кроме каталогов
+  `/Users/<имя>/` во всех источниках `LINKS`, `DIR_LINKS` и в `vscode/`, кроме каталогов
   `test`, `tests`, `logs`. Путь в новом формате (`$USER`, `/root/`) или новый источник вне
   `LINKS` проверка не увидит; фикстура с чужим HOME вне `test/` — ложное ✗.
 - `install.sh:VSCODE_LINKS` ↔ `%APPDATA%\Code\User` VS Code в Windows: цель
@@ -103,6 +103,12 @@ paths:
   `нет бинаря/файла/каталога`). Сменил формулировку — поправь раздел.
   `SETUP_RE` и `BASHRC_OWN` общие с `shell_migrate`: что перенесено, то и
   проверяется.
+- `install.sh:DIR_LINKS` (`~/.claude/skills`, `~/.claude/commands`) ↔ `dir_links`: цель — обычный
+  каталог, симлинк на каждый элемент источника; чужие элементы не трогаются, симлинк
+  в харнесс без источника убирается. Новый скилл виден после `./install.sh` (шаг в
+  `skills/skill-authoring`); `test-install-check.mjs` разбирает массив регэкспом, как `LINKS`.
+  Каталог-симлинк прежних установок заменяется каталогом; `.bak-` совпавшего имени —
+  внутри каталога, `backups_check` смотрит и туда.
 - `install.sh:REPORTS` ↔ цели `LINKS` и имена бэкапов `link_one` (`<цель>.bak-$STAMP`):
   `backup_report` сверяет бэкап этого запуска, в `--check` — живую цель-не-симлинк.
   Цель убрали из `LINKS`, а из `REPORTS` нет — отчёт молча пуст; новая цель
