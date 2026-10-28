@@ -48,9 +48,11 @@ the files the next step needs. The hook says which case it is; follow it.
       interface) rather than codes. A snapshot already in the file (often the
       brief's) is replaced, never kept below as `Состояние (прежнее)`,
       `устарело`, `что сделано в N`.
-   3. `ExitPlanMode` — its dialog is where the user clears the context. Result
-      "approved" in this same session = not cleared (Remote Control): end the turn
-      with `/clear`, then `продолжи по @~/.claude/plans/<file>.md`; else print nothing.
+   3. `ExitPlanMode` in the same response as the write; plan mode takes no
+      questions and no reads but an existing plan file's `Read` — each extra
+      request re-pays the window on Opus. Its dialog is where the user clears
+      the context. "Approved" in this same session = not cleared (Remote
+      Control): end with `/clear`, then `продолжи по @~/.claude/plans/<file>.md`; else nothing.
 4. The snapshot is stale after the next commit — rerun `/handoff`.
 
 ## Snapshot (Russian, only sections that apply)
@@ -123,12 +125,10 @@ cost more than the long one it replaced:
   (default `opusplan`: Opus plans, Sonnet codes after `ExitPlanMode`).
 - Read what `Карта` names for the first step — symbols through `body`, not
   whole files in ranges; the rest stays a pointer until a step needs it.
-- Don't re-run what `Проверено` lists. Re-check one of its lines only when the
-  work changes that behaviour again, or when `git status` contradicts it —
-  then say which line and why.
-- A blocked or contradicted line in `Проверено` is a finding: one line, not a quiet redo.
+- Don't re-run what `Проверено` lists. Re-check a line only when the work
+  changes that behaviour again, or `git status` contradicts it — say which line
+  and why, in one line, not a quiet redo.
 - A pending user decision in the snapshot ("ждёт проверки пользователем",
-  "ждать «ок»") is asked through the question tool when its step is
-  reached, never written as a closing line of text. "Повторно не спрашивать"
-  means don't re-ask what the user already answered; it never cancels the menu
-  for a decision still open.
+  "ждать «ок»") is asked through the question tool when its step is reached,
+  never as a closing line of text. "Повторно не спрашивать" means don't re-ask
+  what the user already answered, not a cancelled menu for a decision still open.
