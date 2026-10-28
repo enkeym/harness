@@ -46,5 +46,5 @@ file, a path outside the index, a string `search` missed.
   contains it verbatim.
 - Error (not indexed, DB busy) → one line, then built-in tools. Graph
   genuinely silent: DB is `.tokensave/tokensave.db`, tables `nodes`, `edges`,
-  `files`. Offer an issue at https://github.com/aovestdipaperino/tokensave —
-  no proprietary code in it.
+  `files`. Name the tracker for an issue as a fact:
+  https://github.com/aovestdipaperino/tokensave — no proprietary code in it.

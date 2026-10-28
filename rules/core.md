@@ -16,7 +16,9 @@ Claude Code tools and gates: `CLAUDE.md`.
 - A question to the user — a fork, a choice, an open point before a handoff —
   goes through `AskUserQuestion`, options
   with the recommended one first; never left as prose at the end of a reply,
-  where it hangs until the user notices it.
+  where it hangs until the user notices it. The same goes for an offer of more
+  work and a wait for the user's action outside the chat: a menu option
+  («Готово» / «Сделать X») or nothing. A user command is named as a fact.
 - Re-check the diff before delivering. Found a mistake — fix it openly.
 - A guard refusal is final: never route around it.
 

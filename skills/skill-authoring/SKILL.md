@@ -42,7 +42,7 @@ loaded — this skill decides how one is written.
   `allowed-tools` limited to the commands it runs, `argument-hint`; end the
   description with `User-invoked as /name.`
 - No other field unless it changes behaviour (`user-invocable: false`,
-  `context: fork`, `model`, `paths`).
+  `model`, `paths`). No `context: fork` or `agent:` — the harness runs no subagents.
 
 ## Body
 

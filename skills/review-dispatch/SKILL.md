@@ -6,7 +6,7 @@ description: "Decides before a commit whether the diff is reviewed in this sessi
 # Review dispatch
 
 A small or doc-only diff is reviewed here; a large or sensitive one gets a
-reviewer with no sunk context, through `handoff`. The checklists stay in
+fresh session with no sunk context (never a subagent), through `handoff`. The checklists stay in
 `review-standards` and `review-security`; this skill only picks where they run.
 
 ## Verdict

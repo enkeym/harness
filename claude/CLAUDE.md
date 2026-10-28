@@ -30,7 +30,7 @@ Shared rules: `~/.claude/rules/core.md`. Here only what exists in Claude Code al
 
 `/commit`, `/doctor`, `/impact-map`, `/optimize`, `/review`, `/usage`,
 `/test-browser` (skills with `disable-model-invocation: true`) and `/ask`,
-`/ask-off` (commands in `claude/commands/`) are user-invoked only. Offer in one line when
+`/ask-off` (commands in `claude/commands/`) are user-invoked only. Name one as a fact, without an invitation, when
 it fits: `/doctor` when the harness misbehaves (loops, repeated refusals, dead
 index, expired provider auth), `/optimize` and `/usage` for spend and
 settings, `/impact-map` only when `project-bootstrap` names the missing map
