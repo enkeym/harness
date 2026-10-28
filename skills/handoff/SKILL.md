@@ -34,8 +34,8 @@ the files the next step needs. The hook says which case it is; follow it.
    waiting for the user, and, with uncommitted changes, whether to commit the
    step or hand them off as they are (the push waits for the request's end, `git-flow`)
    — the user often runs `/handoff` mid-work they mean to finish themselves.
-   Answers go under `Решения`, the tree state under `Состояние`. A question
-   left only in the snapshot hangs unanswered.
+   Skipped between MRs of `/review mr`: nothing is uncommitted or open.
+   Answers go under `Решения`, the tree state under `Состояние`.
 3. In this order, with or without a `task-brief` plan — plan mode allows one
    write, the new file it names, so an old plan is edited before entering:
    1. A `task-brief` plan exists → tick the steps whose commits landed,

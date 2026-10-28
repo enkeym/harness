@@ -97,10 +97,10 @@ upload, webhooks, outbound calls, config first; report per module.
 Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 [reference/gitlab.md](reference/gitlab.md), read before the first call. The
 scope is the MR's diff after `git fetch` — the only fetch /review runs; no
-checkout, no typecheck or tests, they go to the not-checked line. Several MRs
-run one by one: report → drafts → next; after a large one (section 2) the
-rest go to a fresh session through `handoff`, `Дальше` naming this file and
-the remaining `!<iid>` — the new session continues on its own.
+checkout, no typecheck or tests, they go to the not-checked line. One MR per
+session: after its drafts the rest of the queue goes through `handoff`,
+`Дальше` naming this file and the next `!<iid>` — the new session continues
+on its own. Chain rules: *Several MRs* of the reference.
 
 ## 2. Pass
 

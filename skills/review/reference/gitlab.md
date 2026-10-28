@@ -80,6 +80,21 @@ NOTE_<N>
   one, then `GET …/merge_requests/<iid>/discussions` — a `204` does not prove
   the note exists; a missing one → its MR comment in chat.
 
+## Several MRs — one session each
+
+A session is clean when `/review` was its first prompt or it came from a
+handoff of this chain. Clean → pass, report and drafts for the first `!<iid>`;
+print its `MR !<iid>: N черновиков → …` line (the Submit review link) before
+the handoff, which follows when MRs remain. Not clean → handoff right after
+the pick, before the first pass. One MR picked in a clean session → no handoff.
+
+- Skip the question of `handoff` step 2: nothing is uncommitted, nothing waits.
+- Snapshot ≤600 characters: `Задача` (MR mode, project), `Состояние` (done
+  `!<iid>` with draft counts), `Дальше`: `Read ~/.claude/skills/review/SKILL.md,
+  продолжить на !<iid> …`. No `Карта`, no `Проверено`.
+- A large MR (section 2 of SKILL.md): the handoff inside it carries the unread
+  files; the rest of the queue follows in the same `Дальше`.
+
 ## Existing comments
 
 ```bash
