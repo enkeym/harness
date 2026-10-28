@@ -113,8 +113,8 @@ Each item ends as ok, failure or not met, with the line that proves it:
 3. Tool choice: indexed files read through `Read` or shell instead of
    tokensave. Across sessions: `node ~/.ai-hooks/bin/tool-share.mjs`.
 4. Questions: a `question-guard` block is a question left as prose.
-5. Commit gate: each `git commit` follows `review-standards` and
-   `review-security` `Skill` calls.
+5. Commit gate: each `git commit` follows `review-dispatch`, `review-standards`
+   and `review-security` `Skill` calls.
 6. Hooks: `crash` or `slow` lines under this `sid`.
 7. Context meter: its threshold text reached the transcript and the next turn
    followed it.

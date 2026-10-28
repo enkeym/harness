@@ -62,6 +62,9 @@ what it cannot: a file outside the index, a file to create, a string it missed.
 | A file outside the index; a new file            | `Read`, `Edit`, `Write`                               |
 | Exact string in code after `search` `literal: true` answered empty | grep with a file glob              |
 
+Tool names in rules and skills are short; a call uses the full
+`mcp__<server>__<tool>`, and a deferred tool (`Monitor`, `tokensave_read`,
+`tokensave_str_replace` …) is loaded by `ToolSearch("select:…")` first.
 An empty answer means a wrong guess, not missing code — take the next row.
 No subagents for research or implementation; too large for one pass → split
 into commits. Scoping, empty answers, another project: skill
@@ -88,7 +91,8 @@ are examples of how the user asks, not the only trigger.
 | Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
 | Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
 | Hand the thread to a fresh session: the context is filling up, or a reset is coming | `handoff`          |
-| Review a diff, branch or MR — and always right before a commit, in this order      | `review-standards`, `review-security` |
+| Right before a commit: where the review runs, first                                 | `review-dispatch`   |
+| Review a diff, branch or MR — and before a commit when `review-dispatch` says here, in this order | `review-standards`, `review-security` |
 | Commit, branch, or touch a Jira or MR text — after the two review skills; an MR after `test-coverage` too | `git-flow` |
 | Create, edit or review a skill, an agent file, a rules file, CLAUDE.md or AGENTS.md | `skill-authoring`   |
 
@@ -96,8 +100,9 @@ are examples of how the user asks, not the only trigger.
 
 - **Commit and push.** A unit is done — the whole user request or an approved
   plan step, every part applied, verified with real output (`tsc`, tests, the
-  reproduced case), no open question → impact pass, `review-standards`,
-  `review-security`, fix findings, commit, then run `git push` — neither asked
+  reproduced case), no open question → impact pass, `review-dispatch`, then
+  (verdict here) `review-standards`, `review-security`, fix findings, commit
+  (verdict clean: handoff, no commit), then run `git push` — neither asked
   in chat. Push once, after the last commit of the whole request, not after each
   plan step. security-guard's dialog is the confirmation; a prompt naming the
   push only skips that dialog, it is not a precondition. One edit of

@@ -22,7 +22,9 @@ verified by code, docs or a run before it reaches the user.
 - First line of the reply names why it fired, in Russian: `Задача крупная:
   <причина> — собираю бриф.` The user can wave it off. Then
   `EnterPlanMode`; the brief is the plan file it names
-  (`~/.claude/plans/<slug>.md`).
+  (`~/.claude/plans/<slug>.md`). Session on plain Sonnet → one line suggests
+  `/model opusplan` before the plan: Opus writes the brief, Sonnet executes
+  after `ExitPlanMode`. A skill cannot switch the model itself.
 - "поспорь", "мозговой штурм", "найди дыры", "что может пойти не так" about one
   decision, library, schema or idea → *Challenge*, not the brief. So is a
   question that weighs approaches: "какой вариант стабильнее", "стоит ли

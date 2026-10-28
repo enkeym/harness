@@ -10,7 +10,7 @@ argument-hint: "[commit message, or instructions]"
 
 `/commit` = commit **and push** this branch. Write the commit yourself.
 
-Load `review-standards`, `review-security`, then `git-flow` — in that order.
+Load `review-dispatch` first. Verdict *clean* → it writes the handoff, no commit here. Verdict *here* → load `review-standards`, `review-security`, then `git-flow`, in that order.
 
 1. One line: branch (`git branch --show-current`) and `git status --short`.
    Nothing to commit → say so, stop.

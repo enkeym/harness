@@ -24,7 +24,8 @@ ticket, commit style, remote and project restrictions come from
   the files: «Включить все правки в этот коммит» first and recommended, «Без
   этих правок» second. Never leave them out silently — skipped each session,
   they sit in the tree for weeks. Answer holds for the rest of the session.
-- Before every commit: [../shared/review-pass.md](../shared/review-pass.md) on
+- Before every commit: `review-dispatch` first (verdict *clean* → no commit
+  here), then [../shared/review-pass.md](../shared/review-pass.md) on
   that commit's diff, findings fixed by `review-standards` step 8.
 - Message style = the user's own recent commits, not the loudest style in the
   repo: same form, same language, same scope names.

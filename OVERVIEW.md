@@ -191,7 +191,7 @@ harness — **надстройка над агентом**, а не новый �
    покрывает и когда грузить (~2k токенов на всю коллекцию).
 2. **Таблица триггеров** в `rules/core.md` связывает действие со скиллом:
    «трогаешь контроллер или DTO → `nestjs-backend`», «перед коммитом →
-   `review-standards`, `review-security`, `git-flow`».
+   `review-dispatch`, `review-standards`, `review-security`, `git-flow`».
 3. **Тело скилла грузится до первого действия в его области**, один раз за
    сессию. Правило оказывается в окне рядом с действием, к которому
    относится.
@@ -207,7 +207,7 @@ harness — **надстройка над агентом**, а не новый �
 | Действие | Без чего запрещено |
 | --- | --- |
 | Правка `SKILL.md`, `CLAUDE.md`, `AGENTS.md`, `rules/*.md`, команд, агентов | `skill-authoring` |
-| `git commit` в любой форме | `review-standards`, `review-security`, `git-flow` |
+| `git commit` в любой форме | `review-dispatch`, `review-standards`, `review-security`, `git-flow` |
 
 `skill-track` отмечает загруженные скиллы по сессии; после `/clear` сессия
 новая, и скилл надо загрузить снова — как и в контексте модели.
@@ -252,7 +252,8 @@ harness — **надстройка над агентом**, а не новый �
    домен подключается в контекст.
 5. Тесты — через ограничитель вывода: в окне итог, а не 3000 строк лога.
 6. Impact-проход: `tokensave_impact` + карта связей.
-7. `review-standards` → `review-security` → `git-flow` → коммит и push.
+7. `review-dispatch` → `review-standards` → `review-security` → `git-flow` → коммит и push.
+   Вердикт `clean` (крупный или чувствительный дифф) — handoff на ревью, без коммита.
    Без загруженных скиллов `skill-gate` коммит не пропустит.
 8. Окно дошло до `HAND` → шаг доводится, `handoff` переносит задачу в чистую
    сессию.
