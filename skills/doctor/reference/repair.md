@@ -4,14 +4,14 @@
 
 `installed_agents` in `~/.tokensave/state.toml` makes `tokensave init` and any
 command after an upgrade rerun `install`, writing through the symlink into
-`~/harness/claude/settings.json`. Restore without asking, never via
+`~/.config/harness/repo/claude/settings.json`. Restore without asking, never via
 `tokensave uninstall` (it strips the harness's own tokensave hooks):
 
-1. `git -C ~/harness diff claude/settings.json`: all hunks tokensave's
+1. `git -C ~/.config/harness/repo diff claude/settings.json`: all hunks tokensave's
    (`tokensave hook-*` entries and their `matcher`, `mcp__tokensave__*`, key
    order) → `checkout` the file; the user's lines mixed in → revert only
    tokensave's with `Edit`. `model` is not a change.
-2. `~/harness/install.sh` — symlinks, MCP entry, rules file to `.bak-<date>`,
+2. `~/.config/harness/repo/install.sh` — symlinks, MCP entry, rules file to `.bak-<date>`,
    `installed_agents = []`.
 3. `install.sh --check` and `git status` clean; restored settings load in the
    next session — say so.
@@ -48,23 +48,23 @@ report carries no values: read them from `<file>` yourself, and never print an
    харнесс» / «Оставить в бэкапе». Recommend leaving an item that is a
    machine path, a tokensave entry (`tokensave hook-*`, `mcp__tokensave__*`)
    or a duplicate of what the harness already does under another name.
-2. Carry each chosen item into `~/harness`:
+2. Carry each chosen item into `~/.config/harness/repo`:
 
 | Report line | Carry over |
 |---|---|
 | `свой: <name>` under `skills` / `commands` | `Read` + `Write` each file into `skills/<name>/` / `claude/commands/<name>`; run the `skill-authoring` checklist, an auto-loaded skill gets its row in `rules/core.md` |
-| `изменён: <name>` | `diff -r ~/harness/<src>/<name> <file>/<name>`; only the user's lines go into the harness file with `Edit`, the rest stays the harness's |
+| `изменён: <name>` | `diff -r ~/.config/harness/repo/<src>/<name> <file>/<name>`; only the user's lines go into the harness file with `Edit`, the rest stays the harness's |
 | `env.<NAME>` | a secret (token, key, password) → `export NAME=…` in `~/.config/harness/env`, never into git; otherwise `Edit` `env` in `claude/settings.json` |
 | `permissions.<allow\|deny\|ask>: <rule>` | append to that array in `claude/settings.json`; a machine path in the rule → through `~` |
 | `hooks.<event>[<matcher>]: <command>` | the entry under that event and matcher in `claude/settings.json`; a script it runs → `ai-hooks/` (`Read` + `Write`), called through its interpreter (`node ~/.ai-hooks/<script>`, `bash …`) — an absolute path fails `machine_paths_check` |
 | `<key.path>`, `<key.path> — другое значение` | `Edit` the key in `claude/settings.json`; the question names both values unless the key holds a credential |
 | `bindings[<context>].<key>` | `Edit` that block in `claude/keybindings.json` |
-| `<file> — отличается от харнесса (<src>), строк своих: N` | `diff ~/harness/<src> <file>`, one question per own rule or setting; a `CLAUDE.md` rule goes where [claude-md.md](../../skill-authoring/reference/claude-md.md) places it, `config.toml` lines into `tokensave/config.toml` |
+| `<file> — отличается от харнесса (<src>), строк своих: N` | `diff ~/.config/harness/repo/<src> <file>`, one question per own rule or setting; a `CLAUDE.md` rule goes where [claude-md.md](../../skill-authoring/reference/claude-md.md) places it, `config.toml` lines into `tokensave/config.toml` |
 | `<file> не разобран как JSON — сравнить руками` | `Read` it, then the rows above by hand |
 | `<file> — node не найден, …` | install node, rerun `install.sh --check` |
 | `core.hooksPath = <dir> из … не перенесён` | `ls <dir>`; per hook a name tokensave does not use → `Read` + `Write` into `~/.config/git/hooks/` (machine-local), then `chmod +x`; the same name → leave and say so, `tokensave githooks on` rewrites its hooks |
 
-3. `git -C ~/harness diff`, the test loop from step 1, then the commit
+3. `git -C ~/.config/harness/repo diff`, the test loop from step 1, then the commit
    trigger: `feat(skills)` for skills and commands, `chore(config)` for
    `claude/settings.json` and `claude/keybindings.json`. Settings and hooks
    load in the next session — say so.

@@ -25,7 +25,13 @@ paths:
   `<SYMLINKD>`, путь в скобках). Сменится формат `dir` — `--check` выдаст
   ложное «не симлинк», а install пересоздаст живой симлинк.
   На macOS (`uname -s` = `Darwin`, WSL проверяется первым) `install.sh:vscode_dir` ↔
-  `~/Library/Application Support/Code/User`, симлинки — `link_one`/`check_one`.
+  `~/Library/Application Support/Code/User`, на обычном Linux — `~/.config/Code/User`;
+  симлинки — `link_one`/`check_one`.
+- `~/.config/harness/repo` (симлинк на клон в `LINKS`, источник `.`) ↔ пути в `skills/doctor`
+  (`allowed-tools`, `git -C`), `skills/skill-authoring`, `skills/optimize`,
+  `skills/hooks-guards`, `skills/test-browser`. Клон лежит где угодно, пока
+  не сломан симлинк: без `./install.sh` `/doctor` его не найдёт.
+  `machine_paths_check` этот источник пропускает.
   VS Code сменит каталог — настройки молча не подключаются, `--check` о них не скажет.
   `vscode/keybindings.json` (`ctrl+alt+a`) зовёт
   `~/.ai-hooks/bin/ask-mode.mjs` через `!` Claude Code: переименуешь скрипт —

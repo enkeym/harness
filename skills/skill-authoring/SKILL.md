@@ -12,8 +12,8 @@ loaded — this skill decides how one is written.
 
 ## Placement
 
-- Global: `~/harness/skills/<name>/SKILL.md`; `~/.claude/skills` is a symlink,
-  write the harness path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
+- Global: `~/.config/harness/repo/skills/<name>/SKILL.md`; `~/.claude/skills` is a symlink,
+  write the repo path. Project: `<project>/.claude/skills/<name>/SKILL.md`.
 - Description in double quotes whenever it contains `: ` — frontmatter is
   YAML, an unquoted value is cut there.
 - One area per skill. `Grep` the existing descriptions first: an overlap is
@@ -86,8 +86,8 @@ loaded — this skill decides how one is written.
    sentence be picked out of thirty others?
 4. Body from the template below; run the checklist.
 5. Auto-loaded skill → add its row to the **Skills** table in
-   `~/harness/rules/core.md`. Command → the user-invoked line in `CLAUDE.md`.
-6. Commit in `~/harness`: `feat(skills): <what the skill adds>`.
+   `~/.config/harness/repo/rules/core.md`. Command → the user-invoked line in `CLAUDE.md`.
+6. Commit in `~/.config/harness/repo`: `feat(skills): <what the skill adds>`.
 
 ## Checklist
 

@@ -38,9 +38,10 @@ case "$kind" in
       exit 1
     }
     cd "$root" || exit 1
-    # Бинарь — из PATH (Homebrew, ~/.cargo/bin); /usr/local/bin — на случай
-    # урезанного PATH у процесса claude. Переменная — подмена в тестах.
-    bin="${AI_HOOKS_TOKENSAVE_CMD:-$(command -v tokensave || echo /usr/local/bin/tokensave)}"
+    # Бинарь — из PATH (Homebrew, ~/.cargo/bin); ~/.local/bin (сюда его кладёт
+    # install.sh) и /usr/local/bin — на случай урезанного PATH у процесса claude.
+    # Переменная — подмена в тестах.
+    bin="${AI_HOOKS_TOKENSAVE_CMD:-$(command -v tokensave || { [ -x "$HOME/.local/bin/tokensave" ] && echo "$HOME/.local/bin/tokensave" || echo /usr/local/bin/tokensave; })}"
     exec "$bin" serve -p "$root"
     ;;
   ragsave)

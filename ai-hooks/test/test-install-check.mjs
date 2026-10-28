@@ -71,6 +71,7 @@ function sandbox({ settings = '{}', tools = TOOLS, fakes = [], personal = true }
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'install-check-')));
   const harness = path.join(home, 'harness');
   for (const { src } of LINKS) {
+    if (src === '.') continue; // сам репозиторий
     fs.mkdirSync(path.dirname(path.join(harness, src)), { recursive: true });
     fs.writeFileSync(path.join(harness, src), '');
   }
@@ -412,6 +413,23 @@ function macSandbox() {
   const sb = sandbox();
   fs.mkdirSync(sb.target('Library/Application Support/Code/User'), { recursive: true });
   check('не macOS — каталог Library не трогается', sb.run().out.includes('Library'), false);
+}
+
+{
+  const sb = sandbox();
+  const dir = sb.target('.config/Code/User');
+  fs.mkdirSync(path.join(sb.harness, 'vscode'), { recursive: true });
+  fs.writeFileSync(path.join(sb.harness, 'vscode', 'settings.json'), '');
+  fs.mkdirSync(dir, { recursive: true });
+  check('Linux: каталог ~/.config/Code/User ведут link_one/check_one', sb.run().out.includes(`${dir}/settings.json — нет`), true);
+}
+
+{
+  const sb = sandbox();
+  fakeScript(sb, 'uname', 'echo MINGW64_NT-10.0');
+  const before = sb.snap();
+  const res = sb.run([]);
+  check('нативный Windows (MINGW) — отказ с кодом 2, ничего не тронуто', [res.status, sb.snap()], [2, before]);
 }
 
 {

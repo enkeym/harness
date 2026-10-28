@@ -16,6 +16,14 @@
 
 set -euo pipefail
 
+# Нативный Windows (Git Bash/MSYS/Cygwin): симлинки там не симлинки, раскатка
+# сломается на полпути. Нужен WSL.
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*)
+    echo "install.sh не работает в нативном Windows (Git Bash/MSYS): поставить WSL и запустить из него." >&2
+    exit 2 ;;
+esac
+
 HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 MODE="${1:-install}"
@@ -57,6 +65,9 @@ LINKS=(
   "$HOME/.bash_env|shell/bash_env"
   "$HOME/.zshenv|shell/zshenv"
   "$HOME/.tokensave/config.toml|tokensave/config.toml"
+  # Стабильный путь к репозиторию: клон лежит где угодно, а скиллы и /doctor
+  # зовут ~/.config/harness/repo.
+  "$HOME/.config/harness/repo|."
 )
 
 # Личное автора: приглашение и алиасы, глобальный git, клавиши Claude Code
@@ -101,8 +112,8 @@ win_link_target() {
   wincmd dir /AL "$1" | sed -nE "s/.*<SYMLINKD?> +${2//./\\.} \[(.*)\]\$/\1/p"
 }
 
-# Каталог настроек VS Code (в WSL — в виде /mnt/c/...); пусто — не WSL и не macOS
-# или VS Code нет.
+# Каталог настроек VS Code (в WSL — в виде /mnt/c/...); пусто — не WSL, не macOS
+# и не Linux или VS Code нет.
 vscode_dir() {
   local appdata dir=""
   if is_wsl; then
@@ -111,6 +122,8 @@ vscode_dir() {
     dir="$(wslpath -u "$appdata")/Code/User"
   elif [ "$(uname -s 2>/dev/null)" = Darwin ]; then
     dir="$HOME/Library/Application Support/Code/User"
+  else
+    dir="$HOME/.config/Code/User"
   fi
   [ -n "$dir" ] && [ -d "$dir" ] && printf '%s' "$dir"
   return 0
@@ -599,6 +612,8 @@ build_venv() {
 machine_paths_check() {
   local srcs=() pair src hits line rest
   for pair in "${LINKS[@]}"; do
+    # Симлинк на сам репозиторий — не источник: в нём и тесты, и доки с примерами.
+    [ "${pair##*|}" = . ] && continue
     src="$HARNESS/${pair##*|}"
     [ -e "$src" ] || continue
     case " ${srcs[*]:-} " in *" $src "*) ;; *) srcs+=("$src") ;; esac

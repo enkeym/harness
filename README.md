@@ -41,7 +41,7 @@
 git clone git@github.com:enkeym/harness.git ~/harness   # каталог любой
 cd ~/harness
 ./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы
-./install.sh --venv     # venv для ragsave (~250 МБ) + зависимости
+./install.sh --venv     # venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка ~2 ГБ) + зависимости
 ```
 
 Ядро не трогает свои `~/.bashrc`, `~/.gitconfig`, `~/.gitignore_global`,
@@ -125,7 +125,7 @@ exec-форме (`command` + `args`): Claude Code ищет его в PATH, `toke
 такую запись принимает и не переписывает (строковую форму с аргументами он
 «чинит» в абсолютный путь — сквозь симлинк, правкой харнесса). Абсолютный путь
 в хуках оставляет `tokensave install` — `--check` сверит его с PATH. MCP-сервер
-(`ai-hooks/bin/mcp-serve.sh`) берёт tokensave из PATH, `/usr/local/bin` — запасной.
+(`ai-hooks/bin/mcp-serve.sh`) берёт tokensave из PATH, `~/.local/bin` и `/usr/local/bin` — запасные.
 Бинаря нет — `--check` назовёт релизы и версию, что стояла на машине
 (`~/.tokensave/state.toml`).
 
@@ -147,7 +147,7 @@ tokensave 7.12.1 в песочном HOME):
 
 Поэтому на новой машине:
 
-1. Поставить бинарь tokensave (в `/usr/local/bin`, иначе поправить путь хуков).
+1. Поставить бинарь tokensave в PATH (хуки зовут его по имени).
    Источник — релизы <https://github.com/aovestdipaperino/tokensave>; обновление
    поставленного бинаря — `tokensave upgrade` (качает оттуда же).
    `tokensave install` и `reinstall` не запускать — агентам они запрещены
@@ -252,7 +252,7 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 | `~/.rag-mcp/venv` (2,6 ГБ с CUDA) | воспроизводится из `ragsave/requirements.txt`; без `nvidia-smi` — CPU-сборка `onnxruntime` без пакетов `nvidia-*` | `./install.sh --venv` |
 | `~/.claude.json` | регистрация MCP вперемешку с историей проектов | `./install.sh` (из `mcp/servers.json`) |
 | рантайм `~/.claude` (`projects/`, `sessions/`, `history.jsonl`, `state/`) | локальное состояние машины | создаётся само |
-| `tokensave` | сторонний бинарь в `/usr/local/bin` | ставится отдельно, без `tokensave install` (см. «Раскатка на новой машине») |
+| `tokensave` | сторонний бинарь в PATH | ставится отдельно, без `tokensave install` (см. «Раскатка на новой машине») |
 | `~/.config/git/hooks` | глобальные git-хуки генерирует сам `tokensave` (chain-repo-hook, auto-init) | `tokensave githooks on` |
 | `~/.tokensave/{global.db,servers/,state.toml}` | индекс и реестр живых серверов — рантайм машины | создаются сами |
 | ключи и токены | секретам не место в git | `~/.claude/.credentials.json`, логин провайдеров |

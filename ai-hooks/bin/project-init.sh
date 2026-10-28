@@ -38,7 +38,7 @@ repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || ex
 
 here="${BASH_SOURCE%/*}"
 # Переменные — подмена в тестах.
-ts_bin="${AI_HOOKS_TOKENSAVE_CMD:-$(command -v tokensave || echo /usr/local/bin/tokensave)}"
+ts_bin="${AI_HOOKS_TOKENSAVE_CMD:-$(command -v tokensave || { [ -x "$HOME/.local/bin/tokensave" ] && echo "$HOME/.local/bin/tokensave" || echo /usr/local/bin/tokensave; })}"
 rag_bin="${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}"
 log_dir="${AI_HOOKS_LOG_DIR:-$HOME/.ai-hooks/logs}"
 log_file="$log_dir/project-init.log"

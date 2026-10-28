@@ -2,7 +2,7 @@
 name: doctor
 description: "Diagnoses harness failures — loops, repeated guard refusals, dead indexing, expired CLI auth, an unresponsive MCP server, a slow hook, a startup settings warning, install drift, settings overwritten by tokensave, duplicates and dead paths in the machine env, a configured machine's own settings left in install backups, old install backups, projects without an index — from logs and state, and proposes or restores a fix. User-invoked as /doctor."
 disable-model-invocation: true
-allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls *), Bash(diff *), Bash(chmod +x ~/.config/git/hooks/*), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/harness/install.sh --check), Bash(~/harness/install.sh), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/harness *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read, Edit, Write
+allowed-tools: Bash(tail:*), Bash(ps:*), Bash(grep *), Bash(jq *), Bash(ls *), Bash(diff *), Bash(chmod +x ~/.config/git/hooks/*), Bash(claude mcp list), Bash(claude plugin list), Bash(claude -p ok --max-turns 1 --debug), Bash(~/.config/harness/repo/install.sh --check), Bash(~/.config/harness/repo/install.sh), Bash(node ~/.ai-hooks/test/*), Bash(node ~/.ai-hooks/bin/tool-share.mjs *), Bash(git -C ~/.config/harness/repo *), Bash(git ls-remote *), Bash(tokensave status *), Bash(curl -sS --max-time 10 --fail-with-body -H *), Read, Edit, Write
 argument-hint: "[what broke, in your own words | session [sid]]"
 ---
 
@@ -18,8 +18,8 @@ Harness and hooks:
 
 ```
 claude mcp list
-~/harness/install.sh --check
-git -C ~/harness status --short && git -C ~/harness log --oneline @{u}..
+~/.config/harness/repo/install.sh --check
+git -C ~/.config/harness/repo status --short && git -C ~/.config/harness/repo log --oneline @{u}..
 for t in ~/.ai-hooks/test/test-*.mjs; do node "$t" >/tmp/doctor-test.out 2>&1 || { echo "RED $t"; tail -5 /tmp/doctor-test.out; }; done
 jq -rs '(now - 86400 | todate) as $since | map(select(.ts > $since)) | group_by(.hook, .decision)[] | [.[0].hook, .[0].decision, length, (map(.ms // 0) | max)] | @tsv' ~/.ai-hooks/logs/hooks.jsonl | column -t
 tail -60 ~/.ai-hooks/logs/hooks.jsonl
@@ -77,14 +77,14 @@ Then, per symptom: `~/.claude/state/`.
 | A command vanished from PATH after `./install.sh`, or `install.sh --check` names lines in `~/.config/harness/env` | section 5 — machine env |
 | `./install.sh` or `--check` lists `своё, чего нет в харнессе` or `core.hooksPath … не перенесён` | section 5 — configured machine |
 | `install.sh --check` names old `.bak-<date>` files or projects without an index | section 5 — backups, indexes |
-| Guards broke right after a harness edit | `git -C ~/harness status`: an uncommitted edit is live in every session; the red test names it |
+| Guards broke right after a harness edit | `git -C ~/.config/harness/repo status`: an uncommitted edit is live in every session; the red test names it |
 
 ## 3. What to do with a finding
 
 Name the cause in one sentence and back it with a line from a log — without one
 it is a guess. Then:
 
-- **A hook or rule fix** — apply it as its own commit in `~/harness`.
+- **A hook or rule fix** — apply it as its own commit in `~/.config/harness/repo`.
 - After an applied fix, rerun the test loop from step 1. A red test means
   roll back, not patch further.
 - **The failure is in the task, not the system** — say so plainly and return the

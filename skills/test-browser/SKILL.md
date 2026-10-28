@@ -16,7 +16,7 @@ conventions are `test-conventions`.
 
 1. No `browser_*` tools in the session → stop: the Playwright MCP server is
    registered per project, not globally; point to the commands in
-   `~/harness/README.md` (*Раскатка*) and a session restart.
+   `~/.config/harness/repo/README.md` (*Раскатка*) and a session restart.
 2. Resolve the base branch by [../shared/project-facts.md](../shared/project-facts.md).
 3. App running? Dev port from `package.json` scripts or `playwright.config.*`
    (`webServer.url`). Not running → `build`, then `start` in the background

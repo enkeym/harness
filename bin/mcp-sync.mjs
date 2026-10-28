@@ -92,6 +92,11 @@ function syncClaude() {
       drift += 1;
       continue;
     }
+    if (!resolveCommand('claude')) {
+      bad(`${name} — claude не найден в PATH, сервер не зарегистрирован`);
+      unresolved.add(name);
+      continue;
+    }
     if (have) execFileSync('claude', ['mcp', 'remove', '-s', 'user', name], { stdio: 'ignore' });
     const spec = { type: 'stdio', command: s.command, args: s.args, env: s.env };
     execFileSync('claude', ['mcp', 'add-json', '-s', 'user', name, JSON.stringify(spec)], {
