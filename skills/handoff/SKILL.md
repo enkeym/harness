@@ -120,7 +120,7 @@ cost more than the long one it replaced:
   SKILL.md and continue; never ask the user to retype it — the Skill tool
   can't call it, and the user's call already started the run.
 - Next step `(проектирование)` → `EnterPlanMode` before the first read
-  (`opusplan`: Opus plans, Sonnet codes after `ExitPlanMode`).
+  (default `opusplan`: Opus plans, Sonnet codes after `ExitPlanMode`).
 - Read what `Карта` names for the first step — symbols through `body`, not
   whole files in ranges; the rest stays a pointer until a step needs it.
 - Don't re-run what `Проверено` lists. Re-check one of its lines only when the

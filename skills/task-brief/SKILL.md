@@ -5,11 +5,9 @@ description: "Turns a large or loosely worded task into a brief checked against 
 
 # Task brief
 
-No implementation until the brief is approved; a single decision to argue gets
-the *Challenge* section instead, a plain one-line change gets neither.
-`rules/core.md` gates still hold; once work starts, the stack skill carries
-the rules. Argument without a check is opinion — every objection here is
-verified by code, docs or a run before it reaches the user.
+No implementation until the brief is approved; one decision to argue gets
+*Challenge* instead. Once work starts, the stack skill carries the rules. Every
+objection is verified by code, docs or a run before it reaches the user.
 
 ## Trigger
 
@@ -17,18 +15,25 @@ verified by code, docs or a run before it reaches the user.
   subsystem, data model, integration or migration; no file or place named; no
   acceptance criterion; no boundary (what stays out); intent spread over
   several sentences with no structure.
-- Does not fire: a bug with an error and a location; a diff the user could
-  describe in one line; a prompt that already has the sections below.
-- First line of the reply names why it fired, in Russian: `Задача крупная:
-  <причина> — собираю бриф.` The user can wave it off. Then
-  `EnterPlanMode`; the brief is the plan file it names
-  (`~/.claude/plans/<slug>.md`). Session on plain Sonnet → one line suggests
-  `/model opusplan` before the plan: Opus writes the brief, Sonnet executes
-  after `ExitPlanMode`. A skill cannot switch the model itself.
+- Does not fire: a bug with an error and a location; a one-line diff; a
+  prompt that already has the sections below.
 - "поспорь", "мозговой штурм", "найди дыры", "что может пойти не так" about one
   decision, library, schema or idea → *Challenge*, not the brief. So is a
   question that weighs approaches: "какой вариант стабильнее", "стоит ли
   внедрять", "а нельзя ли вместо …".
+
+## Brief flow
+
+Fixed order; a brief in chat or outside plan mode is the failure to prevent.
+
+1. `ToolSearch("select:EnterPlanMode,ExitPlanMode")` — both are deferred.
+2. Reply line: `Задача крупная: <причина> — собираю бриф.` Default `opusplan`
+   plans on Opus itself; after a manual `/model` to plain Sonnet add a line
+   naming `/model opusplan` — a skill cannot switch the model.
+3. `EnterPlanMode` before the first read; the brief goes only into the plan
+   file it names, never a path picked by hand.
+4. *Reason before asking*, *Questions*, then *The brief* into that file.
+5. `ExitPlanMode` — the approval window, it offers to clear the context.
 
 ## Challenge
 
@@ -115,18 +120,14 @@ symbols and commands, not areas. Empty section = `нет`, never omitted.
 1. <единица размером с коммит>
 ```
 
-Write the block to the plan file, then `ExitPlanMode` — it is the approval;
-no chat line.
-
 ## After the answer
 
 - One step = one commit = one session (~20–40 turns; every later turn re-pays
   what the step dragged in). A third subsystem, a second data model or a
   migration plus its callers → two steps, each with its check.
-- "да", "ок", "поехали" → step 1. A correction → rewrite the touched sections
-  only, reprint just them, wait again.
-- The brief is the spec: one step, one commit (`rules/core.md` commit trigger).
-  A step that turns out different → one line saying so before continuing.
+- Approved → step 1. Rejected with a correction → rewrite only the touched
+  sections in the plan file, `ExitPlanMode` again.
+- A step that turns out different → one line saying so before continuing.
 - The plan file is the brief across sessions — a landed step
   becomes `1. [x] <title> — <hash>`, a changed one is rewritten; at `handoff`
   drop `Возражения` and each `Допущения` line no open step relies on — the
