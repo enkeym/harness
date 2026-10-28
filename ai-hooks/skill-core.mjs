@@ -2,7 +2,7 @@
 // области, но это правило модель забывает чаще прочих: правит SKILL.md по
 // памяти, коммитит без ревью. Здесь то же правило становится хуком — для двух
 // областей, где цена забывания видна сразу: файлы инструкций (skill-authoring)
-// и git commit (review-standards, review-security, git-flow — без последнего
+// и git commit (review-dispatch, review-standards, review-security, git-flow — без последнего
 // в сообщение попадает Co-Authored-By, а это политика компании).
 //
 // Модуль чистый: не читает stdin, не пишет stdout. Метка «загружен» ставится
@@ -55,7 +55,7 @@ export const GATES = [
   },
   {
     id: 'commit',
-    requires: ['review-standards', 'review-security', 'git-flow'],
+    requires: ['review-dispatch', 'review-standards', 'review-security', 'git-flow'],
     what: 'git commit',
     matches: (toolName, toolInput) => toolName === 'Bash' && isGitCommit(toolInput?.command),
   },
@@ -277,10 +277,14 @@ export function missingSkills(toolName, toolInput, loaded, cwd) {
 export function denyReason(gap) {
   const load = gap.missing.map((s) => `Skill(${s})`).join(', ');
   if (gap.id === 'commit') {
-    return (
-      `Commit without review: ${gap.missing.join(', ')} not loaded in this session. ` +
-      `Load ${load}, run the diff through the checklists, then rerun git commit.`
-    );
+    const head = `Commit without review: ${gap.missing.join(', ')} not loaded in this session. `;
+    if (gap.missing.includes('review-dispatch')) {
+      return (
+        head +
+        `Load review-dispatch first: a small diff is reviewed here (then the rest of the set), a large or sensitive one goes to a clean session by handoff. Then rerun git commit.`
+      );
+    }
+    return head + `Load ${load}, run the diff through the checklists, then rerun git commit.`;
   }
   return (
     `${gap.what[0].toUpperCase()}${gap.what.slice(1)} requires the skill ${gap.missing.join(', ')}, ` +

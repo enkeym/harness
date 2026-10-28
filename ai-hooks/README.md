@@ -290,7 +290,7 @@ CLAUDE.md велит грузить скилл до первого действ�
 | Действие | Требует |
 | --- | --- |
 | правка `skills/*/SKILL.md`, `skills/*/reference/*.md`, `commands/*.md`, `agents/*.md`, `rules/*.md` (под `.claude/`, `claude/` или `harness/`), любого `CLAUDE.md` или `AGENTS.md` — и через Bash (`bashWrites`): назначение `cp`/`mv`/`ln`/`rsync`/`install`, `>`/`>>`, `tee`, `sed`/`perl -i`, `git checkout`/`restore` пути | `skill-authoring` |
-| `git … commit` в любом сегменте команды (пайп, `&&`, фоновый `&`, `$(…)`, `-C`, за `sudo`/`env X=1`); так же `commit-tree`, `am`, `merge -m`/`-F` и `merge`/`cherry-pick`/`revert`/`rebase --continue` (своё содержимое или сообщение); `pull` и перенос готовых коммитов — нет | `review-standards`, `review-security`, `git-flow` |
+| `git … commit` в любом сегменте команды (пайп, `&&`, фоновый `&`, `$(…)`, `-C`, за `sudo`/`env X=1`); так же `commit-tree`, `am`, `merge -m`/`-F` и `merge`/`cherry-pick`/`revert`/`rebase --continue` (своё содержимое или сообщение); `pull` и перенос готовых коммитов — нет | `review-dispatch`, `review-standards`, `review-security`, `git-flow` |
 
 `git-flow` в списке не ради стиля: без него в сообщение попадает
 `Co-Authored-By`, а это политика компании. Список гейтов — `GATES` в

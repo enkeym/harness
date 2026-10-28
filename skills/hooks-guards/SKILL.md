@@ -51,14 +51,14 @@ Never route around a refusal (`rules/core.md`); this names the hook and what it 
 - Denies an edit of a SKILL.md, `skills/*/reference/*.md`, `commands/*.md` or
   any `CLAUDE.md` (also via `cp`/`>`/`git checkout --`) until
   `skill-authoring` is loaded, and a commit (`commit`, `commit-tree`, `am`,
-  `merge -m`, `--continue`) until `review-standards`, `review-security`,
-  `git-flow` are, while its line 2 is non-empty (empty it, no amend), or
-  while no content `git diff` (not `--stat`) ran in its own call after the
-  last edit and the `review-standards` load.
-- The refusal names the missing skill or step: load with `Skill(<name>)`, run
-  the pass on the diff, repeat the call. Loaded-state is per session — after
-  `/clear` the skills are gone from your context and from the gate alike.
-- A prompt the user started with `/<skill>` counts as loaded.
+  `merge -m`, `--continue`) until `review-dispatch`, `review-standards`,
+  `review-security`, `git-flow` are, while its line 2 is non-empty (empty
+  it, no amend), or while no content `git diff` (not `--stat`) ran in its own
+  call after the last edit and the `review-standards` load.
+- `review-dispatch` loads first; verdict *clean* = handoff, the gate checks the load only.
+- The refusal names the missing skill or step: `Skill(<name>)`, repeat the
+  call. Loaded-state is per session — after `/clear` it is gone from the gate
+  and from your context alike. A prompt the user started with `/<skill>` counts.
 
 ## Read router
 

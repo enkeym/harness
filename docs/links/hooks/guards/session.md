@@ -31,6 +31,12 @@ paths:
 ## Контракты и доки
 - `AI_HOOKS_SKILL_GATE_OFF` — `ai-hooks/skill-core.mjs:gateEnabled` ↔
   `ai-hooks/README.md`. Переименовал — README учит несуществующему флагу.
+- Гейт коммита — `ai-hooks/skill-core.mjs:GATES` (`requires`, `denyReason`) ↔ порядок загрузки в
+  `skills/review-dispatch/SKILL.md`, `skills/commit/SKILL.md`, `skills/git-flow/SKILL.md`,
+  `skills/shared/review-pass.md` (шаг 1), `rules/core.md` (таблица Skills и триггер коммита),
+  `skills/hooks-guards/SKILL.md`, `skills/doctor/SKILL.md` (пункт 5), `OVERVIEW.md`,
+  `ai-hooks/README.md`. Добавил или убрал скилл в `requires` —
+  скиллы называют старый набор, а гейт отказывает каждому коммиту.
 - Чтение diff перед коммитом — `ai-hooks/skill-core.mjs:readsDiff`, `unreadDiff` (что считается
   diff, отказ называет `skills/shared/review-pass.md`) ↔ шаг 1 `review-pass.md`, отказ в
   `skills/hooks-guards/SKILL.md`, шаг 2 `skills/commit/SKILL.md` (diff отдельным вызовом).

@@ -186,21 +186,22 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
 {
   const r = gate('sid-g', 'Bash', bash('git commit -m "feat: x"'));
   check('commit без ревью → deny', decision(r), 'deny');
-  check('… перечислены все три скилла', ['review-standards', 'review-security', 'git-flow'].every((s) => r.includes(s)), true);
+  check('… перечислены все четыре скилла', ['review-dispatch', 'review-standards', 'review-security', 'git-flow'].every((s) => r.includes(s)), true);
   check('git status → allow', gate('sid-g', 'Bash', bash('git status --short')), 'allow');
 
+  loadViaTool('sid-g', 'review-dispatch');
   loadViaTool('sid-g', 'review-standards');
   loadViaTool('sid-g', 'review-security');
   const r2 = gate('sid-g', 'Bash', bash('git commit -m x'));
-  check('два из трёх → deny, не хватает git-flow', decision(r2) === 'deny' && r2.includes('git-flow') && !r2.includes('review-standards'), true);
+  check('три из четырёх → deny, не хватает git-flow', decision(r2) === 'deny' && r2.includes('git-flow') && !r2.includes('review-standards'), true);
   loadViaTool('sid-g', 'git-flow');
   const r4 = gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -'));
-  check('все три без diff → deny с подсказкой', decision(r4) === 'deny' && r4.includes('git diff'), true);
+  check('все четыре без diff → deny с подсказкой', decision(r4) === 'deny' && r4.includes('git diff'), true);
   check('diff в той же команде не в счёт', decision(gate('sid-g', 'Bash', bash('git diff HEAD && git commit -m x'))), 'deny');
   check('сводка --stat → allow, но не в счёт', gate('sid-g', 'Bash', bash('git diff --stat HEAD')), 'allow');
   check('после --stat коммит → deny', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
   gate('sid-g', 'Bash', bash('git diff HEAD'));
-  check('все три и diff → allow', gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -')), 'allow');
+  check('все четыре и diff → allow', gate('sid-g', 'Bash', bash('git -C /home/x/harness commit -F -')), 'allow');
   gate('sid-g', 'Edit', edit('/home/x/p/src/a.ts'));
   check('правка после diff → deny', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
   run(GATE, { session_id: 'sid-g', agent_id: 'a1', tool_name: 'Bash', tool_input: bash('git diff HEAD'), cwd: tmp });
@@ -210,7 +211,7 @@ check('commit: sudo git log не коммит', isGitCommit('sudo git log --grep
   check('review-standards загружен после diff → deny', decision(gate('sid-g', 'Bash', bash('git commit -m x'))), 'deny');
   gate('sid-g', 'Bash', bash('git diff --cached'));
   const r3 = gate('sid-g', 'Bash', bash("git commit -F - <<'EOF'\nfix: x\n- body\nEOF"));
-  check('все три, заголовок без пустой строки → deny', decision(r3) === 'deny' && r3.includes('blank line'), true);
+  check('все четыре, заголовок без пустой строки → deny', decision(r3) === 'deny' && r3.includes('blank line'), true);
 }
 
 // --- выключатели и fail-open ---

@@ -575,7 +575,8 @@ export function guardRead(filePath, cwd, labels, sessionId) {
     : `File of another project: add graph_root: "${fileRoot}" to every tokensave call. `;
   return (
     `File is in the tokensave index. ${foreign}Instead of ${labels.read}: tokensave_body / tokensave_signature (symbol), ` +
-    'tokensave_read (file; a range — `mode: "lines", lines: "A-B"`, without `mode` the whole file comes back), tokensave_context (overview). ' +
+    'mcp__tokensave__tokensave_read (parameter `file`, not `file_path`; a range — `mode: "lines", lines: "A-B"`, without `mode` the whole file comes back), tokensave_context (overview); ' +
+    'a tokensave tool whose schema is not loaded yet goes through ToolSearch("select:<full name>") first. ' +
     `tokensave answered with an error or empty — quote the answer and repeat ${labels.read}: ` +
     'a repeat on the same target within 3 minutes passes.'
   );
