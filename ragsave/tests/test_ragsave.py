@@ -1367,6 +1367,19 @@ def test_fts_query() -> None:
     check_true("однобуквенные отбрасываются", "а" not in _fts_query("а деплой"))
 
 
+def test_tool_annotations() -> None:
+    print("\n--- пометки инструментов MCP ---")
+    from ragsave import server
+
+    hints = {
+        tool.name: tool.annotations.read_only_hint if tool.annotations else None
+        for tool in server.TOOLS
+    }
+    check("rag_search только читает", hints.get("rag_search"), True)
+    check("rag_status только читает", hints.get("rag_status"), True)
+    check("rag_index без пометки", hints.get("rag_index"), None)
+
+
 def test_progress_bar() -> None:
     import io
     import shutil
@@ -1545,6 +1558,7 @@ def main() -> int:
     test_idle_unload()
     test_daemon()
     test_fts_query()
+    test_tool_annotations()
     test_progress_bar()
     test_device()
     print(f"\n=== {PASSED} passed, {FAILED} failed ===")

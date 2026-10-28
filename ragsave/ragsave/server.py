@@ -177,6 +177,9 @@ TOOLS: list[types.Tool] = [
         # их через ToolSearch. tokensave свои основные помечает этой меткой, и
         # без неё rag_search проигрывал ему выбор ещё до первого вызова.
         _meta={"anthropic/alwaysLoad": True},
+        # Без этой пометки plan mode спрашивает подтверждение, даже если
+        # инструмент есть в permissions.allow.
+        annotations=types.ToolAnnotations(readOnlyHint=True),
     ),
     types.Tool(
         name="rag_status",
@@ -193,6 +196,7 @@ TOOLS: list[types.Tool] = [
                 }
             },
         },
+        annotations=types.ToolAnnotations(readOnlyHint=True),
     ),
     types.Tool(
         name="rag_index",
