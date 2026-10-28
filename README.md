@@ -40,9 +40,15 @@
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness   # каталог любой
 cd ~/harness
-./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы
-./install.sh --venv     # venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка ~2 ГБ) + зависимости
+./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы;
+                        # недостающее (tokensave, claude, venv, git-хуки) предлагает вопросом y/N
+./install.sh --yes      # то же без вопросов (без TTY и без --yes шаги пропускаются и называются в отчёте)
+./install.sh --venv     # только venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка ~2 ГБ) + зависимости
 ```
+
+tokensave качается из релиза GitHub в `~/.local/bin` (версия — `last_installed_version`
+из `~/.tokensave/state.toml`, иначе latest) со сверкой `SHA256SUMS`: не сошлась —
+ничего не ставится. Intel Mac — `cargo install tokensave`.
 
 Ядро не трогает свои `~/.bashrc`, `~/.gitconfig`, `~/.gitignore_global`,
 `~/.claude/keybindings.json` и VS Code: в `~/.bashrc` дописывается один блок
@@ -185,9 +191,11 @@ MCP-серверы берутся из [`mcp/servers.json`](mcp/servers.json), �
 не на месте, читать ему нечего кроме этого файла. Поэтому порядок ниже —
 самодостаточный, выполнять сверху вниз.
 
-1. `./install.sh` — симлинки и MCP-серверы. Отчёт покажет, что встало, что
+1. `./install.sh --yes` — симлинки, MCP-серверы, tokensave, venv для ragsave
+   (долго, качает пакеты), git-хуки. Отчёт покажет, что встало, что
    уехало в бэкап.
-2. `./install.sh --venv` — venv для ragsave. Долго, качает пакеты.
+2. Без `--yes` и без TTY шаги пропускаются: строка «Пропущено без вопроса»
+   назовёт их — повторить с `--yes`.
 3. `claude mcp list` — оба сервера из `mcp/servers.json` должны быть
    `✔ Connected`.
 4. `node ai-hooks/test/test-guards.mjs` и соседние тесты — зелёные.

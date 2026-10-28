@@ -25,14 +25,14 @@
       (`install.sh` такие назовёт).
 - [ ] nvm и node (сейчас v24) — `nvm install 24 && nvm alias default 24`;
       `~/.bashrc` берёт node по default-алиасу nvm.
-- [ ] Claude Code: установить, запустить `claude` и залогиниться —
+- [ ] Claude Code: `install.sh` предложит установить; запустить `claude` и залогиниться —
       появится `~/.claude.json`, без него MCP-серверы не зарегистрируются.
-- [ ] tokensave — бинарь из релизов
-      <https://github.com/aovestdipaperino/tokensave> в любой каталог PATH
-      (`/usr/local/bin`, `~/.cargo/bin`): хуки и MCP ищут его по имени.
-      Версию прежней машины — `previous_version` в её
-      `~/.tokensave/state.toml`. **`tokensave install` /
-      `reinstall` не запускать**, даже если `tokensave doctor` советует.
+- [ ] tokensave — `install.sh` скачает бинарь из релизов
+      <https://github.com/aovestdipaperino/tokensave> в `~/.local/bin` сам (вопросом
+      или с `--yes`; сумма из `SHA256SUMS`). Вручную — в любой каталог PATH,
+      хуки и MCP ищут его по имени; Intel Mac — `cargo install tokensave`.
+      **`tokensave install` / `reinstall` не запускать**, даже если
+      `tokensave doctor` советует.
 - [ ] WSL + VS Code в Windows: включить «Параметры → Для разработчиков → Режим
       разработчика», иначе `mklink` не создаст симлинки настроек.
 - [ ] По необходимости: pnpm; Playwright MCP — только для проектов с
@@ -43,11 +43,15 @@
 ```bash
 git clone git@github.com:enkeym/harness.git ~/harness
 cd ~/harness
-./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы
+./install.sh            # ядро: симлинки, локальные файлы из шаблонов, MCP-серверы;
+                        # tokensave, claude, venv ragsave и git-хуки — вопросом y/N
+./install.sh --yes      # то же, на всё «да» (без TTY и без --yes шаги пропускаются)
 ./install.sh --personal # только машина автора: ~/.bashrc, git, клавиши, VS Code
-./install.sh --venv     # venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка)
-tokensave githooks on   # только после --personal: git-хуки tokensave в его hooksPath
+./install.sh --venv     # только venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка)
 ```
+
+`tokensave githooks on` install включает сам, только если `core.hooksPath` —
+`~/.config/git/hooks` (то есть после `--personal`).
 
 Без `--personal` `tokensave githooks on` задаёт глобальный `core.hooksPath`, и git
 перестаёт читать `.git/hooks` всех репозиториев (husky и т. п.). Там — по проекту:

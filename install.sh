@@ -5,7 +5,9 @@
 # Симлинки, а не копии: правка в рабочем каталоге сразу видна git'у, и не нужен
 # отдельный шаг «синхронизировать обратно» — именно он и разъезжается.
 #
-#   ./install.sh             создать/починить симлинки ядра (и личного, если оно включено)
+#   ./install.sh             создать/починить симлинки ядра (и личного, если оно включено);
+#                            недостающее (tokensave, claude, venv, git-хуки) предлагает поставить вопросом y/N
+#   ./install.sh --yes       то же без вопросов: на каждое предложение «да» (флаг сочетается с остальными)
 #   ./install.sh --personal  то же плюс личные настройки автора харнесса (PERSONAL_*)
 #   ./install.sh --check     только отчёт, ничего не менять
 #   ./install.sh --venv      собрать venv для ragsave (~2,6 ГБ с CUDA, без GPU — CPU-сборка) и поставить зависимости
@@ -26,17 +28,19 @@ esac
 
 HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-MODE="${1:-install}"
 # Личное включает --personal один раз: метка держит выбор, и повторные
 # ./install.sh и --check (их зовёт /doctor) ведут личные цели наравне с ядром.
 # Удалить метку — выключить личное (симлинки остаются, их убирают руками).
 PERSONAL_MARK="$HOME/.config/harness/personal"
-PERSONAL=0
-if [ "$MODE" = "--personal" ]; then
-  MODE=install PERSONAL=1
-elif [ -f "$PERSONAL_MARK" ]; then
-  PERSONAL=1
-fi
+MODE=install PERSONAL=0 YES=0
+for arg in "$@"; do
+  case "$arg" in
+    --yes) YES=1 ;;
+    --personal) PERSONAL=1 ;;
+    *) MODE="$arg" ;;
+  esac
+done
+[ "$PERSONAL" = 0 ] && [ -f "$PERSONAL_MARK" ] && PERSONAL=1
 # Каталог ragsave — тот же, что у bin/ragsave: он ищет там и venv, и код (PYTHONPATH).
 RAG_HOME="${RAGSAVE_HOME:-$HOME/.rag-mcp}"
 
@@ -735,9 +739,12 @@ tokensave_hook_check() {
 # Бинаря нет — говорим, откуда взять и какую версию: state.toml переживает
 # удаление бинаря, версия в нём — последняя стоявшая здесь. На новой машине
 # файла нет, и подсказка обходится без версии.
+tokensave_version() {
+  awk -F'"' '/^(last_installed_version|previous_version) *=/ && $2 != "" { print $2; exit }' "$HOME/.tokensave/state.toml" 2>/dev/null || true
+}
 tokensave_missing() {
   local want
-  want="$(awk -F'"' '/^(last_installed_version|previous_version) *=/ && $2 != "" { print $2; exit }' "$HOME/.tokensave/state.toml" 2>/dev/null)" || true
+  want="$(tokensave_version)"
   bad "tokensave — не найден: бинарь из релизов https://github.com/aovestdipaperino/tokensave в /usr/local/bin${want:+, здесь стояла $want}; tokensave install не запускать"
 }
 
@@ -892,6 +899,116 @@ externals() {
   fi
 }
 
+# Вопрос y/N. --yes — «да» без вопроса; без TTY и без --yes шаг не выполняется,
+# а его имя попадает в отчёт (skipped): скрипт из пайпа или cron ничего не ставит молча.
+# $1 — вопрос, $2 — имя шага для отчёта.
+skipped=""
+ask() {
+  local answer=
+  [ "$YES" = 1 ] && return 0
+  if [ -t 0 ]; then
+    read -r -p "  ? $1 [y/N] " answer || answer=n
+    case "$answer" in y|Y|yes|д|Д) return 0 ;; esac
+    return 1
+  fi
+  skipped="${skipped}${skipped:+, }$2"
+  return 1
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null; then sha256sum "$1" | awk '{ print $1 }'; else shasum -a 256 "$1" | awk '{ print $1 }'; fi
+}
+
+# Подсказка установки по ОС: macOS — brew, остальное — apt/nvm.
+pkg_hint() {
+  case "$(uname -s 2>/dev/null)" in
+    Darwin) case "$1" in node) echo "brew install node" ;; *) echo "brew install python" ;; esac ;;
+    *) case "$1" in node) echo "nvm install 22 (https://github.com/nvm-sh/nvm)" ;; *) echo "sudo apt install python3 python3-venv" ;; esac ;;
+  esac
+}
+
+# Бинарь tokensave из релиза GitHub в ~/.local/bin. Версия — последняя стоявшая
+# здесь (state.toml), иначе latest. Сумма из SHA256SUMS сверяется до распаковки:
+# не сошлась — ничего не ставится. Intel Mac: релиза нет, cargo install.
+TOKENSAVE_REPO="aovestdipaperino/tokensave"
+tokensave_fetch() {
+  local want tag os arch asset base tmp sum got bindir="$HOME/.local/bin"
+  os="$(uname -s 2>/dev/null)" arch="$(uname -m 2>/dev/null)"
+  case "$os/$arch" in
+    Linux/x86_64) asset=x86_64-linux ;;
+    Linux/aarch64|Linux/arm64) asset=aarch64-linux ;;
+    Darwin/arm64) asset=aarch64-macos ;;
+    Darwin/x86_64)
+      if command -v cargo >/dev/null; then
+        cargo install tokensave --root "$HOME/.local" && good "tokensave собран через cargo в $bindir" && return 0
+        bad "cargo install tokensave не удался"; return 1
+      fi
+      bad "Intel Mac: готового релиза нет — поставить rust (brew install rust) и повторить, либо cargo install tokensave"; return 1 ;;
+    *) bad "tokensave: для $os/$arch нет готового релиза — https://github.com/$TOKENSAVE_REPO/releases"; return 1 ;;
+  esac
+  command -v curl >/dev/null || { bad "curl не найден — tokensave не скачать"; return 1; }
+  want="$(tokensave_version)"
+  if [ -n "$want" ]; then
+    tag="v$want"
+  else
+    tag="$(curl -fsSL "https://api.github.com/repos/$TOKENSAVE_REPO/releases/latest" 2>/dev/null | sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' | head -1)" || true
+    [ -n "$tag" ] || { bad "tokensave: не узнать последний релиз (api.github.com недоступен)"; return 1; }
+  fi
+  asset="tokensave-$tag-$asset.tar.gz"
+  base="https://github.com/$TOKENSAVE_REPO/releases/download/$tag"
+  tmp="$(mktemp -d)"
+  if ! curl -fsSL "$base/$asset" -o "$tmp/$asset" || ! curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"; then
+    rm -rf "$tmp"; bad "tokensave $tag: не скачать $base/$asset"; return 1
+  fi
+  sum="$(awk -v f="$asset" '$2 == f || $2 == "*" f { print $1; exit }' "$tmp/SHA256SUMS")"
+  got="$(sha256_of "$tmp/$asset")"
+  if [ -z "$sum" ] || [ "$sum" != "$got" ]; then
+    rm -rf "$tmp"; bad "tokensave $tag: сумма $asset не сошлась с SHA256SUMS — ничего не поставлено"; return 1
+  fi
+  mkdir "$tmp/x"
+  if ! tar -xzf "$tmp/$asset" -C "$tmp/x" || [ ! -f "$tmp/x/tokensave" ]; then
+    rm -rf "$tmp"; bad "tokensave $tag: в $asset нет бинаря tokensave"; return 1
+  fi
+  mkdir -p "$bindir"
+  chmod +x "$tmp/x/tokensave"
+  mv "$tmp/x/tokensave" "$bindir/tokensave"
+  rm -rf "$tmp"
+  case ":$PATH:" in *":$bindir:"*) ;; *) PATH="$bindir:$PATH"; warn "$bindir не в PATH — добавить в ~/.config/harness/env" ;; esac
+  good "tokensave $tag установлен в $bindir (сумма сошлась)"
+  fixed=$((fixed + 1))
+}
+
+# Недостающее вокруг харнеса: tokensave, claude, venv ragsave, git-хуки tokensave.
+# Каждый шаг — вопрос ask; на node и python только подсказка, их ставит пакетный менеджер ОС.
+autoinstall() {
+  say
+  say "Автоустановка:"
+  local hooks
+  if ! command -v tokensave >/dev/null && ask "tokensave не найден — скачать из релиза в ~/.local/bin?" "tokensave"; then
+    tokensave_fetch || missing=$((missing + 1))
+  fi
+  if ! command -v claude >/dev/null && ask "claude не найден — поставить (curl -fsSL https://claude.ai/install.sh | bash)?" "claude"; then
+    if curl -fsSL https://claude.ai/install.sh | bash; then
+      PATH="$HOME/.local/bin:$PATH"; fixed=$((fixed + 1))
+    else
+      bad "claude: установщик не отработал"; missing=$((missing + 1))
+    fi
+  fi
+  if command -v claude >/dev/null && [ ! -f "$HOME/.claude.json" ]; then
+    warn "claude не входил в аккаунт: запустить claude, залогиниться, повторить ./install.sh"
+  fi
+  command -v node >/dev/null || warn "node не найден: $(pkg_hint node)"
+  command -v python3 >/dev/null || warn "python3 не найден: $(pkg_hint python3)"
+  if command -v python3 >/dev/null && [ ! -x "$RAG_HOME/venv/bin/python" ] && ask "собрать venv ragsave (~2,6 ГБ с CUDA, без GPU меньше)?" "venv ragsave"; then
+    build_venv || missing=$((missing + 1))
+  fi
+  hooks="$(git config --global --includes --get core.hooksPath 2>/dev/null)" || true
+  if [ "${hooks/#\~/$HOME}" = "$HOME/.config/git/hooks" ] && [ ! -x "$HOME/.config/git/hooks/post-checkout" ] \
+    && command -v tokensave >/dev/null && ask "включить глобальные git-хуки tokensave (tokensave githooks on)?" "git-хуки tokensave"; then
+    tokensave githooks on && good "глобальные git-хуки tokensave включены" && fixed=$((fixed + 1)) || { bad "tokensave githooks on не удался"; missing=$((missing + 1)); }
+  fi
+}
+
 case "$MODE" in
   --check)
     say "Проверка симлинков харнеса ($HARNESS), $(personal_label):"
@@ -933,14 +1050,19 @@ case "$MODE" in
     backups_check
     projects_check
     mcp_sync
+    autoinstall
     externals
     say
     say "на месте: $ok, создано/починено: $fixed, нет источника: $missing"
+    if [ -n "$skipped" ]; then
+      say
+      say "Пропущено без вопроса (нет TTY): $skipped — запустить ./install.sh в терминале или с --yes."
+    fi
     say
-    say "Дальше: ./install.sh --venv. MCP-серверы правятся в mcp/servers.json."
+    say "MCP-серверы правятся в mcp/servers.json."
     ;;
   *)
-    say "Использование: ./install.sh [--personal|--check|--venv]"
+    say "Использование: ./install.sh [--yes] [--personal|--check|--venv]"
     exit 2
     ;;
 esac

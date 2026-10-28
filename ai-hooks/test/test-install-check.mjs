@@ -8,6 +8,7 @@
 
 import './env-isolate.mjs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -736,7 +737,7 @@ check('zsh не видит node — drift на 1 больше', drifts[false] - 
   const sb = sandbox();
   const before = sb.snap();
   const res = sb.run(['--bogus']);
-  check('неизвестный режим — код 2 и usage', [res.status, res.out.includes('Использование: ./install.sh [--personal|--check|--venv]')], [2, true]);
+  check('неизвестный режим — код 2 и usage', [res.status, res.out.includes('Использование: ./install.sh [--yes] [--personal|--check|--venv]')], [2, true]);
   check('неизвестный режим — ничего не меняет', changes(before, sb.snap()), []);
 }
 
@@ -830,6 +831,55 @@ for (const gpu of [true, false]) {
     [res.status, res.out.includes('без sqlite3 enable_load_extension'), res.out.includes('brew install python'),
       res.calls.length, fs.existsSync(sb.target('.rag-mcp/venv'))],
     [1, true, true, 1, false]);
+}
+
+// Автоустановка tokensave: curl, tar и uname — фейки, реальная сеть и бинари не затронуты.
+const TAR_NAME = 'tokensave-v9.9.9-x86_64-linux.tar.gz';
+function fetchSandbox(sum) {
+  const sb = sandbox({ tools: [...TOOLS, 'mktemp', 'chmod', 'sha256sum'], fakes: ['claude'] });
+  fakeScript(sb, 'uname', 'case "$1" in -m) echo x86_64 ;; *) echo Linux ;; esac');
+  fakeScript(sb, 'curl', [
+    'out=; url=',
+    'while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift ;; -*) ;; *) url=$1 ;; esac; shift; done',
+    'case "$url" in',
+    '  */releases/latest) echo \'{"tag_name": "v9.9.9"}\' ;;',
+    `  */SHA256SUMS) printf '%s  ${TAR_NAME}\\n' ${sum} >"$out" ;;`,
+    '  *.tar.gz) printf payload >"$out" ;;',
+    '  *) exit 22 ;;',
+    'esac',
+  ].join('\n'));
+  fakeScript(sb, 'tar', [
+    'while [ $# -gt 0 ]; do case "$1" in -C) dir=$2; shift ;; esac; shift; done',
+    'printf \'#!/bin/sh\\necho tokensave\\n\' >"$dir/tokensave"',
+  ].join('\n'));
+  return sb;
+}
+const PAYLOAD_SUM = createHash('sha256').update('payload').digest('hex');
+
+{
+  const sb = fetchSandbox(PAYLOAD_SUM);
+  const res = sb.run(['--yes']);
+  const bin = sb.target('.local/bin/tokensave');
+  check('--yes: tokensave из релиза v9.9.9 с верной суммой ложится в ~/.local/bin',
+    [fs.existsSync(bin) && (fs.statSync(bin).mode & 0o111) !== 0, res.out.includes('tokensave v9.9.9 установлен')], [true, true]);
+  check('--yes: повтор без правок — tokensave уже есть, скачивания нет',
+    sb.run(['--yes'], { PATH: `${sb.target('.local/bin')}:${path.join(sb.home, 'path')}` }).out.includes('tokensave v9.9.9 установлен'), false);
+}
+
+{
+  const sb = fetchSandbox('0'.repeat(64));
+  const res = sb.run(['--yes']);
+  check('неверная сумма — ✗, tokensave не поставлен',
+    [res.out.includes('✗ tokensave v9.9.9: сумма'), fs.existsSync(sb.target('.local/bin/tokensave'))], [true, false]);
+}
+
+{
+  const sb = fetchSandbox(PAYLOAD_SUM);
+  const res = sb.run([]);
+  check('без TTY и без --yes — шаг назван в отчёте и не выполнен',
+    [res.out.includes('Пропущено без вопроса (нет TTY): tokensave'), fs.existsSync(sb.target('.local/bin/tokensave'))], [true, false]);
+  sb.run(['--yes', '--check']);
+  check('--check с --yes ничего не ставит', fs.existsSync(sb.target('.local/bin/tokensave')), false);
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');

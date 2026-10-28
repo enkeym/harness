@@ -44,9 +44,12 @@ paths:
   `tokensave install`/`reinstall` переписывают хуки абсолютным путём —
   `tokensave_hook_check` сверяет его с PATH. Claude Code ищет имя в PATH своего
   процесса: без каталога tokensave в нём хуки молча не стартуют.
-- `install.sh:tokensave_missing` ↔ ключи `last_installed_version` /
-  `previous_version` в `~/.tokensave/state.toml`: переименует tokensave — версия
-  молча пропадёт из подсказки.
+- `install.sh:tokensave_version` (его зовут `tokensave_missing` и `tokensave_fetch`) ↔
+  ключи `last_installed_version` / `previous_version` в `~/.tokensave/state.toml`:
+  переименует tokensave — версия молча пропадёт, а `tokensave_fetch` возьмёт latest.
+- `install.sh:tokensave_fetch` ↔ имена ассетов релиза GitHub
+  (`tokensave-v<версия>-<arch>.tar.gz` с одним файлом `tokensave`, `SHA256SUMS`):
+  сменится схема имён — установка назовёт ✗, но ничего не поставит.
 - `tokensave install` ↔ файлы, которые он пишет поверх харнеса: MCP-запись
   `tokensave` в `~/.claude.json`, `~/.claude/rules/tokensave.md`, `installed_agents` в
   `~/.tokensave/state.toml` (по нему тихий reinstall после смены версии и на
