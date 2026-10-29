@@ -70,7 +70,7 @@ structural rules and:
 **Leftovers**
 - No `console.log` or debug `print`, debug flags, commented code, ownerless
   `TODO`, unused imports/exports/params, files outside the task or unrequested
-  lockfile/config edits the user did not include (`git-flow` asks).
+  lockfile/config edits outside the authorized scope (preserve them, as git-flow requires).
 
 **Not a finding:** formatting, import order, anything the project's linter or
 formatter own, unless the style file states it;

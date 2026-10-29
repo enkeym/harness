@@ -1,18 +1,6 @@
 {
-  "description": "Harness: MCP search routing and background RAG sync",
+  "description": "Harness: background RAG sync",
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "^(Bash|exec_command|shell|shell_command|Grep|Glob|Agent|spawn_agent)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.ai-hooks/bin/mcp-search-guard.mjs\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "matcher": "^(startup|resume|clear|compact|fork)$",

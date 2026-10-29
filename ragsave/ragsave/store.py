@@ -235,6 +235,13 @@ class Store:
             db.execute("DELETE FROM chunks WHERE path=?", (path,))
         db.execute("DELETE FROM files WHERE path=?", (path,))
 
+    def oversized_files(self) -> set[str]:
+        """Старые фрагменты, которые нужно перечитать с жёстким лимитом."""
+        return {row[0] for row in self.conn.execute(
+            "SELECT DISTINCT path FROM chunks WHERE length(text) > ?",
+            (config.CHUNK_CHARS,),
+        )}
+
     def add_file(
         self,
         path: str,
@@ -304,6 +311,9 @@ class Store:
             (content_hash,),
         ).fetchall()
         if not rows:
+            return None
+        if any(len(row["text"]) > config.CHUNK_CHARS for row in rows):
+            self.forget_cache(content_hash)
             return None
         chunks = [(row["text"], row["start_line"], row["end_line"]) for row in rows]
         vectors = [row["embedding"] for row in rows]

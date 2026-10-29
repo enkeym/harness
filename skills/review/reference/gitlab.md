@@ -1,22 +1,24 @@
 # /review — open MRs and draft notes
 
-GitLab API for the MR mode: list, pick, scope, drafts. Token rules, `<host>`
-and `<api>`: *Opening the MR in GitLab* of
-[../../git-flow/reference/mr.md](../../git-flow/reference/mr.md); `curl …`
-below stands for `curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN"`.
+GitLab API for MR mode: list, pick, scope, drafts. Use
+`node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host>`;
+host and encoded project: [../../git-flow/reference/mr.md](../../git-flow/reference/mr.md).
+The endpoint replaces `<api>` with `projects/<encoded-project>`.
+Store responses in a private temporary JSON file and check the client's exit
+status before parsing with jq; do not mask failed requests in a pipe.
+Paginate list endpoints when all MRs/comments are requested.
 
 ## Unavailable
 
-No token, a GitHub remote, or a list call that fails → one line why
+An unsupported remote or a list call that fails → one line why
 (`MR не смотрю: <причина>`), the `Открытые MR` item is not offered; `mr`
 stops there, `!<iid>` asks for its source branch.
 
 ## List and pick
 
 ```bash
-curl … "https://<host>/api/v4/user" | jq -r .username
-curl … "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
-  | jq -r '.[] | [.iid, .title, .source_branch, .target_branch, .author.username, .draft] | @tsv'
+node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> user
+node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<encoded-project>/merge_requests?state=opened&order_by=updated_at&per_page=50&page=1'
 ```
 
 - Drop the MRs authored by the `/user` name before counting: the user's own
@@ -25,12 +27,13 @@ curl … "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
 - Option label `!<iid> <title, ≤40 chars>`, description
   `<source> → <target>, <author>`, plus `черновик` when `draft`.
 - None left → `Открытых MR коллег нет`, stop. Otherwise show a numbered list
-  and ask for one or more numbers or `Все`. Use an available question tool
+  and use the requested MR or queue; ask for a selection only if it cannot
+  be inferred. Use an available question tool
   only when its schema fits; do not require multiple-selection controls.
 
 ## Scope of one MR
 
-1. `curl … "<api>/merge_requests/<iid>"` → `diff_refs` (`base_sha`,
+1. GET `projects/<encoded-project>/merge_requests/<iid>` → `diff_refs` (`base_sha`,
    `start_sha`, `head_sha`), `source_branch`, `target_branch`, `web_url`.
 2. `git fetch origin <source> <target>`; a fork MR (source not on origin) →
    `git fetch origin refs/merge-requests/<iid>/head`. Check
@@ -45,21 +48,13 @@ Present the report before any external write. Create drafts only when the
 user explicitly requested or approved their delivery; `/review` alone is
 read-only. If authorization is missing, offer drafts after the report and
 wait. Reuse authorization already given; native Codex approvals still apply.
-One `curl` per finding, Minor included, in number order; body = the MR comment
-of [report.md](report.md) through a quoted heredoc:
+One request per finding, in number order; body = the MR comment of
+[report.md](report.md). Write a JSON body file with `note` and, where valid,
+a `position` object containing position_type, base_sha, start_sha, head_sha,
+old_path, new_path and new_line. Keep actual newlines in JSON strings.
 
 ```bash
-curl -sS -o /dev/null -w '<N> %{http_code}\n' -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-  --data-urlencode 'position[position_type]=text' \
-  --data-urlencode 'position[base_sha]=<base_sha>' \
-  --data-urlencode 'position[start_sha]=<start_sha>' \
-  --data-urlencode 'position[head_sha]=<head_sha>' \
-  --data-urlencode 'position[old_path]=<old path>' \
-  --data-urlencode 'position[new_path]=<path>' \
-  --data-urlencode 'position[new_line]=<line>' \
-  --data-urlencode note@- "<api>/merge_requests/<iid>/draft_notes" <<'NOTE_<N>'
-<текст комментария>
-NOTE_<N>
+node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> --method POST --input <note.json> projects/<encoded-project>/merge_requests/<iid>/draft_notes
 ```
 
 - Position only on an added line: `new_line` from a `+` row of
@@ -79,28 +74,18 @@ NOTE_<N>
   one, then `GET …/merge_requests/<iid>/discussions` — a `204` does not prove
   the note exists; a missing one → its MR comment in chat.
 
-## Several MRs — one session each
+## Several MRs
 
-A session is clean when `/review` was its first prompt or it came from a
-handoff of this chain. Clean → pass, report and drafts for the first `!<iid>`;
-print its `MR !<iid>: N черновиков → …` line (the Submit review link) before
-the handoff, which follows when MRs remain. Not clean → handoff right after
-the pick, before the first pass. One MR picked in a clean session → no handoff.
-
-- Carry any existing authorization for draft delivery in the handoff; if it
-  is absent, keep the next review read-only until the user approves delivery.
-- Snapshot ≤600 characters: `Задача` (MR mode, project), `Состояние` (done
-  `!<iid>` with draft counts), `Дальше`: `Load ~/.agents/skills/review/SKILL.md,
-  продолжить на !<iid> …`. No `Карта`, no `Проверено`.
-- A large MR (section 2 of SKILL.md): the handoff inside it carries the unread
-  files; the rest of the queue follows in the same `Дальше`.
+Review the selected queue in this session. Report each MR before moving to
+the next; reuse loaded rules and preserve authorization. Use native compaction
+with current MR, completed items, unread files and findings. Do not require a
+new session because another task preceded review or because an MR is large.
+Use handoff only when the user requests it.
 
 ## Existing comments
 
-```bash
-curl … "<api>/merge_requests/<iid>/discussions?per_page=100" \
-  | jq -r '.[] | .notes[0] | select(.system == false) | [.id, .author.username, .resolvable and (.resolved | not), (.position.new_path // "-"), (.position.new_line // .position.old_line // "-"), (.body | gsub("\n"; " ") | .[0:160])] | @tsv'
-```
+GET `projects/<encoded-project>/merge_requests/<iid>/discussions?per_page=100&page=1`.
+Parse only a successful response; paginate before claiming no existing comments.
 
 - A finding an open comment already names → no finding, no draft; the summary
   counts it.
@@ -110,7 +95,7 @@ curl … "<api>/merge_requests/<iid>/discussions?per_page=100" \
 
 ## Current branch with an open MR
 
-`curl … "<api>/merge_requests?source_branch=<branch>&state=opened"`. Drafts
+GET `projects/<encoded-project>/merge_requests?source_branch=<encoded-branch>&state=opened`. Drafts
 only when the reviewed code is its `diff_refs.head_sha` — the reviewed ref is
 that sha, or in the uncommitted scope `git diff --quiet <head_sha>` succeeds;
 otherwise the anchors miss the MR's lines.

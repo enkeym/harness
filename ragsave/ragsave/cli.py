@@ -25,6 +25,7 @@ from .indexer import (
     stderr_progress, sync_state,
 )
 from .store import Store
+from .retrieval import current_hits, search_limit, stale_note
 
 _BAR_WIDTH = 28
 # Уже не сужаем: в окне, где не влезают и 10 клеток, кадр просто обрезается.
@@ -302,11 +303,15 @@ def _cmd_search(args: argparse.Namespace) -> int:
         hits = store.search(
             query_vector=vector,
             query_text=args.query,
-            limit=args.limit,
+            limit=search_limit(args.limit),
             path_include=args.include,
             path_exclude=args.exclude,
             only_outside_tokensave=args.outside,
         )
+        hits, stale = current_hits(root, store, hits)
+
+    if warning := stale_note(stale):
+        print(warning, file=sys.stderr)
 
     if not hits:
         print("Ничего не найдено.")

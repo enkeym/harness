@@ -35,10 +35,12 @@ Discover the tool schema before calling it. Core names use the
   editing commands are already exposed.
 - Reuse `seen_node_ids` as `exclude_node_ids` for repeated context calls.
   Use `graph_root` for another initialized project.
-- No index, unavailable/broken MCP, or a file explicitly reported unscanned →
+- No index, unavailable/broken MCP, a file explicitly reported unscanned or
+  excluded by the project's index configuration →
   report once, then use `rg` and bounded shell reads for that scope. An empty
   query alone does not authorize shell-reading an indexed file: locate it
   with `files` and use `read`. Config paths outside the index use local tools.
+  Refresh existing indexes autonomously when stale or after changing coverage.
   Initial indexing is the user's choice; do not run `init` automatically.
 - No hits → broaden the query once, use RAG for synonyms, then `rg`; do not
   repeat the same empty call. RAG proximity is not proof of an exact match.

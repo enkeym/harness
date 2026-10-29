@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const managedServers = Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'mcp/servers.json'), 'utf8'))).sort();
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
 const fakeBin = path.join(home, 'fake-bin');
 const codexHome = path.join(home, 'custom-codex');
@@ -60,7 +61,9 @@ assert.ok(fs.readdirSync(codexHome).some((name) => name.startsWith('AGENTS.md.ba
 assert.ok(fs.lstatSync(path.join(codexHome, 'hooks.json')).isSymbolicLink());
 assert.deepEqual(JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8')),
   JSON.parse(fs.readFileSync(path.join(root, 'codex/hooks.json'), 'utf8')), 'установщик подключает RAG hooks');
-assert.deepEqual(JSON.parse(fs.readFileSync(stateFile)).map((s) => s.name).sort(), ['custom', 'ragsave', 'tokensave']);
+const installedHooks = JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8'));
+assert.deepEqual(Object.keys(installedHooks.hooks).sort(), ['SessionStart', 'Stop'], 'поисковый guard не устанавливается');
+assert.deepEqual(JSON.parse(fs.readFileSync(stateFile)).map((s) => s.name).sort(), ['custom', ...managedServers].sort());
 const before = fs.readFileSync(stateFile, 'utf8');
 result = install('--check');
 assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -78,7 +81,7 @@ if (cli.status === 0) {
   }
   const parsed = spawnSync('codex', ['mcp', 'list', '--json'], { env: cliEnv, encoding: 'utf8', timeout: 30000 });
   assert.equal(parsed.status, 0, parsed.stderr);
-  assert.deepEqual(JSON.parse(parsed.stdout).map((s) => s.name).sort(), ['ragsave', 'tokensave']);
+  assert.deepEqual(JSON.parse(parsed.stdout).map((s) => s.name).sort(), managedServers);
   assert.ok(fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8').includes(customConfig.trim()));
   console.log('Codex CLI: real MCP config round-trip passed');
 }

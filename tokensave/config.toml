@@ -1,3 +1,6 @@
+upload_enabled = false
 watcher_debounce = "2s"
 extraction_timeout_secs = 60
 wildcard_permissions = true
+manage_rules = true
+claude_hooks = true

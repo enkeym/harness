@@ -956,8 +956,9 @@ def test_sync_state() -> None:
                 check_true("проба не держит замок", True)
 
             found = server._do_search({"query": "деплой", "project": str(root)})
-            check_true("без синка поиск не предупреждает",
-                       "ragsave:" not in found.content[0].text, found.content[0].text)
+            check_true("ошибка последнего синка не скрывается",
+                       "последний фоновый синк завершился ошибкой" in found.content[0].text,
+                       found.content[0].text)
 
             paths.disable_mark.write_text("", encoding="utf-8")
             check("отказ от автосинка виден", sync_state(paths)["autosync"],

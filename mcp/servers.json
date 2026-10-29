@@ -6,5 +6,9 @@
   "ragsave": {
     "command": "~/.ai-hooks/bin/mcp-serve.sh",
     "args": ["ragsave"]
+  },
+  "playwright": {
+    "command": "npx",
+    "args": ["-y", "@playwright/mcp@latest", "--headless", "--isolated"]
   }
 }

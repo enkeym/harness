@@ -28,6 +28,7 @@ from .config import ProjectPaths, find_project_root
 from .embedder import Embedder
 from .indexer import SyncInProgress, index_project, sync_state
 from .store import Store
+from .retrieval import current_hits, search_limit, stale_note
 
 SERVER_NAME = "ragsave"
 SERVER_VERSION = "1.0.0"
@@ -268,11 +269,12 @@ def _do_search(args: dict[str, Any]) -> types.CallToolResult:
         hits = store.search(
             query_vector=vector,
             query_text=query,
-            limit=int(args.get("limit") or 8),
+            limit=search_limit(args.get("limit")),
             path_include=args.get("path_include"),
             path_exclude=args.get("path_exclude"),
             only_outside_tokensave=bool(args.get("only_outside_tokensave")),
         )
+        hits, stale = current_hits(root, store, hits)
 
     note = _sync_note(paths)
     if not hits:
@@ -289,6 +291,8 @@ def _do_search(args: dict[str, Any]) -> types.CallToolResult:
         blocks.append("")
     if note:
         blocks.append(note)
+    if warning := stale_note(stale):
+        blocks.append(warning)
     return _text("\n".join(blocks))
 
 
@@ -316,6 +320,10 @@ def _sync_note(paths: ProjectPaths) -> str | None:
                 f"индекс может отставать от файлов")
     if state["sync_in_progress"]:
         return "ragsave: идёт синхронизация индекса — свежих правок в выдаче может не быть"
+    if not state["last_sync"]:
+        return "ragsave: нет подтверждённого отчёта фоновой синхронизации; свежесть индекса не подтверждена"
+    if state["sync_health"] == "failed":
+        return "ragsave: последний фоновый синк завершился ошибкой; проверь rag_status и sync.log"
     return None
 
 

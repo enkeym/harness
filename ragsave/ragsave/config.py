@@ -9,8 +9,10 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO, Iterator
 
 # Каталог индекса внутри проекта — парный к .tokensave/
 INDEX_DIR = ".ragsave"
@@ -122,6 +124,8 @@ DB_BUSY_TIMEOUT = 60.0
 # Чанкинг: мягкий лимит символов на чанк (~400 токенов) и перекрытие строками.
 CHUNK_CHARS = 1600
 CHUNK_OVERLAP_LINES = 3
+SEARCH_MAX_HITS = 20
+SEARCH_MAX_CHARS = 24_000
 
 # Файлы крупнее — пропускаем: лок-файлы, дампы, минифицированный js.
 # Для семантического поиска они бесполезны, а индекс раздувают сильно.
@@ -241,7 +245,7 @@ class ProjectPaths:
 
 
 def find_project_root(start: str | os.PathLike[str] | None = None) -> Path | None:
-    """Корень проекта: git-репозиторий, иначе ближайший каталог с маркером.
+    """Ближайший существующий индекс в репозитории, иначе корень проекта.
 
     Возвращает None для $HOME и вне проекта — индексировать домашний каталог
     целиком мы не хотим никогда.
@@ -259,7 +263,16 @@ def find_project_root(start: str | os.PathLike[str] | None = None) -> Path | Non
         )
         if out.returncode == 0:
             root = Path(out.stdout.strip()).resolve()
-            return None if root == home else root
+            if root == home:
+                return None
+            current = begin
+            while current.is_relative_to(root):
+                if (current / INDEX_DIR / DB_NAME).is_file():
+                    return current
+                if current == root:
+                    break
+                current = current.parent
+            return root
     except (OSError, subprocess.SubprocessError):
         pass
 
@@ -273,6 +286,49 @@ def find_project_root(start: str | os.PathLike[str] | None = None) -> Path | Non
             return current
         current = current.parent
     return None
+
+
+def is_project_file(root: Path, relative: str) -> bool:
+    """Текстовый файл внутри проекта без перехода через symlink."""
+    name = Path(relative)
+    if name.is_absolute() or ".." in name.parts or any(part in SKIP_DIRS for part in name.parts):
+        return False
+    base = root.resolve()
+    candidate = base / name
+    try:
+        resolved = candidate.resolve(strict=True)
+        return (resolved == candidate and resolved.is_relative_to(base)
+                and resolved.is_file() and is_text_by_name(resolved))
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
+def has_symlink(root: Path, relative: str) -> bool:
+    current = root
+    for part in Path(relative).parts:
+        current /= part
+        if current.is_symlink():
+            return True
+    return False
+
+
+@contextmanager
+def open_project_file(root: Path, relative: str) -> Iterator[BinaryIO]:
+    """Открыть файл без перехода по symlink, включая родительские каталоги."""
+    name = Path(relative)
+    if name.is_absolute() or not name.parts or ".." in name.parts:
+        raise ValueError("путь должен находиться внутри проекта")
+    directory = os.open(root.resolve(), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in name.parts[:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(name.parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(fd, "rb") as handle:
+            yield handle
+    finally:
+        os.close(directory)
 
 
 def is_text_by_name(path: Path) -> bool:

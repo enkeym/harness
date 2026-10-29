@@ -33,59 +33,46 @@ def _flush(buffer: list[str], start: int) -> Chunk | None:
 
 
 def chunk_text(content: str, max_chars: int = config.CHUNK_CHARS) -> list[Chunk]:
-    """Разбить содержимое файла на фрагменты не длиннее max_chars.
-
-    Границы: заголовок markdown начинает новый фрагмент; пустая строка —
-    допустимая точка разреза при переполнении; сверхдлинный монолитный блок
-    режется жёстко по строкам, чтобы не превысить лимит модели.
-    """
-    lines = content.splitlines()
-    if not lines:
-        return []
-
+    """Разбить текст с жёстким лимитом и исходными номерами строк."""
+    if max_chars < 1:
+        raise ValueError("max_chars должен быть положительным")
     chunks: list[Chunk] = []
     buffer: list[str] = []
     start = 1
-    size = 0
 
-    for index, line in enumerate(lines, start=1):
-        is_heading = bool(_HEADING.match(line))
+    def flush(lines: list[str], first: int) -> None:
+        if chunk := _flush(lines, first):
+            chunks.append(chunk)
 
-        # Заголовок markdown — начало новой секции: закрываем накопленное.
-        if is_heading and buffer and size > 0:
-            chunk = _flush(buffer, start)
-            if chunk:
-                chunks.append(chunk)
-            buffer, size, start = [], 0, index
-
-        buffer.append(line)
-        size += len(line) + 1
-
-        if size < max_chars:
+    for index, line in enumerate(content.splitlines(), start=1):
+        if len(line) > max_chars:
+            flush(buffer, start)
+            buffer = []
+            for offset in range(0, len(line), max_chars):
+                flush([line[offset:offset + max_chars]], index)
+            start = index + 1
             continue
-
-        # Переполнение: ищем последнюю пустую строку как точку разреза,
-        # чтобы не рвать абзац или тело функции посередине.
-        cut = _last_blank(buffer)
-        if cut is None:
-            chunk = _flush(buffer, start)
-            if chunk:
-                chunks.append(chunk)
-            tail = buffer[-config.CHUNK_OVERLAP_LINES:]
-            start = index + 1 - len(tail)
-            buffer = list(tail)
-        else:
-            head, tail = buffer[:cut], buffer[cut:]
-            chunk = _flush(head, start)
-            if chunk:
-                chunks.append(chunk)
-            start = start + cut
-            buffer = tail
-        size = sum(len(item) + 1 for item in buffer)
-
-    chunk = _flush(buffer, start)
-    if chunk:
-        chunks.append(chunk)
+        if _HEADING.match(line) and buffer:
+            flush(buffer, start)
+            buffer = []
+            start = index
+        if buffer and len("\n".join([*buffer, line])) > max_chars:
+            cut = _last_blank(buffer)
+            if cut is not None:
+                flush(buffer[:cut], start)
+                buffer = buffer[cut:]
+                start += cut
+            if buffer and len("\n".join([*buffer, line])) > max_chars:
+                flush(buffer, start)
+                overlap = min(config.CHUNK_OVERLAP_LINES, len(buffer) - 1)
+                buffer = buffer[-overlap:] if overlap else []
+                while buffer and len("\n".join([*buffer, line])) > max_chars:
+                    buffer.pop(0)
+                start = index - len(buffer)
+        if not buffer:
+            start = index
+        buffer.append(line)
+    flush(buffer, start)
     return chunks
 
 

@@ -7,11 +7,12 @@ commit rules: [../SKILL.md](../SKILL.md).
 
 1. Base: the resolved base branch. MR delivery restricted by the project's
    memory or rules file → no API, the chat block is the whole result.
-2. Tests: `test-coverage` on `<base>...HEAD`, report first. Red suite → stop
-   until the user decides.
+2. Tests: `test-coverage` on `<base>...HEAD`; reuse current successful checks.
+   Fix failures within the authorized scope autonomously. Report external
+   blockers precisely; continue preparing reviewable work without another approval gate.
 3. Review: [../../shared/review-pass.md](../../shared/review-pass.md) on
-   `<base>...HEAD`, links between commits included. Critical or Important →
-   report, stop until the user decides.
+   `<base>...HEAD`, links between commits included. Fix certain in-scope findings;
+   unresolved findings block publication, not safe local preparation.
 4. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
    `git diff <base>...HEAD --stat` — the whole branch, nothing outside it.
 5. Sort each commit's hunks by removed and added lines: **behaviour** — a user
@@ -36,7 +37,8 @@ commit rules: [../SKILL.md](../SKILL.md).
 
 Summary `<TICKET> <Type>: <суть всей ветки>`, type from the branch prefix:
 `feature/`→`Feature:`, `fix|bugfix|hotfix/`→`Bugfix:`, `refactor/`→`Refactor:`,
-`chore/`→`Chore:`. No ticket in the branch → ask. One headline for the whole
+`chore/`→`Chore:`. No ticket in the branch → omit the ticket and Closes line
+unless project rules require one. One headline for the whole
 branch — raise the level instead of joining two with "и". Placeholders below
 stay placeholders:
 
@@ -74,36 +76,34 @@ Closes <TICKET>
 
 ## Opening the MR in GitLab
 
-Default delivery when step 1 allows; the chat gets the result line, not the
-text or a command. Token `$GITLAB_TOKEN` only — never printed, never
-`~/.git-credentials`, no separate probe (`[ -n … ]`, `echo`): the first call
-answers, a 401 is step 3's cause. No `git push -o merge_request.*` — push
-options reject newlines.
+Use the shared client `node ~/.config/harness/repo/bin/gitlab-api.mjs`.
+It uses existing glab authorization for the explicit host; GITLAB_TOKEN,
+GLAB_TOKEN or GITLAB_ACCESS_TOKEN is a fallback only when the client cannot
+start or read its configuration. Never read credential stores, print tokens,
+run login, or infer an expired session from a filesystem/network failure.
+The client enforces timeouts, validates HTTP/JSON and returns nonzero on failure.
+Never pipe an unchecked curl request into jq. Never retry an ambiguous POST.
 
 `git remote get-url origin` (`https://<host>/<group>/<repo>.git` or
 `git@<host>:<group>/<repo>.git`) → `<api>` =
 `https://<host>/api/v4/projects/<group>%2F<repo>`, every `/` of the path
 encoded, written out in full.
 
-1. Branch pushed. `curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN"
-   "<api>/merge_requests?source_branch=<branch>&state=opened"` → an open MR
-   gets `-X PUT <api>/merge_requests/<iid>` (title and description only);
+1. Branch pushed. Call the client with `--hostname <host>` and endpoint
+   `projects/<encoded-project>/merge_requests?source_branch=<encoded-branch>&state=opened`.
+   An open MR gets `--method PUT` to `projects/<encoded-project>/merge_requests/<iid>`;
    none → create:
 
-   ```bash
-   curl -sS --fail-with-body -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -X POST \
-     --data-urlencode 'source_branch=<branch>' --data-urlencode 'target_branch=<base>' \
-     --data-urlencode 'title=<Summary>' --data-urlencode description@- \
-     "<api>/merge_requests" <<'MR_BODY' | jq '{iid, web_url, message, error}'
-   <описание>
-   MR_BODY
-   ```
+   Write a JSON body file with source_branch, target_branch, title and description.
+   Call `node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host>
+   --method POST --input <body.json> projects/<encoded-project>/merge_requests`.
+   Updating an MR sends only title and description. Check exit status, iid and web_url.
 
    No labels, assignee, milestone, squash flags. The user's explicit MR
    request authorizes this delivery; follow native Codex approvals when
    required and do not rely on a hook confirmation.
 2. Success → `MR !<iid> создан: <url>` (or `обновлён`), after the
    `test-coverage` report.
-3. No token or a failed call → one line with the cause or HTTP code, the
-   Summary and description ready to paste, and the step 1 command with
-   `$GITLAB_TOKEN` unexpanded for `! <command>`.
+3. A failed call → one line distinguishing authorization, permissions, network
+   or local config access; retain the prepared body and report its path.
+   Continue authorized local work. Do not hand the user a login or secret-reading step.

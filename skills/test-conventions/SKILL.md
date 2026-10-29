@@ -62,13 +62,14 @@ needs: `test-coverage`.
 ## Running
 - While writing: only the touched file with the package's runner (Jest:
   `path -t 'name'`, Vitest: `run path`, Playwright: `path -g 'name'
-  --project=<one>`). Full suite once before the commit.
+  --project=<one>`). Broaden only when project rules, failures or impact require it.
+  Run necessary checks autonomously; do not ask permission to test.
 - Clean output: no `console.error`, no `act` warnings, no open handles.
 - Flakiness fixed with determinism (fake timers, explicit `await`), never retries.
 
 ## Never
 - Bend an expectation to current wrong behaviour — leave it red, report, and
   don't commit the red suite (`git-flow`).
-- Change production code for testability silently — describe what must change
-  and hand it over.
+- Expand production scope merely to make testing easier. Use existing public
+  boundaries; make a minimal supporting change autonomously when the task needs it.
 - Test the library (`class-validator` validates an email) — only your logic on top.

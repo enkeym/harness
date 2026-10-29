@@ -9,8 +9,8 @@ The project outranks this list: copy a neighbouring module first
 (scoped search, then `tokensave_read` mode="lines" on the server). Read
 [../shared/code-rules.md](../shared/code-rules.md) (types, reuse order,
 KISS/SOLID/DRY) before the first edit; this file adds only Nest structure.
-Tests are written only when asked or before an MR (`test-coverage`), never as
-a side effect of a server edit.
+Run focused checks and add meaningful regression tests for changed behaviour
+autonomously, following project rules and test-conventions.
 
 ## Structure
 - One module per domain: `x.module.ts`, `x.controller.ts`, `x.service.ts`,

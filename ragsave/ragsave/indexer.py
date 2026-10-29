@@ -27,6 +27,7 @@ import os
 import queue
 import re
 import sqlite3
+import stat as stat_mode
 import subprocess
 import sys
 import threading
@@ -225,16 +226,21 @@ def last_sync(log_path: Path) -> dict[str, object] | None:
     except ValueError:
         lines = [line for line in text.splitlines() if line.strip()]
         return {"at": at, "error": lines[-1][-200:] if lines else "пустой лог"}
+    if not isinstance(report, dict):
+        return {"at": at, "error": "отчёт синхронизации должен быть JSON-объектом"}
     return {"at": at, "report": report}
 
 
 def sync_state(paths: ProjectPaths) -> dict[str, object]:
     """Состояние автосинка: без него выключенный хук две недели выглядел живым."""
     disabled = paths.disable_mark.exists()
+    last = last_sync(paths.sync_log)
+    failed = bool(last and ("error" in last or last.get("report", {}).get("errors", 0)))
     return {
         "autosync": f"disabled ({config.DISABLE_MARK})" if disabled else "ok",
+        "sync_health": "unknown" if not last else "failed" if failed else "recorded",
         "sync_in_progress": lock_holder(paths.lock) or False,
-        "last_sync": last_sync(paths.sync_log),
+        "last_sync": last,
     }
 
 
@@ -289,6 +295,8 @@ def list_indexable_files(root: Path) -> tuple[list[tuple[Path, str]], int]:
             continue
         if not config.is_text_by_name(file_path):
             continue
+        if not config.is_project_file(root, relative):
+            continue
         result.append((file_path, relative))
     return result, raw_count
 
@@ -298,17 +306,22 @@ def _git_files(root: Path) -> list[str] | None:
     try:
         result = subprocess.run(
             ["git", "-C", str(root), "ls-files", "--cached", "--others",
-             "--exclude-standard"],
+             "--exclude-standard", "-z"],
             capture_output=True, text=True, timeout=60, check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
         return None
-    return [line for line in result.stdout.splitlines() if line]
+    return [name for name in result.stdout.split("\0") if name]
 
 
 def _scan_one(path: Path, relative: str, previous: FileRecord | None, force: bool) -> Scanned:
+    root = path
+    for _ in Path(relative).parts:
+        root = root.parent
+    if not config.is_project_file(root, relative):
+        return Scanned("binary", relative)
     try:
         stat = path.stat()
     except OSError:
@@ -320,13 +333,19 @@ def _scan_one(path: Path, relative: str, previous: FileRecord | None, force: boo
     ):
         return Scanned("unchanged", relative)
 
-    if not config.is_text_by_content(path, stat.st_size):
+    if not stat_mode.S_ISREG(stat.st_mode) or stat.st_size > config.MAX_FILE_BYTES:
         return Scanned("binary", relative)
 
     try:
-        data = path.read_bytes()
-    except OSError:
+        with config.open_project_file(root, relative) as handle:
+            stat = os.fstat(handle.fileno())
+            if not stat_mode.S_ISREG(stat.st_mode):
+                return Scanned("binary", relative)
+            data = handle.read(config.MAX_FILE_BYTES + 1)
+    except (OSError, ValueError):
         return Scanned("error", relative)
+    if len(data) > config.MAX_FILE_BYTES or b"\0" in data[:8192]:
+        return Scanned("binary", relative)
 
     record = FileRecord(
         path=relative, hash=hashlib.sha256(data).hexdigest(),
@@ -460,7 +479,9 @@ def _index_pass(
         # фрагментам.
         done = 0
 
-        for item in _scanned(all_files, known, force):
+        oversized = store.oversized_files()
+        scan_known = {name: record for name, record in known.items() if name not in oversized}
+        for item in _scanned(all_files, scan_known, force):
             seen.add(item.relative)
             is_new = item.relative not in known
             in_graph = item.relative in covered
@@ -539,7 +560,8 @@ def _index_pass(
             for stale in set(known) - seen:
                 # Файл, проиндексированный до того, как его имя попало в список
                 # секретов: текст остался бы в кеше ещё на 45 дней.
-                if config.is_secret_name(Path(stale)):
+                if (config.is_secret_name(Path(stale))
+                        or config.has_symlink(root, stale)):
                     store.forget_cache(known[stale].hash)
                 store.drop_file(stale)
                 report.removed += 1

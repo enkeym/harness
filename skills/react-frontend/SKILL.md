@@ -9,8 +9,8 @@ The project outranks this list: copy neighbouring components first
 (scoped search, then `tokensave_read` mode="lines" on the client). Read
 [../shared/code-rules.md](../shared/code-rules.md) (types, reuse order, tokens,
 KISS/SOLID/DRY) before the first edit; this file adds only React structure.
-`next` in `package.json` → load `nextjs-app` too. Tests are written only when
-asked or before an MR (`test-coverage`), never as a side effect of a UI edit.
+`next` in `package.json` → load `nextjs-app` too. Run focused checks and add
+meaningful regression tests autonomously, following project rules and test-conventions.
 
 ## Components
 - Function components, named exports, one per file, file named after it.

@@ -30,6 +30,11 @@ if (args.includes('--venv')) {
 }
 const check = args.includes('--check');
 let drift = 0;
+try {
+  execFileSync(process.execPath, [path.join(root, 'bin/harness-index-config.mjs'), ...(check ? ['--check'] : [])], { stdio: 'inherit' });
+} catch {
+  drift++;
+}
 const links = [
   [path.join(codexHome, 'AGENTS.md'), 'codex/AGENTS.md'],
   [path.join(codexHome, 'hooks.json'), 'codex/hooks.json'],
@@ -86,5 +91,5 @@ if (!fs.existsSync(path.join(ragHome, 'venv/bin/python'))) {
   console.error('✗ Нет venv ragsave: ./install.sh --codex --venv');
   drift++;
 }
-console.log('Поисковый и RAG hooks установлены: проверьте и доверьте определения через /hooks. --check не проверяет доверие hooks.');
+console.log('Фоновые RAG hooks настроены; поисковый guard не подключается. --check не проверяет доверие или исполнение hooks.');
 process.exitCode = drift ? 1 : 0;

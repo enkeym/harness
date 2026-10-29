@@ -95,10 +95,9 @@ upload, webhooks, outbound calls, config first; report per module.
 
 Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 [reference/gitlab.md](reference/gitlab.md), read before the first call. Scope:
-the MR's diff after `git fetch` — the only fetch /review runs; no checkout,
-typecheck or tests (not-checked line). One MR per session: after its drafts
-the queue goes through `handoff`, `Дальше` naming this file and the next
-`!<iid>`. Chain rules: *Several MRs* of the reference.
+   the MR's diff after `git fetch` — the only fetch /review runs; no checkout,
+   typecheck or tests (not-checked line). Continue the selected MR queue in
+   this session, carrying evidence and existing authorization forward.
 
 ## 2. Pass
 
@@ -107,8 +106,8 @@ commit runs; a fact it leaves open goes to the not-checked line.
 
 - Inventory first: `git diff --stat <range>` minus review-pass step 5 files,
   `*.scss`, `*.css`, `*.svg`. Each file is read in its diff before the report;
-  an unread one goes to the coverage line. Past ~1500 changed lines it is
-  large: one per session, `handoff` carries the unread files.
+  an unread one goes to the coverage line. Review large changes in bounded
+  groups and continue in this session; use native compaction, not a line-count gate.
 - A colleague's branch or MR with an open MR: its comments before the pass —
   *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
 - Review within the current Codex session; report evidence and actionable findings.

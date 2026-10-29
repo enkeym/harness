@@ -19,11 +19,8 @@ ticket, commit style, remote and project restrictions come from
 - Branch name = the user's existing prefix + ticket (`<prefix>/<TICKET>`); no
   ticket → `<prefix>/<slug>`. Branch off the resolved base. No worktrees.
 - Never commit red tests or secrets.
-- `git status --short` shows changes outside the task (a lockfile, an editor
-  config, the user's own edits) → before the commit, ask once naming
-  the files: «Включить все правки в этот коммит» first and recommended, «Без
-  этих правок» second. Never leave them out silently — skipped each session,
-  they sit in the tree for weeks. Answer holds for the rest of the session.
+- Keep unrelated user changes out of the task commit; mention them briefly in
+  the result. Do not ask to include them unless they block the requested work.
 - Before every commit, follow ../shared/review-pass.md on that commit's diff.
 - Message style = the user's own recent commits, not the loudest style in the
   repo: same form, same language, same scope names.
@@ -66,7 +63,8 @@ MR", "описание для Jira", "собери описание"). **Never a
 own, never after every commit.** An unrequested MR reads as "ready" and gets
 merged half-finished.
 
-Merges, force pushes, protected branches: confirm first.
+Stay within the requested Git operation. Ask before push unless already authorized;
+local operations need no extra confirmation. Native approvals still apply.
 
 Procedure, text format and GitLab delivery: read
 [reference/mr.md](reference/mr.md) before the first step. The MR goes to

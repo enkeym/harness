@@ -1,6 +1,6 @@
 ---
 name: test-coverage
-description: "Test-gap procedure for a diff or branch — behaviour inventory, case matrix, match against existing tests, red-check, behaviour → test report. Load when the object to test is a diff, a branch or the current change as a whole, and before an MR or its Jira text; one named symbol → test-conventions."
+description: "Coverage analysis for an explicit request or MR: behaviour inventory, missing cases and focused checks. For ordinary implementation and one named symbol use test-conventions."
 ---
 
 # Test coverage
@@ -13,7 +13,8 @@ write. Base branch and test runner: resolve by
 
 ## Scope
 
-- Not run on a commit: tests come only on request or before an MR.
+- Run focused checks for changed behaviour autonomously. The full coverage
+  procedure is for an explicit coverage request or MR preparation.
 - Before an MR, or asked to test the change as a whole: the full procedure on
   `git diff <base>...HEAD`, base resolved. Commit the new tests when commits
   are allowed; restricted by memory → leave them in the working tree and list
@@ -26,7 +27,7 @@ write. Base branch and test runner: resolve by
   | One named symbol or file | That test by `test-conventions`, run its file; no inventory, coverage or full suite |
   | No production code to guard (a sample, a scratch script, demo code) | Not a test — write what was asked |
   | Existing tests, nothing to write | Run the suite and report |
-  Object unclear → ask in one line before starting.
+  Object unclear → use the current change as scope; ask only if no scope can be inferred.
 
 ## Procedure
 
@@ -57,15 +58,15 @@ write. Base branch and test runner: resolve by
    DI, guards, pipes, DB query → Nest e2e with `supertest`; component state →
    Testing Library; a flow across pages → Playwright spec. One row, one level.
 5. **Write** the missing rows by `test-conventions`, beside the neighbours' specs.
-6. **Red-check** each new test: break the line it guards (flip the condition,
-   return early, drop the guard), run that file, confirm red, restore, confirm
-   green. A test that stays green is rewritten or deleted.
+6. **Regression check.** For a bug fix, verify the test reproduces the original
+   failure when practical. Do not mutate every implementation merely to prove
+   assertions; use meaningful public behaviour and failure cases.
 7. **Coverage of changed lines** with the resolved runner — Jest:
    `--coverage --changedSince=<base>`; Vitest: `run --coverage --changed <base>`;
    through the package's test script when it sets config or env. No runner in
    the package → say so, skip the step. An uncovered changed branch →
    back to step 2 or a reason in the report. Coverage percent is not the goal.
-8. **Run** the touched spec files, then the full suite once. Red on existing
+8. **Run** the touched spec files; run the full suite when project rules or impact require it. Red on existing
    tests → report, never bend the expectation (`test-conventions`).
 
 ## Not tested
@@ -78,8 +79,8 @@ write. Base branch and test runner: resolve by
 
 ## Production code
 
-- Untestable without a change (hidden `new`, global time, module-level state)
-  → describe the change and ask; never refactor silently.
+- Untestable without a supporting change → use existing public boundaries first;
+  make the minimal change within task scope autonomously and explain it in the result.
 - A row that exposes a real bug → leave the test red, report it under
   `Найдено`, don't fix inside the test task unless asked. A red suite is not
   committed (`git-flow`): stop before the commit and hand the choice to the user.
