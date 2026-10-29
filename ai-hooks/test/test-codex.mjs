@@ -58,7 +58,8 @@ assert.equal(fs.readFileSync(path.join(home, '.codex.json'), 'utf8'), 'untouched
 assert.equal(fs.readFileSync(path.join(home, '.agents/skills/custom/SKILL.md'), 'utf8'), 'custom skill');
 assert.ok(fs.readdirSync(codexHome).some((name) => name.startsWith('AGENTS.md.bak-')));
 assert.ok(fs.lstatSync(path.join(codexHome, 'hooks.json')).isSymbolicLink());
-assert.deepEqual(JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8')).hooks, {}, 'установщик не включает глобальные hooks');
+assert.deepEqual(JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8')),
+  JSON.parse(fs.readFileSync(path.join(root, 'codex/hooks.json'), 'utf8')), 'установщик подключает RAG hooks');
 assert.deepEqual(JSON.parse(fs.readFileSync(stateFile)).map((s) => s.name).sort(), ['custom', 'ragsave', 'tokensave']);
 const before = fs.readFileSync(stateFile, 'utf8');
 result = install('--check');

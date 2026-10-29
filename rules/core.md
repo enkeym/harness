@@ -6,10 +6,12 @@
 - Reuse installed libraries and established patterns; avoid duplicated logic and implicit dependencies.
 - Do not use TypeScript any; use precise types or unknown with narrowing.
 - Use DTOs for service inputs and interfaces for responses.
-- For indexed code, locate symbols with scoped tokensave_search/files; read only needed ranges with tokensave_read mode="lines". Use scoped context without code for unfamiliar structure, and callers/impact for dependencies.
-- Use rag_search for docs and conceptual searches; use rg for regexes, unindexed files or unavailable MCP. Avoid full-file reads unless the task requires them; use apply_patch for changes.
+- Indexed project files must be searched/read through MCP: scoped tokensave_search/files → tokensave_read mode="lines"; context without code for structure, callers/impact for dependencies. Do not use shell cat/sed/head, interpreter scripts or copied temp files to read indexed source.
+- Use rag_search for docs and conceptual searches. Shell is for Git revisions/diffs, commands/tests, logs, files outside the index and regexes MCP cannot express. MCP unavailable or a file reported unscanned → state that limitation before a scoped fallback. Use apply_patch for changes.
 - Discover MCP tools through the tool catalog. If unavailable, report that limitation.
 - Load each skill/rule once per session; reuse unchanged results. For noisy noninteractive commands use bash ~/.ai-hooks/bin/brief-output.sh <command> [args...]; inspect the saved log around errors. Keep diffs and review evidence complete; never wrap interactive commands or use this to bypass approvals.
+- Batch independent reads/searches in one tool round; keep dependent steps sequential. Reuse successful checks until their inputs change. Poll running jobs at sensible intervals instead of repeated short waits.
+- Keep task notes as paths, decisions and next actions; store large logs/data in files. Preserve only current state through compaction or handoff, without accumulated snapshots. Do not spawn agents unless explicitly requested.
 - Ask only for missing decisions or authorization; reuse answers already given. Use an available question tool within its schema and mode, otherwise ask briefly in chat. Multiple selections can be answered as finding numbers in text.
 - Keep native sandbox and approvals active. Never route around a guard denial.
 - Review the diff and run meaningful checks before delivery.

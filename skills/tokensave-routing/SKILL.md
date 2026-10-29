@@ -5,6 +5,9 @@ description: "Choose tokensave/ragsave searches and small line-range reads for c
 
 # Search and read only what is needed
 
+For indexed files, MCP search/read is required; a shell read is not an
+alternative just because the path is already known. Git diffs and other
+revisions, command output/logs and files outside the index use local tools.
 Discover the tool schema before calling it. Core names use the
 `mcp__tokensave__tokensave_` prefix; RAG uses `mcp__ragsave__rag_search`.
 
@@ -32,8 +35,16 @@ Discover the tool schema before calling it. Core names use the
   editing commands are already exposed.
 - Reuse `seen_node_ids` as `exclude_node_ids` for repeated context calls.
   Use `graph_root` for another initialized project.
-- No index or unavailable/broken MCP → report once, then use `rg` and bounded
-  shell reads. Config paths outside the index use local tools directly.
+- No index, unavailable/broken MCP, or a file explicitly reported unscanned →
+  report once, then use `rg` and bounded shell reads for that scope. An empty
+  query alone does not authorize shell-reading an indexed file: locate it
+  with `files` and use `read`. Config paths outside the index use local tools.
   Initial indexing is the user's choice; do not run `init` automatically.
 - No hits → broaden the query once, use RAG for synonyms, then `rg`; do not
   repeat the same empty call. RAG proximity is not proof of an exact match.
+- Start RAG with 3–5 fragments and a path scope when known; expand only for
+  missing evidence. Reuse fragments already read. A fresh index still may lag
+  behind an edit: verify exact code in the working tree before changing it.
+- Load extra tool areas only for a concrete operation, never `all` for a
+  routine lookup. Keep a stable tool/instruction prefix where possible;
+  discover schemas once and avoid reloading unchanged rules mid-task.

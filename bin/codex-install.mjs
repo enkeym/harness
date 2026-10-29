@@ -86,5 +86,5 @@ if (!fs.existsSync(path.join(ragHome, 'venv/bin/python'))) {
   console.error('✗ Нет venv ragsave: ./install.sh --codex --venv');
   drift++;
 }
-console.log('Глобальные Codex hooks отключены. Проектные hooks проверяются через /hooks.');
+console.log('Поисковый и RAG hooks установлены: проверьте и доверьте определения через /hooks. --check не проверяет доверие hooks.');
 process.exitCode = drift ? 1 : 0;

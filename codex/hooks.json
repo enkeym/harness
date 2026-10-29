@@ -1,4 +1,40 @@
 {
-  "description": "Harness: global Codex hooks disabled",
-  "hooks": {}
+  "description": "Harness: MCP search routing and background RAG sync",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|exec_command|shell|shell_command|Grep|Glob|Agent|spawn_agent)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/bin/mcp-search-guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact|fork)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/ragsave-sync.sh\" --warm \"$PWD\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/ragsave-sync.sh\" \"$PWD\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }
