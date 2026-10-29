@@ -6,7 +6,7 @@ description: "React client conventions — components, hooks, state, data fetchi
 # React frontend conventions
 
 The project outranks this list: copy neighbouring components first
-(`tokensave_context` with `path_include` on the client). Read
+(scoped search, then `tokensave_read` mode="lines" on the client). Read
 [../shared/code-rules.md](../shared/code-rules.md) (types, reuse order, tokens,
 KISS/SOLID/DRY) before the first edit; this file adds only React structure.
 `next` in `package.json` → load `nextjs-app` too. Tests are written only when

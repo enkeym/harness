@@ -120,7 +120,8 @@ An unread file on the coverage line → never `approved`.
 
 ## Menu
 
-One `AskUserQuestion` call after the summary, recommended first.
+Ask once after the summary, recommended option first. Use a question tool
+available in the current mode within its schema, otherwise a numbered chat list.
 
 The user's branch:
 
@@ -146,9 +147,8 @@ A colleague's:
   *Current branch with an open MR*; no MR fits → the MR comments in chat,
   one line why.
 - Не исправлять → one line, no recap.
-- Fix selected → a second `multiSelect` question: one option per finding
-  when ≤4, else severity groups (all Critical; Critical and Important),
-  single numbers through "Other".
+- Fix selected → ask for finding numbers or severity groups in text; do not
+  require a multiple-selection control.
 - Chosen fixes: exactly the fix shown, nothing more; never `git add` — in the
   soft-reset flow the colleague's change stays staged and the fix unstaged,
   so VS Code shows them apart. Then `tsc`, linter without fix flags, tests of

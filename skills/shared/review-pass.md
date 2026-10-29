@@ -6,13 +6,14 @@ run, so a commit and `/review` on the same code find the same defects. What
 follows the pass differs: `/review` reports and edits nothing, a commit fixes
 findings inside its diff by `review-standards` step 8.
 
-1. Before a commit, `review-dispatch` is loaded first; verdict *plan* runs
-   the pass inside plan mode (findings go to the plan file, fixes after
-   `ExitPlanMode`). Load `review-standards`, `review-security`, the stack skill of every
-   touched area (`rules/core.md` Skills table), `test-conventions` when the
-   scope has tests. A skill loaded earlier in the session is not a pass done:
-   skill-gate checks the load and a `git diff` read, not the steps, so every
-   commit runs the steps below on its own diff.
+1. Scope once: uncommitted work uses git status --short and git diff HEAD,
+   including untracked source; a branch uses git diff <base>...HEAD. Review's
+   explicit scope overrides this default. Inspect all source in scope, in
+   bounded ranges for new files; generated artifacts use step 5. Load
+   review-standards, review-security and relevant stack/project rules once.
+   Both passes reuse the same diff, search results, callers and test output.
+   Refresh only evidence invalidated by edits; do not run a second identical
+   impact pass or successful check without changed inputs.
 2. Run both procedures through their checklists, every step between scope
    and triage: verification, reuse, impact, regression, depth, project style,
    secrets, missing controls. Every finding verified by search or by reading

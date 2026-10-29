@@ -2,8 +2,8 @@
 
 Read by `git-flow`, `review-standards`, `test-coverage`, `test-conventions` and
 `test-browser` before the first step that needs a fact below. Order of
-authority is in `rules/core.md` (*Project facts outrank skills*): memory and
-the project's rules file first, then the repository, then a skill default.
+authority: explicit user instructions and project AGENTS.md first, then
+other project rules and repository facts, then a skill default.
 Resolve once per session; state each fact used in one line
 (`База: dev (форк 1 коммит назад)`) so a wrong one is caught before it is
 acted on.
@@ -18,12 +18,12 @@ acted on.
 | Commit style | `git log --author="$(git config user.name)" --no-merges --format=%s -15`; the dominant form, including scope names |
 | Remote host and path | `git remote get-url origin` |
 | Commit allowed | Memory/rules file; silent → `rules/core.md` commit trigger |
-| Push allowed | Memory/rules file; silent → push |
-| MR delivery | Memory/rules file; silent → push + GitLab API; restricted → Jira block in chat only |
+| Push allowed | User authorization and project restrictions; `/commit` includes push |
+| MR delivery | Explicit user MR request and project restrictions; authorized → GitLab API; restricted → text in chat |
 | Browser QA allowed | Memory/rules file; silent → only on `/test-browser` |
 | Test runner, scripts | `package.json` of the touched package (`scripts`, `devDependencies`): `jest` / `vitest` / `@playwright/test` |
 | Playwright setup | The package's `playwright.config.*`: `testDir`, `webServer`, `workers`, projects |
-| Style file | Memory; the `CLAUDE.md`/`AGENTS.md` of the repo and the touched package, plus every file they import (`@path`) or name as rules; `.claude/rules/`, `rules/`, `.cursor/rules/`, `.cursorrules`, `CONTRIBUTING.md`; `docs/` on style, conventions or architecture (`fsd.md`). All that apply, not the first hit |
+| Style file | Project AGENTS.md for the repo and touched package, plus explicitly referenced rules; `rules/`, `.cursor/rules/`, `.cursorrules`, `CONTRIBUTING.md`; relevant `docs/` on style or architecture. Read applicable sources once, do not assume `@path` imports are automatic |
 | Language of MR/Jira text | Memory/rules file; silent → the language of recent MR titles, else Russian |
 
 ## Base branch

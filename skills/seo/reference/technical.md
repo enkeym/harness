@@ -43,7 +43,7 @@ and regional · Rendering · Images · Core Web Vitals · Internal linking
   in Gemini Apps and Vertex AI; Search and AI Overviews are unaffected.
 - `User-agent: YandexAdditional` limits the page in YandexGPT and Alice answers
   without leaving search; it ignores `User-agent: *` — needs its own group.
-- Training and assistant bots (`GPTBot`, `ClaudeBot`, `PerplexityBot`,
+- Training and assistant bots (`GPTBot`, `CodexBot`, `PerplexityBot`,
   `CCBot`) are separate `User-agent` groups.
 
 ## sitemap.xml

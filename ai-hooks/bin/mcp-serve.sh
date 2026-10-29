@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Запуск MCP-серверов tokensave / ragsave с явно выбранным проектом.
 #
-# Серверы наследуют cwd процесса claude. Запущенный вне проекта, ragsave честно
+# Серверы наследуют cwd процесса codex. Запущенный вне проекта, ragsave честно
 # отвечает ошибкой «не удалось определить корень», а tokensave об этом молчит:
 # он сканирует соседние инициализированные проекты и берёт ПЕРВЫЙ ПО АЛФАВИТУ.
 # Так сессия, стартовавшая в $HOME, получала граф ~/main/dual-vpn при работе в
@@ -15,7 +15,7 @@
 set -u
 
 kind="${1:?usage: mcp-serve.sh tokensave|ragsave}"
-start="${CLAUDE_PROJECT_DIR:-$PWD}"
+start="${CODEX_PROJECT_DIR:-$PWD}"
 
 # Ближайший вверх по дереву каталог с индексом. $HOME проектом не считается:
 # ~/.tokensave — это глобальный конфиг CLI (global.db, pricing.json), а не граф
@@ -39,7 +39,7 @@ case "$kind" in
     }
     cd "$root" || exit 1
     # Бинарь — из PATH (Homebrew, ~/.cargo/bin); ~/.local/bin (сюда его кладёт
-    # install.sh) и /usr/local/bin — на случай урезанного PATH у процесса claude.
+    # install.sh) и /usr/local/bin — на случай урезанного PATH у процесса codex.
     # Переменная — подмена в тестах.
     bin="${AI_HOOKS_TOKENSAVE_CMD:-$(command -v tokensave || { [ -x "$HOME/.local/bin/tokensave" ] && echo "$HOME/.local/bin/tokensave" || echo /usr/local/bin/tokensave; })}"
     exec "$bin" serve -p "$root"

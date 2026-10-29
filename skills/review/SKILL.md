@@ -1,9 +1,6 @@
 ---
 name: review
 description: "Reviews a change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings and manual check steps, then an offer to fix on the user's own branch or MR draft notes on a colleague's. User-invoked as /review."
-disable-model-invocation: true
-allowed-tools: Bash(git status:*), Bash(git branch --show-current), Bash(git for-each-ref:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git grep:*), Bash(git merge-base:*), Bash(git config user.email), Bash(git remote get-url:*), Bash(git fetch:*), Bash(curl:*), Bash(jq:*), Read
-argument-hint: "[branch | !MR-iid | mr | path | audit <area>] [focus, in your own words]"
 ---
 
 # /review
@@ -20,7 +17,7 @@ checkout, stash or switch. A missing ref → name it in one line and stop.
 
 ## 1. Scope
 
-| `$ARGUMENTS` | Scope |
+| Arguments after `/review` | Scope |
 |---|---|
 | empty | steps 1–4 on `HEAD` |
 | a path | steps 1–4, limited to that path |
@@ -53,10 +50,10 @@ checkout, stash or switch. A missing ref → name it in one line and stop.
      a later commit already fixed.
 3. **Base branch** — `<ref>` is `main`, `master`, `dev`, `develop` or the
    base from project memory: commits of many tasks sit there, so one
-   `AskUserQuestion` before the pass. Key found → `Коммиты <KEY> (<n>:
+   scope question before the pass. Key found → `Коммиты <KEY> (<n>:
    <oldest>..<newest>)` (Recommended), `Последний коммит <sha> <subject>`,
    `Аудит`, `Открытые MR (<n>)`. No key → the menu of step 4.
-4. **Nothing** — clean tree, no commit with the key → one `AskUserQuestion`:
+4. **Nothing** — clean tree, no commit with the key → one scope question:
 
 ```
 <Ключа задачи нет>. До какого коммита смотреть? В «Other» — sha, число коммитов или ветка.
@@ -66,6 +63,9 @@ checkout, stash or switch. A missing ref → name it in one line and stop.
 - Открытые MR (<n>)
 ```
 
+- Use the question tool available in the current Codex mode, respecting its
+  option limits. Otherwise show a numbered list in chat; selections can be
+  entered as numbers.
 - `Открытые MR` only when the list call of 1.2 answered, with `<n>` ≥ 1.
 - `Коммиты от <base>` only off a base branch and with `<n>` ≥ 1 — then it
   goes first as Recommended: `<base>` through
@@ -80,7 +80,7 @@ checkout, stash or switch. A missing ref → name it in one line and stop.
   and `+/-` totals, the reviewed commits as `--oneline` or `коммиты не смотрел`.
 - Ref other than `HEAD`: `git show <ref>:<path>`, `git grep -n <name> <ref>`,
   the ref a literal sha or branch, never `$var`. The graph holds the working
-  tree; a ref at `HEAD`'s sha is the graph — bash-router refuses both there.
+  tree; use its graph only when the target matches `HEAD` and the index is current.
 - Free words after the target are the focus: checked first, full pass still.
 
 ### 1.1 Audit
@@ -111,12 +111,10 @@ commit runs; a fact it leaves open goes to the not-checked line.
   large: one per session, `handoff` carries the unread files.
 - A colleague's branch or MR with an open MR: its comments before the pass —
   *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
-- Mode: `review-dispatch` verdict over the scope (audit: path candidates count
-  as confirmed). **plan** → `EnterPlanMode`, report into the plan file,
-  `ExitPlanMode`, then the menu or MR drafts (`curl -X POST`).
+- Review within the current Codex session; report evidence and actionable findings.
 
 No edits of any kind — not even a certain one-line fix or an impact-map line —
-and no files written (the plan file aside), `/tmp` included: a large diff is
+and no files written, `/tmp` included: a large diff is
 read as `--stat`, then `git diff <range> -- <path>` per file. Target `HEAD`: the project's typecheck and linter — a
 script that writes (`--fix`, `--write`) runs as its bare tool without the
 flag — then only the test files the scope adds or changes. Another ref: list
@@ -134,4 +132,5 @@ The branch is the user's when every reviewed commit is authored by
 `git config user.email`. Uncommitted scope: the commits of
 `git log HEAD..@{u}` — what a soft reset took off; none, or no upstream →
 the user's. Audit → the user's. Anything else is a colleague's.
-MR mode (1.2): the report, then draft notes, no menu.
+MR mode (1.2): the report, then draft notes only when their delivery has been
+explicitly authorized; otherwise offer to create them.

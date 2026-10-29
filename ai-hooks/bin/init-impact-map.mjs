@@ -12,7 +12,7 @@ import path from 'node:path';
 import { repoRootOr } from '../state-core.mjs';
 import { hasIndex, MAP_DIR, INDEX_NAME } from '../links-core.mjs';
 
-const LEGACY = ['docs/implicit-links.md', '.claude/implicit-links.md'];
+const LEGACY = ['docs/implicit-links.md', '.codex/implicit-links.md'];
 
 const INDEX_SKELETON = `# Карта скрытых связей — индекс
 

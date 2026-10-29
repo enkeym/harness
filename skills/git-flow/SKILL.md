@@ -20,13 +20,11 @@ ticket, commit style, remote and project restrictions come from
   ticket → `<prefix>/<slug>`. Branch off the resolved base. No worktrees.
 - Never commit red tests or secrets.
 - `git status --short` shows changes outside the task (a lockfile, an editor
-  config, the user's own edits) → before the commit, `AskUserQuestion` naming
+  config, the user's own edits) → before the commit, ask once naming
   the files: «Включить все правки в этот коммит» first and recommended, «Без
   этих правок» second. Never leave them out silently — skipped each session,
   they sit in the tree for weeks. Answer holds for the rest of the session.
-- Before every commit: `review-dispatch` first (verdict *plan* → the pass
-  runs in plan mode, commit after `ExitPlanMode`), then [../shared/review-pass.md](../shared/review-pass.md) on
-  that commit's diff, findings fixed by `review-standards` step 8.
+- Before every commit, follow ../shared/review-pass.md on that commit's diff.
 - Message style = the user's own recent commits, not the loudest style in the
   repo: same form, same language, same scope names.
   - Header: one line, ~72 chars.
@@ -34,7 +32,7 @@ ticket, commit style, remote and project restrictions come from
     language the user's bodies use.
   - Multi-line messages via `git commit -F -`, never chained `-m`. Line 2
     is empty — without it git joins header and body into one subject, and
-    skill-gate refuses the whole command, `git add` included. Copy this shape:
+    review the message before `git add` included. Copy this shape:
 
     ```
     git commit -F - <<'EOF'
@@ -56,11 +54,10 @@ ticket, commit style, remote and project restrictions come from
 - Push once per request, after its last commit — every plan step done and
   verified: `git push origin <branch>` (`-u` the first time). Earlier commits
   stay local; a handoff mid-request leaves the push to the session that
-  finishes. security-guard asks the user on every push — that dialog is the
-  only confirmation — unless the user's last prompt named it («запушь»,
-  «сделай МР»), then it passes without one; declined → the commits stay
-  local, say so in one line, no retry. Only the project's own memory or rules file can restrict it; then say
-  in one line that the push is left to the user.
+  finishes. Push only when authorized by the user (including `/commit` or
+  an explicit MR request that requires a push). Reuse that authorization;
+  follow native Codex sandbox and approval requests when required. Without
+  authorization, keep commits local. Project restrictions still apply.
 
 ## Merge request and Jira text — only on explicit request
 

@@ -2,13 +2,13 @@
 
 Read by `review-standards` and `test-coverage` before the impact pass, and by
 `task-brief` when the task touches a listed domain. The graph
-(`tokensave_impact`, `callers`, `callees`, `affected`) answers
+(`tokensave_impact`, `callers`, `callees`) answers
 "who calls this". This file answers the rest: links that exist at runtime but
 not in any call edge, and that a change silently breaks.
 
 Only in a project with an index — `.tokensave/` or `.ragsave/rag.db`: the
 candidates come from it. Without one, do the impact pass with
-`grep -rn --include` over the changed names and say so in one line.
+`rg` over the changed names and say so in one line.
 
 ## Where it lives
 
@@ -18,7 +18,7 @@ candidates come from it. Without one, do the impact pass with
   clone's `.git/info/exclude`; a line in their `.gitignore` is itself a commit
   to their history. The path stays, only the commit is skipped.
 - The project already keeps a map under another name — sections of
-  `CLAUDE.md`, `docs/architecture.md`, an ADR folder, another agent's rules →
+  `AGENTS.md`, `docs/architecture.md`, an ADR folder, another agent's rules →
   that is the map. Add the line there, in the format that file already uses.
   Never create a second place for the same link.
 - The project defines its own map contract (a rules file on `docs/links/`,
@@ -54,7 +54,7 @@ docs/links/<domain>/<sub>.md — only once <domain>.md passes 80 lines
 
 ## `paths:` — how a domain file reaches the model
 
-Every domain file opens with the `.claude/rules` frontmatter:
+Every domain file opens with the `rules` frontmatter:
 
 ```markdown
 ---
@@ -64,13 +64,12 @@ paths:
 ---
 ```
 
-- The harness hook `links-context.mjs` injects, when an edit tool touches a
-  matching path, only the items naming that file, a directory of it, or a
-  backticked glob over it — each once per session; reads stay silent. Write
-  each link as one `- ` item with full project-relative paths, continuation
-  lines indented, so the filter finds it. Native
-  path-scoped rules fire on `Read` only, never on `tokensave_read`, which the
-  router forces for indexed files. `INDEX.md` stays for the impact pass.
+- During the impact pass, read `INDEX.md`, then only domains whose `paths:`
+  match changed files or whose index entry names the affected contract.
+  Locate relevant links with search, read small line ranges and reuse what
+  is already in context. Each link is one `- ` item with project-relative
+  paths and indented continuation lines. Selection is explicit in the skill;
+  no automatic hook injection is required.
 - Globs are project-relative in `path.matchesGlob` syntax; each one matches
   at least one file in the working tree — the checker reports the rest. A
   file without `paths:` is reached only through the index.

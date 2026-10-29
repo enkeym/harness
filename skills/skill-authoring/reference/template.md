@@ -11,7 +11,7 @@ description: <What it covers — key terms>. Load before <task> or when <trigger
 
 # <Subject>
 
-<Governing rule in one line.> <Boundary: what lives in CLAUDE.md or `<skill>`.>
+<Governing rule in one line.> <Boundary: what lives in AGENTS.md or `<skill>`.>
 
 ## <Task or category>
 

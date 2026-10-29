@@ -5,15 +5,12 @@ description: "Security checklist for a diff or module — secrets, env fallbacks
 
 # Security review
 
-security-guard judged command form; this judges code meaning. A finding is
-exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
+Review code meaning and actual security boundaries. A finding is exploitable
+or leaks. "Not best practice" without a scenario = *Info*, one line.
 
 ## Procedure
 
-1. Scope. Uncommitted: `git diff HEAD` **and** `git status --short` —
-   `/commit` stages with `git add -A`, so an untracked `.env`, dump, key,
-   `*.pem` is the likely leak. Branch: `git diff <base>...HEAD` +
-   `git log --stat <base>..HEAD`.
+1. Reuse scope, diff and loaded rules from [../shared/review-pass.md](../shared/review-pass.md); do not reread the same evidence.
 2. Secrets pass, always. Grep diff and new files for: high-entropy strings,
    `-----BEGIN`, `AKIA`, `sk_`, `ghp_`, `xox`, `eyJ`,
    `password|secret|token|api[_-]?key|private[_-]?key` next to a literal,
@@ -35,7 +32,8 @@ exploitable or leaks. "Not best practice" without a scenario = *Info*, one line.
    the attack scenario tried per item before calling it clean.
 6. Critical blocks the commit. Triage as in `review-standards` step 8:
    certain fix inside the diff → applied; a fix with a choice, a behaviour
-   change or outside the diff → `AskUserQuestion`. Info: one line.
+   change or outside the diff → ask only when the user's scope leaves the
+   choice unresolved. Info: one line.
 
 ## Checklist
 

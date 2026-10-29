@@ -1,8 +1,6 @@
 ---
 name: test-browser
 description: "Manual QA of a running web app through Playwright MCP — every change of the branch as a browser scenario, console and network errors, a bug report with reproduction steps. User-invoked as /test-browser."
-disable-model-invocation: true
-argument-hint: "[URL, page or flow to narrow the pass]"
 ---
 
 # /test-browser
@@ -14,9 +12,9 @@ conventions are `test-conventions`.
 
 ## Setup
 
-1. No `browser_*` tools in the session → stop: the Playwright MCP server is
-   registered per project, not globally; point to the commands in
-   `~/.config/harness/repo/README.md` (*Раскатка*) and a session restart.
+1. Discover the available browser tool schemas. If no suitable tools exist,
+   report the missing browser MCP and stop; do not point to an absent setup
+   section or invent tool names. Use the actual schemas for the steps below.
 2. Resolve the base branch by [../shared/project-facts.md](../shared/project-facts.md).
 3. App running? Dev port from `package.json` scripts or `playwright.config.*`
    (`webServer.url`). Not running → `build`, then `start` in the background
@@ -28,7 +26,7 @@ conventions are `test-conventions`.
 
 ## Branch inventory
 
-`$ARGUMENTS` names a page or flow → only that; skip to *Scenarios*.
+Arguments after `/test-browser` name a page or flow → only that; skip to *Scenarios*.
 Otherwise every change of the branch gets a scenario:
 
 1. `git log --no-merges --format='%h %s' <base>..HEAD`,

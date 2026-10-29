@@ -10,10 +10,6 @@ desktop.ini
 # AI-агенты и локальные инструменты (глобально для всех репозиториев)
 # Паттерн без префикса (например .cursor/, а не project/.cursor/) — игнор в любой папке дерева.
 # Настройка: git config --global core.excludesfile ~/.gitignore_global
-# .claude/ и .vscode/ целиком здесь нет: в них бывают общие настройки проекта
-# (settings.json, skills, launch.json), которые коммитят. Личное Claude Code — да.
-.claude/settings.local.json
-CLAUDE.local.md
 .codegraph/
 .cursor/
 .gemini/

@@ -99,8 +99,9 @@ encoded, written out in full.
    MR_BODY
    ```
 
-   No labels, assignee, milestone, squash flags. security-guard's prompt on
-   the POST/PUT is the confirmation — no chat question on top.
+   No labels, assignee, milestone, squash flags. The user's explicit MR
+   request authorizes this delivery; follow native Codex approvals when
+   required and do not rely on a hook confirmation.
 2. Success → `MR !<iid> создан: <url>` (or `обновлён`), after the
    `test-coverage` report.
 3. No token or a failed call → one line with the cause or HTTP code, the

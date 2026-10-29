@@ -159,7 +159,6 @@ SKIP_NAMES = {
 # и rag_search вернул бы значение токена прямо в контекст агента. Индекс живёт
 # дольше сессии, поэтому фильтруем по имени, а не полагаемся на .gitignore.
 # Примеры и шаблоны не секреты: в них имена переменных без значений.
-# Список продублирован в ai-hooks/security-core.mjs:SECRET_FILE_RE — правятся вместе.
 SECRET_NAME_RE = re.compile(
     r"""(?xi)
     ^(
@@ -167,7 +166,7 @@ SECRET_NAME_RE = re.compile(
       | \.envrc
       | \.?(npmrc|pypirc|netrc|pgpass)
       | id_(rsa|dsa|ecdsa|ed25519)([_-][\w-]+)?                  # и id_ed25519_github, без .pub
-      | \.?(credentials|auth|secrets?|service-account[\w-]*)\.json  # и .credentials.json Claude
+      | \.?(credentials|auth|secrets?|service-account[\w-]*)\.json
       | \.?(credentials|secrets?)\.ya?ml
       | \.git-credentials
       | [\w.-]*\.(tfstate(\.backup)?|tfvars(\.json)?)             # Terraform state и переменные

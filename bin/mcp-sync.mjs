@@ -1,15 +1,3 @@
-#!/usr/bin/env node
-// Единый список MCP-серверов (mcp/servers.json) → Claude Code.
-//
-// Claude держит серверы в ~/.claude.json вперемешку с историей проектов, файл
-// в репозиторий не кладётся — туда пишем через `claude mcp add-json`.
-//
-//   node bin/mcp-sync.mjs          привести Claude к servers.json
-//   node bin/mcp-sync.mjs --check  только отчёт; код выхода 1 при расхождении
-//
-// Серверы, которых нет в servers.json, не удаляются — только предупреждение:
-// их мог добавить проектный конфиг или ручной эксперимент.
-
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 const HARNESS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
-const CLAUDE_JSON = path.join(os.homedir(), '.claude.json');
 const CHECK = process.argv.includes('--check');
 
 let drift = 0;
@@ -26,16 +13,12 @@ const good = (s) => console.log(`  \x1b[32m✓\x1b[0m ${s}`);
 const warn = (s) => console.log(`  \x1b[33m!\x1b[0m ${s}`);
 const bad = (s) => console.log(`  \x1b[31m✗\x1b[0m ${s}`);
 
-// `~/` в servers.json — чтобы список не зависел от имени пользователя; в
-// ~/.claude.json уходит уже абсолютный путь.
+// `~/` в servers.json раскрывается в домашний каталог пользователя.
 const expand = (p) => (p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
-// Голое имя (`foo-mcp`) ищется по PATH того, кто запускает синк, и в
-// Claude уходит найденный путь: так в servers.json не зашита версия node из
-// nvm, а после смены версии --check видит устаревший путь как расхождение.
-// Не нашлось — null: писать в Claude команду, которая не стартует, нельзя.
+// Голое имя ищется по PATH; --check замечает смену пути, например после nvm.
 function resolveCommand(cmd) {
   if (cmd.includes('/')) return expand(cmd);
   for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
@@ -59,31 +42,17 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
   }
   servers[name] = { command, args: s.args ?? [], env: s.env ?? {} };
 }
-const listed = (name) => name in servers || unresolved.has(name);
-
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-function syncClaude() {
-  console.log('Claude Code (~/.claude.json, scope user):');
-  if (!fs.existsSync(CLAUDE_JSON)) {
-    bad('~/.claude.json нет — сначала запустить и залогинить claude');
-    drift += 1;
-    return;
-  }
-  const current = readJson(CLAUDE_JSON).mcpServers ?? {};
-
-  for (const name of Object.keys(current)) {
-    if (!listed(name)) warn(`${name} — зарегистрирован в Claude, нет в servers.json`);
-  }
-
+function syncCodex() {
+  console.log('Codex (config.toml, scope user):');
+  const current = JSON.parse(execFileSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', cwd: os.homedir() }));
   for (const [name, s] of Object.entries(servers)) {
-    const have = current[name];
-    const matches =
-      have &&
-      have.command === s.command &&
-      sameJson(have.args ?? [], s.args) &&
-      sameJson(have.env ?? {}, s.env);
-    if (matches) {
+    const have = current.find((entry) => entry.name === name);
+    const transport = have?.transport;
+    if (have?.enabled !== false && transport?.type === 'stdio' && transport.command === s.command
+      && sameJson(transport.args ?? [], s.args)
+      && sameJson(transport.env ?? {}, s.env)) {
       good(name);
       continue;
     }
@@ -92,20 +61,12 @@ function syncClaude() {
       drift += 1;
       continue;
     }
-    if (!resolveCommand('claude')) {
-      bad(`${name} — claude не найден в PATH, сервер не зарегистрирован`);
-      unresolved.add(name);
-      continue;
-    }
-    if (have) execFileSync('claude', ['mcp', 'remove', '-s', 'user', name], { stdio: 'ignore' });
-    const spec = { type: 'stdio', command: s.command, args: s.args, env: s.env };
-    execFileSync('claude', ['mcp', 'add-json', '-s', 'user', name, JSON.stringify(spec)], {
-      stdio: 'ignore',
-    });
-    good(`${name} — ${have ? 'перерегистрирован' : 'зарегистрирован'}`);
+    const envArgs = Object.entries(s.env).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
+    if (have) execFileSync('codex', ['mcp', 'remove', name], { stdio: 'pipe', cwd: os.homedir() });
+    execFileSync('codex', ['mcp', 'add', name, ...envArgs, '--', s.command, ...s.args], { stdio: 'pipe', cwd: os.homedir() });
+    good(`${name} — зарегистрирован`);
   }
 }
 
-syncClaude();
-// Ненайденная команда — ошибка и при синке: сервер в Claude не обновлён.
+syncCodex();
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);

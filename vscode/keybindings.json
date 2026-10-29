@@ -1058,7 +1058,7 @@
         {
           "command": "workbench.action.terminal.sendSequence",
           "args": {
-            "text": "claude\n"
+            "text": "codex\n"
           }
         }
       ]
@@ -1068,7 +1068,7 @@
     "key": "ctrl+shift+l",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
-      "text": "claude\n"
+      "text": "codex\n"
     }
   },
   {
@@ -1080,7 +1080,7 @@
         {
           "command": "workbench.action.terminal.sendSequence",
           "args": {
-            "text": "~/awg-start.sh claude\n"
+            "text": "~/awg-start.sh codex\n"
           }
         }
       ]
@@ -1090,7 +1090,7 @@
     "key": "ctrl+shift+k",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
-      "text": "~/awg-start.sh claude\n"
+      "text": "~/awg-start.sh codex\n"
     }
   }
   // {

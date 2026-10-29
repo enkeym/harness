@@ -50,7 +50,7 @@ function sandbox({ db = true } = {}) {
     ...process.env, HOME: home, AI_HOOKS_RAGSAVE_CMD: FAKE,
     AI_HOOKS_LOG_DIR: path.join(home, 'logs'), FAKE_INDEXER_CALLS: calls,
   };
-  delete env.CLAUDE_PROJECT_DIR;
+  delete env.CODEX_PROJECT_DIR;
 
   // cwd по умолчанию — HOME: так запасной PWD никогда не попадает в проект случайно.
   const run = (extra = {}, args = [root], cwd = home) => {
@@ -160,14 +160,14 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
 
 {
   const sb = sandbox();
-  sb.run({ CLAUDE_PROJECT_DIR: sb.root }, []);
-  check('без аргумента — CLAUDE_PROJECT_DIR', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
+  sb.run({ CODEX_PROJECT_DIR: sb.root }, []);
+  check('без аргумента — CODEX_PROJECT_DIR', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
 }
 
 {
   const sb = sandbox();
   sb.run({}, [], sb.root);
-  check('без аргумента и CLAUDE_PROJECT_DIR — PWD', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
+  check('без аргумента и CODEX_PROJECT_DIR — PWD', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
 }
 
 {

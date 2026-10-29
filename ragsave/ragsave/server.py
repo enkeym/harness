@@ -173,12 +173,7 @@ TOOLS: list[types.Tool] = [
             },
             "required": ["query"],
         },
-        # Claude Code держит инструменты MCP в deferred, пока модель не загрузит
-        # их через ToolSearch. tokensave свои основные помечает этой меткой, и
-        # без неё rag_search проигрывал ему выбор ещё до первого вызова.
-        _meta={"anthropic/alwaysLoad": True},
-        # Без этой пометки plan mode спрашивает подтверждение, даже если
-        # инструмент есть в permissions.allow.
+        # Стандартная MCP-аннотация инструмента чтения.
         annotations=types.ToolAnnotations(readOnlyHint=True),
     ),
     types.Tool(

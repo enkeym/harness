@@ -1,5 +1,4 @@
 // Карта неявных связей на диске — то, что читают и чекер (bin/check-impact-map.mjs),
-// и хук подключения домена (claude/links-context.mjs): где каталог карты, какие
 // файлы в нём домены, как из файла домена достать глобы `paths:`.
 // Контракт формата: skills/shared/impact-map.md.
 
@@ -30,8 +29,7 @@ export function indexesOf(root) {
   };
 }
 
-// Индекс, при котором карта нужна: есть чем собрать кандидатов (seed) и есть
-// кому её подключать. Без индекса impact идёт через grep, карты нет.
+// Индекс для сбора кандидатов карты. Без индекса impact идёт через rg.
 export function hasIndex(root) {
   const { tokensave, ragsave } = indexesOf(root);
   return tokensave || ragsave;
@@ -47,7 +45,6 @@ export function domainFiles(mapDir) {
     .sort();
 }
 
-// Frontmatter файла домена в формате .claude/rules: `paths:` и список глобов.
 // Нет frontmatter или нет `paths:` → null: файл достижим только через индекс.
 // Пустой список — отдельный случай, чекер о нём сообщает.
 // CRLF (файл правили из Windows-редактора) приводится к LF, иначе frontmatter
@@ -67,9 +64,4 @@ export function pathsOf(text) {
     globs.push(item[1]);
   }
   return globs;
-}
-
-// Тело файла домена без frontmatter — то, что стоит показывать модели.
-export function bodyOf(text) {
-  return lf(text).replace(/^---\n[\s\S]*?\n---\n\s*/, '');
 }

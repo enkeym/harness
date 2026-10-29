@@ -2,9 +2,7 @@
 # Достраивает недостающий индекс проекта. Ручной `tokensave init` или
 # `ragsave init` — решение человека индексировать репозиторий (git-хуки
 # tokensave `.tokensave/` сами не создают), поэтому второй индекс собирается
-# без второй команды. Зовут обёртки tokensave/ragsave из shell/bashrc и
-# shell/zshenv сразу после init и project-bootstrap на SessionStart —
-# страховка для init мимо обёртки и для прогона, оборванного выключением WSL.
+# без второй команды. Скрипт запускается явно после решения об индексации.
 #
 # Использование: project-init.sh [--detach] <каталог>
 # --detach — проверить, есть ли что делать, напечатать одну строку в stderr и
@@ -50,9 +48,9 @@ need_rag() {
   [ -x "$rag_bin" ] && [ ! -f "$repo_root/.ragsave-disable" ] && [ ! -f "$repo_root/.ragsave/rag.db" ]
 }
 
-# Ключ замка — как projectKey в state-core.mjs: sha256 корня, 16 символов.
+# Ключ замка: sha256 корня, 16 символов.
 key="$(printf '%s' "$repo_root" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
-lock_dir="${AI_HOOKS_STATE_DIR:-$HOME/.claude/state}/project-init"
+lock_dir="${AI_HOOKS_STATE_DIR:-${CODEX_HOME:-$HOME/.codex}/state}/project-init"
 lock="$lock_dir/$key.lock"
 
 # Замок держит живой прогон. Без pid — mkdir уже был, pid ещё не записан:

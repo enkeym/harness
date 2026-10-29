@@ -138,6 +138,7 @@
   "workbench.panel.defaultLocation": "right",
   // Сочетания клавиш по физическим клавишам — работают в любой раскладке
   "keyboard.dispatch": "keyCode",
-  "window.confirmBeforeClose": "keyboardOnly"
+  "window.confirmBeforeClose": "keyboardOnly",
+  "qwen-code.provider": "api-key"
   // test
 }

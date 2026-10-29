@@ -24,12 +24,9 @@ curl … "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
   `!<iid>` → its source branch through that row.
 - Option label `!<iid> <title, ≤40 chars>`, description
   `<source> → <target>, <author>`, plus `черновик` when `draft`.
-- None left → `Открытых MR коллег нет`, stop. ≤3 → one `AskUserQuestion`,
-  `multiSelect`: `Все (<n>)`, then the MRs.
-- More → the numbered list in chat, then one call: `Все (<n>)` + 3 MRs, then
-  4 MRs per question, ≤4 questions (15 MRs); never a single-option question —
-  move one MR back to it. The rest and bare numbers through «Other».
-- `Все` picked alongside single MRs → all.
+- None left → `Открытых MR коллег нет`, stop. Otherwise show a numbered list
+  and ask for one or more numbers or `Все`. Use an available question tool
+  only when its schema fits; do not require multiple-selection controls.
 
 ## Scope of one MR
 
@@ -44,11 +41,12 @@ curl … "<api>/merge_requests?state=opened&order_by=updated_at&per_page=50" \
 
 ## Drafts
 
-Verdict *plan*: the pass and the report sit in plan mode; drafts are written
-only after `ExitPlanMode`. All drafts of one MR in one Bash call, no chat question first —
-security-guard's prompt is the confirmation. One `curl` per finding, Minor
-included, in number order; body = the MR comment of [report.md](report.md)
-through a quoted heredoc:
+Present the report before any external write. Create drafts only when the
+user explicitly requested or approved their delivery; `/review` alone is
+read-only. If authorization is missing, offer drafts after the report and
+wait. Reuse authorization already given; native Codex approvals still apply.
+One `curl` per finding, Minor included, in number order; body = the MR comment
+of [report.md](report.md) through a quoted heredoc:
 
 ```bash
 curl -sS -o /dev/null -w '<N> %{http_code}\n' -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
@@ -89,9 +87,10 @@ print its `MR !<iid>: N черновиков → …` line (the Submit review li
 the handoff, which follows when MRs remain. Not clean → handoff right after
 the pick, before the first pass. One MR picked in a clean session → no handoff.
 
-- Skip the question of `handoff` step 2: nothing is uncommitted, nothing waits.
+- Carry any existing authorization for draft delivery in the handoff; if it
+  is absent, keep the next review read-only until the user approves delivery.
 - Snapshot ≤600 characters: `Задача` (MR mode, project), `Состояние` (done
-  `!<iid>` with draft counts), `Дальше`: `Read ~/.claude/skills/review/SKILL.md,
+  `!<iid>` with draft counts), `Дальше`: `Load ~/.agents/skills/review/SKILL.md,
   продолжить на !<iid> …`. No `Карта`, no `Проверено`.
 - A large MR (section 2 of SKILL.md): the handoff inside it carries the unread
   files; the rest of the queue follows in the same `Дальше`.

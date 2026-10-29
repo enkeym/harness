@@ -15,7 +15,7 @@ import { INDEX_NAME, domainFiles, mapDirOf, pathsOf } from '../links-core.mjs';
 
 const INDEX_MAX = 30;
 const ENTITY_MAX = 80;
-const LEGACY = ['docs/implicit-links.md', '.claude/implicit-links.md'];
+const LEGACY = ['docs/implicit-links.md', '.codex/implicit-links.md'];
 // Что не обходить, сверяя глобы с деревом: глоб на артефакт сборки — не связь.
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage']);
 

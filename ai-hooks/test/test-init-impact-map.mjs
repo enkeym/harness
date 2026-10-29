@@ -110,7 +110,7 @@ function run(script, dir) {
   const dir = project({ authors: [ME, 'other@example.test'] });
   const { code, out } = run(SCRIPT, dir);
   check('чужой автор → docs/links', code === 0 && out.includes('создана docs/links/INDEX.md'), out.trim());
-  check('.claude/links не создан', !fs.existsSync(path.join(dir, '.claude/links')));
+  check('.codex/links не создан', !fs.existsSync(path.join(dir, '.codex/links')));
 }
 
 // Плоская карта старого формата — не наращивать вторую, а разбить.

@@ -1,9 +1,6 @@
 ---
 name: impact-map
 description: "Creates the implicit-links map (docs/links/) of a project indexed by tokensave or ragsave — seeded candidates, one file per domain, validated by check-impact-map.mjs; an existing map only gets the checker or, with --reseed, the missing candidates. User-invoked as /impact-map."
-disable-model-invocation: true
-allowed-tools: Bash(node ~/.ai-hooks/bin/init-impact-map.mjs:*), Bash(node ~/.ai-hooks/bin/seed-impact-map.mjs:*), Bash(node ~/.ai-hooks/bin/check-impact-map.mjs:*), Read, Write, mcp__tokensave__tokensave_search, mcp__ragsave__rag_search
-argument-hint: "[project path] [--reseed]"
 ---
 
 # /impact-map
@@ -12,24 +9,24 @@ Seed the map once; after that it grows one line per impact pass, never by
 another scan — `--reseed` is the one exception, and it only prints. Where the
 map lives, the index-plus-domain shape, `paths:` frontmatter, the line format
 and what qualifies as a link: [../shared/impact-map.md](../shared/impact-map.md)
-— this skill adds only the first run. Project = `$ARGUMENTS` minus the flag;
-empty → cwd.
+— this skill adds only the first run. Project = the path after `/impact-map`,
+excluding `--reseed`; empty → cwd.
 
 ## Steps
 
 1. `rag_search` for a map under another name — "неявные связи", "скрытые
-   связи", "тронул X → обнови Y" — across `CLAUDE.md`, `docs/`, ADR folders.
+   связи", "тронул X → обнови Y" — across `AGENTS.md`, `docs/`, ADR folders.
    Found → stop and name the file: a second place for the same links is worse
    than none.
 2. `node ~/.ai-hooks/bin/init-impact-map.mjs <project>`. Its line decides:
    - `нет индекса` → report it, done. Without `.tokensave/` or `.ragsave/rag.db`
-     the impact pass is `grep -rn --include`, not a map.
+     use `rg` for the impact pass.
    - `уже есть` → step 5 only; with `--reseed` → steps 3 and 6.
    - `плоская` → stop. Splitting a flat map is an edit with the user, not a scan.
    - `создана` → steps 3–5.
-3. `node ~/.ai-hooks/bin/seed-impact-map.mjs <project>` in the background
-   (`run_in_background: true`) — 2–5 minutes
-   on a mid-size project, each ragsave query costs ~4 s. While it runs, list
+3. Run `node ~/.ai-hooks/bin/seed-impact-map.mjs <project>` with Codex
+   `exec_command` and a short `yield_time_ms`; poll the returned `session_id`
+   with `write_stdin`. While it runs, list
    the domains from the feature folders on both sides of the tree (`src/<domain>`,
    `client/src/features/<domain>`) and draft one `paths:` list per domain.
    The output is the whole candidate list, one `path:symbol` per line
@@ -55,7 +52,7 @@ empty → cwd.
      `rag_search` by the field name, both trees.
    - A section absent from the output gets no section in the map; a name from
      `.env.example` with no read in the output is not a link.
-4. Write the domain files with `Write` (tokensave creates no files) — one per
+4. Create the domain files with Codex `apply_patch` — one per
    domain a diff would start in, both sides of the boundary in the same file,
    `paths:` frontmatter first, then a section per kind, sides as exact
    `path:symbol`, the consequence in the same line. A candidate belongs to the

@@ -1,125 +1,26 @@
-# Shared rules
+# Working rules
 
-Stack: NestJS, Next.js, React, TypeScript.
-Only behaviour gates and routing rules here; procedure lives in skills.
-Claude Code tools and gates: `CLAUDE.md`.
-
-## Working style
-
-- Reply in Russian. One short line on what you are doing before code or commands.
-- Ask mode off → apply edits immediately. Chat-only when ask mode is on or the
-  user says "покажи в чате", "не применяй", "только предложи".
-- Confirm only before: deleting files, deploy, destructive migration, force
-  push, merge into a protected branch. Commit needs no confirmation; push is
-  confirmed in security-guard's dialog (skipped when the user's last prompt
-  named it), not in chat.
-- A question to the user — a fork, a choice, an open point before a handoff —
-  goes through `AskUserQuestion`, options
-  with the recommended one first; never left as prose at the end of a reply,
-  where it hangs until the user notices it. The same goes for an offer of more
-  work and a wait for the user's action outside the chat: a menu option
-  («Готово» / «Сделать X») or nothing. A user command is named as a fact.
-- Re-check the diff before delivering. Found a mistake — fix it openly.
-- A guard refusal is final: never route around it.
-
-## Project facts outrank skills
-
-Base branch, ticket format, commit style, remote, scripts, commit/push
-restrictions — from the project, in this order:
-
-1. Project memory and the project's `CLAUDE.md` / `AGENTS.md`.
-2. The repository: git, `package.json`, configs — via `skills/shared/project-facts.md`.
-3. A skill's default.
-
-A restriction applies only to the project whose memory or rules file states it.
-A skill line naming another project's value is a defect: fix the skill.
-
-A global skill carries the approach; the project's skills and rules files
-(`docs/rules/`, a rules section of `AGENTS.md`) carry its concrete choices:
-type form, test runner, config layer, map format and checker. Load both; a
-global line that fixes such a choice is a defect — make it defer to the project.
-
-## Bash runs commands, nothing else
-
-`git`, `npm`, `tsc`, `docker`, tests, linters. No file reads or writes through
-the shell: no `cat`/`head`/`sed -n`, `sed -i`, `> file`, `tee`, heredoc into a
-file, `node -e`/`python -c`, `git show HEAD:<file>`, a copy into `/tmp` —
-including new files and non-indexed configs.
-Allowed: `jq` over a `.json`/`.jsonl`/`.ndjson` outside the tokensave index (logs,
-reports); `>`/`>>` into `/tmp/` for command output, `cat`/`tail` of that file.
-
-## Tool choice
-
-In a project with `.tokensave/` the index answers first; built-in tools take
-what it cannot: a file outside the index, a file to create, a string it missed.
-
-| Question                                        | Tool                                                  |
-| ----------------------------------------------- | ----------------------------------------------------- |
-| Where a symbol or file is, who calls it, what breaks | tokensave (`search`, `files`, `callers`, `impact`) — not `find`/`grep` |
-| What a symbol does                              | `tokensave_body`/`signature`                          |
-| A file in the index, whole or a range           | `tokensave_read` (`mode: "lines"`, `lines: "A-B"`) — `Read` is refused |
-| An edit to a file in the index                  | `tokensave_str_replace`/`multi_str_replace` — built-in edit needs a built-in read first |
-| Meaning, no name: how/where/why; docs, configs, `.env.example`, yml, CI, infrastructure | `rag_search` |
-| Exact string in docs, configs or a link map      | `tokensave_search` `literal: true`; empty → `rag_search` with `path_include` on that dir — unfiltered, code outranks the doc |
-| A file outside the index; a new file            | `Read`, `Edit`, `Write`                               |
-| Exact string in code after `search` `literal: true` answered empty | grep with a file glob              |
-
-Tool names in rules and skills are short; a call uses the full
-`mcp__<server>__<tool>`, and a deferred tool (`Monitor`, `tokensave_read`,
-`tokensave_str_replace` …) is loaded by `ToolSearch("select:…")` first.
-An empty answer means a wrong guess, not missing code — take the next row.
-No subagents for research or implementation; too large for one pass → split
-into commits. Scoping, empty answers, another project: skill
-`tokensave-routing`.
+- Reply in Russian. Briefly describe the next action before commands or edits.
+- Follow project AGENTS.md and explicit user authorization.
+- Inspect package.json, existing types, helpers, configs and theme tokens before coding.
+- Reuse installed libraries and established patterns; avoid duplicated logic and implicit dependencies.
+- Do not use TypeScript any; use precise types or unknown with narrowing.
+- Use DTOs for service inputs and interfaces for responses.
+- For indexed code, locate symbols with scoped tokensave_search/files; read only needed ranges with tokensave_read mode="lines". Use scoped context without code for unfamiliar structure, and callers/impact for dependencies.
+- Use rag_search for docs and conceptual searches; use rg for regexes, unindexed files or unavailable MCP. Avoid full-file reads unless the task requires them; use apply_patch for changes.
+- Discover MCP tools through the tool catalog. If unavailable, report that limitation.
+- Load each skill/rule once per session; reuse unchanged results. For noisy noninteractive commands use bash ~/.ai-hooks/bin/brief-output.sh <command> [args...]; inspect the saved log around errors. Keep diffs and review evidence complete; never wrap interactive commands or use this to bypass approvals.
+- Ask only for missing decisions or authorization; reuse answers already given. Use an available question tool within its schema and mode, otherwise ask briefly in chat. Multiple selections can be answered as finding numbers in text.
+- Keep native sandbox and approvals active. Never route around a guard denial.
+- Review the diff and run meaningful checks before delivery.
+- Commit and push only within the user's authorized scope.
 
 ## Skills
 
-Load the skill before the first action in its area, once per area per session.
-Reviewing code counts as touching it. A project skill for the same area is
-loaded next to the global one, not instead of it. Quoted phrases in the table
-are examples of how the user asks, not the only trigger.
-
-| You are about to                                                                  | Load                |
-| --------------------------------------------------------------------------------- | ------------------- |
-| Start a large or loosely worded task: multi-module, new subsystem, no place or acceptance criterion named; or argue one decision or weigh approaches: "поспорь", "мозговой штурм", "какой вариант лучше", "стоит ли" | `task-brief` |
-| Touch server code: module, controller, service, DTO, entity, guard, migration      | `nestjs-backend`    |
-| Touch client code: component, page, hook, store, form, styles                      | `react-frontend`    |
-| Touch code in a project with `next` in `package.json`: app/ route, action, route.ts, proxy.ts, next.config | `react-frontend`, `nextjs-app` |
-| Touch TypeScript that is neither: script, shared lib, config                       | read `skills/shared/code-rules.md` |
-| Touch Python code: module, script, test, conftest, requirements                   | `python`            |
-| Write, fix or review tests in any stack, one test on a named symbol included       | `test-conventions`  |
-| Cover a whole branch or diff with tests, test a change with no object named, or prepare an MR | `test-coverage` |
-| Set up or audit SEO — only when the user asks for it                               | `seo`               |
-| Write or rewrite user-facing copy: landing, card, article, meta description        | `copywriting`       |
-| Search or edit past the table above, or tokensave/ragsave answered empty or errored | `tokensave-routing` |
-| Hand the thread to a fresh session: the context is filling up, or a reset is coming | `handoff`          |
-| Right before a commit: which mode the review runs in, first                         | `review-dispatch`   |
-| Review a diff, branch or MR — and before a commit, in this order                  | `review-standards`, `review-security` |
-| Commit, branch, or touch a Jira or MR text — after the two review skills; an MR after `test-coverage` too | `git-flow` |
-| Create, edit or review a skill, an agent file, a rules file, CLAUDE.md or AGENTS.md | `skill-authoring`   |
-
-## Two triggers that must not wait for a skill
-
-- **Commit and push.** A unit is done — the whole user request or an approved
-  plan step, every part applied, verified with real output (`tsc`, tests, the
-  reproduced case), no open question → impact pass, `review-dispatch`, then
-  `review-standards`, `review-security` (verdict plan: inside plan mode, fixes
-  after `ExitPlanMode`), fix findings, commit, then run `git push` — neither asked
-  in chat. Push once, after the last commit of the whole request, not after each
-  plan step. security-guard's dialog is the confirmation; a prompt naming the
-  push only skips that dialog, it is not a precondition. One edit of
-  an unfinished request, an unverified fix, or a change the user is still
-  steering is not done. In doubt → «Закоммитить» as an option in the closing
-  menu, not a commit. Only a restriction in the project's own memory or rules
-  file stops a step; then do the rest and report the skipped step in one line.
-  A found secret stops everything. Procedure: skill `git-flow`. Outside a git
-  repository (`git rev-parse` fails) the trigger is off: no commit, no
-  «Закоммитить» option, no `git init` — the user says when.
-- **Impact before the review skills.** Every symbol whose behaviour the diff
-  changes goes through `tokensave_impact`/`callers` and the project's map of
-  implicit links (`docs/links/`, or whatever map the project already keeps);
-  each hit ends as unaffected, fixed, or covered by a test. Green tests on the
-  changed symbol prove nothing about its consumers. No `.tokensave/` in the
-  project → `grep -rn --include` over the changed names, no map, and one line
-  saying so. Where the map lives, how
-  it is split and how it is checked: `skills/shared/impact-map.md`.
+Read the relevant SKILL.md before working in its area:
+task-brief for ambiguous scope; nestjs-backend for server work; react-frontend
+for UI; nextjs-app for Next.js; python for Python; test-conventions for tests;
+test-coverage for coverage analysis; review-standards and review-security for
+reviews; git-flow for Git; tokensave-routing for code navigation;
+skill-authoring for instruction files; hooks-guards for harness diagnostics.
+Other skills are discoverable by their descriptions and explicit invocation.
