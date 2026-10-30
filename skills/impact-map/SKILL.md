@@ -1,6 +1,6 @@
 ---
 name: impact-map
-description: "Creates the implicit-links map (docs/links/) of a project indexed by tokensave or ragsave — seeded candidates, one file per domain, validated by check-impact-map.mjs; an existing map only gets the checker or, with --reseed, the missing candidates. User-invoked as /impact-map."
+description: "Create or seed a project's implicit-links map (docs/links/, карта неявных связей) when the user requests it, including /impact-map. Requires tokensave or ragsave; validate with check-impact-map.mjs. An existing map only gets checked, or missing candidates are reported with --reseed."
 ---
 
 # /impact-map
@@ -10,7 +10,8 @@ another scan — `--reseed` is the one exception, and it only prints. Where the
 map lives, the index-plus-domain shape, `paths:` frontmatter, the line format
 and what qualifies as a link: [../shared/impact-map.md](../shared/impact-map.md)
 — this skill adds only the first run. Project = the path after `/impact-map`,
-excluding `--reseed`; empty → cwd.
+excluding `--reseed`; empty → cwd. An ordinary-language request to create
+the map invokes the same workflow; use the project named in that request.
 
 ## Steps
 

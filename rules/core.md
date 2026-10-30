@@ -14,4 +14,15 @@
 
 ## Skills
 
-Load relevant SKILL.md once: task-brief for ambiguous scope; nestjs-backend for server; react-frontend for UI; nextjs-app for Next.js; python for Python; test-conventions for tests; test-coverage for coverage; review-standards and review-security for review; git-flow for Git; tokensave-routing for navigation; skill-authoring for instructions; hooks-guards for harness diagnostics. Discover others by task.
+Load the relevant SKILL.md once before its workflow. Match the user's intent, including ordinary Russian requests; a slash command is not required. Explicitly requested workflows stay within that request's scope.
+
+- Harness installation, missing skills, MCP or index health: doctor; hook refusals, trust and sandbox diagnosis: hooks-guards; context and tool overhead: optimize.
+- Code navigation: tokensave-routing; large or ambiguous implementation/design: task-brief; skills and AGENTS.md: skill-authoring.
+- Server: nestjs-backend; UI: react-frontend; Next.js: also nextjs-app; Python: python.
+- Review requests: review; code quality and impact checks: review-standards; security audits: review-security. Load both checks before every commit.
+- Tests: test-conventions; requested coverage analysis: also test-coverage; explicitly requested browser QA: test-browser.
+- Git branches, commits and MR/Jira text: git-flow; explicit commit-and-push workflow: commit (its push still requires authorization).
+- Requested creation or seeding of the implicit-links map: impact-map. During implementation/review, use existing docs/links through shared/impact-map.md when assessing affected contracts; seeding is a separate requested workflow.
+- Russian website copy: copywriting; requested SEO audit/setup: seo; requested transfer to another session: handoff.
+
+Skills are instructions, not hook handlers. shared/ contains references, not a separate skill. SessionStart/Stop maintain existing RAG indexes; helpers under ai-hooks/bin run only when the selected workflow needs them. Check hook trust through /hooks; file presence or a successful manual handler run does not prove lifecycle execution.

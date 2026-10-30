@@ -212,10 +212,9 @@ class Embedder:
     def embed_stream(self, texts: Iterable[str]) -> Iterator[list[float]]:
         """Векторы для потока фрагментов, в порядке подачи.
 
-        Поток идёт пачками в демон, если тот уже запущен: на всех ядрах и без
-        второй копии модели, а поиск вклинивается между кусками. Демона нет
-        или он упал посреди потока — остаток считает своя модель; демон жив, но
-        молчит — DaemonFailed, синк догонит следующий хук.
+        Между пачками повторно проверяет демон: если он появился после начала
+        синка, локальная модель освобождается. Поиск вклинивается между кусками.
+        Демон жив, но молчит — DaemonFailed, синк догонит следующий хук.
         """
         if not self._daemon_on():
             yield from self._local_stream(texts)
@@ -224,9 +223,13 @@ class Embedder:
         while batch := list(islice(rest, config.DAEMON_BATCH)):
             vectors = self._via_daemon("passage", batch, start=False)
             if vectors is None:
-                yield from self._local_stream(chain(batch, rest))
-                return
-            yield from vectors
+                if config.EMBED_PARALLEL is not None:
+                    yield from self._local_stream(chain(batch, rest))
+                    return
+                yield from self._local_stream(batch)
+            else:
+                self.unload()
+                yield from vectors
 
     def _local_stream(self, texts: Iterable[str]) -> Iterator[list[float]]:
         """Векторы своей моделью.

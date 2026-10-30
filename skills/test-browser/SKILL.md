@@ -1,12 +1,13 @@
 ---
 name: test-browser
-description: "Manual QA of a running web app through Playwright MCP — every change of the branch as a browser scenario, console and network errors, a bug report with reproduction steps. User-invoked as /test-browser."
+description: "Run browser QA when the user explicitly requests browser testing or /test-browser. Use Playwright MCP to check branch changes as user scenarios, console/network errors, and report bugs with reproduction steps."
 ---
 
 # /test-browser
 
 Click what a user would click and report only what was seen in the browser.
-Runs only on this command — never offered or started by another skill. Project
+Runs on an explicit browser-QA request, including ordinary language or
+`/test-browser`; another skill does not start it automatically. Project
 memory that forbids browser QA wins: say so in one line and stop. Spec
 conventions are `test-conventions`.
 

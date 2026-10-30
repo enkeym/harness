@@ -1169,7 +1169,15 @@ def test_daemon() -> None:
             local = Counted(use_daemon=False)
             texts = ["деплой", "сервер почты", "ci", "миграции базы", "а"]
 
+            config.DAEMON_BATCH = 2
+            takeover = Counted()
+            pending = takeover.embed_stream(iter(texts))
+            prefix = [next(pending), next(pending)]
             served, thread = run_daemon(idle=1.5)
+            check("синк переходит на появившийся демон без потери векторов",
+                  prefix + list(pending), local.embed_passages(texts))
+            check("после перехода локальная модель синка выгружена",
+                  (takeover.loads, takeover._model), (1, None))
             first, second = Counted(), Counted()
             check("вектор запроса через демон совпадает с локальным",
                   first.embed_query("деплой"), local.embed_query("деплой"))
