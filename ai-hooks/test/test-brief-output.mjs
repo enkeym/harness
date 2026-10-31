@@ -45,3 +45,10 @@ for (const status of [0, 7]) {
   assert.ok(Buffer.byteLength(result.stdout, "utf8") <= 13000, "single-line output must be byte-bounded");
 }
 console.log('brief-output: exit status, full log, excerpts and literal argv passed');
+for (const status of [0, 7]) {
+  const result = spawnSync('bash', [script, process.execPath, '-e',
+    'process.stdout.write("😀я".repeat(40000)); process.exit(Number(process.argv[1]));', String(status)], { encoding: 'utf8' });
+  assert.equal(result.status, status, result.stderr);
+  assert.equal(result.stdout.includes('�'), false, 'byte limit must preserve valid UTF-8');
+  assert.ok(Buffer.byteLength(result.stdout) <= 13000);
+}

@@ -32,7 +32,12 @@ marker_bytes=$(printf '%s\n' "$truncate_marker" | wc -c)
 excerpt_budget=$((MAX_OUTPUT_BYTES - summary_bytes - marker_bytes))
 excerpt_bytes=$(wc -c <"$excerpt")
 if [ "$excerpt_bytes" -gt "$excerpt_budget" ]; then
-  head -c "$excerpt_budget" "$excerpt"
+  node --input-type=module -e '
+    import fs from "node:fs";
+    import { pathToFileURL } from "node:url";
+    const { utf8Prefix } = await import(pathToFileURL(process.argv[1]));
+    process.stdout.write(utf8Prefix(fs.readFileSync(process.argv[2], "utf8"), Number(process.argv[3])));
+  ' "$(dirname "$0")/context-state.mjs" "$excerpt" "$excerpt_budget"
   printf '%s\n' "$truncate_marker"
 else
   cat "$excerpt"

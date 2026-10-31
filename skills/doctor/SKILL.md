@@ -7,8 +7,9 @@ description: "Diagnose Codex harness installation, missing or unused skills, hoo
 
 Run ~/.config/harness/repo/install.sh --check, codex --version and codex mcp list.
 For a skills audit, compare ~/.config/harness/repo/skills/*/SKILL.md with ~/.agents/skills
-links and the session's available-skills catalog; inspect workflow triggers,
-relative references and required helpers. shared/ is reference material.
+links, the hand-made Qwen mirror ~/.qwen/skills (install.sh --check does not cover it —
+flag links whose target is gone) and the session's available-skills catalog; inspect
+workflow triggers, relative references and required helpers. shared/ is reference material.
 Use codex doctor --json for native diagnostics when needed; keep its report
 local and quote only relevant redacted checks. It does not prove hook execution.
 Harness has only SessionStart/Stop for background RAG sync; search routing is

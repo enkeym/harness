@@ -47,7 +47,7 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<enco
 Present the report before any external write. Create drafts only when the
 user explicitly requested or approved their delivery; `/review` alone is
 read-only. If authorization is missing, offer drafts after the report and
-wait. Reuse authorization already given; native Codex approvals still apply.
+wait. Reuse authorization already given.
 One request per finding, in number order; body = the MR comment of
 [report.md](report.md). Write a JSON body file with `note` and, where valid,
 a `position` object containing position_type, base_sha, start_sha, head_sha,

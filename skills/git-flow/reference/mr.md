@@ -100,8 +100,7 @@ encoded, written out in full.
    Updating an MR sends only title and description. Check exit status, iid and web_url.
 
    No labels, assignee, milestone, squash flags. The user's explicit MR
-   request authorizes this delivery; follow native Codex approvals when
-   required and do not rely on a hook confirmation.
+   request authorizes this delivery; do not rely on a hook confirmation.
 2. Success → `MR !<iid> создан: <url>` (or `обновлён`), after the
    `test-coverage` report.
 3. A failed call → one line distinguishing authorization, permissions, network

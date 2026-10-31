@@ -32,8 +32,8 @@ node --test --test-concurrency=1 ai-hooks/test/test-*.mjs
 node bin/mcp-sync.mjs --check
 ```
 
-Подробности: [Codex](docs/codex.md), [проверки и устранение тупиков](docs/harness-fixes.md).
-Перенесённые практики экономии: [контекст и токены](docs/token-efficiency.md).
+Подробности: [Codex](docs/codex.md), [результаты аудита](docs/harness-audit.md).
+Практики экономии: [управление контекстом](docs/context-automation.md).
 
 Чтение кода: scoped search → tokensave_read с mode="lines" вокруг нужного
 попадания. Правки — apply_patch; разрешения и sandbox — нативные Codex.

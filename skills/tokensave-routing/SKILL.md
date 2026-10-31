@@ -8,23 +8,24 @@ description: "Choose tokensave/ragsave searches and small line-range reads for c
 For indexed files, MCP search/read is required; a shell read is not an
 alternative just because the path is already known. Git diffs and other
 revisions, command output/logs and files outside the index use local tools.
-Discover the tool schema before calling it. Core names use the
-`mcp__tokensave__tokensave_` prefix; RAG uses `mcp__ragsave__rag_search`.
+Discover the tool schema before calling it. In `functions.exec`, call the
+discovered `tools.mcp__tokensave__tokensave_*` or `tools.mcp__ragsave__rag_*`
+method; display labels such as `tokensave.tokensave_files` are not JS names.
 
 | Question | Tool |
 | --- | --- |
-| Known symbol or exact code text | `search`, scoped with `path_include`; text uses `literal: true` |
-| File by name | `files` |
-| Source around a search hit | `read` with `file`, `mode: "lines"`, `lines: "A-B"` |
-| Unfamiliar structure | `context`, scoped, `include_code: false`, small `max_nodes` |
-| Callers and dependencies | `callers`, `callees`, `impact` |
-| Concept, docs, config, CI | `rag_search`, small `limit`; `only_outside_tokensave: true` for non-code |
+| Known symbol or exact code text | `mcp__tokensave__tokensave_search`, scoped with `path_include`; text uses `literal: true` |
+| File by name | `mcp__tokensave__tokensave_files` |
+| Source around a search hit | `mcp__tokensave__tokensave_read` with `file`, `mode: "lines"`, `lines: "A-B"` |
+| Unfamiliar structure | `mcp__tokensave__tokensave_context`, scoped, `include_code: false`, small `max_nodes` |
+| Callers and dependencies | `mcp__tokensave__tokensave_callers`, `mcp__tokensave__tokensave_callees`, `mcp__tokensave__tokensave_impact` |
+| Concept, docs, config, CI | `mcp__ragsave__rag_search`, small `limit`; `only_outside_tokensave: true` for non-code |
 | Changes | Codex `apply_patch`; tokensave replacement tools when their schema fits |
 
 - Start with a few search hits and read about 30–80 lines around the relevant
   one. Expand only when the needed context crosses that range. Do not scan a
   file in successive slices just to reconstruct its full contents.
-- Example: `tokensave_read({file: "src/service.ts", mode: "lines", lines: "120-170"})`.
+- Example: `await tools.mcp__tokensave__tokensave_read({file: "src/service.ts", mode: "lines", lines: "120-170"})`.
   Use `format: "text"` where supported. Reuse `if_digest` only for the same
   range still held in context. Read a whole small file when its full contract
   is needed; avoid large `full`, `map`, `signatures` or whole-symbol bodies.
@@ -34,7 +35,14 @@ Discover the tool schema before calling it. Core names use the
   schema first. Do not assume `signature`, `affected`, `similar` or symbol
   editing commands are already exposed.
 - Reuse `seen_node_ids` as `exclude_node_ids` for repeated context calls.
-  Use `graph_root` for another initialized project.
+- For the project already served by this MCP server, omit `graph_root` and
+  `graph_branch`, even if its absolute path is known. Examples:
+  `await tools.mcp__tokensave__tokensave_files({format: "grouped"})` and
+  `await tools.mcp__tokensave__tokensave_status({})`.
+  Use `graph_root` only for another initialized project; `graph_branch`
+  requires it. If an error says `graph_root selects the same project already
+  served`, retry once without both selectors; this is an argument error,
+  not a missing index or permission to fall back to shell reads.
 - No index, unavailable/broken MCP, a file explicitly reported unscanned or
   excluded by the project's index configuration →
   report once, then use `rg` and bounded shell reads for that scope. An empty
@@ -50,3 +58,7 @@ Discover the tool schema before calling it. Core names use the
 - Load extra tool areas only for a concrete operation, never `all` for a
   routine lookup. Keep a stable tool/instruction prefix where possible;
   discover schemas once and avoid reloading unchanged rules mid-task.
+- Harness compacts tool descriptions at the MCP boundary; this does not
+  replace mandatory indexed search/read. Tool results remain complete.
+  Do not print whole discovery entries just to obtain one schema: select
+  the requested tool once, and reuse already retrieved source ranges.

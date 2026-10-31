@@ -1,0 +1,8 @@
+{
+  "source": "codex-cli 0.166.0 isolated protocol probe 2026-10-31; ids redacted",
+  "native": [
+    {"method":"thread/tokenUsage/updated","params":{"threadId":"probe-thread","turnId":"probe-turn","tokenUsage":{"total":{"totalTokens":15581,"inputTokens":15566,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":15,"reasoningOutputTokens":0},"last":{"totalTokens":15581,"inputTokens":15566,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":15,"reasoningOutputTokens":0},"modelContextWindow":475000}}},
+    {"method":"thread/tokenUsage/updated","params":{"threadId":"probe-thread","turnId":"probe-compact","tokenUsage":{"total":{"totalTokens":15581,"inputTokens":15566,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":15,"reasoningOutputTokens":0},"last":{"totalTokens":19443,"inputTokens":0,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0},"modelContextWindow":475000}}}
+  ],
+  "rollout": {"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":15783,"cached_input_tokens":12032,"cache_write_input_tokens":0,"output_tokens":206,"reasoning_output_tokens":0,"total_tokens":15989},"last_token_usage":{"input_tokens":15783,"cached_input_tokens":12032,"cache_write_input_tokens":0,"output_tokens":206,"reasoning_output_tokens":0,"total_tokens":15989},"last_usage_includes_reasoning":true,"model_context_window":475000}}}
+}

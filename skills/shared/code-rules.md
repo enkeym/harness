@@ -40,7 +40,7 @@ at the first hit:
    propose one in one line before writing: name, latest version
    (`npm view <pkg> version`), why it beats hand-rolling. Prefer maintained,
    typed, tree-shakable. A necessary dependency within the authorized task can
-   be installed autonomously; follow project constraints and native approvals.
+   be installed autonomously; follow project constraints.
 4. **Write it.** Domain logic, a few lines, or the library would be the only
    use of a large dependency → write it beside the neighbours, in their form.
 

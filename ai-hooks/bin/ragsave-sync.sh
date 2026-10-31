@@ -72,7 +72,9 @@ $detach bash -c '
   code=$?
   [ "$code" = 3 ] && { rm -f "$tmp"; exit 0; }
   [ "$code" = 0 ] || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"
-  mv -f "$tmp" "$log"
+  # sync.log — единственный источник last_sync, и пустой файл rag_status читает
+  # как «синк упал». Пустой успешный отчёт оставляем прошлый, неудачный — пишем.
+  if [ "$code" = 0 ] && [ ! -s "$tmp" ]; then rm -f "$tmp"; else mv -f "$tmp" "$log"; fi
 ' _ "$root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" "$low_io" </dev/null >/dev/null 2>&1 &
 
 exit 0

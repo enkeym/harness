@@ -52,9 +52,8 @@ ticket, commit style, remote and project restrictions come from
   verified: `git push origin <branch>` (`-u` the first time). Earlier commits
   stay local; a handoff mid-request leaves the push to the session that
   finishes. Push only when authorized by the user (including `/commit` or
-  an explicit MR request that requires a push). Reuse that authorization;
-  follow native Codex sandbox and approval requests when required. Without
-  authorization, keep commits local. Project restrictions still apply.
+  an explicit MR request that requires a push). Reuse that authorization.
+  Without authorization, keep commits local. Project restrictions still apply.
 
 ## Merge request and Jira text — only on explicit request
 
@@ -64,7 +63,7 @@ own, never after every commit.** An unrequested MR reads as "ready" and gets
 merged half-finished.
 
 Stay within the requested Git operation. Ask before push unless already authorized;
-local operations need no extra confirmation. Native approvals still apply.
+local operations need no extra confirmation.
 
 Procedure, text format and GitLab delivery: read
 [reference/mr.md](reference/mr.md) before the first step. The MR goes to

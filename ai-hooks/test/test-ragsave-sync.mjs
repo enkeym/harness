@@ -137,6 +137,16 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
 
 {
   const sb = sandbox();
+  const log = path.join(sb.dir, 'sync.log');
+  fs.writeFileSync(log, 'итог прошлого синка\n');
+  sb.run({ FAKE_INDEXER_SILENT: '1' });
+  sb.waitCalls(1);
+  check('пустой успешный отчёт не затирает прошлый sync.log',
+    waitFor(() => tmpLogs(sb).length === 0) && read(log) === 'итог прошлого синка\n', true);
+}
+
+{
+  const sb = sandbox();
   const old = path.join(sb.dir, 'sync.log.111');
   const fresh = path.join(sb.dir, 'sync.log.222');
   fs.writeFileSync(old, '');

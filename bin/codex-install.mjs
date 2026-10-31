@@ -42,6 +42,7 @@ const links = [
   [path.join(home, '.config/harness/repo'), '.'],
   [path.join(home, '.tokensave/config.toml'), 'tokensave/config.toml'],
   [path.join(home, '.local/bin/ragsave'), 'bin/ragsave'],
+  [path.join(home, '.local/bin/harness-context'), 'ai-hooks/bin/context-runner.mjs'],
   ...['ragsave', 'tests', 'README.md'].map((name) => [path.join(ragHome, name), `ragsave/${name}`]),
 ];
 for (const name of fs.readdirSync(path.join(root, 'skills'))) {
