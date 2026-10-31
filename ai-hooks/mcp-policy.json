@@ -1,0 +1,17 @@
+{
+  "outputEnabled": true,
+  "errorsEnabled": true,
+  "digestsEnabled": true,
+  "resultBytes": 13000,
+  "turnBytes": 13000,
+  "artifactCount": 64,
+  "artifactBytes": 16777216,
+  "artifactGraceMs": 60000,
+  "retries": 2,
+  "retryDelayMs": 100,
+  "circuitMs": 30000,
+  "failureEntries": 64,
+  "readEntries": 512,
+  "requestTimeoutMs": 120000,
+  "shutdownGraceMs": 1000
+}

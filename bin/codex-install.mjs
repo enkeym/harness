@@ -92,5 +92,5 @@ if (!fs.existsSync(path.join(ragHome, 'venv/bin/python'))) {
   console.error('✗ Нет venv ragsave: ./install.sh --codex --venv');
   drift++;
 }
-console.log('Фоновые RAG hooks настроены; поисковый guard не подключается. --check не проверяет доверие или исполнение hooks.');
+console.log('Фоновые tokensave и RAG hooks настроены; поисковый guard не подключается. --check не проверяет доверие или исполнение hooks.');
 process.exitCode = drift ? 1 : 0;

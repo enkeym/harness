@@ -48,9 +48,10 @@ done
 [ -f "$root/.ragsave-disable" ] && exit 0
 
 log="$root/.ragsave/sync.log"
+. "${BASH_SOURCE%/*}/background.sh"
 
 # Сироты sync.log.<pid> прерванных синков: живой синк сутки не идёт.
-find "$root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>/dev/null
+cleanup_sync_logs "$root/.ragsave"
 
 # Каждый запуск пишет в свой файл: `>"$log"` обнулял лог идущего синка ещё до
 # проверки замка. Занятый замок (код 3) — лог удаляется, ragsave сам оставил
@@ -61,7 +62,6 @@ find "$root/.ragsave" -maxdepth 1 -name 'sync.log.*' -mmin +1440 -delete 2>/dev/
 # при переиндексации после смены ветки). RAGSAVE_THREADS из окружения главнее.
 # Лимит и nice — только синку: демон, поднятый warm, живёт дольше синка и
 # считает поиск всех сессий. setsid, ionice и их замены на macOS — background.sh.
-. "${BASH_SOURCE%/*}/background.sh"
 $detach bash -c '
   root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; low_io="$6"; tmp="$log.$$"
   if [ "$warm" = 1 ]; then

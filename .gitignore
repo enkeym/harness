@@ -6,6 +6,7 @@
 *.bak-*
 *.pre-harness
 .*/settings.local.json
+.env.local
 
 # Python
 __pycache__/

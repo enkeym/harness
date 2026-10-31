@@ -4,11 +4,11 @@
     "args": ["~/.ai-hooks/bin/mcp-proxy.mjs", "--compact", "--", "bash", "~/.ai-hooks/bin/mcp-serve.sh", "tokensave"]
   },
   "ragsave": {
-    "command": "~/.ai-hooks/bin/mcp-serve.sh",
-    "args": ["ragsave"]
+    "command": "node",
+    "args": ["~/.ai-hooks/bin/mcp-proxy.mjs", "--", "bash", "~/.ai-hooks/bin/mcp-serve.sh", "ragsave"]
   },
   "playwright": {
     "command": "node",
-    "args": ["~/.ai-hooks/bin/mcp-proxy.mjs", "--catalog", "~/.config/harness/repo/mcp/playwright-tools.json", "--", "npx", "-y", "@playwright/mcp@0.0.83", "--headless", "--isolated"]
+    "args": ["~/.ai-hooks/bin/mcp-proxy.mjs", "--catalog", "~/.config/harness/repo/mcp/playwright-tools.json", "--", "npx", "-y", "@playwright/mcp@0.0.83", "--extension", "--browser=chrome"]
   }
 }

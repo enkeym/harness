@@ -9,6 +9,11 @@
 # Обе переменные подставляются без кавычек: пусто — ничего, иначе команда со
 # своими флагами.
 detach=""
+sync_log_retention_minutes="${AI_HOOKS_SYNC_LOG_RETENTION_MINUTES:-1440}"
+cleanup_sync_logs() {
+  [[ "$sync_log_retention_minutes" =~ ^[0-9]+$ ]] || return 1
+  find "$1" -maxdepth 1 -name 'sync.log.*' -mmin "+$sync_log_retention_minutes" -delete 2>/dev/null
+}
 command -v setsid >/dev/null 2>&1 && detach=setsid
 low_io=""
 if command -v ionice >/dev/null 2>&1; then

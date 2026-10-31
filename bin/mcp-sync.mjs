@@ -3,9 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { playwrightEnv } from './playwright-env.mjs';
 
 const HARNESS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
+const LOCAL_ENV = path.join(HARNESS, '.env.local');
 const CHECK = process.argv.includes('--check');
 
 let drift = 0;
@@ -17,6 +19,45 @@ const bad = (s) => console.log(`  \x1b[31m✗\x1b[0m ${s}`);
 const expand = (p) => (p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+
+function readLocalEnv() {
+  if (!fs.existsSync(LOCAL_ENV)) return {};
+  const mode = fs.statSync(LOCAL_ENV).mode & 0o777;
+  if ((mode & 0o077) !== 0) {
+    if (CHECK) {
+      drift++;
+      warn('.env.local — требуются приватные права доступа (600)');
+    } else {
+      fs.chmodSync(LOCAL_ENV, 0o600);
+      warn('.env.local — права доступа ограничены владельцем (600)');
+    }
+  }
+
+  const env = {};
+  const lines = fs.readFileSync(LOCAL_ENV, 'utf8').split(/\r?\n/);
+  for (const [index, source] of lines.entries()) {
+    const line = source.trim();
+    if (!line || line.startsWith('#')) continue;
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!match) throw new Error(`${LOCAL_ENV}:${index + 1} — ожидается NAME=VALUE`);
+
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, '');
+    }
+    env[match[1]] = value;
+  }
+  return env;
+}
+
+const localEnv = readLocalEnv();
+function serverEnv(name, configuredEnv = {}) {
+  const prefix = `${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_MCP_`;
+  const local = Object.fromEntries(Object.entries(localEnv).filter(([key]) => key.startsWith(prefix)));
+  return { ...local, ...configuredEnv };
+}
 
 // Голое имя ищется по PATH; --check замечает смену пути, например после nvm.
 function resolveCommand(cmd) {
@@ -40,19 +81,22 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
     unresolved.add(name);
     continue;
   }
-  servers[name] = { command, args: (s.args ?? []).map(expand), env: s.env ?? {} };
+  servers[name] = { command, args: (s.args ?? []).map(expand), env: serverEnv(name, s.env ?? {}) };
 }
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-function syncCodex() {
+async function syncCodex() {
   console.log('Codex (config.toml, scope user):');
   const current = JSON.parse(execFileSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', cwd: os.homedir() }));
+  const edits = [];
   for (const [name, s] of Object.entries(servers)) {
     const have = current.find((entry) => entry.name === name);
     const transport = have?.transport;
-    if (have?.enabled !== false && transport?.type === 'stdio' && transport.command === s.command
+    const env = { ...(transport?.env ?? {}), ...s.env };
+    if (name === 'playwright') Object.assign(env, playwrightEnv({ ...process.env, ...env }));
+    if (transport?.type === 'stdio' && transport.command === s.command
       && sameJson(transport.args ?? [], s.args)
-      && sameJson(transport.env ?? {}, s.env)) {
+      && sameJson(transport.env ?? {}, env)) {
       good(name);
       continue;
     }
@@ -61,10 +105,24 @@ function syncCodex() {
       drift += 1;
       continue;
     }
-    const envArgs = Object.entries(s.env).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
-    if (have) execFileSync('codex', ['mcp', 'remove', name], { stdio: 'pipe', cwd: os.homedir() });
+    if (have) {
+      for (const [key, value] of Object.entries({ command: s.command, args: s.args, env, url: null })) {
+        edits.push({ keyPath: `mcp_servers.${JSON.stringify(name)}.${key}`, value, mergeStrategy: 'replace' });
+      }
+      continue;
+    }
+    const envArgs = Object.entries(env).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
     execFileSync('codex', ['mcp', 'add', name, ...envArgs, '--', s.command, ...s.args], { stdio: 'pipe', cwd: os.homedir() });
     good(`${name} — зарегистрирован`);
+  }
+  if (edits.length) {
+    const { AppServer } = await import('../ai-hooks/bin/context-runner.mjs');
+    const client = new AppServer({ cwd: os.homedir(), env: { ...process.env, HARNESS_CONTEXT_GENERATION_FILE: '' } });
+    try {
+      await client.initialize(10000);
+      await client.request('config/batchWrite', { edits }, 10000);
+      good('MCP — команды обновлены с сохранением пользовательских опций');
+    } finally { client.close(); }
   }
 }
 
@@ -80,11 +138,12 @@ function syncQwen() {
     const separator = registered.args.indexOf('--');
     if (registered.args.includes('--catalog') && registered.args.some(arg => path.basename(arg) === 'mcp-proxy.mjs')
       && separator >= 0 && registered.args[separator + 1]) {
-      const command = resolveCommand(registered.args[separator + 1]);
-      if (!command) { bad(`${name} — backend не найден`); unresolved.add(name); continue; }
-      server = { ...registered, command, args: registered.args.slice(separator + 2) };
+      const catalogAt = registered.args.indexOf('--catalog');
+      server = { ...registered, args: registered.args.filter((_, index) => index !== catalogAt && index !== catalogAt + 1) };
     }
     const have = current.mcpServers[name];
+    server = { ...server, env: { ...(have?.env ?? {}), ...server.env } };
+    if (name === 'playwright') Object.assign(server.env, playwrightEnv({ ...process.env, ...server.env }));
     if (have?.command === server.command && sameJson(have.args ?? [], server.args)
       && sameJson(have.env ?? {}, server.env) && !have.url && !have.httpUrl) {
       good(name);
@@ -106,5 +165,5 @@ function syncQwen() {
 }
 
 if (process.argv.includes('--qwen')) syncQwen();
-else syncCodex();
+else await syncCodex();
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);

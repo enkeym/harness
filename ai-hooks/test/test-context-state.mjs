@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Accounting, ReadLedger, acquireLease, atomicJson, ingestRollout, safeRead, classify, boundTextResult, utf8Prefix, redactDiagnostic } from '../bin/context-state.mjs';
+import { loadMcpPolicy } from '../bin/mcp-policy.mjs';
 
 function temporary(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-state-'));
@@ -16,6 +17,18 @@ const usage = (input, output = 10) => ({ inputTokens: input, cachedInputTokens: 
 test('diagnostics redact recognizable credentials without modifying tool results', () => {
   assert.equal(redactDiagnostic('Bearer fixture-value api_key=fixture-value password: fixture-value'),
     'Bearer [redacted] api_key=[redacted] password: [redacted]');
+});
+
+test('atomic JSON removes temporary files after serialization and rename failures', t => {
+  const dir = temporary(t);
+  const file = path.join(dir, 'state.json');
+  atomicJson(file, { preserved: true });
+  const circular = {}; circular.self = circular;
+  assert.throws(() => atomicJson(file, circular));
+  assert.deepEqual(JSON.parse(fs.readFileSync(file)), { preserved: true });
+  const blocked = path.join(dir, 'directory'); fs.mkdirSync(blocked);
+  assert.throws(() => atomicJson(blocked, {}));
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['directory', 'state.json']);
 });
 
 test('installed native and rollout fixtures preserve post-compaction context without double billing', () => {
@@ -87,13 +100,48 @@ test('only temporary explicitly read-only operations retry; writes remain uncert
 
 test('text output obeys aggregate UTF-8 budget and preserves protocol payloads', t => {
   const dir = temporary(t);
-  const result = { content: [{ type: 'text', text: 'я'.repeat(1000) }, { type: 'text', text: '😀'.repeat(1000) }] };
+  const result = { content: [{ type: 'text', text: 'я'.repeat(1000), annotations: { audience: ['assistant'] } }, { type: 'text', text: '😀'.repeat(1000) }], _meta: { original: true }, custom: 'preserved' };
   const bounded = boundTextResult(result, 512, dir);
   assert.ok(bounded.content.reduce((n, b) => n + Buffer.byteLength(b.text), 0) <= 512);
   assert.ok(!JSON.stringify(bounded).includes('�'));
+  assert.equal(bounded._meta.original, true); assert.equal(bounded.custom, 'preserved');
+  assert.deepEqual(bounded.content[0].annotations, result.content[0].annotations);
   const artifact = fs.readdirSync(dir)[0]; assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, artifact))), result);
-  for (const original of [{ ...result, isError: true }, { ...result, structuredContent: { test: 1 } },
+  for (const original of [{ ...result, isError: true }, { ...result, structuredContent: { test: 1 } }, { ...result, structuredContent: null },
     { content: [{ type: 'text', text: JSON.stringify({ large: 'a'.repeat(1000) }) }] },
+    { content: [{ type: 'text', text: JSON.stringify('a'.repeat(1000)) }] },
     { content: [{ type: 'image', data: 'abc', mimeType: 'image/png' }] }]) assert.equal(boundTextResult(original, 512, dir), original);
   assert.equal(utf8Prefix('я😀!', 5), 'я');
+});
+
+test('exhausted text budget still exposes the full artifact and preserves private permissions', t => {
+  const dir = temporary(t);
+  const result = { content: [{ type: 'text', text: 'large output' }] };
+  const bounded = boundTextResult(result, 0, dir);
+  assert.match(bounded.content[0].text, /full_result=.*harness_read_result/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(bounded._meta.harnessFullResult)), result);
+  assert.equal(fs.statSync(bounded._meta.harnessFullResult).mode & 0o777, 0o600);
+});
+
+test('artifact retention protects fresh concurrent results and evicts old files', t => {
+  const dir = temporary(t);
+  const policy = { ...loadMcpPolicy({}), artifactCount: 1, artifactBytes: 1 };
+  const result = { content: [{ type: 'text', text: 'large output' }] };
+  const first = boundTextResult(result, 0, dir, policy)._meta.harnessFullResult;
+  assert.throws(() => boundTextResult(result, 0, dir, policy), /capacity/);
+  assert.ok(fs.existsSync(first));
+  fs.utimesSync(first, 0, 0);
+  const latest = boundTextResult(result, 0, dir, policy)._meta.harnessFullResult;
+  assert.ok(fs.existsSync(latest)); assert.equal(fs.existsSync(first), false);
+});
+
+test('MCP policy merges diagnostic switches and rejects unknown or invalid settings', t => {
+  const file = path.join(temporary(t), 'policy.json');
+  fs.writeFileSync(file, JSON.stringify({ outputEnabled: false, retries: 0 }));
+  const policy = loadMcpPolicy({ HARNESS_MCP_POLICY_FILE: file });
+  assert.equal(policy.outputEnabled, false); assert.equal(policy.retries, 0); assert.equal(policy.resultBytes, 13000);
+  for (const invalid of [{ invented: true }, { resultBytes: -1 }, { errorsEnabled: 'false' }, null]) {
+    fs.writeFileSync(file, JSON.stringify(invalid));
+    assert.throws(() => loadMcpPolicy({ HARNESS_MCP_POLICY_FILE: file }), /Invalid MCP policy/);
+  }
 });

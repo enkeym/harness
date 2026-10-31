@@ -14,9 +14,10 @@ function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-runner-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true })); return dir;
 }
-function backend({ finishAt = 4, unresolved = false, crash = false, stalled = false, pendingTools = false } = {}) {
+function backend({ finishAt = 4, unresolved = false, crash = false, stalled = false, pendingTools = false, reroute = false } = {}) {
   const requests = []; let turn = 0; let threads = 0; let pending; let onEvent;
-  return { requests, factory(options) {
+  const observations = [];
+  return { requests, observations, factory(options) {
     onEvent = options.onEvent;
     return { async initialize() {}, close() {}, async request(method, params) {
       requests.push({ method, params });
@@ -27,6 +28,11 @@ function backend({ finishAt = 4, unresolved = false, crash = false, stalled = fa
       }
       if (method === 'turn/start') {
         if (crash) throw new Error('transport closed');
+        const before = JSON.parse(fs.readFileSync(options.env.HARNESS_CONTEXT_GENERATION_FILE));
+        if (reroute) onEvent({ method: 'model/rerouted', params: { threadId: params.threadId, toModel: 'new-model' } });
+        observations.push({ before: before.generation, generation: JSON.parse(fs.readFileSync(options.env.HARNESS_CONTEXT_GENERATION_FILE)).generation,
+          budget: fs.readFileSync(options.env.HARNESS_CONTEXT_OUTPUT_BUDGET_FILE, 'utf8') });
+        fs.appendFileSync(options.env.HARNESS_CONTEXT_OUTPUT_BUDGET_FILE, 'fixture-reservation 100\n');
         const ack = params.input[0].text.match(/ack must equal ([\w-]+)/)[1];
         turn++;
         const cp = checkpoint(ack, stalled ? 1 : turn, turn >= finishAt ? 'completed' : 'running');
@@ -55,6 +61,14 @@ test('runner compacts safely and completes in the original thread', async t => {
   assert.equal(fs.existsSync(path.join(dir, 'lease.json')), false);
   assert.equal(fs.existsSync(path.join(dir, 'generation.json')), false);
   assert.equal(fs.existsSync(path.join(dir, 'output-budget.log')), false);
+  assert.deepEqual(fake.observations.map(value => value.budget), ['', '']);
+  assert.ok(fake.observations[1].generation > fake.observations[0].generation);
+});
+
+test('native model rerouting invalidates the runner generation', async t => {
+  const dir = setup(t); const fake = backend({ finishAt: 1, reroute: true });
+  await runObjective({ project: dir, dir, objective: 'test', permissions: 'no push', clientFactory: fake.factory });
+  assert.equal(fake.observations[0].generation, fake.observations[0].before + 1);
 });
 
 test('context pressure after compaction saves a checkpoint for manual continuation without starting another thread', async t => {

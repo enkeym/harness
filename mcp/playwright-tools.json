@@ -3,8 +3,8 @@
   "args": [
     "-y",
     "@playwright/mcp@0.0.83",
-    "--headless",
-    "--isolated"
+    "--extension",
+    "--browser=chrome"
   ],
   "initialize": {
     "protocolVersion": "2024-11-05",

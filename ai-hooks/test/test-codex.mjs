@@ -84,6 +84,17 @@ if (cli.status === 0) {
   assert.equal(parsed.status, 0, parsed.stderr);
   assert.deepEqual(JSON.parse(parsed.stdout).map((s) => s.name).sort(), managedServers);
   assert.ok(fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8').includes(customConfig.trim()));
+  const configFile = path.join(codexHome, 'config.toml');
+  const original = fs.readFileSync(configFile, 'utf8');
+  fs.writeFileSync(configFile, original.replace('[mcp_servers.ragsave]', '[mcp_servers.ragsave]\nstartup_timeout_sec = 47\ntool_timeout_sec = 91\ndefault_tools_approval_mode = "approve"\nenabled = false\nenv = { CUSTOM_AUTH = "fixture-value" }').replace(/(\[mcp_servers\.ragsave\][\s\S]*?command = )[^\n]+/, '$1"obsolete"'));
+  const resync = spawnSync(process.execPath, [path.join(root, 'bin/mcp-sync.mjs'), '--codex'], { env: cliEnv, encoding: 'utf8', timeout: 30000 });
+  assert.equal(resync.status, 0, resync.stdout + resync.stderr);
+  const preserved = fs.readFileSync(configFile, 'utf8');
+  for (const option of ['startup_timeout_sec = 47', 'tool_timeout_sec = 91', 'default_tools_approval_mode = "approve"', 'enabled = false', 'CUSTOM_AUTH = "fixture-value"']) assert.ok(preserved.includes(option));
+  assert.ok(!preserved.includes('obsolete'));
+  const recheck = spawnSync(process.execPath, [path.join(root, 'bin/mcp-sync.mjs'), '--codex', '--check'], { env: cliEnv, encoding: 'utf8', timeout: 30000 });
+  assert.equal(recheck.status, 0, recheck.stdout + recheck.stderr);
+  assert.equal(fs.readFileSync(configFile, 'utf8'), preserved);
   console.log('Codex CLI: real MCP config round-trip passed');
 }
 console.log('Codex: installer and MCP passed');

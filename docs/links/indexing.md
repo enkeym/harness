@@ -1,14 +1,22 @@
 ---
 paths:
+  - "ai-hooks/bin/background.sh"
   - "ai-hooks/bin/project-init.sh"
   - "ai-hooks/test/test-project-init.mjs"
   - "ai-hooks/bin/ragsave-sync.sh"
+  - "ai-hooks/bin/tokensave-sync.sh"
+  - "ai-hooks/test/test-tokensave-sync.mjs"
   - "ai-hooks/bin/log-error.sh"
   - "ai-hooks/test/test-ragsave-sync.mjs"
   - "codex/hooks.json"
 ---
 
 ## Жизненный цикл индексов
+- `ai-hooks/bin/background.sh:cleanup_sync_logs` используется обоими sync hooks:
+  удаляет старые `sync.log.*` по `AI_HOOKS_SYNC_LOG_RETENTION_MINUTES` (1440 минут
+  по умолчанию), сохраняя свежие файлы и основной отчёт. Прерванный TokenSave sync
+  также убирает временный лог через EXIT trap, кроме аварийного SIGKILL.
+- Codex `SessionStart` и `Stop` также вызывают `tokensave-sync.sh`: независимый фоновый sync существующего ближайшего индекса, без init, с `.tokensave-disable`, отчётом `.tokensave/sync.log` и общим журналом ошибок. Конкуренцию регулирует lock CLI; занятый lock сохраняет прошлый отчёт. Сценарии проверяет `test-tokensave-sync.mjs`.
 - `ai-hooks/bin/log-error.sh` — общий приёмник ошибок обоих hooks; `test-project-init.mjs` и `test-ragsave-sync.mjs` проверяют запись ошибок и продолжение следующих шагов. При изменении фильтров или формата обновлять обе проверки.
 
 - `project-init.sh` запускает `tokensave init` только при отсутствии базы и `tokensave sync` при `.tokensave/dirty`; после этого отдельно проверяет необходимость `ragsave init`. Ошибка одного шага записывается, второй шаг всё равно выполняется. `test-project-init.mjs` проверяет порядок, повторный запуск, маркеры отключения, блокировку и продолжение после ошибки.

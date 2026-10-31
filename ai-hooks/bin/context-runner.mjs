@@ -177,6 +177,7 @@ export async function runObjective({ project, objective, permissions, dir, polic
       onEvent(event) {
         accounting.event(event);
         const p = event.params;
+        if (p?.threadId === state.thread && ['model/rerouted', 'thread/compacted'].includes(event.method)) invalidate();
         if (event.method === 'item/started' && p?.threadId === state.thread) active.add(p.item.id);
         if (event.method === 'item/completed' && p?.threadId === state.thread) {
           active.delete(p.item.id);

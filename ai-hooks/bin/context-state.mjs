@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { mcpPolicy, retryAllowed, retryDelay } from './mcp-policy.mjs';
 
 export const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 export function redactDiagnostic(value) {
@@ -13,10 +14,14 @@ export function redactDiagnostic(value) {
 export function atomicJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  const fd = fs.openSync(temp, 'wx', 0o600);
-  try { fs.writeFileSync(fd, `${JSON.stringify(value)}\n`); fs.fsyncSync(fd); }
-  finally { fs.closeSync(fd); }
-  fs.renameSync(temp, file);
+  try {
+    const fd = fs.openSync(temp, 'wx', 0o600);
+    try { fs.writeFileSync(fd, `${JSON.stringify(value)}\n`); fs.fsyncSync(fd); }
+    finally { fs.closeSync(fd); }
+    fs.renameSync(temp, file);
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
 }
 
 export function readJson(file, fallback) {
@@ -147,18 +152,18 @@ export function classify(error, write = false) {
   if (write) return 'uncertain-write';
   const s = String(error?.message ?? error);
   if (/permission|denied|unauth|forbidden|401|403/i.test(s)) return 'permission';
-  if (/ENOENT|not found|missing.*index/i.test(s)) return 'missing';
+  if (/ENOENT|not found|missing.*index|индекс.*не построен/i.test(s)) return 'missing';
   if (/(invalid|bad).*(arg|param|schema)|-32602/i.test(s)) return 'argument';
   if (/ECONNRESET|ETIMEDOUT|temporar|transport closed/i.test(s)) return 'transport';
   return 'protocol';
 }
 
-export async function safeRead(operation, { readOnly = false, retries = 2, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+export async function safeRead(operation, { readOnly = false, retries = mcpPolicy.retries, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
   for (let attempt = 0; ; attempt++) {
     try { return await operation(); }
     catch (error) {
-      if (!readOnly || classify(error) !== 'transport' || attempt >= Math.min(retries, 2)) throw error;
-      await sleep(100 * 2 ** attempt);
+      if (!retryAllowed(classify(error), readOnly, attempt, { ...mcpPolicy, retries })) throw error;
+      await sleep(retryDelay(attempt));
     }
   }
 }
@@ -172,12 +177,20 @@ export function utf8Prefix(text, bytes) {
 
 // Only explicitly plain text may be bounded. JSON, MCP errors, images and
 // structuredContent are returned intact; never parse warning-prefixed text as JSON.
-export function boundTextResult(result, budget, dir) {
-  if (result.isError || result.structuredContent || !Array.isArray(result.content) ||
-      result.content.some(b => b.type !== 'text' || /^[\s]*[\[{]/.test(b.text))) return result;
+export function plainTextResult(result) {
+  return result && !result.isError && !Object.hasOwn(result, 'structuredContent') && Array.isArray(result.content) &&
+    result.content.every(b => {
+      if (b.type !== 'text' || typeof b.text !== 'string' || /^[\s]*[\[{]/.test(b.text)) return false;
+      try { JSON.parse(b.text); return false; } catch { return true; }
+    });
+}
+
+export function boundTextResult(result, budget, dir, policy = mcpPolicy) {
+  if (!plainTextResult(result)) return result;
   const bytes = result.content.reduce((n, b) => n + Buffer.byteLength(b.text), 0);
   if (bytes <= budget) return result;
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if ((fs.statSync(dir).mode & 0o077) !== 0) throw new Error('Artifact directory must be private');
   const file = path.join(dir, `${crypto.randomUUID()}.json`);
   atomicJson(file, result);
   // Bounded private artifact retention; keep the newest result even if it alone
@@ -190,13 +203,20 @@ export function boundTextResult(result, budget, dir) {
     })
     .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
   let retainedBytes = 0;
+  let retainedCount = 0;
   for (const [index, item] of artifacts.entries()) {
     retainedBytes += item.stat.size;
-    if (item.file !== file && (index >= 64 || retainedBytes > 16 * 1024 * 1024)) {
+    if (item.file !== file && Date.now() - item.stat.mtimeMs >= policy.artifactGraceMs &&
+        (index >= policy.artifactCount || retainedBytes > policy.artifactBytes)) {
       try { fs.unlinkSync(item.file); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    }
+      retainedBytes -= item.stat.size;
+    } else retainedCount++;
   }
-  const marker = `\n[full_result=${file}; bytes=${bytes}]`;
+  if (retainedCount > policy.artifactCount || (retainedCount > 1 && retainedBytes > policy.artifactBytes)) {
+    fs.unlinkSync(file);
+    throw new Error('Artifact capacity occupied by recent results');
+  }
+  const marker = `\n[full_result=${file}; bytes=${bytes}; read with harness_read_result(path, offset, bytes) or full=true]`;
   const content = [];
   let remaining = Math.max(0, budget - Buffer.byteLength(marker));
   for (const block of result.content) {
@@ -204,14 +224,14 @@ export function boundTextResult(result, budget, dir) {
     remaining -= Buffer.byteLength(text);
     if (text) content.push({ ...block, text });
   }
-  if (Buffer.byteLength(marker) <= budget) content.push({ type: 'text', text: marker });
+  content.push({ type: 'text', text: marker });
   return { ...result, content, _meta: { ...result._meta, harnessFullResult: file, originalTextBytes: bytes } };
 }
 
 // One append-only reservation ledger per runner turn. appendFileSync is atomic
 // for these small records; each adapter accounts all earlier reservations before
 // deciding its allowance. JSON/errors/binary are explicitly outside this cap.
-export function reserveTextBudget(file, requested, limit = 13000) {
+export function reserveTextBudget(file, requested, limit = mcpPolicy.turnBytes) {
   const id = crypto.randomUUID();
   fs.appendFileSync(file, `${id} ${requested}\n`, { mode: 0o600 });
   let used = 0;

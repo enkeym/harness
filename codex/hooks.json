@@ -1,5 +1,5 @@
 {
-  "description": "Harness: background RAG sync",
+  "description": "Harness: background tokensave and RAG sync",
   "hooks": {
     "SessionStart": [
       {
@@ -8,6 +8,11 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.ai-hooks/bin/ragsave-sync.sh\" --warm \"$PWD\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/tokensave-sync.sh\" \"$PWD\"",
             "timeout": 10
           }
         ]
@@ -19,6 +24,11 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.ai-hooks/bin/ragsave-sync.sh\" \"$PWD\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/tokensave-sync.sh\" \"$PWD\"",
             "timeout": 10
           }
         ]

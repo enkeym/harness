@@ -39,7 +39,11 @@ test('Qwen install repairs dangling skills, preserves settings and checks drift 
   assert.equal(after.mcpServers.tokensave.trust, true);
   assert.equal(after.hooks.SessionStart[0].hooks[0].timeout, 10000);
   assert.equal(after.hooks.Stop[0].hooks[0].command, 'echo custom');
-  assert.equal(after.hooks.Stop.length, 2);
+  assert.equal(after.hooks.Stop.length, 3);
+  for (const event of ['SessionStart', 'Stop']) {
+    const commands = after.hooks[event].flatMap(entry => entry.hooks).map(hook => hook.command);
+    assert.ok(commands.includes('bash "$HOME/.ai-hooks/bin/tokensave-sync.sh" "$QWEN_PROJECT_DIR"'));
+  }
   assert.equal(fs.realpathSync(path.join(qwenHome, 'skills', 'python')), path.join(root, 'skills/python'));
   assert.ok(fs.existsSync(path.join(qwenHome, 'QWEN.md')));
   assert.equal(run('--check').status, 0);
@@ -49,7 +53,7 @@ test('Qwen install repairs dangling skills, preserves settings and checks drift 
   assert.equal(run('--unknown').status, 2);
 });
 
-test('Qwen sync unwraps catalog proxy while retaining custom servers and options', t => {
+test('Qwen sync removes only catalog mode while retaining proxy, custom servers and options', t => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-mcp-'));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   fs.mkdirSync(path.join(home, 'bin'));
@@ -57,18 +61,34 @@ test('Qwen sync unwraps catalog proxy while retaining custom servers and options
   fs.mkdirSync(path.join(home, '.qwen'));
   const script = path.join(home, 'bin/mcp-sync.mjs');
   fs.copyFileSync(path.join(root, 'bin/mcp-sync.mjs'), script);
+  fs.copyFileSync(path.join(root, 'bin/playwright-env.mjs'), path.join(home, 'bin/playwright-env.mjs'));
   fs.writeFileSync(path.join(home, 'mcp/servers.json'), JSON.stringify({
     playwright: { command: process.execPath, args: ['~/mcp-proxy.mjs', '--catalog', '~/catalog.json', '--', process.execPath, '--version'] },
   }));
   const settings = path.join(home, '.qwen/settings.json');
   fs.writeFileSync(settings, JSON.stringify({ mcpServers: {
-    playwright: { httpUrl: 'http://localhost:1', trust: true }, custom: { command: 'custom' },
+    playwright: { httpUrl: 'http://localhost:1', trust: true, timeout: 91000, env: { CUSTOM_AUTH: 'fixture-value', PLAYWRIGHT_MCP_EXECUTABLE_PATH: '/custom/chrome' } }, custom: { command: 'custom' },
   } }));
   const result = spawnSync(process.execPath, [script, '--qwen'], {
     env: { ...process.env, HOME: home, QWEN_HOME: path.join(home, '.qwen') }, encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
   const actual = JSON.parse(fs.readFileSync(settings, 'utf8')).mcpServers;
-  assert.deepEqual(actual.playwright, { trust: true, command: process.execPath, args: ['--version'], env: {} });
+  assert.deepEqual(actual.playwright, { trust: true, timeout: 91000, command: process.execPath, args: [path.join(home, 'mcp-proxy.mjs'), '--', process.execPath, '--version'], env: { CUSTOM_AUTH: 'fixture-value', PLAYWRIGHT_MCP_EXECUTABLE_PATH: '/custom/chrome' } });
   assert.deepEqual(actual.custom, { command: 'custom' });
+  const localEnv = path.join(home, '.env.local');
+  fs.writeFileSync(localEnv, '', { mode: 0o644 });
+  fs.chmodSync(localEnv, 0o644);
+  const snapshot = fs.readFileSync(settings, 'utf8');
+  const check = spawnSync(process.execPath, [script, '--qwen', '--check'], {
+    env: { ...process.env, HOME: home, QWEN_HOME: path.join(home, '.qwen') }, encoding: 'utf8',
+  });
+  assert.equal(check.status, 1, check.stderr);
+  assert.equal(fs.statSync(localEnv).mode & 0o777, 0o644);
+  assert.equal(fs.readFileSync(settings, 'utf8'), snapshot);
+  const sync = spawnSync(process.execPath, [script, '--qwen'], {
+    env: { ...process.env, HOME: home, QWEN_HOME: path.join(home, '.qwen') }, encoding: 'utf8',
+  });
+  assert.equal(sync.status, 0, sync.stderr);
+  assert.equal(fs.statSync(localEnv).mode & 0o777, 0o600);
 });
