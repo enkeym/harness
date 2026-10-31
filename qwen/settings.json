@@ -1,0 +1,166 @@
+{
+  "general": {
+    "outputStyle": "Concise"
+  },
+  "ui": {
+    "autoModeAcknowledged": true,
+    "theme": "Atom One",
+    "showToolCallDetails": false,
+    "shellOutputMaxLines": 10
+  },
+  "ide": {
+    "hasSeenNudge": true,
+    "enabled": true
+  },
+  "$version": 4,
+  "modelProviders": {
+    "openai": [
+      {
+        "id": "deepseek-v4-pro",
+        "name": "deepseek-v4-pro",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "envKey": "QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_API_DEEPSEEK_COM_V1_DCC5634504C8",
+        "wireApi": "chat-completions",
+        "capabilities": {
+          "reasoning": {
+            "profile": "deepseek-openai",
+            "efforts": [
+              "low",
+              "high",
+              "max"
+            ],
+            "defaultEffort": "max"
+          }
+        }
+      },
+      {
+        "id": "deepseek-flash",
+        "name": "deepseek-flash",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "envKey": "QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_API_DEEPSEEK_COM_V1_DCC5634504C8",
+        "wireApi": "chat-completions",
+        "capabilities": {
+          "reasoning": {
+            "profile": "deepseek-openai",
+            "efforts": [
+              "low",
+              "high",
+              "max"
+            ],
+            "defaultEffort": "max"
+          }
+        }
+      },
+      {
+        "id": "qwen/qwen3.8-max",
+        "name": "Qwen 3.8 Max",
+        "baseUrl": "https://apimira.com/v1",
+        "envKey": "QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_APIMIRA_COM_V1_3727C662834D",
+        "wireApi": "responses"
+      },
+      {
+        "id": "qwen/qwen3.8-flash",
+        "name": "Qwen 3.8 Flash",
+        "baseUrl": "https://apimira.com/v1",
+        "envKey": "QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_APIMIRA_COM_V1_3727C662834D",
+        "wireApi": "responses"
+      }
+    ]
+  },
+  "security": {
+    "auth": {
+      "selectedType": "openai"
+    }
+  },
+  "model": {
+    "name": "deepseek-v4-pro",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "reasoningEffort": "max"
+  },
+  "mcpServers": {
+    "tokensave": {
+      "command": "/home/enkeym/.nvm/versions/node/v24.18.0/bin/node",
+      "args": [
+        "/home/enkeym/.ai-hooks/bin/mcp-proxy.mjs",
+        "--compact",
+        "--",
+        "bash",
+        "/home/enkeym/.ai-hooks/bin/mcp-serve.sh",
+        "tokensave"
+      ],
+      "env": {}
+    },
+    "ragsave": {
+      "command": "/home/enkeym/.nvm/versions/node/v24.18.0/bin/node",
+      "args": [
+        "/home/enkeym/.ai-hooks/bin/mcp-proxy.mjs",
+        "--",
+        "bash",
+        "/home/enkeym/.ai-hooks/bin/mcp-serve.sh",
+        "ragsave"
+      ],
+      "env": {}
+    },
+    "playwright": {
+      "command": "/home/enkeym/.nvm/versions/node/v24.18.0/bin/node",
+      "args": [
+        "/home/enkeym/.ai-hooks/bin/mcp-proxy.mjs",
+        "--catalog",
+        "/home/enkeym/.config/harness/repo/mcp/playwright-tools.json",
+        "--",
+        "npx",
+        "-y",
+        "@playwright/mcp@0.0.83",
+        "--extension",
+        "--browser=chrome"
+      ],
+      "env": {
+        "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "${PLAYWRIGHT_MCP_EXTENSION_TOKEN}",
+        "PLAYWRIGHT_MCP_EXECUTABLE_PATH": "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/ragsave-sync.sh\" --warm \"$QWEN_PROJECT_DIR\"",
+            "timeout": 10000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/tokensave-sync.sh\" \"$QWEN_PROJECT_DIR\"",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/ragsave-sync.sh\" \"$QWEN_PROJECT_DIR\"",
+            "timeout": 10000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.ai-hooks/bin/tokensave-sync.sh\" \"$QWEN_PROJECT_DIR\"",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}
