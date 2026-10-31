@@ -43,7 +43,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const cwds = path.join(home, 'cwd.txt');
   const env = {
     ...process.env, HOME: home, AI_HOOKS_TOKENSAVE_CMD: FAKE, AI_HOOKS_RAGSAVE_CMD: FAKE,
-    FAKE_INDEXER_CALLS: calls, FAKE_INDEXER_CWD: cwds, CODEX_PROJECT_DIR: root,
+    FAKE_INDEXER_CALLS: calls, FAKE_INDEXER_CWD: cwds, CODEX_PROJECT_DIR: root, QWEN_PROJECT_DIR: undefined,
   };
 
   // cwd по умолчанию — HOME: так запасной PWD никогда не попадает в проект случайно.
@@ -57,6 +57,12 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 }
 
 // === tokensave ===
+
+for (const kind of Object.keys(INDEX)) {
+  const sb = sandbox();
+  const res = sb.run([kind], { QWEN_PROJECT_DIR: path.join(sb.root, 'src'), CODEX_PROJECT_DIR: sb.home });
+  check(`${kind}: Qwen выбирает проект сессии вместо унаследованного Codex`, [res.status, res.cwds], [0, [sb.root]]);
+}
 
 {
   const sb = sandbox();

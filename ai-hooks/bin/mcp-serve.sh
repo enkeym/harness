@@ -15,7 +15,7 @@
 set -u
 
 kind="${1:?usage: mcp-serve.sh tokensave|ragsave}"
-start="${CODEX_PROJECT_DIR:-$PWD}"
+start="${QWEN_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$PWD}}"
 
 # Ближайший вверх по дереву каталог с индексом. $HOME проектом не считается:
 # ~/.tokensave — это глобальный конфиг CLI (global.db, pricing.json), а не граф

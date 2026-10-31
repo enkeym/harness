@@ -40,7 +40,7 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
     unresolved.add(name);
     continue;
   }
-  servers[name] = { command, args: s.args ?? [], env: s.env ?? {} };
+  servers[name] = { command, args: (s.args ?? []).map(expand), env: s.env ?? {} };
 }
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -68,5 +68,43 @@ function syncCodex() {
   }
 }
 
-syncCodex();
+function syncQwen() {
+  const settings = path.join(process.env.QWEN_HOME || path.join(os.homedir(), '.qwen'), 'settings.json');
+  const current = fs.existsSync(settings) ? readJson(settings) : {};
+  current.mcpServers ??= {};
+  let changed = false;
+  for (const [name, registered] of Object.entries(servers)) {
+    let server = registered;
+    // Qwen probes prompts/resources during discovery, so a catalog proxy is
+    // not lazy here and can negotiate a different protocol than its snapshot.
+    const separator = registered.args.indexOf('--');
+    if (registered.args.includes('--catalog') && registered.args.some(arg => path.basename(arg) === 'mcp-proxy.mjs')
+      && separator >= 0 && registered.args[separator + 1]) {
+      const command = resolveCommand(registered.args[separator + 1]);
+      if (!command) { bad(`${name} — backend не найден`); unresolved.add(name); continue; }
+      server = { ...registered, command, args: registered.args.slice(separator + 2) };
+    }
+    const have = current.mcpServers[name];
+    if (have?.command === server.command && sameJson(have.args ?? [], server.args)
+      && sameJson(have.env ?? {}, server.env) && !have.url && !have.httpUrl) {
+      good(name);
+      continue;
+    }
+    drift++;
+    if (CHECK) { warn(`${name} — требуется синхронизация Qwen`); continue; }
+    // Preserve trust, timeouts and other Qwen-specific server options.
+    const { url, httpUrl, ...options } = have ?? {};
+    current.mcpServers[name] = { ...options, ...server };
+    changed = true;
+    good(`${name} — зарегистрирован в Qwen`);
+  }
+  if (changed) {
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    if (fs.existsSync(settings)) fs.copyFileSync(settings, `${settings}.bak-${Date.now()}`, fs.constants.COPYFILE_EXCL);
+    fs.writeFileSync(settings, `${JSON.stringify(current, null, 2)}\n`, { mode: 0o600 });
+  }
+}
+
+if (process.argv.includes('--qwen')) syncQwen();
+else syncCodex();
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);
