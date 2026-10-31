@@ -9,7 +9,7 @@
 - Keep notes as paths, decisions and next actions; logs in files. Compact current state without accumulated snapshots. No subagents unless requested.
 - Reload rules/skills and schemas only after changes or compaction. For `harness-context`, see ~/.config/harness/repo/docs/context-automation.md; a persistent digest alone does not prove content is still held.
 - Complete authorized edits, local commands, tests and commits without confirmation. Infer routine choices; ask for information only when progress is blocked. Preserve unrelated user changes.
-- Ask only before push; an explicit push request authorizes it.
+- Ask before push, publication, deployment, data deletion, irreversible Git operations and changes to secrets. Explicit user authorization covers the named operation within the requested scope; do not ask again. Routine edits and local checks need no confirmation.
 - Review the diff and run focused checks. Full suites and coverage only when project rules or impact require them.
 
 ## Skills
