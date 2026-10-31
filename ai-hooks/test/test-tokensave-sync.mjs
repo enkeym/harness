@@ -66,6 +66,13 @@ test('подкаталог со своим индексом выбирается
   assert.deepEqual(JSON.parse(fs.readFileSync(sb.calls, 'utf8')), ['sync', nested]);
 });
 
+test('без аргумента выбирается проект Qwen вместо унаследованного CODEX_PROJECT_DIR', async t => {
+  const sb = sandbox(t);
+  sb.run(sb.home, { QWEN_PROJECT_DIR: sb.root }, 'bash "$HOME/.ai-hooks/bin/tokensave-sync.sh"');
+  await waitFor(() => fs.existsSync(sb.log));
+  assert.deepEqual(JSON.parse(fs.readFileSync(sb.calls, 'utf8')), ['sync', sb.root]);
+});
+
 for (const mode of ['no index', 'disabled', 'outside git']) {
   test(`${mode}: sync и init не запускаются`, async (t) => {
     const sb = sandbox(t, { db: mode !== 'no index' });

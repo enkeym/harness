@@ -17,7 +17,7 @@ set -u
 warm=0
 [ "${1:-}" = "--warm" ] && { warm=1; shift; }
 
-project_dir="${1:-${CODEX_PROJECT_DIR:-$PWD}}"
+project_dir="${1:-${QWEN_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$PWD}}}"
 [ "$project_dir" = "$HOME" ] && exit 0
 
 repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || exit 0

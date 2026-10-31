@@ -4,11 +4,12 @@ Treat the following as required steps, not suggestions. Perform them through act
 
 ## Before acting
 
-- Before the first task, read `~/.config/harness/repo/rules/core.md`. Read applicable project instructions and relevant `~/.qwen/skills/<name>/SKILL.md` before their workflow. After compaction, restore missing instructions before continuing. If a required file cannot be read, report the blocker before dependent actions.
+- Before the first task, read `~/.config/harness/repo/rules/core.md`. Before their workflow, read applicable project instructions and relevant `~/.qwen/skills/<name>/SKILL.md` only when missing from the current context or changed; reuse unchanged contents still in context. After compaction, restore missing instructions before continuing. If a required file cannot be read, report the blocker before dependent actions.
 - Follow explicit user instructions within system/tool constraints. Project instructions set project conventions; they do not waive core.md prohibitions reserved for explicit user permission, including the ban on adding or rewriting code comments and JSDoc.
 - Before code changes, inspect existing implementations and callers as core.md requires. Before each edit, read the exact target and confirm its path; serialize edits to each file. Never patch a guessed path or unseen content.
 - Search/read indexed files through MCP using tokensave-routing. Shell fallback requires a concrete unavailable tool/index or excluded file, stated before use; knowing a path or getting one empty search is insufficient.
-- Discover each needed tool's schema before its first call and reuse it. Do not invent tool names, arguments or commands. Codex-only commands in shared skills do not apply to Qwen; use available Qwen tools and report an unavailable required capability.
+- Select workflow and stack skills as required by core.md before their work begins; repeat selection when the scope changes and restore missing instructions on session transfer. Shared skills apply independently of the model and client.
+- Discover each needed tool's schema before its first call and reuse it. Do not invent tool names, arguments or commands. Resolve tools and client-specific capabilities from the active environment; report an unavailable required capability.
 
 ## Before continuing or finishing
 

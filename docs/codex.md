@@ -25,6 +25,11 @@ Playwright стартует при первом браузерном вызов�
 Глобальный hooks.json подключает SessionStart (прогрев модели и синк) и Stop
 (синк после ответа). Скрипт быстро возвращается и отделяет фоновый процесс;
 вывод индексации сохраняется в .ragsave/sync.log, а не в контексте модели.
+SessionStart и UserPromptSubmit также вызывают `skill-context.mjs`: при старте
+он добавляет раздел Skills and hooks из `rules/core.md`, перед запросом — только
+короткий Skill reminder из того же файла. После compaction SessionStart
+восстанавливает маршрутизацию. Агент читает SKILL.md только при отсутствии
+содержимого в текущем контексте или его изменении.
 Разрешения и sandbox использует сам Codex.
 Поиск: tokensave_search/files → tokensave_read с mode="lines" и небольшим
 диапазоном вокруг попадания; docs/config — rag_search. Дополнительные инструменты

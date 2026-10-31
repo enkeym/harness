@@ -25,9 +25,9 @@ the map invokes the same workflow; use the project named in that request.
    - `уже есть` → step 5 only; with `--reseed` → steps 3 and 6.
    - `плоская` → stop. Splitting a flat map is an edit with the user, not a scan.
    - `создана` → steps 3–5.
-3. Run `node ~/.ai-hooks/bin/seed-impact-map.mjs <project>` with Codex
-   `exec_command` and a short `yield_time_ms`; poll the returned `session_id`
-   with `write_stdin`. While it runs, list
+3. Run `node ~/.ai-hooks/bin/seed-impact-map.mjs <project>` through the active
+   client's command tool. If it supports background execution, use a short
+   initial wait and poll with its supported process controls. While it runs, list
    the domains from the feature folders on both sides of the tree (`src/<domain>`,
    `client/src/features/<domain>`) and draft one `paths:` list per domain.
    The output is the whole candidate list, one `path:symbol` per line
@@ -53,7 +53,7 @@ the map invokes the same workflow; use the project named in that request.
      `rag_search` by the field name, both trees.
    - A section absent from the output gets no section in the map; a name from
      `.env.example` with no read in the output is not a link.
-4. Create the domain files with Codex `apply_patch` — one per
+4. Create the domain files with the available patch/edit tool — one per
    domain a diff would start in, both sides of the boundary in the same file,
    `paths:` frontmatter first, then a section per kind, sides as exact
    `path:symbol`, the consequence in the same line. A candidate belongs to the

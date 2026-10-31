@@ -3,10 +3,15 @@
 Здесь запуск MCP (`bin/mcp-serve.sh`), создание и проверка карты связей,
 ручные задачи индексации (`project-init.sh`, `ragsave-sync.sh`).
 Первичную индексацию запускают только по решению пользователя.
-SessionStart/Stop запускают фоновое обновление существующего RAG-индекса.
+SessionStart/Stop в обеих интеграциях запускают фоновое обновление существующих
+индексов TokenSave и RAG; SessionStart также прогревает модель RAG.
+SessionStart/UserPromptSubmit вызывают `skill-context.mjs`: он передаёт полный
+раздел Skills and hooks при старте и короткий Skill reminder перед запросом.
+Оба текста берутся из `rules/core.md`; запрос не сохраняется, работа не блокируется.
 Поисковый PreToolUse не устанавливается; MCP выбирается по инструкциям.
-Определения из codex/hooks.json нужно доверить через /hooks; разрешения и sandbox обеспечивает Codex.
-Проектные hooks настраиваются отдельно в `.codex/hooks.json` репозитория.
+Конфигурацию hooks устанавливает выбранный установщик; доверие, разрешения
+и sandbox управляются клиентом. Настройка интеграций: [Codex](../docs/codex.md)
+и [Qwen](../docs/qwen.md). Успешная установка не доказывает исполнение hooks.
 
 Проверка: node --test --test-concurrency=1 ai-hooks/test/test-*.mjs.
 

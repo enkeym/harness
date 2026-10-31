@@ -2,6 +2,8 @@
 
 Starting shape for a new SKILL.md. Delete every section that has nothing to
 say; a heading with one filler bullet costs more than it carries.
+Keep shared instructions independent of the model and client; resolve available
+tools and client-specific capabilities from the active environment.
 
 ````markdown
 ---

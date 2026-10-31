@@ -9,6 +9,8 @@ paths:
   - "ai-hooks/bin/log-error.sh"
   - "ai-hooks/test/test-ragsave-sync.mjs"
   - "codex/hooks.json"
+  - "bin/qwen-install.mjs"
+  - "ai-hooks/test/test-qwen.mjs"
 ---
 
 ## Жизненный цикл индексов
@@ -16,8 +18,8 @@ paths:
   удаляет старые `sync.log.*` по `AI_HOOKS_SYNC_LOG_RETENTION_MINUTES` (1440 минут
   по умолчанию), сохраняя свежие файлы и основной отчёт. Прерванный TokenSave sync
   также убирает временный лог через EXIT trap, кроме аварийного SIGKILL.
-- Codex `SessionStart` и `Stop` также вызывают `tokensave-sync.sh`: независимый фоновый sync существующего ближайшего индекса, без init, с `.tokensave-disable`, отчётом `.tokensave/sync.log` и общим журналом ошибок. Конкуренцию регулирует lock CLI; занятый lock сохраняет прошлый отчёт. Сценарии проверяет `test-tokensave-sync.mjs`.
+- Клиентские `SessionStart` и `Stop` вызывают `tokensave-sync.sh`: независимый фоновый sync существующего ближайшего индекса, без init, с `.tokensave-disable`, отчётом `.tokensave/sync.log` и общим журналом ошибок. Конкуренцию регулирует lock CLI; занятый lock сохраняет прошлый отчёт. Сценарии проверяет `test-tokensave-sync.mjs`.
 - `ai-hooks/bin/log-error.sh` — общий приёмник ошибок обоих hooks; `test-project-init.mjs` и `test-ragsave-sync.mjs` проверяют запись ошибок и продолжение следующих шагов. При изменении фильтров или формата обновлять обе проверки.
 
 - `project-init.sh` запускает `tokensave init` только при отсутствии базы и `tokensave sync` при `.tokensave/dirty`; после этого отдельно проверяет необходимость `ragsave init`. Ошибка одного шага записывается, второй шаг всё равно выполняется. `test-project-init.mjs` проверяет порядок, повторный запуск, маркеры отключения, блокировку и продолжение после ошибки.
-- Codex `SessionStart` и `Stop` вызывают `ragsave-sync.sh`: он синхронизирует только уже созданную базу, уважает `.ragsave-disable`, выбирает ближайший индекс монорепозитория, пишет ошибки и не принимает занятый индексный lock за отказ. `test-ragsave-sync.mjs` покрывает hooks, выбор корня, отсутствие первичного init, занятый lock и ошибки; при изменении этого поведения обновлять тест вместе со скриптом и `codex/hooks.json`.
+- Клиентские `SessionStart` и `Stop` вызывают `ragsave-sync.sh`, на SessionStart с `--warm`: он синхронизирует только уже созданную базу, уважает `.ragsave-disable`, выбирает ближайший индекс монорепозитория, пишет ошибки и не принимает занятый индексный lock за отказ. `test-ragsave-sync.mjs` покрывает выбор корня, отсутствие первичного init, занятый lock и ошибки; при изменении поведения согласованно обновлять скрипт, `codex/hooks.json`, `bin/qwen-install.mjs` и проверки обеих интеграций.

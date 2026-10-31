@@ -63,7 +63,7 @@ assert.equal(fs.realpathSync(path.join(home, '.local/bin/harness-context')), pat
 assert.deepEqual(JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8')),
   JSON.parse(fs.readFileSync(path.join(root, 'codex/hooks.json'), 'utf8')), 'установщик подключает RAG hooks');
 const installedHooks = JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8'));
-assert.deepEqual(Object.keys(installedHooks.hooks).sort(), ['SessionStart', 'Stop'], 'поисковый guard не устанавливается');
+assert.deepEqual(Object.keys(installedHooks.hooks).sort(), ['SessionStart', 'Stop', 'UserPromptSubmit'], 'поисковый guard не устанавливается');
 assert.deepEqual(JSON.parse(fs.readFileSync(stateFile)).map((s) => s.name).sort(), ['custom', ...managedServers].sort());
 const before = fs.readFileSync(stateFile, 'utf8');
 result = install('--check');

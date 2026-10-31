@@ -63,7 +63,7 @@ checkout, stash or switch. A missing ref → name it in one line and stop.
 - Открытые MR (<n>)
 ```
 
-- Use the question tool available in the current Codex mode, respecting its
+- Use the question tool available in the current client and mode, respecting its
   option limits. Otherwise show a numbered list in chat; selections can be
   entered as numbers.
 - `Открытые MR` only when the list call of 1.2 answered, with `<n>` ≥ 1.
@@ -110,7 +110,7 @@ commit runs; a fact it leaves open goes to the not-checked line.
   groups and continue in this session; use native compaction, not a line-count gate.
 - A colleague's branch or MR with an open MR: its comments before the pass —
   *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
-- Review within the current Codex session; report evidence and actionable findings.
+- Review within the current session; report evidence and actionable findings.
 
 No edits of any kind — not even a certain one-line fix or an impact-map line —
 and no files written, `/tmp` included: a large diff is

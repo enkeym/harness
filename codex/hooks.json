@@ -1,5 +1,5 @@
 {
-  "description": "Harness: background tokensave and RAG sync",
+  "description": "Harness: skill loading context and background tokensave and RAG sync",
   "hooks": {
     "SessionStart": [
       {
@@ -13,6 +13,22 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.ai-hooks/bin/tokensave-sync.sh\" \"$PWD\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/bin/skill-context.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.ai-hooks/bin/skill-context.mjs\"",
             "timeout": 10
           }
         ]

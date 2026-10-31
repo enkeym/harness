@@ -46,15 +46,17 @@ const settings = path.join(qwenHome, 'settings.json');
 const current = fs.existsSync(settings) ? JSON.parse(fs.readFileSync(settings, 'utf8')) : {};
 current.hooks ??= {};
 let changed = false;
-for (const event of ['SessionStart', 'Stop']) {
+for (const event of ['SessionStart', 'Stop', 'UserPromptSubmit']) {
   const entries = current.hooks[event] ?? [];
-  for (const script of ['ragsave-sync.sh', 'tokensave-sync.sh']) {
-    const command = `bash "$HOME/.ai-hooks/bin/${script}" ${script === 'ragsave-sync.sh' && event === 'SessionStart' ? '--warm ' : ''}"$QWEN_PROJECT_DIR"`;
+  const commands = event === 'UserPromptSubmit' ? [] : ['ragsave-sync.sh', 'tokensave-sync.sh'].map(script =>
+    `bash "$HOME/.ai-hooks/bin/${script}" ${script === 'ragsave-sync.sh' && event === 'SessionStart' ? '--warm ' : ''}"$QWEN_PROJECT_DIR"`);
+  if (event !== 'Stop') commands.push('node "$HOME/.ai-hooks/bin/skill-context.mjs"');
+  for (const command of commands) {
     const existing = entries.flatMap(entry => entry.hooks ?? []).filter(hook => hook.command === command);
-    if (existing.length && existing.every(hook => hook.timeout === 10000)) continue;
-    if (check) { console.error(`✗ Qwen ${event} ${script} hook`); drift++; continue; }
-    if (existing.length) existing.forEach(hook => { hook.timeout = 10000; });
-    else entries.push({ hooks: [{ type: 'command', command, timeout: 10000 }] });
+    if (existing.length && existing.every(hook => hook.timeout === 10)) continue;
+    if (check) { console.error(`✗ Qwen ${event} hook: ${command}`); drift++; continue; }
+    if (existing.length) existing.forEach(hook => { hook.timeout = 10; });
+    else entries.push({ hooks: [{ type: 'command', command, timeout: 10 }] });
     current.hooks[event] = entries;
     changed = true;
   }

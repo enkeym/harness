@@ -26,8 +26,8 @@ paths:
   `bin/mcp-sync.mjs:syncQwen` переносит общий реестр в settings.json.
   `ai-hooks/bin/mcp-serve.sh` принимает `QWEN_PROJECT_DIR` раньше Codex/cwd;
   `ai-hooks/test/test-qwen.mjs` и `ai-hooks/test/test-mcp-serve.mjs` проверяют
-  восстановление ссылок, сохранение настроек, timeout в мс и выбор проекта.
-`mcp/servers.json` — источник списка серверов, который `bin/mcp-sync.mjs:syncCodex` приводит к конфигурации Codex через `bin/codex-install.mjs`; `ai-hooks/test/test-codex.mjs` проверяет регистрацию и сохранение пользовательских серверов. `ai-hooks/bin/mcp-serve.sh` выбирает ближайший проект с нужным индексом и запускает один сервер; `ai-hooks/test/test-mcp-serve.mjs` проверяет выбор корня, команду запуска и коды отказа. При смене транспорта или правил выбора обновлять документацию и соответствующие проверки.
+  восстановление ссылок, сохранение настроек, timeout командных hooks в секундах и выбор проекта.
+`mcp/servers.json` — общий источник списка серверов: `bin/mcp-sync.mjs:syncCodex` и `bin/mcp-sync.mjs:syncQwen` регистрируют его через соответствующий установщик; `ai-hooks/test/test-codex.mjs` и `ai-hooks/test/test-qwen.mjs` проверяют регистрацию и сохранение пользовательских настроек. `ai-hooks/bin/mcp-serve.sh` выбирает ближайший проект с нужным индексом и запускает один сервер; `ai-hooks/test/test-mcp-serve.mjs` проверяет выбор корня, команду запуска и коды отказа. При смене транспорта или правил выбора обновлять документацию и соответствующие проверки.
 
 `mcp-proxy.mjs` сокращает описания TokenSave и откладывает запуск Playwright в Codex
 до первого вызова. Версия и аргументы Playwright связаны с `playwright-tools.json`;
@@ -54,6 +54,7 @@ paths:
 - `PLAYWRIGHT_MCP_EXECUTABLE_PATH` — определяет `bin/playwright-env.mjs:playwrightEnv`,
   сохраняют `bin/mcp-sync.mjs:syncCodex` и `bin/mcp-sync.mjs:syncQwen`;
   `mcp/playwright-tools.json` не должен закреплять путь или профиль в аргументах.
+- Ссылки на переменные окружения в env Qwen сохраняет `bin/mcp-sync.mjs:syncQwen`; `ai-hooks/test/test-qwen.mjs` проверяет, что локальное значение не заменяет ссылку в settings.json.
 - `project` у RAG и `graph_root` у TokenSave — `ai-hooks/bin/mcp-proxy.mjs:prepareCall`
   выбирает по ним БД для снятия защиты ошибок; отслеживание cwd вместо явно
   выбранного проекта задерживает восстановление до истечения circuit.

@@ -143,6 +143,9 @@ function syncQwen() {
     }
     const have = current.mcpServers[name];
     server = { ...server, env: { ...(have?.env ?? {}), ...server.env } };
+    for (const [key, value] of Object.entries(have?.env ?? {})) {
+      if (typeof value === 'string' && /\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(value)) server.env[key] = value;
+    }
     if (name === 'playwright') Object.assign(server.env, playwrightEnv({ ...process.env, ...server.env }));
     if (have?.command === server.command && sameJson(have.args ?? [], server.args)
       && sameJson(have.env ?? {}, server.env) && !have.url && !have.httpUrl) {
