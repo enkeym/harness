@@ -139,6 +139,7 @@
   // Сочетания клавиш по физическим клавишам — работают в любой раскладке
   "keyboard.dispatch": "keyCode",
   "window.confirmBeforeClose": "keyboardOnly",
-  "qwen-code.provider": "api-key"
+  "qwen-code.provider": "api-key",
+  "claudeCode.preferredLocation": "panel"
   // test
 }

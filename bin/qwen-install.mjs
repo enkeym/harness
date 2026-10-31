@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { installShell } from './shell-install.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const home = os.homedir();
@@ -19,6 +20,7 @@ const links = [
   [path.join(qwenHome, 'QWEN.md'), 'qwen/QWEN.md'],
   [path.join(home, '.ai-hooks'), 'ai-hooks'],
   [path.join(home, '.config/harness/repo'), '.'],
+  [path.join(home, '.config/harness/bashrc'), 'shell/harness.bash'],
   [path.join(home, '.tokensave/config.toml'), 'tokensave/config.toml'],
   [path.join(home, '.local/bin/ragsave'), 'bin/ragsave'],
   ...fs.readdirSync(path.join(root, 'skills'))
@@ -36,6 +38,8 @@ for (const [target, relative] of links) {
   fs.symlinkSync(source, target);
   console.log(`✓ ${target}`);
 }
+
+drift += installShell(home, check);
 
 // Merge only harness-owned hooks; retain user hooks and authentication settings.
 const settings = path.join(qwenHome, 'settings.json');

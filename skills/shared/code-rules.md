@@ -3,8 +3,9 @@
 Read by `nestjs-backend` and `react-frontend` before the first edit, by
 `python` for its language-neutral sections and by `review-standards` as its
 checklist: the stack skill adds structure, the review adds only what a diff
-can show. The project's own code outranks any
-line here; facts about one project live in its memory, never in this file.
+can show. Project rules decide conventions; neighbouring code does not excuse
+duplication, hardcoding or comments forbidden by core.md. Project facts belong
+in project docs, never in this file.
 
 ## Types
 
@@ -23,8 +24,9 @@ line here; facts about one project live in its memory, never in this file.
 
 ## Reuse before writing new
 
-Before a new function, hook, component, type or constant, in this order — stop
-at the first hit:
+Before new logic (including inline blocks), functions, hooks, components,
+types or constants, in this order; read a candidate and its callers to verify
+the contract rather than stopping at a name match:
 
 1. **The project.** `tokensave_search` by the likely name and the verb
    (`format`, `parse`, `debounce`, `useFetch`), `rag_search` by meaning ("where
@@ -52,7 +54,7 @@ at the first hit:
   project's form.
 - Config only through the project's config layer: never `process.env` in
   module code, never a default that is a secret; a new variable → `.env.example`
-  in the same change (name + comment, no value).
+  in the same change (name only, no secret); explain it in external docs.
 - A value that differs between environments (host, URL, port, credentials,
   external account or resource id, a switch, a per-environment limit) is
   config, never a constant. A required variable has no fallback in code: a
@@ -80,7 +82,7 @@ at the first hit:
 - One responsibility per module, class, component, hook.
 - A copied block becomes the existing util or one new util used from both
   places; a similar component/service → parameterise the existing one. Two
-  that must stay separate get a one-line reason. Merge only what changes
+  that must stay separate get a one-line reason in chat. Merge only what changes
   together; look-alike loops with different rules stay.
 - The simplest thing that meets the task; "could be more generic" with no
   second caller yet is not a reason.

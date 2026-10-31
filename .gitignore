@@ -7,6 +7,7 @@
 *.pre-harness
 .*/settings.local.json
 .env.local
+.playwright-mcp/
 
 # Python
 __pycache__/

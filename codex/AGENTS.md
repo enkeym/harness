@@ -3,6 +3,6 @@
 Read `~/.config/harness/repo/rules/core.md` before the first task.
 Load relevant skills from `~/.agents/skills` by reading their SKILL.md.
 Use MCP to search/read indexed project files; shell fallback requires a stated index/tool limitation.
-Project AGENTS.md and explicit user instructions take precedence.
+Project AGENTS.md decides project conventions; only an explicit user request can lift core.md's ban on adding or rewriting code comments, including JSDoc.
 Perform edits and focused checks autonomously; follow core.md confirmation rules for sensitive operations and reuse explicit user authorization.
 Use the installed tools.

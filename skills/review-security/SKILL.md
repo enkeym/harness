@@ -43,8 +43,8 @@ or leaks. "Not best practice" without a scenario = *Info*, one line.
 - No literal secret in code, tests, fixtures, seeds, logs, errors, docker
   layers, CI output, comments. A "test" key that is real is real.
 - Config through the project's config layer, validated at startup; new
-  variable → `.env.example` with comment, no value. Environment values in
-  constants: `code-rules.md`.
+  variable → `.env.example` with name only, no secret; explain in external docs.
+  Environment values in constants: `code-rules.md`.
 - A fallback that weakens protection when a variable is missing — auth or
   verification skipped, debug on, CORS open, a built-in key → Critical.
 - `.env*`, dumps, keys, `*.pem`, local DBs in `.gitignore`.

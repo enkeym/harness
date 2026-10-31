@@ -68,6 +68,8 @@ structural rules and:
   the README, `.env.example` or doc describing it changes in the same diff.
 
 **Leftovers**
+- Added or rewritten code comments, JSDoc, TODOs or suppression directives
+  without an explicit user request violate core.md; report at least Important.
 - No `console.log` or debug `print`, debug flags, commented code, ownerless
   `TODO`, unused imports/exports/params, files outside the task or unrequested
   lockfile/config edits outside the authorized scope (preserve them, as git-flow requires).

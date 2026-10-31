@@ -24,6 +24,11 @@ test('Qwen install repairs dangling skills, preserves settings and checks drift 
       Stop: [{ hooks: [{ type: 'command', command: 'echo custom' }] }] },
   }));
   fs.symlinkSync('/missing/old-harness', path.join(qwenHome, 'skills', 'python'));
+  const bashrc = path.join(home, '.bashrc');
+  fs.writeFileSync(bashrc, 'case $- in *i*) ;; *) return ;; esac\nexport USER_SHELL_SETTING=kept\n');
+  fs.mkdirSync(path.join(home, '.config/harness'), { recursive: true });
+  fs.symlinkSync('/missing/harness.bash', path.join(home, '.config/harness/bashrc'));
+  fs.writeFileSync(path.join(home, '.config/harness/env'), 'export QWEN_TEST_API_KEY=fixture-key\n');
   const run = (...args) => spawnSync('bash', [path.join(root, 'install.sh'), '--qwen', ...args], {
     env: { ...process.env, HOME: home, QWEN_HOME: qwenHome, PATH: `${bin}:${process.env.PATH}` }, encoding: 'utf8',
   });
@@ -46,10 +51,18 @@ test('Qwen install repairs dangling skills, preserves settings and checks drift 
   }
   assert.equal(fs.realpathSync(path.join(qwenHome, 'skills', 'python')), path.join(root, 'skills/python'));
   assert.ok(fs.existsSync(path.join(qwenHome, 'QWEN.md')));
+  assert.equal(fs.realpathSync(path.join(home, '.config/harness/bashrc')), path.join(root, 'shell/harness.bash'));
+  const shell = spawnSync('bash', ['--noprofile', '--norc', '-c', '. "$HOME/.bashrc"; unset QWEN_TEST_API_KEY; bash -c \'test "$QWEN_TEST_API_KEY" = fixture-key\''], {
+    env: { ...process.env, HOME: home, BASH_ENV: '' }, encoding: 'utf8',
+  });
+  assert.equal(shell.status, 0, shell.stderr);
+  assert.ok(fs.readFileSync(bashrc, 'utf8').endsWith('export USER_SHELL_SETTING=kept\n'));
   assert.equal(run('--check').status, 0);
   const snapshot = fs.readFileSync(settings, 'utf8');
+  const shellSnapshot = fs.readFileSync(bashrc, 'utf8');
   assert.equal(run().status, 0);
   assert.equal(fs.readFileSync(settings, 'utf8'), snapshot);
+  assert.equal(fs.readFileSync(bashrc, 'utf8'), shellSnapshot);
   assert.equal(run('--unknown').status, 2);
 });
 
