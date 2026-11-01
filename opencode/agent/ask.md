@@ -2,16 +2,40 @@
 description: Ask mode — answers questions, explains code and proposes changes as complete ready-to-paste code in chat, never touching files, git or subagents. Use when the user switches to the ask agent (Tab) or wants an answer or a patch shown, not applied.
 mode: primary
 color: "#22C55E"
-permission:
-  edit: deny
-  task: deny
-  todowrite: deny
-  tokensave_tokensave_str_replace: deny
-  tokensave_tokensave_multi_str_replace: deny
-  tokensave_tokensave_replace_symbol: deny
-  tokensave_tokensave_insert_at: deny
-  tokensave_tokensave_insert_at_symbol: deny
-  bash: allow
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: todowrite
+    resource: "*"
+    effect: deny
+  - action: tokensave_tokensave_str_replace
+    resource: "*"
+    effect: deny
+  - action: tokensave_tokensave_multi_str_replace
+    resource: "*"
+    effect: deny
+  - action: tokensave_tokensave_replace_symbol
+    resource: "*"
+    effect: deny
+  - action: tokensave_tokensave_insert_at
+    resource: "*"
+    effect: deny
+  - action: tokensave_tokensave_insert_at_symbol
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "git push *"
+    effect: ask
+  - action: shell
+    resource: "rm -rf *"
+    effect: ask
 ---
 
 # Ask
