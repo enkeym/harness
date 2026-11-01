@@ -71,19 +71,24 @@ test('native model rerouting invalidates the runner generation', async t => {
   assert.equal(fake.observations[0].generation, fake.observations[0].before + 1);
 });
 
-test('context pressure after compaction saves a checkpoint for manual continuation without starting another thread', async t => {
+test('context pressure transfers the handoff and continues automatically in a fresh thread', async t => {
   const dir = setup(t); const fake = backend();
   const state = await runObjective({ project: dir, dir, objective: 'test', permissions: 'no push',
     policy: { ...defaultPolicy, cooldownTurns: 1 }, clientFactory: fake.factory });
 
-  assert.equal(state.phase, 'manual-handoff');
-  assert.deepEqual(state.threads, ['thread-1']);
-  assert.deepEqual(fake.requests.map(c => c.method), ['thread/start', 'turn/start', 'thread/compact/start', 'turn/start']);
+  assert.equal(state.phase, 'completed');
+  assert.deepEqual(state.threads, ['thread-1', 'thread-2']);
+  const turns = fake.requests.filter(c => c.method === 'turn/start');
+  assert.equal(turns[2].params.threadId, 'thread-2');
+  assert.match(turns[2].params.input[0].text, /"completedSteps":2/);
+  assert.match(turns[2].params.input[0].text, /permissions and constraints.*no push/);
+  assert.match(turns[2].params.input[0].text, /without confirmation/);
+  assert.notEqual(turns[1].params.input[0].text.match(/ack must equal ([\w-]+)/)[1], turns[2].params.input[0].text.match(/ack must equal ([\w-]+)/)[1]);
   const saved = JSON.parse(fs.readFileSync(path.join(dir, 'checkpoint.json')));
-  assert.equal(saved.checkpoint.completedSteps, 2);
+  assert.equal(saved.checkpoint.completedSteps, 4);
   assert.equal(saved.objective, 'test');
   assert.equal(saved.permissions, 'no push');
-  assert.equal(saved.thread, 'thread-1');
+  assert.equal(saved.thread, 'thread-2');
   assert.equal(fs.existsSync(path.join(dir, 'lease.json')), false);
 });
 
@@ -126,7 +131,9 @@ test('checkpoint acknowledgement, safety and engineering policy are validated', 
     started: Date.now(), turns: 1, lastMaintenance: 0, compacted: false };
   assert.equal(chooseAction(state, defaultPolicy), 'continue');
   assert.equal(chooseAction({ ...state, turns: 2 }, defaultPolicy), 'compact');
-  assert.equal(chooseAction({ ...state, turns: 2, compacted: true }, defaultPolicy), 'manual-handoff');
+  assert.equal(chooseAction({ ...state, turns: 2, compacted: true }, defaultPolicy), 'handoff');
+  assert.equal(chooseAction({ ...state, usage: { context: 110000, contextWindow: 1000000 }, turns: 2 }, defaultPolicy), 'compact');
+  assert.equal(chooseAction({ ...state, usage: { context: 150000, contextWindow: 1000000 } }, defaultPolicy), 'handoff');
 });
 
 test('MCP environment overrides reach only configured proxy servers without changing model or user config', () => {

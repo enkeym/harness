@@ -1,11 +1,15 @@
 ---
 name: handoff
-description: "Prepare or restore a compact handoff for session transfer or continuation by another agent or client. Load before transferring work and when resuming from a handoff."
+description: "Prepare or restore a compact handoff and continuation plan. Invoke as $handoff in Codex or /handoff in OpenCode; also load for automatic context compaction and session transfer."
 ---
 
 # handoff
 
-When requested, record the objective, constraints, decisions, completed changes, test results and next concrete step in a compact project note. Include branch, affected paths and log locations, not copied source or full logs. Record the applicable skills and instruction paths so the receiving agent can load them. Carry existing authorization and unresolved questions forward. Finish at a coherent work boundary; do not restart sessions automatically or invent context thresholds. Use the active client's supported resume mechanism when continuing an existing session. Do not assume a transcript format or switch models. Never create a new task unless requested.
+Record the objective, constraints, decisions, completed changes, test results and next concrete step. Include branch, affected paths and log locations, not copied source or full logs. Record applicable skills and instruction paths so the receiving agent can load them. Carry existing authorization, latest user steering and unresolved questions forward. Include a short remaining plan and pending processes or uncertain writes; never replay them blindly.
+
+For manual invocation, save a compact note at the requested path, otherwise HANDOFF.md in the project. For native compaction, preserve these essentials in the client's required summary template without tools or a separate file write. Automatic maintenance and continuation are authorized by the installed context policy; do not request confirmation for them. Use supported client compaction or the harness-owned fresh-thread mechanism. Do not delete history, switch models, manufacture token measurements or launch another worker to implement the current task.
+
+After automatic compaction or transfer, restore the objective and remaining plan and continue the next authorized action without waiting for another user message. Keep completed and blocked tasks stopped. Manual handoff alone does not restart or clear a session; the client owns context replacement. Client controls and thresholds are documented in [context automation](../../docs/context-automation.md).
 
 Rebuild the note from current state, aiming for at most 3000 characters; replace
 the previous snapshot instead of appending. Keep only decisions, affected

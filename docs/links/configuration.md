@@ -1,6 +1,9 @@
 ---
 paths:
   - "bin/codex-install.mjs"
+  - "bin/codex-context.mjs"
+  - "ai-hooks/bin/context-policy.mjs"
+  - "skills/handoff/SKILL.md"
   - "bin/qwen-install.mjs"
   - "bin/opencode-install.mjs"
   - "opencode/**"
@@ -21,6 +24,7 @@ paths:
 ---
 
 ## Каталоги и установка клиентов
+- `skills/handoff/SKILL.md` → `ai-hooks/bin/context-policy.mjs:handoffPrompt` → `bin/codex-context.mjs` и `opencode/harness.js`: единые инструкции сводки используются native compaction обоих клиентов; пороги согласуются установщиками, input-бюджетом OpenCode и runner. После изменения skill переустановить Codex и перезапустить сервис OpenCode (reload может удержать модуль); проверять `test-context-policy.mjs`, `test-context-runner.mjs`, `test-opencode.mjs` и `docs/context-automation.md`.
 - `rules/core.md` → `ai-hooks/bin/skill-context.mjs`: раздел Skills and hooks становится контекстом SessionStart, Skill reminder — контекстом UserPromptSubmit в обеих интеграциях. При изменении заголовков или событий согласованно обновлять обработчик, `codex/hooks.json`, `bin/qwen-install.mjs` и проверки `test-skill-context.mjs`, `test-codex.mjs`, `test-qwen.mjs`.
 - `harness-context` — `bin/codex-install.mjs:links` устанавливает команду на
   `ai-hooks/bin/context-runner.mjs`; `ai-hooks/test/test-codex.mjs` проверяет symlink.

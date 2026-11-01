@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import { contextPolicy, handoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
 
 export default {
   id: "harness",
@@ -22,6 +23,21 @@ export default {
       }
     }
     sync(true)
+    await context.model.transform((editor) => {
+      for (const model of editor.list()) {
+        if (model.limit.context <= 0) continue
+        editor.update(model.providerID, model.id, (draft) => {
+          draft.limit.input = Math.min(
+            draft.limit.input > 0 ? draft.limit.input : draft.limit.context,
+            draft.limit.context,
+            contextPolicy.maxTokens
+          )
+        })
+      }
+    })
+    await context.session.hook("compaction", (event) => {
+      event.system.push({ type: "text", text: handoffPrompt })
+    })
     const events = await context.event.subscribe({
       types: [
         "session.execution.succeeded",

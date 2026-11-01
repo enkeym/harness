@@ -1,11 +1,10 @@
 # Automatic context management: implementation plan
 
-Current behavior (updated 2026-10-31 at the user's request): automatic thread
-switching has been removed. Each explicit `run` creates one thread; after native
-compaction, renewed context pressure saves the checkpoint and stops with
-`manual-handoff`. The user starts the next session manually. `maxRotations` is
-removed. The plan and completion notes below describe the original implementation;
-use `docs/context-automation.md` for the current workflow.
+Current behavior (updated 2026-11-01 at the user's request): automatic Handoff and
+continuation are enabled again. Native Codex/OpenCode compaction uses the shared
+handoff instructions from 110k tokens within a 150k working budget; the runner
+can transfer its checkpoint to a fresh thread. The plan and completion notes below
+are historical; use `docs/context-automation.md` for the current workflow.
 
 Date: 2026-10-31. User authorized implementation, focused checks, local installation
 and automatic continuation in a fresh session without further confirmation.

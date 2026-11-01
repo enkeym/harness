@@ -30,6 +30,20 @@ fs.writeFileSync(path.join(fakeBin, 'codex'), `#!${process.execPath}
 import fs from 'node:fs';
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('codex-test'); process.exit(0); }
+if (args[0] === 'app-server') {
+  const configFile = process.env.FAKE_CODEX_STATE + '.context';
+  const lines = (await import('node:readline')).createInterface({ input: process.stdin });
+  lines.on('line', line => {
+    const message = JSON.parse(line);
+    if (!message.id) return;
+    const config = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile)) : {};
+    if (message.method === 'config/batchWrite') {
+      for (const edit of message.params.edits) config[edit.keyPath] = edit.value;
+      fs.writeFileSync(configFile, JSON.stringify(config));
+    }
+    console.log(JSON.stringify({ id: message.id, result: message.method === 'config/read' ? { config } : {} }));
+  });
+} else {
 const file = process.env.FAKE_CODEX_STATE;
 let servers = JSON.parse(fs.readFileSync(file, 'utf8'));
 if (args[1] === 'list') { console.log(JSON.stringify(servers)); process.exit(0); }
@@ -44,6 +58,7 @@ if (args[1] === 'add') {
   servers.push({ name, enabled: true, transport: { type: 'stdio', command: args[split + 1], args: args.slice(split + 2), env } });
 }
 fs.writeFileSync(file, JSON.stringify(servers));
+}
 `, { mode: 0o755 });
 const env = { ...process.env, HOME: home, CODEX_HOME: codexHome, RAGSAVE_HOME: path.join(home, '.rag-mcp'), PATH: `${fakeBin}:${process.env.PATH}`, FAKE_CODEX_STATE: stateFile };
 delete env.CODEX_SESSION_ID;

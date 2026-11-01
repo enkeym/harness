@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { installShell } from './shell-install.mjs';
 import { configDirectory, loadConfig, writeConfig } from '../opencode/config.mjs';
 import { importQwen } from '../opencode/qwen-import.mjs';
+import { contextPolicy, handoffCommand } from '../ai-hooks/bin/context-policy.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const home = os.homedir();
@@ -19,6 +20,8 @@ const check = args.includes('--check');
 const { settings, current } = loadConfig(directory);
 const desired = args.includes('--import-qwen') ? importQwen(current, directory, check) : structuredClone(current);
 desired.instructions = [...new Set([...(current.instructions ?? []), path.join(root, 'opencode/AGENTS.md'), path.join(root, 'rules/core.md')])];
+desired.commands = { ...current.commands, handoff: { description: 'Save Handoff and the remaining plan', template: handoffCommand } };
+desired.compaction = { ...current.compaction, auto: true, keep: { tokens: contextPolicy.keepTokens }, buffer: contextPolicy.maxTokens - contextPolicy.startTokens };
 desired.plugins = (current.plugins ?? []).filter(plugin => plugin !== new URL('../opencode/harness.mjs', import.meta.url).href);
 let drift = 0;
 if (!isDeepStrictEqual(current, desired) || !fs.existsSync(settings)) {

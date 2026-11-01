@@ -8,6 +8,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Accounting, acquireLease, atomicJson, readJson, hash, transition, ingestRollout, classify, redactDiagnostic } from './context-state.mjs';
+import { contextPolicy } from './context-policy.mjs';
 
 const strings = ['ack', 'latestSteering', 'constraints', 'decisions', 'changedPaths', 'verification', 'unresolved', 'nextAction', 'result'];
 export const checkpointSchema = {
@@ -34,10 +35,11 @@ export function chooseAction(state, policy) {
   if (state.turns >= policy.maxTurns || Date.now() - state.started >= policy.maxMs) return 'budget';
   if (!state.progress) return 'stalled';
   const usage = state.usage;
-  const limit = usage.contextWindow ? usage.contextWindow * policy.contextRatio : policy.contextTokens;
+  const limit = Math.min(policy.contextTokens, usage.contextWindow ? usage.contextWindow * policy.contextRatio : Infinity);
   const high = usage.context >= limit || (usage.growth > 0 && usage.context + usage.growth >= limit * 1.1);
+  if (usage.context >= contextPolicy.maxTokens) return 'handoff';
   if (!high || state.turns - state.lastMaintenance < policy.cooldownTurns) return 'continue';
-  return state.compacted ? 'manual-handoff' : 'compact';
+  return state.compacted ? 'handoff' : 'compact';
 }
 
 export function mcpEnvironmentOverrides(servers, env) {
@@ -136,7 +138,7 @@ export class AppServer {
   }
 }
 
-export const defaultPolicy = { contextRatio: 0.75, contextTokens: 120000, cooldownTurns: 2,
+export const defaultPolicy = { contextRatio: 0.75, contextTokens: contextPolicy.startTokens, cooldownTurns: 2,
   maxTurns: 12, maxMs: 30 * 60 * 1000 };
 
 export function policyFor(overrides = {}) {
@@ -175,8 +177,9 @@ export async function runObjective({ project, objective, permissions, dir, polic
     invalidate(); persist();
     client = clientFactory({ cwd: project, env: { ...process.env, HARNESS_CONTEXT_GENERATION_FILE: generationFile, HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: outputBudgetFile },
       onEvent(event) {
-        accounting.event(event);
         const p = event.params;
+        if (p?.threadId && p.threadId !== state.thread) return;
+        accounting.event(event);
         if (p?.threadId === state.thread && ['model/rerouted', 'thread/compacted'].includes(event.method)) invalidate();
         if (event.method === 'item/started' && p?.threadId === state.thread) active.add(p.item.id);
         if (event.method === 'item/completed' && p?.threadId === state.thread) {
@@ -188,15 +191,20 @@ export async function runObjective({ project, objective, permissions, dir, polic
         }
       } });
     await client.initialize(remaining());
-    const thread = await client.request('thread/start', { cwd: project }, remaining());
-    if (!thread.thread?.id) throw new Error('Missing new thread id');
-    state.thread = thread.thread.id; state.threads.push(state.thread); invalidate();
-    emit('thread-started');
-    const ack = crypto.randomUUID();
+    const startThread = async () => {
+      const thread = await client.request('thread/start', { cwd: project }, remaining());
+      if (!thread.thread?.id || state.threads.includes(thread.thread.id)) throw new Error('Missing or reused new thread id');
+      state.thread = thread.thread.id; state.threads.push(state.thread); invalidate();
+      accounting.state.context = 0; accounting.state.growth = 0; accounting.state.contextWindow = null;
+      state.compacted = false;
+      emit('thread-started');
+    };
+    await startThread();
+    let ack = crypto.randomUUID(); let transferred = false;
     while (!stopped) {
       if (Date.now() - state.started >= policy.maxMs) { emit('budget'); break; }
-      const prompt = state.turns === 0 ? `Start this authorized objective. Read project instructions.\nObjective: ${objective}\nUser permissions and constraints (never expand them): ${permissions}\n` : 'Continue from the last checkpoint and latest user steering.\n';
-      const instructions = `Work autonomously for one useful, bounded step, then return the checkpoint JSON (<=3000 characters). No subagents. Never push unless explicitly permitted. Stop all tools/tests before returning. Preserve user changes. Do not replay uncertain writes. status=completed only after objective and verification are actually finished; blocked for missing user input. unresolved lists pending/uncertain operations (empty if none). completedSteps must increase only after useful progress. Include input-specific verification, changed paths, decisions, latest steering and the next action. Keep secrets out of the checkpoint. ack must equal ${ack}.`;
+      const prompt = state.turns === 0 || transferred ? `Continue this authorized objective. Read project instructions and the handoff skill.\nObjective: ${objective}\nUser permissions and constraints (never expand them): ${permissions}\nHandoff checkpoint: ${JSON.stringify(state.checkpoint ?? null)}\nRestore the remaining plan and execute its next action without confirmation.\n` : 'Continue from the last checkpoint and latest user steering.\n';
+      const instructions = `Work autonomously for one useful, bounded step, then return the checkpoint JSON (<=3000 characters). No subagents. Never push unless explicitly permitted. Stop all tools/tests before returning. Preserve user changes. Do not replay uncertain writes. status=completed only after objective and verification are actually finished; blocked for missing user input. unresolved lists pending/uncertain operations (empty if none). completedSteps must increase only after useful progress. Include input-specific verification, changed paths, decisions, latest steering and the remaining plan in nextAction. Keep secrets out of the checkpoint. ack must equal ${ack}.`;
       finalText = ''; emit('turn-pending');
       fs.writeFileSync(outputBudgetFile, '', { mode: 0o600 });
       const result = await client.request('turn/start', { threadId: state.thread,
@@ -205,12 +213,20 @@ export async function runObjective({ project, objective, permissions, dir, polic
         Math.max(1, policy.maxMs - (Date.now() - state.started)));
       if (completed.params.turn.status !== 'completed' || active.size) throw new Error('Turn not safely completed; inspect native thread');
       const checkpoint = validateCheckpoint(JSON.parse(finalText), ack);
+      transferred = false;
       state.progress = checkpoint.completedSteps > (state.checkpoint?.completedSteps ?? 0);
       state.checkpoint = checkpoint; state.turns++;
       atomicJson(path.join(dir, 'checkpoint.json'), { v: 1, task, project, objective, permissions, thread: state.thread, checkpoint });
       emit('checkpoint');
       const action = chooseAction(state, policy);
-      if (['completed', 'blocked', 'budget', 'stalled', 'manual-handoff'].includes(action)) { emit(action); break; }
+      if (['completed', 'blocked', 'budget', 'stalled'].includes(action)) { emit(action); break; }
+      if (action === 'handoff') {
+        emit('handoff-pending');
+        await startThread();
+        ack = crypto.randomUUID(); transferred = true;
+        state.lastMaintenance = state.turns;
+        emit('handoff-started');
+      }
       if (action === 'compact') {
         emit('compaction-pending');
         await client.request('thread/compact/start', { threadId: state.thread }, remaining());
@@ -222,9 +238,6 @@ export async function runObjective({ project, objective, permissions, dir, polic
       fs.rmSync(generationFile, { force: true });
       fs.rmSync(outputBudgetFile, { force: true });
       console.log(state.checkpoint.result);
-    }
-    if (state.phase === 'manual-handoff') {
-      console.log(`Continue manually in Codex using ${path.join(dir, 'checkpoint.json')}; no new thread was started.`);
     }
     return state;
   } catch (error) {

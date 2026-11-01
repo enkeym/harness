@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { installShell } from './shell-install.mjs';
+import { syncCodexContext } from './codex-context.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const home = os.homedir();
@@ -76,6 +77,8 @@ for (const [target, relative] of links) {
 }
 
 drift += installShell(home, check);
+try { drift += await syncCodexContext({ check, cwd: home }); }
+catch { console.error('✗ Codex context policy'); drift++; }
 
 for (const command of ['node', 'codex', 'tokensave']) {
   try {

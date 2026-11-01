@@ -10,6 +10,7 @@ import { createServer } from "node:http"
 import { setTimeout } from "node:timers/promises"
 import { loadConfig, readConfig, writeConfig } from "../../opencode/config.mjs"
 import { importQwen } from "../../opencode/qwen-import.mjs"
+import { contextPolicy } from "../bin/context-policy.mjs"
 
 function sandbox(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-opencode-"))
@@ -121,6 +122,16 @@ test("OpenCode installer preserves both configs, repairs skills and imports Qwen
   assert.equal(loadConfig(directory).current.providers, undefined)
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
   assert.ok(fs.existsSync(path.join(directory, "skills/task-brief/SKILL.md")))
+  assert.ok(fs.existsSync(path.join(directory, "skills/handoff/SKILL.md")))
+  assert.match(
+    loadConfig(directory).current.commands.handoff.template,
+    /handoff skill/
+  )
+  assert.equal(loadConfig(directory).current.compaction.auto, true)
+  assert.equal(
+    loadConfig(directory).current.compaction.buffer,
+    contextPolicy.maxTokens - contextPolicy.startTokens
+  )
   assert.equal(
     fs.realpathSync(path.join(directory, "agents/ask.md")),
     path.resolve(import.meta.dirname, "../../opencode/agent/ask.md")
@@ -158,10 +169,101 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     )
   }
   const requests = []
+  let successful = false
+  let primaryCalls = 0
   const server = createServer(async (request, response) => {
     let body = ""
     for await (const chunk of request) body += chunk
-    requests.push(JSON.parse(body))
+    const input = JSON.parse(body)
+    requests.push({ ...input, fixtureURL: request.url })
+    if (successful) {
+      const primary =
+        Boolean(input.tools?.length) &&
+        !JSON.stringify(input).includes("Harness automatic Handoff.")
+      if (primary) primaryCalls++
+      const text = primary
+        ? "Fixture step completed."
+        : "## Objective\n- Handoff fixture: continue the authorized objective.\n\n## Requirements\n- Preserve permissions.\n\n## Decisions\n- Continue the remaining plan.\n\n## Work State\n### Completed\n- First step.\n### Active\n- Next step.\n### Blocked\n- (none)\n\n## Next Move\n1. Execute the next authorized step.\n\n## Relevant Files\n- (none)\n\n## Important Context\n- Local compaction fixture."
+      const usage = {
+        input_tokens: primary && primaryCalls === 1 ? 120000 : 1000,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens: 20,
+        output_tokens_details: { reasoning_tokens: 0 },
+        total_tokens: primary && primaryCalls === 1 ? 120020 : 1020
+      }
+      const part = { type: "output_text", text, annotations: [] }
+      const item = {
+        id: "msg_fixture",
+        type: "message",
+        role: "assistant",
+        status: "completed",
+        content: [part]
+      }
+      const result = {
+        id: "resp_fixture",
+        object: "response",
+        created_at: 1,
+        status: "completed",
+        model: "model",
+        output: [item],
+        usage
+      }
+      if (input.stream) {
+        response.writeHead(200, { "content-type": "text/event-stream" })
+        response.end(
+          [
+            {
+              type: "response.created",
+              response: { ...result, status: "in_progress", output: [] }
+            },
+            {
+              type: "response.output_item.added",
+              output_index: 0,
+              item: { ...item, status: "in_progress", content: [] }
+            },
+            {
+              type: "response.content_part.added",
+              output_index: 0,
+              item_id: item.id,
+              content_index: 0,
+              part: { ...part, text: "" }
+            },
+            {
+              type: "response.output_text.delta",
+              output_index: 0,
+              item_id: item.id,
+              content_index: 0,
+              delta: text
+            },
+            {
+              type: "response.output_text.done",
+              output_index: 0,
+              item_id: item.id,
+              content_index: 0,
+              text
+            },
+            {
+              type: "response.content_part.done",
+              output_index: 0,
+              item_id: item.id,
+              content_index: 0,
+              part
+            },
+            { type: "response.output_item.done", output_index: 0, item },
+            { type: "response.completed", response: result }
+          ]
+            .map(
+              (value, sequence_number) =>
+                `event: ${value.type}\ndata: ${JSON.stringify({ ...value, sequence_number })}\n\n`
+            )
+            .join("")
+        )
+      } else {
+        response.writeHead(200, { "content-type": "application/json" })
+        response.end(JSON.stringify(result))
+      }
+      return
+    }
     response.writeHead(401, { "content-type": "application/json" })
     response.end(
       JSON.stringify({
@@ -178,6 +280,11 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     path.join(config, "opencode.jsonc"),
     JSON.stringify({
       model: "fixture/model",
+      compaction: {
+        auto: true,
+        buffer: contextPolicy.maxTokens - contextPolicy.startTokens,
+        keep: { tokens: 0 }
+      },
       providers: {
         fixture: {
           package: "@ai-sdk/openai",
@@ -185,7 +292,13 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
             baseURL: `http://127.0.0.1:${server.address().port}/v1`,
             apiKey: "fixture-key"
           },
-          models: { model: { modelID: "model", settings: { api: "chat" } } }
+          models: {
+            model: {
+              modelID: "model",
+              settings: { api: "chat" },
+              limit: { context: 1000000, output: 1000 }
+            }
+          }
         }
       }
     })
@@ -233,9 +346,9 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   const authorization = `Basic ${Buffer.from(`opencode:${log.match(/server password (\S+)/)[1]}`).toString("base64")}`
   const api = async (url, body) => {
     const response = await fetch(`http://127.0.0.1:${port}/api${url}`, {
-      method: "POST",
+      method: body === undefined ? "GET" : "POST",
       headers: { authorization, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000)
     })
     assert.ok(response.ok, `${url}: ${response.status}`)
@@ -270,7 +383,77 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     assert.match(system, /tokensave_search/, agent)
     assert.match(system, /rag_search/, agent)
     assert.match(system, /outside the index/, agent)
+    const summaryStart = requests.length
+    await api(`/session/${session.data.id}/compact`, {})
+    await wait(() =>
+      requests
+        .slice(summaryStart)
+        .some((value) =>
+          JSON.stringify(value).includes("Harness automatic Handoff.")
+        )
+    )
   }
+  successful = true
+  const session = await api("/session", {
+    agent: "build",
+    title: "Automatic Handoff fixture",
+    location: { directory },
+    model: { providerID: "fixture", id: "model" }
+  })
+  await api(`/session/${session.data.id}/prompt`, {
+    text: "Initial context fixture. Continue the authorized objective."
+  })
+  const deadline = Date.now() + 15000
+  let first
+  do {
+    first = await api(`/session/${session.data.id}/context`)
+    if (
+      first.data.some(
+        (value) => value.type === "assistant" && value.time.completed
+      )
+    )
+      break
+    await setTimeout(25)
+  } while (Date.now() < deadline)
+  assert.ok(
+    first.data.some(
+      (value) => value.type === "assistant" && value.tokens?.input === 120000
+    ),
+    JSON.stringify({
+      context: first,
+      primaryCalls,
+      lastRequests: requests.slice(-3).map((value) => ({
+        keys: Object.keys(value),
+        url: value.fixtureURL,
+        stream: value.stream,
+        tools: value.tools?.length,
+        model: value.model
+      }))
+    })
+  )
+  const summaryStart = requests.length
+  await api(`/session/${session.data.id}/prompt`, {
+    text: "Execute the next authorized step."
+  })
+  try { await wait(() => primaryCalls >= 2) }
+  catch (error) { throw new Error(JSON.stringify({ primaryCalls, requests: requests.slice(summaryStart).map(value => ({ tools: value.tools?.length, handoff: JSON.stringify(value).includes("Harness automatic Handoff."), summary: JSON.stringify(value).includes("Handoff fixture"), inputTail: JSON.stringify(value.input).slice(-200) })), context: await api(`/session/${session.data.id}/context`) }), { cause: error }) }
+  const automatic = requests.slice(summaryStart)
+  assert.ok(
+    automatic.some((value) =>
+      JSON.stringify(value).includes("Harness automatic Handoff.")
+    )
+  )
+  const resumed = automatic.find(
+    (value) =>
+      value.tools?.length &&
+      !JSON.stringify(value).includes("Harness automatic Handoff.")
+  )
+  assert.match(JSON.stringify(resumed.input), /Handoff fixture/)
+  assert.match(
+    JSON.stringify(resumed.input),
+    /Execute the next authorized step/
+  )
+  assert.doesNotMatch(JSON.stringify(resumed.input), /Initial context fixture/)
 })
 
 test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
@@ -412,19 +595,48 @@ for (const extension of ["json", "jsonc"]) {
   test(`OpenCode MCP sync removes remote URLs from ${extension} when installing a local server`, (t) => {
     const directory = sandbox(t)
     const settings = path.join(directory, `opencode.${extension}`)
-    fs.writeFileSync(settings, JSON.stringify({
-      model: "user/model",
-      mcp: { servers: { tokensave: { type: "remote", url: "https://example.test/mcp", timeout: 12345 } } }
-    }))
+    fs.writeFileSync(
+      settings,
+      JSON.stringify({
+        model: "user/model",
+        mcp: {
+          servers: {
+            tokensave: {
+              type: "remote",
+              url: "https://example.test/mcp",
+              timeout: 12345
+            }
+          }
+        }
+      })
+    )
     const overlay = path.join(directory, "opencode.jsonc")
-    if (extension === "json") fs.writeFileSync(overlay, '{"instructions":["custom.md"]}')
-    const snapshot = () => Object.fromEntries(fs.readdirSync(directory).sort().map((name) => [
-      name, fs.readFileSync(path.join(directory, name), "utf8")
-    ]))
+    if (extension === "json")
+      fs.writeFileSync(overlay, '{"instructions":["custom.md"]}')
+    const snapshot = () =>
+      Object.fromEntries(
+        fs
+          .readdirSync(directory)
+          .sort()
+          .map((name) => [
+            name,
+            fs.readFileSync(path.join(directory, name), "utf8")
+          ])
+      )
     const before = snapshot()
-    const run = (...args) => spawnSync(process.execPath, [
-      path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), "--opencode", ...args
-    ], { env: { ...process.env, OPENCODE_CONFIG_DIR: directory }, encoding: "utf8" })
+    const run = (...args) =>
+      spawnSync(
+        process.execPath,
+        [
+          path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"),
+          "--opencode",
+          ...args
+        ],
+        {
+          env: { ...process.env, OPENCODE_CONFIG_DIR: directory },
+          encoding: "utf8"
+        }
+      )
 
     assert.equal(run("--check").status, 1)
     assert.deepEqual(snapshot(), before)
@@ -436,10 +648,18 @@ for (const extension of ["json", "jsonc"]) {
     assert.equal(current.mcp.servers.tokensave.type, "local")
     assert.equal(Object.hasOwn(current.mcp.servers.tokensave, "url"), false)
     assert.equal(current.mcp.servers.tokensave.timeout, 12345)
-    assert.equal(Object.hasOwn(readConfig(settings).mcp.servers.tokensave, "url"), false)
-    const backup = fs.readdirSync(directory).find((name) => name.startsWith(`opencode.${extension}.bak-`))
+    assert.equal(
+      Object.hasOwn(readConfig(settings).mcp.servers.tokensave, "url"),
+      false
+    )
+    const backup = fs
+      .readdirSync(directory)
+      .find((name) => name.startsWith(`opencode.${extension}.bak-`))
     assert.ok(backup)
-    assert.equal(fs.readFileSync(path.join(directory, backup), "utf8"), before[`opencode.${extension}`])
+    assert.equal(
+      fs.readFileSync(path.join(directory, backup), "utf8"),
+      before[`opencode.${extension}`]
+    )
     if (extension === "json") {
       assert.deepEqual(current.instructions, ["custom.md"])
       const original = JSON.parse(before["opencode.json"])
@@ -515,10 +735,16 @@ for (const type of [
     const harnessRoot = path.join(directory, "harness clone #1")
     fs.mkdirSync(path.join(harnessRoot, "opencode"), { recursive: true })
     for (const file of ["harness.js", "AGENTS.md", "package.json"]) {
-      fs.copyFileSync(path.resolve(import.meta.dirname, "../../opencode", file), path.join(harnessRoot, "opencode", file))
+      fs.copyFileSync(
+        path.resolve(import.meta.dirname, "../../opencode", file),
+        path.join(harnessRoot, "opencode", file)
+      )
     }
     for (const folder of ["ai-hooks", "rules"]) {
-      fs.symlinkSync(path.resolve(import.meta.dirname, "../..", folder), path.join(harnessRoot, folder))
+      fs.symlinkSync(
+        path.resolve(import.meta.dirname, "../..", folder),
+        path.join(harnessRoot, folder)
+      )
     }
     const project = path.join(directory, "other project $(literal)")
     fs.mkdirSync(project)
@@ -543,6 +769,7 @@ for (const type of [
       };
       await plugin.setup({
         location: { directory: process.env.TEST_PROJECT },
+        model: { transform: async callback => callback({ list: () => [] }) },
         event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT }; })() },
         session: { hook: async () => {} }
       });
