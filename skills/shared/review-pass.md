@@ -18,6 +18,23 @@ findings inside its diff by `review-standards` step 8.
    and triage: verification, reuse, impact, regression, depth, project style,
    secrets, missing controls. Every finding verified by search or by reading
    the caller — a guess is not reported.
+   - State writers, serializers and synchronizers: trace add, change and
+     remove from the caller's desired state through persistence to read-back.
+     Include inherited/default values and repeated application. Run an
+     existing focused test or a minimal reproducer for removal and the next
+     application; compare the reloaded result, not just the desired object or
+     exit code. In review-only mode, respect its no-write scope; use an
+     in-memory reproducer where necessary. An unexecuted case stays on the
+     not-checked line, even when the happy-path suite passes.
+   - Claimed restrictions or guarantees: cross-check docs/instructions,
+     effective config/permissions/guards and test assertions in a compact
+     evidence table: claim | enforced by | tested by. Follow defaults,
+     wildcards and overrides; distinguish instructions to the model from a
+     technical restriction. For each changed restriction, verify a denied
+     action or read its effective permission; successful allowed actions do
+     not prove denial. Contradictions are findings; missing runtime evidence
+     stays on the not-checked line. Neither docs nor tests alone prove the
+     contract.
 3. Code outside the scope is read only to settle a suspicion about a changed
    line — its caller, its guard, the sibling it must match. A fact one lookup
    does not settle (a config value, a TTL) is named as not checked, never

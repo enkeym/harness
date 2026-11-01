@@ -11,9 +11,12 @@ paths:
   - "codex/hooks.json"
   - "bin/qwen-install.mjs"
   - "ai-hooks/test/test-qwen.mjs"
+  - "opencode/harness.js"
+  - "ai-hooks/test/test-opencode.mjs"
 ---
 
 ## Жизненный цикл индексов
+- `session.execution.succeeded`, `session.execution.failed`, `session.execution.interrupted` — `opencode/harness.js` подписывается на поток OpenCode V2 и запускает оба sync-скрипта с `context.location.directory`; при загрузке дополнительно прогревается RAG. `ai-hooks/test/test-opencode.mjs` проверяет все события в отдельном проекте. Подмена каталога на cwd общего сервера синхронизирует чужой индекс.
 - `ai-hooks/bin/background.sh:cleanup_sync_logs` используется обоими sync hooks:
   удаляет старые `sync.log.*` по `AI_HOOKS_SYNC_LOG_RETENTION_MINUTES` (1440 минут
   по умолчанию), сохраняя свежие файлы и основной отчёт. Прерванный TokenSave sync

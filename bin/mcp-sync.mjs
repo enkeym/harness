@@ -167,6 +167,31 @@ function syncQwen() {
   }
 }
 
-if (process.argv.includes('--qwen')) syncQwen();
+async function syncOpenCode() {
+  const { loadConfig, writeConfig } = await import('../opencode/config.mjs');
+  const { settings, current } = loadConfig();
+  current.mcp ??= {};
+  current.mcp.servers ??= {};
+  let changed = false;
+  for (const [name, server] of Object.entries(servers)) {
+    const have = current.mcp.servers[name];
+    const environment = { ...(have?.environment ?? {}), ...server.env };
+    if (name === 'playwright') Object.assign(environment, playwrightEnv({ ...process.env, ...environment }));
+    const desired = { ...have, type: 'local', command: [server.command, ...server.args], environment };
+    delete desired.url;
+    if (sameJson(have, desired)) { good(name); continue; }
+    drift++;
+    if (CHECK) { warn(`${name} — требуется синхронизация OpenCode`); continue; }
+    current.mcp.servers[name] = desired;
+    changed = true;
+    good(`${name} — зарегистрирован в OpenCode`);
+  }
+  if (changed) {
+    writeConfig(settings, current);
+  }
+}
+
+if (process.argv.includes('--opencode')) await syncOpenCode();
+else if (process.argv.includes('--qwen')) syncQwen();
 else await syncCodex();
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);

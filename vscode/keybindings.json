@@ -1048,7 +1048,7 @@
     "command": "workbench.action.terminal.sendSequence",
     "args": { "text": "\u0003" },
     "when": "terminalFocus"
-  }, // Ctrl+С на русской раскладке: терминал не шлёт ETX. Далее кастомные клавиши
+  },
   {
     "key": "ctrl+l",
     "command": "runCommands",
@@ -1080,7 +1080,7 @@
         {
           "command": "workbench.action.terminal.sendSequence",
           "args": {
-            "text": "~/awg-start.sh codex\n"
+            "text": "opencode\n"
           }
         }
       ]
@@ -1090,8 +1090,24 @@
     "key": "ctrl+shift+k",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
-      "text": "~/awg-start.sh codex\n"
+      "text": "opencode\n"
     }
+  },
+  {
+    "key": "alt+p",
+    "command": "workbench.action.terminal.sendSequence",
+    "args": {
+      "text": "/model\r"
+    },
+    "when": "terminalFocus"
+  },
+  {
+    "key": "ctrl+o",
+    "command": "workbench.action.terminal.sendSequence",
+    "args": {
+      "text": "\u000f"
+    },
+    "when": "terminalFocus"
   }
   // {
   //   "key": "ctrl+shift+l",
