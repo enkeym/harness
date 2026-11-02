@@ -3,7 +3,8 @@ import { test } from "node:test"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { registerHandoff } from "../../opencode/handoff.mjs"
+import { escalateStalledSession, registerHandoff } from "../../opencode/handoff.mjs"
+import { parseHandoffRoute, resolveHandoffModel, stripHandoffRoute } from "../../opencode/model-routing.mjs"
 
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-handoff-"))
@@ -26,7 +27,7 @@ function fixture(t) {
       synthetic: async () => {}
     }
   }
-  return { context, events, created, prompts, run: () => execute({ sessionID: "source", prompt: { text: "" } }) }
+  return { context, directory, events, created, prompts, run: (text = "") => execute({ sessionID: "source", prompt: { text } }) }
 }
 
 test("Handoff reopens its continuation after repeated calls and plugin reload", async (t) => {
@@ -72,9 +73,115 @@ for (const failure of [false, true]) {
 
     assert.deepEqual(model, source.model)
     assert.equal(f.created.length, failure ? 0 : 1)
-    if (!failure) assert.equal(f.created[0].model.id, "deepseek-flash")
+    if (!failure) assert.deepEqual(f.created[0].model, source.model)
   })
 }
+
+test("Handoff route parser and model selection cover escalation rules", () => {
+  const escalated = parseHandoffRoute("## Objective\n- Fix it.\n\nHARNESS-ROUTE: progress=stalled next=investigate\n")
+  const ordinary = parseHandoffRoute("HARNESS-ROUTE: progress=advancing next=concrete")
+  assert.deepEqual(escalated, { progress: "stalled", next: "investigate" })
+  assert.deepEqual(ordinary, { progress: "advancing", next: "concrete" })
+  assert.equal(parseHandoffRoute("HARNESS-ROUTE: maybe cause=unknown leads=no next=investigate"), null)
+  assert.equal(parseHandoffRoute("HARNESS-ROUTE: pro cause=unknown"), null)
+  assert.equal(parseHandoffRoute("No marker"), null)
+  assert.equal(parseHandoffRoute("HARNESS-ROUTE: progress=maybe next=investigate"), null)
+  assert.equal(parseHandoffRoute("HARNESS-ROUTE: progress=stalled next=investigate\nQuoted example, not a final marker."), null)
+  assert.equal(stripHandoffRoute("## Objective\n- Fix it.\n\nHARNESS-ROUTE: pro cause=unknown leads=no next=investigate\n"), "## Objective\n- Fix it.")
+  const flash = { providerID: "deepseek", id: "deepseek-flash" }
+  const pro = { providerID: "deepseek", id: "deepseek-v4-pro" }
+  for (const route of [
+    { progress: "stalled", next: "concrete" },
+    escalated
+  ]) assert.equal(resolveHandoffModel(flash, route, null).id, "deepseek-v4-pro")
+  assert.equal(resolveHandoffModel(flash, ordinary, null).id, "deepseek-flash")
+  for (const route of [
+    { progress: "advancing", next: "investigate" },
+    { progress: "advancing", next: "done" },
+    { progress: "stalled", next: "done" }
+  ]) assert.equal(resolveHandoffModel(flash, route, null).id, "deepseek-flash")
+  assert.equal(resolveHandoffModel(flash, null, null).id, "deepseek-flash")
+  assert.equal(resolveHandoffModel(pro, ordinary, null).id, "deepseek-v4-pro")
+  assert.equal(resolveHandoffModel(pro, null, "flash").id, "deepseek-flash")
+  assert.equal(resolveHandoffModel(flash, ordinary, "pro").id, "deepseek-v4-pro")
+})
+
+test("Handoff escalates stalled DeepSeek investigation to Pro", async (t) => {
+  const f = fixture(t)
+  const source = await f.context.session.get()
+  f.context.session.get = async () => ({ ...source, model: { providerID: "deepseek", id: "deepseek-flash" } })
+  f.context.session.generate = async () => ({ text: "## Objective\n- Fix the bug.\n\nHARNESS-ROUTE: progress=stalled next=investigate\n" })
+  await registerHandoff(f.context)
+  await f.run()
+
+  assert.equal(f.created[0].model.id, "deepseek-v4-pro")
+  assert.doesNotMatch(f.prompts[0].text, /HARNESS-ROUTE/)
+  assert.match(fs.readFileSync(path.join(f.directory, "HANDOFF.md"), "utf8"), /Fix the bug/)
+})
+
+test("Handoff keeps Flash for an ordinary DeepSeek task and honors --route", async (t) => {
+  const f = fixture(t)
+  const source = await f.context.session.get()
+  f.context.session.get = async () => ({ ...source, model: { providerID: "deepseek", id: "deepseek-flash" } })
+  f.context.session.generate = async () => ({ text: "## Objective\n- Continue the plan.\n\nHARNESS-ROUTE: progress=advancing next=concrete\n" })
+  await registerHandoff(f.context)
+  await f.run()
+  assert.equal(f.created[0].model.id, "deepseek-flash")
+
+  const second = fixture(t)
+  second.context.session.get = async () => ({ ...source, model: { providerID: "deepseek", id: "deepseek-flash" } })
+  second.context.session.generate = async () => ({ text: "## Objective\n- Continue the plan.\n\nHARNESS-ROUTE: progress=advancing next=concrete\n" })
+  await registerHandoff(second.context)
+  await second.run("--route=pro")
+  assert.equal(second.created[0].model.id, "deepseek-v4-pro")
+})
+
+test("stalled completed Flash turns transfer once to Pro before another attempt", async (t) => {
+  const f = fixture(t)
+  f.context.location = { directory: f.directory }
+  f.context.session.get = async () => ({ location: f.context.location, agent: "build", model: { providerID: "deepseek", id: "deepseek-flash" } })
+  f.context.session.context = async () => [{ type: "assistant", time: { completed: 1 }, content: [{ type: "text", text: "Checked A and B without progress.\nHARNESS-ROUTE: progress=stalled next=investigate" }] }, { type: "idle", outcome: "succeeded" }]
+  f.context.session.generate = async () => ({ text: "Checked A and B. Continue investigation." })
+  const handoff = await registerHandoff(f.context)
+  await escalateStalledSession(f.context, "source", handoff)
+  await escalateStalledSession(f.context, "source", handoff)
+  assert.equal(f.created.length, 1)
+  assert.equal(f.created[0].model.id, "deepseek-v4-pro")
+  assert.equal(f.prompts.length, 1)
+})
+
+test("automatic escalation ignores advancing, completed, failed and unrelated sessions", async (t) => {
+  const f = fixture(t)
+  f.context.location = { directory: f.directory }
+  const source = { location: f.context.location, agent: "build", model: { providerID: "deepseek", id: "deepseek-flash" } }
+  const stalled = { type: "assistant", time: { completed: 1 }, content: [{ type: "text", text: "HARNESS-ROUTE: progress=stalled next=investigate" }] }
+  let info = source
+  let last = stalled
+  f.context.session.get = async () => info
+  f.context.session.context = async () => [last]
+  let transfers = 0
+  const handoff = async () => { transfers++ }
+  for (const patch of [
+    { parentID: "parent" }, { agent: "ask" },
+    { location: { directory: "/another-project" } },
+    { model: { providerID: "deepseek", id: "deepseek-v4-pro" } },
+    { model: { providerID: "fixture", id: "deepseek-flash" } }
+  ]) {
+    info = { ...source, ...patch }
+    await escalateStalledSession(f.context, "source", handoff)
+  }
+  info = source
+  for (const message of [
+    { ...stalled, time: {} }, { ...stalled, error: { message: "failed" } },
+    { ...stalled, type: "user" },
+    { ...stalled, content: [{ type: "text", text: "HARNESS-ROUTE: progress=advancing next=investigate" }] },
+    { ...stalled, content: [{ type: "text", text: "HARNESS-ROUTE: progress=stalled next=done" }] }
+  ]) {
+    last = message
+    await escalateStalledSession(f.context, "source", handoff)
+  }
+  assert.equal(transfers, 0)
+})
 
 test("Handoff ignores duplicate calls while generating the note", async (t) => {
   const f = fixture(t)

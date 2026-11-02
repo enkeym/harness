@@ -15,7 +15,7 @@ server display labels and client callable names are interchangeable.
 | Question | Tool |
 | --- | --- |
 | Known symbol or exact code text | TokenSave `tokensave_search`, scoped with `path_include`; text uses `literal: true` |
-| File by name | TokenSave `tokensave_files` |
+| File by name | TokenSave `tokensave_files` when exposed; otherwise scoped search or `tokensave_read` on a known path |
 | Source around a search hit | TokenSave `tokensave_read` with `file`, `mode: "lines"`, `lines: "A-B"` |
 | Unfamiliar structure | TokenSave `tokensave_context`, scoped, `include_code: false`, small `max_nodes` |
 | Callers and dependencies | TokenSave `tokensave_callers`, `tokensave_callees`, `tokensave_impact` |
@@ -42,13 +42,18 @@ server display labels and client callable names are interchangeable.
   not a missing index or permission to fall back to shell reads.
 - No index, unavailable/broken MCP, a file explicitly reported unscanned or
   excluded by the project's index configuration →
-  report once, then use `rg` and bounded shell reads for that scope. An empty
-  query alone does not authorize shell-reading an indexed file: locate it
-  with `files` and use `read`. Config paths outside the index use local tools.
+  state the failing call or coverage evidence and affected paths once, then
+  use `rg` and bounded shell reads for that scope. An empty query alone does
+  not authorize shell-reading an indexed file: try `tokensave_read` on its
+  known path, or locate it through scoped search/`files` when exposed.
+  Missing one optional tool does not disable the others. Config paths outside
+  the index use local tools. A handoff or simple task does not waive routing;
+  built-in read/grep/glob and shell scripts obey the same fallback conditions.
   Refresh existing indexes autonomously when stale or after changing coverage.
   Initial indexing is the user's choice; do not run `init` automatically.
-- No hits → broaden the query once, use RAG for synonyms, then `rg`; do not
-  repeat the same empty call. RAG proximity is not proof of an exact match.
+- No hits → broaden the query once and use RAG for synonyms; do not repeat
+  the same empty call. Use `rg` only under the evidenced fallback conditions
+  above. RAG proximity is not proof of an exact match.
 - Start RAG with 3–5 fragments and a path scope when known; expand only for
   missing evidence. Reuse fragments already read. A fresh index still may lag
   behind an edit: verify exact code in the working tree before changing it.

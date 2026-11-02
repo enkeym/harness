@@ -10,7 +10,8 @@ import { createServer } from "node:http"
 import { setTimeout } from "node:timers/promises"
 import { loadConfig, readConfig, writeConfig } from "../../opencode/config.mjs"
 import { contextPolicy } from "../bin/context-policy.mjs"
-import { configureDeepSeek } from "../../opencode/model-routing.mjs"
+import { configureDeepSeek, deepseekRouting, deepseekRoutingPro } from "../../opencode/model-routing.mjs"
+import { observationDirectory } from "../../opencode/observations.mjs"
 
 function sandbox(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-opencode-"))
@@ -21,9 +22,18 @@ function sandbox(t) {
 test("MCP sync rejects removed, unknown and conflicting client flags without writing", (t) => {
   const directory = sandbox(t)
   for (const args of [["--qwen"], ["--unknown"], ["--codex", "--opencode"]]) {
-    const result = spawnSync(process.execPath, [path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), ...args], {
-      env: { ...process.env, HOME: directory, OPENCODE_CONFIG_DIR: directory }, encoding: "utf8"
-    })
+    const result = spawnSync(
+      process.execPath,
+      [path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), ...args],
+      {
+        env: {
+          ...process.env,
+          HOME: directory,
+          OPENCODE_CONFIG_DIR: directory
+        },
+        encoding: "utf8"
+      }
+    )
     assert.equal(result.status, 2)
     assert.match(result.stderr, /Использование/)
     assert.deepEqual(fs.readdirSync(directory), [])
@@ -77,7 +87,10 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
   const directory = path.join(home, "opencode")
   fs.mkdirSync(path.join(directory, "skills"), { recursive: true })
   fs.mkdirSync(path.join(directory, "plugins"))
-  fs.symlinkSync(path.resolve(import.meta.dirname, "../../opencode/harness.js"), path.join(directory, "plugins/harness.js"))
+  fs.symlinkSync(
+    path.resolve(import.meta.dirname, "../../opencode/harness.js"),
+    path.join(directory, "plugins/harness.js")
+  )
   fs.symlinkSync("/missing/skill", path.join(directory, "skills/task-brief"))
   const alternative = path.join(directory, "opencode.json")
   const settings = path.join(directory, "opencode.jsonc")
@@ -120,7 +133,10 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
   assert.ok(fs.existsSync(path.join(directory, "skills/task-brief/SKILL.md")))
   assert.ok(fs.existsSync(path.join(directory, "skills/handoff/SKILL.md")))
   assert.equal(fs.existsSync(path.join(directory, "plugins/harness.js")), false)
-  assert.equal(fs.realpathSync(path.join(directory, "plugins/harness")), path.resolve(import.meta.dirname, "../../opencode"))
+  assert.equal(
+    fs.realpathSync(path.join(directory, "plugins/harness")),
+    path.resolve(import.meta.dirname, "../../opencode")
+  )
   assert.equal(loadConfig(directory).current.commands.handoff, undefined)
   assert.equal(loadConfig(directory).current.compaction.auto, true)
   assert.equal(
@@ -143,7 +159,14 @@ test("DeepSeek routing persists Flash execution and isolated Pro specialists wit
   const config = {
     model: "deepseek/deepseek-v4-pro",
     providers: { deepseek: { settings: { apiKey: "{file:/outside/key}" } } },
-    agents: { plan: { model: "deepseek/deepseek-v4-pro#max" }, explore: { model: "custom/model" }, "harness-review": { request: { settings: { temperature: 0.3 } }, permissions: [{ action: "edit", resource: "*", effect: "allow" }] } },
+    agents: {
+      plan: { model: "deepseek/deepseek-v4-pro#max" },
+      explore: { model: "custom/model" },
+      "harness-review": {
+        request: { settings: { temperature: 0.3 } },
+        permissions: [{ action: "edit", resource: "*", effect: "allow" }]
+      }
+    },
     commands: { custom: { template: "Preserve me" } }
   }
   configureDeepSeek(config)
@@ -154,17 +177,36 @@ test("DeepSeek routing persists Flash execution and isolated Pro specialists wit
   assert.equal(loaded.agents.compaction.model, "deepseek/deepseek-flash")
   assert.equal(loaded.agents.explore.model, "custom/model")
   assert.equal(loaded.commands.custom.template, "Preserve me")
-  assert.equal(loaded.agents["harness-review"].permissions.findLast(rule => rule.action === "edit").effect, "deny")
+  assert.equal(
+    loaded.agents["harness-review"].permissions.findLast(
+      (rule) => rule.action === "edit"
+    ).effect,
+    "deny"
+  )
   const repeated = structuredClone(loaded)
   configureDeepSeek(repeated)
   assert.deepEqual(repeated, loaded)
   delete repeated.agents["harness-review"].request
   writeConfig(settings, repeated)
   assert.deepEqual(loadConfig(directory).current, repeated)
-  const unrelated = { model: "custom/model", agents: { build: { model: "custom/model" } } }
+  const unrelated = {
+    model: "custom/model",
+    agents: { build: { model: "custom/model" } }
+  }
   const original = structuredClone(unrelated)
   configureDeepSeek(unrelated)
   assert.deepEqual(unrelated, original)
+})
+
+test("DeepSeek routing keeps temporary plans out of the root and cleans up only completed tasks", () => {
+  for (const routing of [deepseekRouting, deepseekRoutingPro]) {
+    assert.match(routing, /\.opencode\/plans\/<task-id>\.md/)
+    assert.match(routing, /unique task identifier/)
+    assert.match(routing, /Delete only this task's temporary plan after the task and its checks are complete/)
+    assert.match(routing, /Keep it while work is unfinished, blocked, or handed off/)
+    assert.match(routing, /Preserve user-owned plans/)
+    assert.doesNotMatch(routing, /otherwise PLAN\.md/)
+  }
 })
 
 test("OpenCode sends skill and search routing to custom and built-in agents", async (t) => {
@@ -185,6 +227,7 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   const requests = []
   let successful = false
   let primaryCalls = 0
+  let stallNextFlash = false
   const server = createServer(async (request, response) => {
     let body = ""
     for await (const chunk of request) body += chunk
@@ -195,9 +238,14 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
         Boolean(input.tools?.length) &&
         !JSON.stringify(input).includes("Harness automatic Handoff.")
       if (primary) primaryCalls++
-      const text = primary
-        ? "Fixture step completed."
-        : "## Objective\n- Handoff fixture: continue the authorized objective.\n\n## Requirements\n- Preserve permissions.\n\n## Decisions\n- Continue the remaining plan.\n\n## Work State\n### Completed\n- First step.\n### Active\n- Next step.\n### Blocked\n- (none)\n\n## Next Move\n1. Execute the next authorized step.\n\n## Relevant Files\n- (none)\n\n## Important Context\n- Local compaction fixture."
+      const stalled =
+        primary && input.model === "deepseek-flash" && stallNextFlash
+      if (stalled) stallNextFlash = false
+      const text = stalled
+        ? "Hypotheses A and B checked without new evidence.\nHARNESS-ROUTE: progress=stalled next=investigate"
+        : primary
+          ? "Fixture step completed."
+          : "## Objective\n- Handoff fixture: continue the authorized objective.\n\n## Requirements\n- Preserve permissions.\n\n## Decisions\n- Continue the remaining plan.\n\n## Work State\n### Completed\n- First step.\n### Active\n- Next step.\n### Blocked\n- (none)\n\n## Next Move\n1. Execute the next authorized step.\n\n## Relevant Files\n- (none)\n\n## Important Context\n- Local compaction fixture."
       const usage = {
         input_tokens: primary && primaryCalls === 1 ? 120000 : 1000,
         input_tokens_details: { cached_tokens: 0 },
@@ -306,8 +354,16 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       providers: {
         deepseek: {
           package: "@ai-sdk/openai",
-          settings: { baseURL: `http://127.0.0.1:${server.address().port}/v1`, apiKey: "fixture-key" },
-          models: Object.fromEntries(["deepseek-flash", "deepseek-v4-pro"].map(modelID => [modelID, { modelID, limit: { context: 1000000, output: 1000 } }]))
+          settings: {
+            baseURL: `http://127.0.0.1:${server.address().port}/v1`,
+            apiKey: "fixture-key"
+          },
+          models: Object.fromEntries(
+            ["deepseek-flash", "deepseek-v4-pro"].map((modelID) => [
+              modelID,
+              { modelID, limit: { context: 1000000, output: 1000 } }
+            ])
+          )
         },
         fixture: {
           package: "@ai-sdk/openai",
@@ -406,6 +462,17 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     assert.match(system, /tokensave_search/, agent)
     assert.match(system, /rag_search/, agent)
     assert.match(system, /outside the index/, agent)
+    assert.match(
+      system,
+      /Before a fallback, state the specific failing MCP call/,
+      agent
+    )
+    assert.match(
+      system,
+      /A missing optional tool does not make the other MCP tools unavailable/,
+      agent
+    )
+    assert.match(system, /handoff, continuation, simple task/, agent)
     const summaryStart = requests.length
     await api(`/session/${session.data.id}/compact`, {})
     await wait(() =>
@@ -454,12 +521,38 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       }))
     })
   )
+  const observationFile = path.join(
+    observationDirectory(directory, path.join(directory, "state")),
+    "sessions",
+    `${session.data.id}.json`
+  )
+  await wait(() => fs.existsSync(observationFile))
+  const observation = JSON.parse(fs.readFileSync(observationFile, "utf8"))
+  assert.equal(observation.sessionID, session.data.id)
+  assert.equal(observation.delegation.childrenComplete, true)
+  assert.ok(observation.sequence.some((step) => step.tokens?.input === 120000))
+  assert.equal(observation.money.validatedUSD, null)
   const summaryStart = requests.length
   await api(`/session/${session.data.id}/prompt`, {
     text: "Execute the next authorized step."
   })
-  try { await wait(() => primaryCalls >= 2) }
-  catch (error) { throw new Error(JSON.stringify({ primaryCalls, requests: requests.slice(summaryStart).map(value => ({ tools: value.tools?.length, handoff: JSON.stringify(value).includes("Harness automatic Handoff."), summary: JSON.stringify(value).includes("Handoff fixture"), inputTail: JSON.stringify(value.input).slice(-200) })), context: await api(`/session/${session.data.id}/context`) }), { cause: error }) }
+  try {
+    await wait(() => primaryCalls >= 2)
+  } catch (error) {
+    throw new Error(
+      JSON.stringify({
+        primaryCalls,
+        requests: requests.slice(summaryStart).map((value) => ({
+          tools: value.tools?.length,
+          handoff: JSON.stringify(value).includes("Harness automatic Handoff."),
+          summary: JSON.stringify(value).includes("Handoff fixture"),
+          inputTail: JSON.stringify(value.input).slice(-200)
+        })),
+        context: await api(`/session/${session.data.id}/context`)
+      }),
+      { cause: error }
+    )
+  }
   const automatic = requests.slice(summaryStart)
   assert.ok(
     automatic.some((value) =>
@@ -480,65 +573,221 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   const manualStart = requests.length
   const eventsAbort = new AbortController()
   t.after(() => eventsAbort.abort())
-  const eventResponse = await fetch(`http://127.0.0.1:${port}/api/event?types=rpc.harness.handoff.changed`, {
-    headers: { authorization }, signal: eventsAbort.signal
-  })
+  const eventResponse = await fetch(
+    `http://127.0.0.1:${port}/api/event?types=rpc.harness.handoff.changed`,
+    {
+      headers: { authorization },
+      signal: eventsAbort.signal
+    }
+  )
   assert.ok(eventResponse.ok)
   let events = ""
   const eventTask = (async () => {
-    for await (const chunk of eventResponse.body) events += Buffer.from(chunk).toString()
-  })().catch((error) => { if (!eventsAbort.signal.aborted) throw error })
-  await api(`/session/${session.data.id}/command`, { name: "handoff", text: "" })
-  const sessions = await api(`/session?directory=${encodeURIComponent(directory)}`)
-  const target = sessions.data.find((value) => value.title === "Handoff: Automatic Handoff fixture")
+    for await (const chunk of eventResponse.body)
+      events += Buffer.from(chunk).toString()
+  })().catch((error) => {
+    if (!eventsAbort.signal.aborted) throw error
+  })
+  await api(`/session/${session.data.id}/command`, {
+    name: "handoff",
+    text: ""
+  })
+  const sessions = await api(
+    `/session?directory=${encodeURIComponent(directory)}`
+  )
+  const target = sessions.data.find(
+    (value) => value.title === "Handoff: Automatic Handoff fixture"
+  )
   assert.ok(target)
   assert.notEqual(target.id, session.data.id)
   assert.equal(target.parentID, undefined)
   assert.deepEqual(target.model, session.data.model)
   assert.equal(target.agent, session.data.agent)
+  await wait(
+    () =>
+      JSON.parse(fs.readFileSync(observationFile, "utf8")).handoff?.targetID ===
+      target.id
+  )
   await wait(() => events.includes('"status":"ready"'))
   assert.match(events, /"status":"preparing"/)
   assert.ok(events.includes(target.id))
-  await api(`/session/${session.data.id}/command`, { name: "handoff", text: "" })
-  const repeated = await api(`/session?directory=${encodeURIComponent(directory)}`)
-  assert.equal(repeated.data.filter((value) => value.title === target.title).length, 1)
+  await api(`/session/${session.data.id}/command`, {
+    name: "handoff",
+    text: ""
+  })
+  const repeated = await api(
+    `/session?directory=${encodeURIComponent(directory)}`
+  )
+  assert.equal(
+    repeated.data.filter((value) => value.title === target.title).length,
+    1
+  )
   eventsAbort.abort()
   await eventTask
-  await wait(() => requests.slice(manualStart).some((value) => JSON.stringify(value.input).includes("Continue the next authorized step")))
-  const continued = requests.slice(manualStart).find((value) => JSON.stringify(value.input).includes("Continue the next authorized step"))
-  assert.match(JSON.stringify(continued.input), /Continue the next authorized step/)
+  await wait(() =>
+    requests
+      .slice(manualStart)
+      .some((value) =>
+        JSON.stringify(value.input).includes(
+          "Continue the next authorized step"
+        )
+      )
+  )
+  const continued = requests
+    .slice(manualStart)
+    .find((value) =>
+      JSON.stringify(value.input).includes("Continue the next authorized step")
+    )
+  assert.match(
+    JSON.stringify(continued.input),
+    /Continue the next authorized step/
+  )
   assert.match(JSON.stringify(continued.input), /Handoff fixture/)
-  assert.doesNotMatch(JSON.stringify(continued.input), /Initial context fixture/)
-  assert.match(fs.readFileSync(path.join(directory, "HANDOFF.md"), "utf8"), /Handoff fixture/)
+  assert.doesNotMatch(
+    JSON.stringify(continued.input),
+    /Initial context fixture/
+  )
+  assert.match(
+    fs.readFileSync(path.join(directory, "HANDOFF.md"), "utf8"),
+    /Handoff fixture/
+  )
   await api(`/experimental/session/${target.id}/wait`, {})
   const targetContext = await api(`/session/${target.id}/context`)
-  assert.ok(targetContext.data.some((value) => value.type === "assistant" && value.time.completed))
+  assert.ok(
+    targetContext.data.some(
+      (value) => value.type === "assistant" && value.time.completed
+    )
+  )
   const deepseekSession = await api("/session", {
-    agent: "build", title: "DeepSeek routing fixture", location: { directory },
+    agent: "build",
+    title: "DeepSeek routing fixture",
+    location: { directory },
     model: { providerID: "deepseek", id: "deepseek-flash" }
   })
   const deepseekID = deepseekSession.data.id
-  await api(`/session/${deepseekID}/prompt`, { text: "PRIVATE_PARENT_HISTORY: implement the accepted plan." })
+  await api(`/session/${deepseekID}/prompt`, {
+    text: "PRIVATE_PARENT_HISTORY: implement the accepted plan."
+  })
   await api(`/experimental/session/${deepseekID}/wait`, {})
-  const flashRequest = requests.find(value => value.model === "deepseek-flash" && JSON.stringify(value.input).includes("PRIVATE_PARENT_HISTORY"))
+  const flashRequest = requests.find(
+    (value) =>
+      value.model === "deepseek-flash" &&
+      JSON.stringify(value.input).includes("PRIVATE_PARENT_HISTORY")
+  )
   assert.ok(flashRequest)
   assert.match(JSON.stringify(flashRequest), /DeepSeek model routing/)
   for (const name of ["harness-brief", "harness-plan", "harness-review"]) {
     const start = requests.length
-    await api(`/session/${deepseekID}/command`, { name, text: `Inspect ${name} scoped task.` })
+    await api(`/session/${deepseekID}/command`, {
+      name,
+      text: `Inspect ${name} scoped task.`
+    })
     await api(`/experimental/session/${deepseekID}/wait`, {})
-    const pro = requests.slice(start).find(value => value.model === "deepseek-v4-pro")
-    assert.ok(pro, `${name}: ${JSON.stringify(requests.slice(start).map(value => ({ model: value.model, input: value.input })))}`)
+    const pro = requests
+      .slice(start)
+      .find((value) => value.model === "deepseek-v4-pro")
+    assert.ok(
+      pro,
+      `${name}: ${JSON.stringify(requests.slice(start).map((value) => ({ model: value.model, input: value.input })))}`
+    )
     assert.match(JSON.stringify(pro.input), /scoped task/)
     assert.doesNotMatch(JSON.stringify(pro.input), /PRIVATE_PARENT_HISTORY/)
   }
+  const delegatedFile = path.join(
+    observationDirectory(directory, path.join(directory, "state")),
+    "sessions",
+    `${deepseekID}.json`
+  )
+  await wait(
+    () =>
+      fs.existsSync(delegatedFile) &&
+      JSON.parse(fs.readFileSync(delegatedFile, "utf8")).delegation.childIDs
+        .length === 3
+  )
+  const delegated = JSON.parse(fs.readFileSync(delegatedFile, "utf8"))
+  assert.equal(delegated.delegation.childrenComplete, true)
+  for (const childID of delegated.delegation.childIDs) {
+    const childRecord = JSON.parse(
+      fs.readFileSync(
+        path.join(path.dirname(delegatedFile), `${childID}.json`),
+        "utf8"
+      )
+    )
+    assert.equal(childRecord.parentID, deepseekID)
+    assert.ok(
+      childRecord.sequence.some((step) => step.model?.id === "deepseek-v4-pro")
+    )
+  }
   const handoffStart = requests.length
   await api(`/session/${deepseekID}/command`, { name: "handoff", text: "" })
-  const flashHandoff = requests.slice(handoffStart).find(value => JSON.stringify(value).includes("Harness automatic Handoff."))
+  const flashHandoff = requests
+    .slice(handoffStart)
+    .find((value) =>
+      JSON.stringify(value).includes("Harness automatic Handoff.")
+    )
   assert.equal(flashHandoff?.model, "deepseek-flash")
-  await wait(() => requests.slice(handoffStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value.input).includes("Continue the next authorized step")))
+  await wait(() =>
+    requests
+      .slice(handoffStart)
+      .some(
+        (value) =>
+          value.model === "deepseek-flash" &&
+          JSON.stringify(value.input).includes(
+            "Continue the next authorized step"
+          )
+      )
+  )
   const sourceAfter = await api(`/session/${deepseekID}`)
   assert.equal(sourceAfter.data.model.id, "deepseek-flash")
+  const stalledSession = await api("/session", {
+    agent: "build",
+    title: "Stalled investigation",
+    location: { directory },
+    model: { providerID: "deepseek", id: "deepseek-flash" }
+  })
+  const stalledID = stalledSession.data.id
+  stallNextFlash = true
+  const escalationStart = requests.length
+  await api(`/session/${stalledID}/prompt`, {
+    text: "Investigate the unresolved fixture."
+  })
+  let continuation
+  const escalationDeadline = Date.now() + 15000
+  while (!continuation && Date.now() < escalationDeadline) {
+    const list = await api(
+      `/session?directory=${encodeURIComponent(directory)}`
+    )
+    continuation = list.data.find(
+      (value) => value.title === "Handoff: Stalled investigation"
+    )
+    if (!continuation) await setTimeout(25)
+  }
+  assert.ok(
+    continuation,
+    log.replace(/server password \S+/g, "server password [redacted]")
+  )
+  assert.equal(continuation.model.id, "deepseek-v4-pro")
+  await wait(() =>
+    requests
+      .slice(escalationStart)
+      .some(
+        (value) =>
+          value.model === "deepseek-v4-pro" &&
+          JSON.stringify(value.input).includes(
+            "Continue the next authorized step"
+          )
+      )
+  )
+  assert.ok(
+    requests
+      .slice(escalationStart)
+      .some((value) =>
+        JSON.stringify(value).includes(
+          "After two consecutive cycles without progress"
+        )
+      )
+  )
+  await api(`/experimental/session/${continuation.id}/wait`, {})
 })
 
 test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
@@ -767,7 +1016,15 @@ for (const type of [
     const directory = sandbox(t)
     const harnessRoot = path.join(directory, "harness clone #1")
     fs.mkdirSync(path.join(harnessRoot, "opencode"), { recursive: true })
-    for (const file of ["harness.js", "handoff.mjs", "handoff-rpc.mjs", "model-routing.mjs", "AGENTS.md", "package.json"]) {
+    for (const file of [
+      "harness.js",
+      "handoff.mjs",
+      "handoff-rpc.mjs",
+      "model-routing.mjs",
+      "observations.mjs",
+      "AGENTS.md",
+      "package.json"
+    ]) {
       fs.copyFileSync(
         path.resolve(import.meta.dirname, "../../opencode", file),
         path.join(harnessRoot, "opencode", file)
@@ -802,11 +1059,12 @@ for (const type of [
       };
       await plugin.setup({
         location: { directory: process.env.TEST_PROJECT },
+        app: { version: "2.2.5" },
         command: { transform: async () => {} },
         rpc: { register: async () => ({}) },
         model: { transform: async callback => callback({ list: () => [] }) },
-        event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT }; })() },
-        session: { hook: async () => {} }
+        event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT, data: { sessionID: "ses_fixture" } }; })() },
+        session: { hook: async () => {}, get: async () => ({ location: { directory: "/different-project" } }) }
       });
       await wait(5);
       await setTimeout(100);
