@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { collectObservations, summarizeSession, observationDirectory } from "../../opencode/observations.mjs"
+import { collectObservations, summarizeSession, observationDirectory, requestObservation } from "../../opencode/observations.mjs"
 
 const tokens = (input = 10) => ({ input, output: 2, reasoning: 3, cache: { read: 5, write: 0 } })
 const info = (id = "ses_root") => ({ id, location: { directory: "/project" }, time: { created: 1, updated: 10 }, cost: 0, tokens: tokens(12), outcome: "succeeded" })
@@ -34,6 +34,32 @@ test("observations reject unsupported schemas and duplicate messages instead of 
   assert.throws(() => summarizeSession({ info: info(), messages: [partial] }, "2.2.5"), /tokens/)
 })
 
+test("observations allocate compaction usage and leave unexplained native usage separate", () => {
+  const auxiliary = { ...message("msg_compaction"), type: "compaction", status: "succeeded", reason: "context", summary: "private summary" }
+  const record = summarizeSession({ info: { ...info(), tokens: tokens(25) }, messages: [message(), auxiliary] }, "2.2.5")
+
+  assert.equal(record.accounting.messageSum.tokens.input, 10)
+  assert.equal(record.accounting.auxiliarySum.tokens.input, 10)
+  assert.equal(record.accounting.observedSum.tokens.input, 20)
+  assert.equal(record.accounting.residual.tokens.input, 5)
+  assert.equal(record.sequence[1].status, "succeeded")
+  assert.ok(record.gaps.includes("unallocated-native-usage"))
+  assert.doesNotMatch(JSON.stringify(record), /private summary|secret output/)
+})
+
+test("native observation requests shrink malformed pages without swallowing command errors", async () => {
+  const run = async (command, args) => {
+    const limit = args.find(value => value.startsWith("limit="))
+    return { stdout: limit === "limit=1" ? '{"data":[{"id":"last"}],"cursor":{}}' : '{"data":[' }
+  }
+
+  const page = await requestObservation(run, "session.message.list", { sessionID: "ses_root", limit: 100, cursor: "previous" })
+  assert.equal(page.data[0].id, "last")
+  assert.deepEqual(page.cursor, {})
+  await assert.rejects(requestObservation(async () => { throw new Error("permission denied") }, "session.message.list", { limit: 100 }), /permission denied/)
+  await assert.rejects(requestObservation(async () => ({ stdout: "{" }), "session.message.list", { limit: 1 }), SyntaxError)
+})
+
 test("collector paginates children and messages, upserts private records and preserves assessment", async (t) => {
   const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-observations-"))
   t.after(() => fs.rm(state, { recursive: true, force: true }))
@@ -57,11 +83,22 @@ test("collector paginates children and messages, upserts private records and pre
   assert.equal(record.sequence.length, 2)
   assert.equal(record.accounting.familyTotal, null)
   record.assessment.accepted = true
+  record.handoff = { targetID: "ses_next", targetIDs: ["ses_next"], submitted: true }
   await fs.writeFile(rootPath, JSON.stringify(record))
-  await collectObservations(api, "ses_root", { stateDirectory: state })
+  const refreshed = await collectObservations(api, "ses_root", { stateDirectory: state })
+  assert.equal(refreshed.length, 3)
+  assert.ok(refreshed.some(file => file.endsWith("ses_next.json")))
+  assert.equal(JSON.parse(await fs.readFile(rootPath)).handoff.targetID, "ses_next")
   assert.equal(JSON.parse(await fs.readFile(rootPath)).assessment.accepted, true)
   assert.equal((await fs.stat(rootPath)).mode & 0o777, 0o600)
   assert.equal((await fs.stat(path.dirname(rootPath))).mode & 0o777, 0o700)
+  api.handoff = async id => id === "ses_root" ? { targetID: "ses_latest", targetIDs: ["ses_latest"], submitted: true } : null
+
+  await collectObservations(api, "ses_root", { stateDirectory: state })
+
+  const bounded = JSON.parse(await fs.readFile(rootPath))
+  assert.deepEqual(bounded.handoff.targetIDs, ["ses_next", "ses_latest"])
+  assert.equal(bounded.handoff.targetID, "ses_latest")
 })
 
 test("collector does not certify missing children or cyclic pagination", async (t) => {

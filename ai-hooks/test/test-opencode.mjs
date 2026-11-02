@@ -10,12 +10,15 @@ import { createServer } from "node:http"
 import { setTimeout } from "node:timers/promises"
 import { loadConfig, readConfig, writeConfig } from "../../opencode/config.mjs"
 import { contextPolicy } from "../bin/context-policy.mjs"
-import { configureDeepSeek, deepseekRouting, deepseekRoutingPro } from "../../opencode/model-routing.mjs"
+import { configureModelRouting } from "../../opencode/model-routing.mjs"
 import { observationDirectory } from "../../opencode/observations.mjs"
 
-function sandbox(t) {
+function sandbox(t, beforeCleanup = async () => {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-opencode-"))
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  t.after(async () => {
+    await beforeCleanup()
+    fs.rmSync(directory, { recursive: true, force: true })
+  })
   return directory
 }
 
@@ -130,6 +133,8 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
   assert.equal(loadConfig(directory).current.model, "user/model")
   assert.equal(loadConfig(directory).current.providers, undefined)
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
+  assert.ok(!loadConfig(directory).current.instructions.some(value => /(?:rules\/core|opencode\/AGENTS)\.md$/.test(value)))
+  assert.equal(loadConfig(directory).current.experimental.background_compaction, false)
   assert.ok(fs.existsSync(path.join(directory, "skills/task-brief/SKILL.md")))
   assert.ok(fs.existsSync(path.join(directory, "skills/handoff/SKILL.md")))
   assert.equal(fs.existsSync(path.join(directory, "plugins/harness.js")), false)
@@ -153,93 +158,96 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
   assert.equal(fs.readFileSync(alternative, "utf8"), '{"model":"user/model"}')
 })
 
-test("DeepSeek routing persists Flash execution and isolated Pro specialists without changing other providers", (t) => {
+test("model routing removes legacy overrides and preserves user configuration", (t) => {
   const directory = sandbox(t)
   const settings = path.join(directory, "opencode.jsonc")
   const config = {
-    model: "deepseek/deepseek-v4-pro",
-    providers: { deepseek: { settings: { apiKey: "{file:/outside/key}" } } },
+    model: "deepseek/deepseek-v4-pro#max",
     agents: {
-      plan: { model: "deepseek/deepseek-v4-pro#max" },
+      plan: { model: "deepseek/deepseek-flash#high", description: "Preserve me" },
       explore: { model: "custom/model" },
-      "harness-review": {
-        request: { settings: { temperature: 0.3 } },
-        permissions: [{ action: "edit", resource: "*", effect: "allow" }]
-      }
+      compaction: { model: { providerID: "deepseek", id: "deepseek-flash" } },
+      "harness-review": { model: "deepseek/deepseek-v4-pro" },
+      custom: { model: "deepseek/deepseek-v4-pro#max" }
     },
-    commands: { custom: { template: "Preserve me" } }
+    commands: { "harness-review": { agent: "harness-review" }, custom: { template: "Preserve me" } }
   }
-  configureDeepSeek(config)
+  configureModelRouting(config)
   writeConfig(settings, config)
   const loaded = loadConfig(directory).current
-  assert.equal(loaded.model, "deepseek/deepseek-flash")
-  assert.equal(loaded.agents.plan.model, "deepseek/deepseek-flash#max")
-  assert.equal(loaded.agents.compaction.model, "deepseek/deepseek-flash")
+  assert.equal(loaded.model, "deepseek/deepseek-v4-pro#max")
+  assert.equal(loaded.agents.plan.model, undefined)
+  assert.equal(loaded.agents.plan.description, "Preserve me")
+  assert.equal(loaded.agents.compaction.model, undefined)
   assert.equal(loaded.agents.explore.model, "custom/model")
+  assert.equal(loaded.agents.custom.model, "deepseek/deepseek-v4-pro#max")
+  assert.equal(loaded.agents["harness-review"], undefined)
+  assert.equal(loaded.commands["harness-review"], undefined)
   assert.equal(loaded.commands.custom.template, "Preserve me")
-  assert.equal(loaded.agents["harness-review"].model, "deepseek/deepseek-v4-pro")
-  assert.equal(loaded.agents["harness-review-flash"].model, "deepseek/deepseek-flash")
-  assert.equal(loaded.commands["harness-review-flash"].agent, "harness-review-flash")
-  assert.equal(loaded.commands["harness-review-flash"].subagent, true)
-  for (const name of ["harness-review", "harness-review-flash"]) {
-    for (const action of ["edit", "subagent"]) {
-      assert.equal(loaded.agents[name].permissions.findLast(rule => rule.action === action).effect, "deny")
-    }
-    assert.match(loaded.agents[name].system, /review_worker: true/)
-    assert.match(loaded.agents[name].system, /exactly one pinned MR/)
-  }
-  assert.equal(
-    loaded.agents["harness-review"].permissions.findLast(
-      (rule) => rule.action === "edit"
-    ).effect,
-    "deny"
-  )
   const repeated = structuredClone(loaded)
-  configureDeepSeek(repeated)
+  configureModelRouting(repeated)
   assert.deepEqual(repeated, loaded)
-  delete repeated.agents["harness-review"].request
-  writeConfig(settings, repeated)
-  assert.deepEqual(loadConfig(directory).current, repeated)
-  const unrelated = {
-    model: "custom/model",
-    agents: { build: { model: "custom/model" } }
-  }
-  const original = structuredClone(unrelated)
-  configureDeepSeek(unrelated)
-  assert.deepEqual(unrelated, original)
-})
-
-test("DeepSeek routing keeps temporary plans out of the root and cleans up only completed tasks", () => {
-  for (const routing of [deepseekRouting, deepseekRoutingPro]) {
-    assert.match(routing, /\.opencode\/plans\/<task-id>\.md/)
-    assert.match(routing, /unique task identifier/)
-    assert.match(routing, /Delete only this task's temporary plan after the task and its checks are complete/)
-    assert.match(routing, /Keep it while work is unfinished, blocked, or handed off/)
-    assert.match(routing, /Preserve user-owned plans/)
-    assert.doesNotMatch(routing, /otherwise PLAN\.md/)
-  }
+  repeated.agents.plan.model = "deepseek/deepseek-v4-pro#max"
+  configureModelRouting(repeated)
+  assert.equal(repeated.agents.plan.model, "deepseek/deepseek-v4-pro#max")
+  const empty = {}
+  configureModelRouting(empty)
+  assert.deepEqual(empty, {})
+  const other = { model: "custom/model", agents: { build: { model: "custom/model" }, "harness-plan": {} } }
+  configureModelRouting(other)
+  assert.equal(other.model, "custom/model")
+  assert.equal(other.agents.build.model, "custom/model")
+  assert.equal(other.agents["harness-plan"], undefined)
 })
 
 test("OpenCode sends skill and search routing to custom and built-in agents", async (t) => {
-  const directory = sandbox(t)
+  let child
+  let server
+  const directory = sandbox(t, async () => {
+    if (child && child.exitCode === null) {
+      const exit = new Promise(resolve => child.once("exit", resolve))
+      child.kill()
+      await exit
+    }
+    server?.closeAllConnections()
+    if (server?.listening) await new Promise(resolve => server.close(resolve))
+  })
   const config = path.join(directory, "config")
   for (const name of ["agents", "plugins"]) {
     fs.mkdirSync(path.join(config, name), { recursive: true })
   }
   for (const [target, source] of [
-    ["agents/ask.md", "opencode/agent/ask.md"],
-    ["plugins/harness", "opencode"]
+    ["agents/ask.md", "opencode/agent/ask.md"]
   ]) {
     fs.symlinkSync(
       path.resolve(import.meta.dirname, "../..", source),
       path.join(config, target)
     )
   }
+  const fixturePlugin = path.join(config, "plugins/harness")
+  fs.mkdirSync(fixturePlugin)
+  fs.writeFileSync(path.join(fixturePlugin, "package.json"), JSON.stringify({ name: "harness-fixture", type: "module", exports: { "./server": "./server.mjs" } }))
+  const duplicateRead = `file: fixture.mjs\nmode: lines\ndigest: ${"a".repeat(64)}\n\n${"CACHE_EVIDENCE_BODY\n".repeat(60)}`
+  fs.writeFileSync(path.join(fixturePlugin, "server.mjs"), `
+import harness from ${JSON.stringify(pathToFileURL(path.resolve(import.meta.dirname, "../../opencode/harness.js")).href)}
+export default { id: "harness", setup: async context => {
+  await context.session.hook("context", event => {
+    if (!JSON.stringify(event.messages).includes("CACHE_PROJECTION_FIXTURE")) return
+    event.system.push({ type: "text", text: "Harness skill instructions:\\nSTALE_INSTRUCTION_FIXTURE" }, { type: "text", text: "DeepSeek model routing: STALE_ROUTING_FIXTURE" })
+    const text = ${JSON.stringify(duplicateRead)}
+    event.messages.unshift(...["read-first", "read-second"].flatMap(id => [
+      { role: "assistant", content: [{ type: "tool-call", id, name: "execute", input: {} }] },
+      { role: "tool", content: [{ type: "tool-result", id, name: "execute", result: { type: "text", value: text } }] }
+    ]))
+  })
+  return harness.setup(context)
+} }
+`)
   const requests = []
   let successful = false
   let primaryCalls = 0
   let stallNextFlash = false
-  const server = createServer(async (request, response) => {
+  server = createServer(async (request, response) => {
     let body = ""
     for await (const chunk of request) body += chunk
     const input = JSON.parse(body)
@@ -348,9 +356,8 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     )
   })
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
-  t.after(() => new Promise((resolve) => server.close(resolve)))
   const routing = { model: "deepseek/deepseek-flash" }
-  configureDeepSeek(routing)
+  configureModelRouting(routing)
   fs.writeFileSync(
     path.join(config, "opencode.jsonc"),
     JSON.stringify({
@@ -397,7 +404,7 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   await new Promise((resolve) => reservation.listen(0, "127.0.0.1", resolve))
   const port = reservation.address().port
   await new Promise((resolve) => reservation.close(resolve))
-  const child = spawn(
+  child = spawn(
     "opencode",
     ["serve", "--hostname", "127.0.0.1", "--port", String(port)],
     {
@@ -412,12 +419,6 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       stdio: ["ignore", "pipe", "pipe"]
     }
   )
-  t.after(async () => {
-    if (child.exitCode !== null) return
-    const exit = new Promise((resolve) => child.once("exit", resolve))
-    child.kill()
-    await exit
-  })
   let log = ""
   for (const stream of [child.stdout, child.stderr])
     stream.on("data", (chunk) => {
@@ -434,14 +435,14 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   }
   await wait(() => /server password \S+/.test(log))
   const authorization = `Basic ${Buffer.from(`opencode:${log.match(/server password (\S+)/)[1]}`).toString("base64")}`
-  const api = async (url, body) => {
+  const api = async (url, body, method = body === undefined ? "GET" : "POST") => {
     const response = await fetch(`http://127.0.0.1:${port}/api${url}`, {
-      method: body === undefined ? "GET" : "POST",
+      method,
       headers: { authorization, "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000)
     })
-    assert.ok(response.ok, `${url}: ${response.status}`)
+    assert.ok(response.ok, response.ok ? url : `${url}: ${response.status}: ${await response.text()}`)
     return response.status === 204 ? undefined : response.json()
   }
   for (const agent of ["ask", "build", "plan"]) {
@@ -469,6 +470,9 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       )
       .join("\n")
     assert.match(system, /Harness skill instructions:/, agent)
+    assert.equal(system.split("# Working rules").length - 1, primary.length, agent)
+    assert.equal(system.split("# OpenCode harness").length - 1, primary.length, agent)
+    assert.match(system, /Never add or rewrite code\/documentation comments/, agent)
     assert.match(system, /Read applicable SKILL.md/, agent)
     assert.match(system, /tokensave_search/, agent)
     assert.match(system, /rag_search/, agent)
@@ -633,6 +637,7 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     repeated.data.filter((value) => value.title === target.title).length,
     1
   )
+  assert.equal(requests.slice(manualStart).filter(value => JSON.stringify(value).includes("Harness automatic Handoff.")).length, 1)
   eventsAbort.abort()
   await eventTask
   await wait(() =>
@@ -669,6 +674,24 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       (value) => value.type === "assistant" && value.time.completed
     )
   )
+  await api(`/session/${target.id}`, undefined, "DELETE")
+  await api(`/session/${session.data.id}/command`, { name: "handoff", text: "" })
+  const recreated = await api(`/session?directory=${encodeURIComponent(directory)}`)
+  const replacement = recreated.data.find(value => value.title === target.title)
+  assert.ok(replacement)
+  assert.notEqual(replacement.id, target.id)
+  assert.equal(requests.slice(manualStart).filter(value => JSON.stringify(value).includes("Harness automatic Handoff.")).length, 2)
+  await api(`/experimental/session/${replacement.id}/wait`, {})
+  const projectionSession = await api("/session", { agent: "build", location: { directory }, model: { providerID: "fixture", id: "model" } })
+  const projectionStart = requests.length
+  await api(`/session/${projectionSession.data.id}/prompt`, { text: "CACHE_PROJECTION_FIXTURE: reply OK." })
+  await api(`/experimental/session/${projectionSession.data.id}/wait`, {})
+  const projection = requests.slice(projectionStart).find(value => value.tools?.length && JSON.stringify(value).includes("CACHE_PROJECTION_FIXTURE"))
+  assert.ok(projection)
+  assert.equal(JSON.stringify(projection).split("CACHE_EVIDENCE_BODY").length - 1, 60)
+  assert.match(JSON.stringify(projection), /identical read result retained in tool call read-first/)
+  assert.doesNotMatch(JSON.stringify(projection), /STALE_INSTRUCTION_FIXTURE|STALE_ROUTING_FIXTURE/)
+  assert.equal(JSON.stringify(projection).split("# Working rules").length - 1, 1)
   const deepseekSession = await api("/session", {
     agent: "build",
     title: "DeepSeek routing fixture",
@@ -686,49 +709,8 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       JSON.stringify(value.input).includes("PRIVATE_PARENT_HISTORY")
   )
   assert.ok(flashRequest)
-  assert.match(JSON.stringify(flashRequest), /DeepSeek model routing/)
-  for (const name of ["harness-brief", "harness-plan", "harness-review"]) {
-    const start = requests.length
-    await api(`/session/${deepseekID}/command`, {
-      name,
-      text: `Inspect ${name} scoped task.`
-    })
-    await api(`/experimental/session/${deepseekID}/wait`, {})
-    const pro = requests
-      .slice(start)
-      .find((value) => value.model === "deepseek-v4-pro")
-    assert.ok(
-      pro,
-      `${name}: ${JSON.stringify(requests.slice(start).map((value) => ({ model: value.model, input: value.input })))}`
-    )
-    assert.match(JSON.stringify(pro.input), /scoped task/)
-    assert.doesNotMatch(JSON.stringify(pro.input), /PRIVATE_PARENT_HISTORY/)
-  }
-  const delegatedFile = path.join(
-    observationDirectory(directory, path.join(directory, "state")),
-    "sessions",
-    `${deepseekID}.json`
-  )
-  await wait(
-    () =>
-      fs.existsSync(delegatedFile) &&
-      JSON.parse(fs.readFileSync(delegatedFile, "utf8")).delegation.childIDs
-        .length === 3
-  )
-  const delegated = JSON.parse(fs.readFileSync(delegatedFile, "utf8"))
-  assert.equal(delegated.delegation.childrenComplete, true)
-  for (const childID of delegated.delegation.childIDs) {
-    const childRecord = JSON.parse(
-      fs.readFileSync(
-        path.join(path.dirname(delegatedFile), `${childID}.json`),
-        "utf8"
-      )
-    )
-    assert.equal(childRecord.parentID, deepseekID)
-    assert.ok(
-      childRecord.sequence.some((step) => step.model?.id === "deepseek-v4-pro")
-    )
-  }
+  assert.doesNotMatch(JSON.stringify(flashRequest), /DeepSeek model routing|use one fresh harness-review|transfers this completed turn to Pro/)
+  assert.equal(requests.some(value => value.model === "deepseek-v4-pro"), false)
   const handoffStart = requests.length
   await api(`/session/${deepseekID}/command`, { name: "handoff", text: "" })
   const flashHandoff = requests
@@ -762,43 +744,13 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   await api(`/session/${stalledID}/prompt`, {
     text: "Investigate the unresolved fixture."
   })
-  let continuation
-  const escalationDeadline = Date.now() + 15000
-  while (!continuation && Date.now() < escalationDeadline) {
-    const list = await api(
-      `/session?directory=${encodeURIComponent(directory)}`
-    )
-    continuation = list.data.find(
-      (value) => value.title === "Handoff: Stalled investigation"
-    )
-    if (!continuation) await setTimeout(25)
-  }
-  assert.ok(
-    continuation,
-    log.replace(/server password \S+/g, "server password [redacted]")
-  )
-  assert.equal(continuation.model.id, "deepseek-v4-pro")
-  await wait(() =>
-    requests
-      .slice(escalationStart)
-      .some(
-        (value) =>
-          value.model === "deepseek-v4-pro" &&
-          JSON.stringify(value.input).includes(
-            "Continue the next authorized step"
-          )
-      )
-  )
-  assert.ok(
-    requests
-      .slice(escalationStart)
-      .some((value) =>
-        JSON.stringify(value).includes(
-          "After two consecutive cycles without progress"
-        )
-      )
-  )
-  await api(`/experimental/session/${continuation.id}/wait`, {})
+  await api(`/experimental/session/${stalledID}/wait`, {})
+  const stalledFile = path.join(observationDirectory(directory, path.join(directory, "state")), "sessions", `${stalledID}.json`)
+  await wait(() => fs.existsSync(stalledFile))
+  const list = await api(`/session?directory=${encodeURIComponent(directory)}`)
+  assert.equal(list.data.some(value => value.title === "Handoff: Stalled investigation"), false)
+  assert.equal(requests.slice(escalationStart).some(value => value.model === "deepseek-v4-pro"), false)
+  assert.equal((await api(`/session/${stalledID}`)).data.model.id, "deepseek-flash")
 })
 
 test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
@@ -1033,6 +985,12 @@ for (const type of [
       "handoff-rpc.mjs",
       "model-routing.mjs",
       "observations.mjs",
+      "cost-policy.mjs",
+      "cost-report.mjs",
+      "local-state.mjs",
+      "instructions.mjs",
+      "cache-policy.mjs",
+      "context-cache.mjs",
       "AGENTS.md",
       "package.json"
     ]) {
@@ -1073,6 +1031,7 @@ for (const type of [
         app: { version: "2.2.5" },
         command: { transform: async () => {} },
         rpc: { register: async () => ({}) },
+        storage: { scan: async () => ({ entries: [] }) },
         model: { transform: async callback => callback({ list: () => [] }) },
         event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT, data: { sessionID: "ses_fixture" } }; })() },
         session: { hook: async () => {}, get: async () => ({ location: { directory: "/different-project" } }) }

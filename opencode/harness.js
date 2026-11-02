@@ -1,10 +1,11 @@
-import fs from "node:fs"
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
-import { contextPolicy, handoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
-import { escalateStalledSession, registerHandoff } from "./handoff.mjs"
-import { deepseekModels, deepseekRouting, deepseekRoutingPro } from "./model-routing.mjs"
+import { contextPolicy, readHandoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
+import { readInstructions } from "./instructions.mjs"
+import { deduplicateContext } from "./context-cache.mjs"
+import { registerHandoff } from "./handoff.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
+import { refreshCostReport } from "./cost-report.mjs"
 
 export default {
   id: "harness",
@@ -43,16 +44,18 @@ export default {
       observationQueue = observationQueue.then(async () => {
         try {
           await collectObservations(observationAPI(context), sessionID, { directory })
+          const { newWarnings } = await refreshCostReport()
+          for (const warning of newWarnings) process.stderr.write(`Harness cost warning: ${warning.code}; ${warning.sessionID ?? "daily"}; observed=${warning.observed}; limit=${warning.limit}.\n`)
         } catch (error) {
           process.stderr.write(`Harness observation failed (${error.name}); session evidence remains incomplete.\n`)
         }
       })
       return observationQueue
     }
-    const handoff = await registerHandoff(context, observe)
+    await registerHandoff(context, observe)
     await context.session.hook("compaction", async (event) => {
       await observe(event.sessionID)
-      event.system.push({ type: "text", text: handoffPrompt })
+      event.system.push({ type: "text", text: readHandoffPrompt() })
     })
     const abort = new AbortController()
     const events = await context.event.subscribe({
@@ -68,39 +71,21 @@ export default {
         if (event.type.startsWith("session.execution.")) {
           sync()
           await observe(event.data.sessionID)
-          if (event.type === "session.execution.succeeded") {
-            try {
-              await escalateStalledSession(context, event.data.sessionID, handoff)
-            } catch (error) {
-              process.stderr.write(`Harness escalation failed (${error.name}); inspect the source session before retrying.\n`)
-            }
-          }
         }
       }
     }
     consume().catch((error) => {
       if (!abort.signal.aborted) process.stderr.write(`Harness autosync event stream failed: ${error.message}\n`)
     })
-    const core = fs.readFileSync(
-      new URL("../rules/core.md", import.meta.url),
-      "utf8"
-    )
-    const routing = core
-      .split("\n## Skills and hooks\n")[1]
-      ?.split("\n## ")[0]
-      .trim()
-    if (!routing)
-      throw new Error("Harness skill routing instructions are missing")
-    const instructions = fs
-      .readFileSync(new URL("./AGENTS.md", import.meta.url), "utf8")
-      .trim()
+    readInstructions()
     await context.session.hook("context", (event) => {
-      if (event.model.providerID === deepseekModels.flash.providerID && ["build", "plan", "general"].includes(event.agent)) {
-        event.system.push({ type: "text", text: event.model.id === deepseekModels.pro.id ? deepseekRoutingPro : deepseekRouting })
+      event.messages = deduplicateContext(event.messages)
+      for (let i = event.system.length - 1; i >= 0; i--) {
+        if (event.system[i].text?.startsWith("Harness skill instructions:\n") || event.system[i].text?.startsWith("DeepSeek model routing:")) event.system.splice(i, 1)
       }
       event.system.push({
         type: "text",
-        text: `Harness skill instructions:\n${routing}\n\n${instructions}`
+        text: readInstructions().text
       })
     })
     return async () => {

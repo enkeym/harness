@@ -21,7 +21,9 @@ ticket, commit style, remote and project restrictions come from
 - Never commit red tests or secrets.
 - Keep unrelated user changes out of the task commit; mention them briefly in
   the result. Do not ask to include them unless they block the requested work.
-- Before every commit, follow ../shared/review-pass.md on that commit's diff.
+- Before every commit, follow the commit mode in ../shared/review-pass.md on
+  that commit's diff. Full review runs only when the user requests it, on the
+  selected model; do not launch a reviewer or switch models automatically.
 - Message style = the user's own recent commits, not the loudest style in the
   repo: same form, same language, same scope names.
   - Header: one line, ~72 chars.

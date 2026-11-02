@@ -10,6 +10,12 @@ are run, not re-done by hand; a finding is what they cannot see.
 
 ## Procedure
 
+Before a commit, use commit mode in the shared review pass: apply this checklist
+to changed logic and direct consumers, reusing evidence from implementation.
+The exhaustive impact inventory, history investigation and full review output
+below belong to explicitly requested reviews. Expand a commit check only for
+a concrete risk; cosmetic suggestions and optional refactors do not block it.
+
 1. Establish scope and evidence through [../shared/review-pass.md](../shared/review-pass.md).
    Reuse a diff or file already held in context; refresh only changed paths.
 2. Match the diff against the user's task. Load applicable project and stack
@@ -82,7 +88,7 @@ applied unasked);
 
 ## Output
 
-Before a commit: fixes and answers one line each, then `review-pass.md` step 7.
+Before a commit: the short result required by `review-pass.md` commit mode.
 
 Requested review (someone's diff, branch, MR) — spec first, then quality; readable
 in one pass, quoting only the lines a finding hinges on:

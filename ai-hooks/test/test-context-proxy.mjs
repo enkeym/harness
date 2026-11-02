@@ -17,6 +17,7 @@ function client(t, automation = true, policy = {}) {
   const policyFile = path.join(dir, 'policy.json'); fs.writeFileSync(policyFile, JSON.stringify(policy));
   const clock = path.join(dir, 'clock'); fs.writeFileSync(clock, '100000');
   const child = spawn(process.execPath, ['--import', path.join(here, 'fixtures/proxy-clock.mjs'), path.join(here, '../bin/mcp-proxy.mjs'), '--', process.execPath, path.join(here, 'fixtures/context-mcp.mjs')], {
+    cwd: os.tmpdir(),
     env: { ...process.env, XDG_STATE_HOME: dir, CONTEXT_CALL_LOG: log, HARNESS_MCP_POLICY_FILE: policyFile, PROXY_CLOCK: clock, HARNESS_CONTEXT_GENERATION_FILE: '', HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: '', ...(automation ? { HARNESS_CONTEXT_GENERATION_FILE: generation, HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: budget } : {}) },
     stdio: ['pipe', 'pipe', 'pipe'],
   });

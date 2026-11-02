@@ -6,6 +6,9 @@ description: "Reviews a change without touching the code — uncommitted changes
 # /review
 
 Report first, edit never — until the user picks fixes in the closing menu.
+Run only when the user requests a review, on their selected model. Do not
+switch models or launch reviewers automatically; delegation requires an
+explicit user request.
 The checks are `review-standards` and `review-security`; this skill replaces
 their step 1 (scope), their triage step (edits) and their Output sections.
 
@@ -108,17 +111,22 @@ upload, webhooks, outbound calls, config first; report per module.
 Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 [reference/gitlab.md](reference/gitlab.md), read before the first call. Scope:
    the MR's diff after `git fetch` — the only fetch /review runs; no checkout,
-   typecheck or tests (not-checked line). The coordinator delegates each selected
-   MR to a fresh subagent under [reference/mr-delegation.md](reference/mr-delegation.md).
-   The worker owns the pass in section 2; the coordinator checks its evidence
-   and coverage, then reports. Do not repeat the pass in the main session.
+   typecheck or tests (not-checked line). Review each pinned MR directly on the
+   selected model. Only when the user explicitly requests delegation, follow
+   [reference/mr-delegation.md](reference/mr-delegation.md). A requested worker
+   owns the pass; the coordinator reuses its evidence without repeating it.
    A task marked `review_worker: true` reviews only its pinned MR and returns
    evidence to the coordinator; it never selects a queue or delegates again.
 
 ## 2. Pass
 
-[../shared/review-pass.md](../shared/review-pass.md) in full — the same pass a
-commit runs; a fact it leaves open goes to the not-checked line.
+For repeat review, retain the prior revision, findings and coverage. Inspect
+corrected findings, changed hunks and their affected callers/contracts. Repeat
+the full pass only when the scope or missing evidence requires it. Direct review
+of your own changes must not be described as independent review.
+
+Full review mode of [../shared/review-pass.md](../shared/review-pass.md);
+a fact it leaves open goes to the not-checked line.
 
 - Inventory first: `git diff --stat <range>` minus review-pass step 5 files,
   `*.scss`, `*.css`, `*.svg`. Each file is read in its diff before the report;

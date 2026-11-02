@@ -10,6 +10,11 @@ or leaks. "Not best practice" without a scenario = *Info*, one line.
 
 ## Procedure
 
+Before a commit, use commit mode in the shared review pass. Always check secrets
+and affected security boundaries; follow a caller or guard for a concrete risk.
+The exhaustive module/caller audit below belongs to explicitly requested reviews.
+Confirmed vulnerabilities and secrets still block publication.
+
 1. Reuse scope, diff and loaded rules from [../shared/review-pass.md](../shared/review-pass.md); do not reread the same evidence.
 2. Secrets pass, always. Grep diff and new files for: high-entropy strings,
    `-----BEGIN`, `AKIA`, `sk_`, `ghp_`, `xox`, `eyJ`,
@@ -113,7 +118,7 @@ or leaks. "Not best practice" without a scenario = *Info*, one line.
 ## Output
 
 Before a commit: fixes one line each, secret/Critical first; the checked
-categories go into the trace line of `review-pass.md` step 7.
+categories go into the short result required by `review-pass.md` commit mode.
 
 Requested review — readable in one pass, quoting only the lines a finding hinges on:
 

@@ -11,7 +11,7 @@ Load review-standards, review-security and git-flow; review the diff before comm
 
 1. One line: branch (`git branch --show-current`) and `git status --short`.
    Nothing to commit → say so, stop.
-2. [../shared/review-pass.md](../shared/review-pass.md) on the diff and on
+2. Commit mode of [../shared/review-pass.md](../shared/review-pass.md) on the diff and on
    untracked files; fix findings inside the diff by `review-standards` step 8.
    Classify suspected secrets before acting; a confirmed secret blocks publication.
    Fix certain in-scope findings autonomously. Stage only the task's paths or

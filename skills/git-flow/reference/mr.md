@@ -7,12 +7,15 @@ commit rules: [../SKILL.md](../SKILL.md).
 
 1. Base: the resolved base branch. MR delivery restricted by the project's
    memory or rules file → no API, the chat block is the whole result.
-2. Tests: `test-coverage` on `<base>...HEAD`; reuse current successful checks.
-   Fix failures within the authorized scope autonomously. Report external
-   blockers precisely; continue preparing reviewable work without another approval gate.
-3. Review: [../../shared/review-pass.md](../../shared/review-pass.md) on
-   `<base>...HEAD`, links between commits included. Fix certain in-scope findings;
-   unresolved findings block publication, not safe local preparation.
+2. Tests: load `test-conventions`; run the project's full test suites and required
+   typecheck/lint/build checks before creating or updating the MR. Reuse successful
+   results only while their relevant inputs are unchanged. Fix in-scope failures;
+   failed or blocked required checks block publication. `test-coverage` is loaded
+   only for an explicit coverage request, not automatically for an MR.
+3. Commit any fixes using the normal standards and security checks, then push
+   once after the last commit and successful checks, before MR delivery. An
+   explicit MR request authorizes this push. Do not run a full review or start
+   another reviewer unless the user requests it; reuse existing diff evidence.
 4. Inventory: `git log --no-merges --format='%h %s' <base>..HEAD` and
    `git diff <base>...HEAD --stat` — the whole branch, nothing outside it.
 5. Sort each commit's hunks by removed and added lines: **behaviour** — a user
@@ -57,7 +60,7 @@ Closes <TICKET>
 ```
 
 - Plain words, as told to a tester; past tense, no "я". No headings, bold,
-  nested bullets or test-gap lines — gaps stay in the `test-coverage` report.
+  nested bullets or test-gap lines — check results stay in the delivery report.
 - One item per entity, `<Где> — <что изменилось>` in one or two sentences;
   the internal item last, dropped when empty. Commits of another ticket →
   "Также доработки <OTHER-TICKET>: …".
@@ -102,7 +105,7 @@ encoded, written out in full.
    No labels, assignee, milestone, squash flags. The user's explicit MR
    request authorizes this delivery; do not rely on a hook confirmation.
 2. Success → `MR !<iid> создан: <url>` (or `обновлён`), after the
-   `test-coverage` report.
+   test results.
 3. A failed call → one line distinguishing authorization, permissions, network
    or local config access; retain the prepared body and report its path.
    Continue authorized local work. Do not hand the user a login or secret-reading step.

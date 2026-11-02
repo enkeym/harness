@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { installShell } from './shell-install.mjs';
 import { configDirectory, loadConfig, writeConfig } from '../opencode/config.mjs';
 import { contextPolicy } from '../ai-hooks/bin/context-policy.mjs';
-import { configureDeepSeek } from '../opencode/model-routing.mjs';
+import { configureModelRouting } from '../opencode/model-routing.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const home = os.homedir();
@@ -19,11 +19,13 @@ if (args.some(arg => !['--check', '--yes'].includes(arg))) {
 const check = args.includes('--check');
 const { settings, current } = loadConfig(directory);
 const desired = structuredClone(current);
-configureDeepSeek(desired);
-desired.instructions = [...new Set([...(current.instructions ?? []), path.join(root, 'opencode/AGENTS.md'), path.join(root, 'rules/core.md')])];
+configureModelRouting(desired);
+const harnessInstructions = new Set(['opencode/AGENTS.md', 'rules/core.md'].map(file => path.join(root, file)));
+desired.instructions = [...new Set((current.instructions ?? []).filter(file => !harnessInstructions.has(file)))];
 desired.commands = { ...desired.commands };
 delete desired.commands.handoff;
 desired.compaction = { ...current.compaction, auto: true, keep: { tokens: contextPolicy.keepTokens }, buffer: contextPolicy.maxTokens - contextPolicy.startTokens };
+desired.experimental = { ...current.experimental, background_compaction: false };
 desired.plugins = (current.plugins ?? []).filter(plugin => plugin !== new URL('../opencode/harness.mjs', import.meta.url).href);
 let drift = 0;
 const legacyPlugin = path.join(directory, 'plugins/harness.js');
