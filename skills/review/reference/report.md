@@ -32,7 +32,9 @@ A severity with no findings — its title dropped.
 ## MR comments
 
 One per finding, Minor included, in number order — the body of a draft note
-(*Drafts* of [gitlab.md](gitlab.md)). In chat only when drafts cannot be
+(*Drafts* of [gitlab.md](gitlab.md)). Delivery is always draft-only, including
+«отправь» and follow-up requests; only the user publishes manually in GitLab.
+In chat only when drafts cannot be
 sent, and then nothing else — no header, severities, verdict or checked
 lines; one fence per comment, copied whole into GitLab or Telegram. The
 anchor line above the fence; four backticks keep inner ` ``` ` blocks inside:

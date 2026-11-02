@@ -177,6 +177,17 @@ test("DeepSeek routing persists Flash execution and isolated Pro specialists wit
   assert.equal(loaded.agents.compaction.model, "deepseek/deepseek-flash")
   assert.equal(loaded.agents.explore.model, "custom/model")
   assert.equal(loaded.commands.custom.template, "Preserve me")
+  assert.equal(loaded.agents["harness-review"].model, "deepseek/deepseek-v4-pro")
+  assert.equal(loaded.agents["harness-review-flash"].model, "deepseek/deepseek-flash")
+  assert.equal(loaded.commands["harness-review-flash"].agent, "harness-review-flash")
+  assert.equal(loaded.commands["harness-review-flash"].subagent, true)
+  for (const name of ["harness-review", "harness-review-flash"]) {
+    for (const action of ["edit", "subagent"]) {
+      assert.equal(loaded.agents[name].permissions.findLast(rule => rule.action === action).effect, "deny")
+    }
+    assert.match(loaded.agents[name].system, /review_worker: true/)
+    assert.match(loaded.agents[name].system, /exactly one pinned MR/)
+  }
   assert.equal(
     loaded.agents["harness-review"].permissions.findLast(
       (rule) => rule.action === "edit"

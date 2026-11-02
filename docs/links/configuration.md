@@ -5,6 +5,7 @@ paths:
   - "ai-hooks/bin/context-policy.mjs"
   - "skills/handoff/SKILL.md"
   - "skills/task-brief/SKILL.md"
+  - "skills/review/**"
   - "bin/opencode-install.mjs"
   - "bin/opencode-observe.mjs"
   - "opencode/**"
@@ -23,6 +24,7 @@ paths:
 ---
 
 ## Каталоги и установка клиентов
+- `/review mr` → `skills/review/reference/mr-delegation.md` задаёт отдельного исполнителя на MR и выбор роли по риску; `opencode/model-routing.mjs:configureDeepSeek` связывает `harness-review-flash` с Flash, `harness-review` с Pro, а `deepseekRouting` и `deepseekRoutingPro` оставляют очередь координатору. При изменении согласованно обновлять `skills/review/SKILL.md`, `skills/review/reference/gitlab.md`, `docs/opencode.md` и `ai-hooks/test/test-opencode.mjs`; проверять `ai-hooks/test/test-handoff.mjs` для сохранения маршрута продолжения.
 - `skills/task-brief/SKILL.md` задаёт пути `.codex/plans/<task-id>.md` и `.opencode/plans/<task-id>.md` и очистку завершённой задачи; `opencode/model-routing.mjs:deepseekRouting` и `opencode/model-routing.mjs:deepseekRoutingPro` передают тот же контракт основной сессии DeepSeek. При изменении согласованно обновлять `docs/context-automation.md`, `docs/opencode.md` и `ai-hooks/test/test-opencode.mjs`.
 - `session.execution.succeeded` → `opencode/handoff.mjs:escalateStalledSession` проверяет финальный маркер тупика в завершённом ответе основной Flash-сессии и вызывает существующий `registerHandoff` с `--route=pro`. Согласованно проверять `opencode/model-routing.mjs:deepseekRouting`, `ai-hooks/test/test-handoff.mjs` и нативный сценарий `ai-hooks/test/test-opencode.mjs`.
 - `session.execution.succeeded/failed/interrupted`, `session.hook("compaction")` — `opencode/harness.js` запускает `opencode/observations.mjs:collectObservations`; `bin/opencode-observe.mjs` читает полные страницы OpenCode 2.2.5. Контракт `sessions/<id>.json` и границы покрытия описаны в `docs/opencode.md`, читает `skills/shared/optimization-observations.md`; проверять нативное выполнение и сохранение истории в `ai-hooks/test/test-opencode.mjs` и `ai-hooks/test/test-opencode-observations.mjs`.

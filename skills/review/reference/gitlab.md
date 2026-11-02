@@ -48,6 +48,17 @@ Present the report before any external write. Create drafts only when the
 user explicitly requested or approved their delivery; `/review` alone is
 read-only. If authorization is missing, offer drafts after the report and
 wait. Reuse authorization already given.
+
+Delivery always means private draft notes. «Отправь», «отправь в MR»,
+«размести», «оставь комментарии», «да» after a draft offer, or approval of
+findings never authorize publication. This restriction applies to the
+coordinator, workers and follow-up requests, even an explicit request to
+publish: leave drafts and tell the user to submit manually in GitLab.
+Never call `draft_notes/bulk_publish`, `draft_notes/<id>/publish`, create
+public notes/discussions, submit/approve/request changes through API or CLI,
+or click «Submit review»/«Publish» in a browser. No publication fallback,
+retry or alternate tool is allowed. Chat verdicts remain report text only.
+
 One request per finding, in number order; body = the MR comment of
 [report.md](report.md). Write a JSON body file with `note` and, where valid,
 a `position` object containing position_type, base_sha, start_sha, head_sha,
@@ -67,20 +78,22 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> --method POST -
   with its code.
 - Then `GET <api>/merge_requests/<iid>/draft_notes`: this run's drafts match
   the `201` lines, or the missing ones go to chat.
-- Done → `MR !<iid>: <n> черновиков → <web_url> — проверь и нажми «Submit review»; если упадёт — не жми повторно, скажи мне`.
-  Drafts stay visible only to the user until that submit.
-- Submit failed → no retry and no `bulk_publish`: each attempt publishes the
-  good drafts again before failing. `PUT …/draft_notes/<id>/publish` one by
-  one, then `GET …/merge_requests/<iid>/discussions` — a `204` does not prove
-  the note exists; a missing one → its MR comment in chat.
+- Done → `MR !<iid>: <n> черновиков → <web_url>. Не опубликованы; проверь и отправь ревью вручную в GitLab`.
+  Drafts stay visible only to the user until their manual submit.
+- Submit failed → read-only inspection of drafts and discussions; report
+  confirmed published, remaining and uncertain notes in chat. Never publish,
+  retry submit or recreate possibly published notes. Leave remaining drafts
+  untouched; the user resolves submission manually in GitLab.
 
 ## Several MRs
 
-Review the selected queue in this session. Report each MR before moving to
-the next; reuse loaded rules and preserve authorization. Use native compaction
-with current MR, completed items, unread files and findings. Do not require a
-new session because another task preceded review or because an MR is large.
-Use handoff only when the user requests it.
+The main session coordinates the selected queue; each MR gets a fresh subagent
+under [mr-delegation.md](mr-delegation.md), including a single selected MR.
+Prepare fetches and pinned scopes before dispatch; workers do not fetch or
+switch branches. Report each completed MR separately, preserving authorization.
+Use native compaction with pinned scopes, worker IDs, completed items, unread
+files and findings. Do not reuse a worker for another MR or require a new user
+session because an MR is large. Use handoff only when the user requests it.
 
 ## Existing comments
 

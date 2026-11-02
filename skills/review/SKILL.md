@@ -9,6 +9,14 @@ Report first, edit never — until the user picks fixes in the closing menu.
 The checks are `review-standards` and `review-security`; this skill replaces
 their step 1 (scope), their triage step (edits) and their Output sections.
 
+**MR delivery is draft-only.** «Отправь», «отправь в MR», «размести»,
+«оставь комментарии» and approval of findings authorize draft notes only.
+Never publish comments or submit a review through API, CLI, browser or workers,
+including follow-up requests and recovery after a failed submit. Publication
+is a manual user action in GitLab; offer no agent publication option.
+The exact delivery and failure rules are in
+[reference/gitlab.md](reference/gitlab.md#drafts).
+
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —
 the user fetches before calling /review, the MR mode (1.2) aside; no diff
@@ -16,6 +24,10 @@ against `main`, `dev` or any other branch unless picked in a scope menu. No
 checkout, stash or switch. A missing ref → name it in one line and stop.
 
 ## 1. Scope
+
+`review_worker: true` with one pinned MR bypasses scope selection, API calls
+and fetch below: use the supplied SHA range and discussions, perform the pass
+and return evidence under [reference/mr-delegation.md](reference/mr-delegation.md).
 
 | Arguments after `/review` | Scope |
 |---|---|
@@ -96,8 +108,12 @@ upload, webhooks, outbound calls, config first; report per module.
 Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
 [reference/gitlab.md](reference/gitlab.md), read before the first call. Scope:
    the MR's diff after `git fetch` — the only fetch /review runs; no checkout,
-   typecheck or tests (not-checked line). Continue the selected MR queue in
-   this session, carrying evidence and existing authorization forward.
+   typecheck or tests (not-checked line). The coordinator delegates each selected
+   MR to a fresh subagent under [reference/mr-delegation.md](reference/mr-delegation.md).
+   The worker owns the pass in section 2; the coordinator checks its evidence
+   and coverage, then reports. Do not repeat the pass in the main session.
+   A task marked `review_worker: true` reviews only its pinned MR and returns
+   evidence to the coordinator; it never selects a queue or delegates again.
 
 ## 2. Pass
 
