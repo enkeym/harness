@@ -15,9 +15,5 @@ if [ "${1:-}" = "--opencode" ]; then
   fi
   exec node "$HARNESS/bin/opencode-install.mjs" "$@"
 fi
-if [ "${1:-}" = "--qwen" ]; then
-  shift
-  exec node "$HARNESS/bin/qwen-install.mjs" "$@"
-fi
 [ "${1:-}" != "--codex" ] || shift
 exec node "$HARNESS/bin/codex-install.mjs" "$@"

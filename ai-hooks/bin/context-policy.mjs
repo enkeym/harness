@@ -12,5 +12,3 @@ export const handoffPrompt = `Harness automatic Handoff. Summarize the current t
   )
   .replace(/^---\n[\s\S]*?\n---\n/, "")
   .trim()}`
-export const handoffCommand =
-  "Load the globally installed handoff skill and follow it. Save the current objective, constraints, progress, verification and remaining plan in HANDOFF.md unless a different path was requested. User arguments: $ARGUMENTS"

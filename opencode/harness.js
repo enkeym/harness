@@ -2,11 +2,14 @@ import fs from "node:fs"
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { contextPolicy, handoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
+import { registerHandoff } from "./handoff.mjs"
+import { deepseekModels, deepseekRouting } from "./model-routing.mjs"
 
 export default {
   id: "harness",
   setup: async (context) => {
     const directory = context.location.directory
+    await registerHandoff(context)
     const sync = (warm = false) => {
       for (const script of ["tokensave-sync.sh", "ragsave-sync.sh"]) {
         const child = spawn(
@@ -69,6 +72,9 @@ export default {
       .readFileSync(new URL("./AGENTS.md", import.meta.url), "utf8")
       .trim()
     await context.session.hook("context", (event) => {
+      if (event.model.providerID === deepseekModels.flash.providerID && ["build", "plan", "general"].includes(event.agent)) {
+        event.system.push({ type: "text", text: deepseekRouting })
+      }
       event.system.push({
         type: "text",
         text: `Harness skill instructions:\n${routing}\n\n${instructions}`

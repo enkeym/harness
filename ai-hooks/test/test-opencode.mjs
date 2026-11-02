@@ -9,14 +9,26 @@ import { spawn, spawnSync } from "node:child_process"
 import { createServer } from "node:http"
 import { setTimeout } from "node:timers/promises"
 import { loadConfig, readConfig, writeConfig } from "../../opencode/config.mjs"
-import { importQwen } from "../../opencode/qwen-import.mjs"
 import { contextPolicy } from "../bin/context-policy.mjs"
+import { configureDeepSeek } from "../../opencode/model-routing.mjs"
 
 function sandbox(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-opencode-"))
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   return directory
 }
+
+test("MCP sync rejects removed, unknown and conflicting client flags without writing", (t) => {
+  const directory = sandbox(t)
+  for (const args of [["--qwen"], ["--unknown"], ["--codex", "--opencode"]]) {
+    const result = spawnSync(process.execPath, [path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), ...args], {
+      env: { ...process.env, HOME: directory, OPENCODE_CONFIG_DIR: directory }, encoding: "utf8"
+    })
+    assert.equal(result.status, 2)
+    assert.match(result.stderr, /Использование/)
+    assert.deepEqual(fs.readdirSync(directory), [])
+  }
+})
 
 test("OpenCode preserves settings and detects drift without writing", (t) => {
   const directory = sandbox(t)
@@ -60,26 +72,12 @@ test("OpenCode preserves settings and detects drift without writing", (t) => {
   assert.equal(fs.statSync(settings).mtimeMs, before)
 })
 
-test("OpenCode installer preserves both configs, repairs skills and imports Qwen only on request", (t) => {
+test("OpenCode installer preserves both configs and repairs skills", (t) => {
   const home = sandbox(t)
   const directory = path.join(home, "opencode")
-  const qwenHome = path.join(home, "qwen")
   fs.mkdirSync(path.join(directory, "skills"), { recursive: true })
-  fs.mkdirSync(qwenHome)
-  fs.writeFileSync(
-    path.join(qwenHome, "settings.json"),
-    JSON.stringify({
-      modelProviders: {
-        openai: [
-          {
-            id: "chat",
-            baseUrl: "https://example.test/v1",
-            envKey: "HARNESS_TEST_IMPORT_KEY"
-          }
-        ]
-      }
-    })
-  )
+  fs.mkdirSync(path.join(directory, "plugins"))
+  fs.symlinkSync(path.resolve(import.meta.dirname, "../../opencode/harness.js"), path.join(directory, "plugins/harness.js"))
   fs.symlinkSync("/missing/skill", path.join(directory, "skills/task-brief"))
   const alternative = path.join(directory, "opencode.json")
   const settings = path.join(directory, "opencode.jsonc")
@@ -101,9 +99,7 @@ test("OpenCode installer preserves both configs, repairs skills and imports Qwen
         env: {
           ...process.env,
           HOME: home,
-          OPENCODE_CONFIG_DIR: directory,
-          QWEN_HOME: qwenHome,
-          HARNESS_TEST_IMPORT_KEY: "fixture-key"
+          OPENCODE_CONFIG_DIR: directory
         },
         encoding: "utf8",
         timeout: 10000
@@ -123,10 +119,9 @@ test("OpenCode installer preserves both configs, repairs skills and imports Qwen
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
   assert.ok(fs.existsSync(path.join(directory, "skills/task-brief/SKILL.md")))
   assert.ok(fs.existsSync(path.join(directory, "skills/handoff/SKILL.md")))
-  assert.match(
-    loadConfig(directory).current.commands.handoff.template,
-    /handoff skill/
-  )
+  assert.equal(fs.existsSync(path.join(directory, "plugins/harness.js")), false)
+  assert.equal(fs.realpathSync(path.join(directory, "plugins/harness")), path.resolve(import.meta.dirname, "../../opencode"))
+  assert.equal(loadConfig(directory).current.commands.handoff, undefined)
   assert.equal(loadConfig(directory).current.compaction.auto, true)
   assert.equal(
     loadConfig(directory).current.compaction.buffer,
@@ -139,18 +134,37 @@ test("OpenCode installer preserves both configs, repairs skills and imports Qwen
   assert.match(fs.readFileSync(settings, "utf8"), /user config/)
   const checked = run("--check")
   assert.equal(checked.status, 0, checked.stderr + checked.stdout)
-  const after = fs.readFileSync(settings, "utf8")
-  assert.equal(run("--import-qwen", "--check").status, 1)
-  assert.equal(fs.existsSync(path.join(directory, "keys")), false)
-  assert.equal(fs.readFileSync(settings, "utf8"), after)
-  const imported = run("--import-qwen")
-  assert.equal(imported.status, 0, imported.stderr + imported.stdout)
-  assert.equal(
-    loadConfig(directory).current.providers["qwen-example"].models.chat.modelID,
-    "chat"
-  )
-  assert.equal(run("--import-qwen", "--check").status, 0)
   assert.equal(fs.readFileSync(alternative, "utf8"), '{"model":"user/model"}')
+})
+
+test("DeepSeek routing persists Flash execution and isolated Pro specialists without changing other providers", (t) => {
+  const directory = sandbox(t)
+  const settings = path.join(directory, "opencode.jsonc")
+  const config = {
+    model: "deepseek/deepseek-v4-pro",
+    providers: { deepseek: { settings: { apiKey: "{file:/outside/key}" } } },
+    agents: { plan: { model: "deepseek/deepseek-v4-pro#max" }, explore: { model: "custom/model" }, "harness-review": { request: { settings: { temperature: 0.3 } }, permissions: [{ action: "edit", resource: "*", effect: "allow" }] } },
+    commands: { custom: { template: "Preserve me" } }
+  }
+  configureDeepSeek(config)
+  writeConfig(settings, config)
+  const loaded = loadConfig(directory).current
+  assert.equal(loaded.model, "deepseek/deepseek-flash")
+  assert.equal(loaded.agents.plan.model, "deepseek/deepseek-flash#max")
+  assert.equal(loaded.agents.compaction.model, "deepseek/deepseek-flash")
+  assert.equal(loaded.agents.explore.model, "custom/model")
+  assert.equal(loaded.commands.custom.template, "Preserve me")
+  assert.equal(loaded.agents["harness-review"].permissions.findLast(rule => rule.action === "edit").effect, "deny")
+  const repeated = structuredClone(loaded)
+  configureDeepSeek(repeated)
+  assert.deepEqual(repeated, loaded)
+  delete repeated.agents["harness-review"].request
+  writeConfig(settings, repeated)
+  assert.deepEqual(loadConfig(directory).current, repeated)
+  const unrelated = { model: "custom/model", agents: { build: { model: "custom/model" } } }
+  const original = structuredClone(unrelated)
+  configureDeepSeek(unrelated)
+  assert.deepEqual(unrelated, original)
 })
 
 test("OpenCode sends skill and search routing to custom and built-in agents", async (t) => {
@@ -161,7 +175,7 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   }
   for (const [target, source] of [
     ["agents/ask.md", "opencode/agent/ask.md"],
-    ["plugins/harness.js", "opencode/harness.js"]
+    ["plugins/harness", "opencode"]
   ]) {
     fs.symlinkSync(
       path.resolve(import.meta.dirname, "../..", source),
@@ -276,16 +290,25 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   })
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
   t.after(() => new Promise((resolve) => server.close(resolve)))
+  const routing = { model: "deepseek/deepseek-flash" }
+  configureDeepSeek(routing)
   fs.writeFileSync(
     path.join(config, "opencode.jsonc"),
     JSON.stringify({
       model: "fixture/model",
+      agents: routing.agents,
+      commands: routing.commands,
       compaction: {
         auto: true,
         buffer: contextPolicy.maxTokens - contextPolicy.startTokens,
         keep: { tokens: 0 }
       },
       providers: {
+        deepseek: {
+          package: "@ai-sdk/openai",
+          settings: { baseURL: `http://127.0.0.1:${server.address().port}/v1`, apiKey: "fixture-key" },
+          models: Object.fromEntries(["deepseek-flash", "deepseek-v4-pro"].map(modelID => [modelID, { modelID, limit: { context: 1000000, output: 1000 } }]))
+        },
         fixture: {
           package: "@ai-sdk/openai",
           settings: {
@@ -352,7 +375,7 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
       signal: AbortSignal.timeout(15000)
     })
     assert.ok(response.ok, `${url}: ${response.status}`)
-    return response.json()
+    return response.status === 204 ? undefined : response.json()
   }
   for (const agent of ["ask", "build", "plan"]) {
     const start = requests.length
@@ -454,6 +477,68 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     /Execute the next authorized step/
   )
   assert.doesNotMatch(JSON.stringify(resumed.input), /Initial context fixture/)
+  const manualStart = requests.length
+  const eventsAbort = new AbortController()
+  t.after(() => eventsAbort.abort())
+  const eventResponse = await fetch(`http://127.0.0.1:${port}/api/event?types=rpc.harness.handoff.changed`, {
+    headers: { authorization }, signal: eventsAbort.signal
+  })
+  assert.ok(eventResponse.ok)
+  let events = ""
+  const eventTask = (async () => {
+    for await (const chunk of eventResponse.body) events += Buffer.from(chunk).toString()
+  })().catch((error) => { if (!eventsAbort.signal.aborted) throw error })
+  await api(`/session/${session.data.id}/command`, { name: "handoff", text: "" })
+  const sessions = await api(`/session?directory=${encodeURIComponent(directory)}`)
+  const target = sessions.data.find((value) => value.title === "Handoff: Automatic Handoff fixture")
+  assert.ok(target)
+  assert.notEqual(target.id, session.data.id)
+  assert.equal(target.parentID, undefined)
+  assert.deepEqual(target.model, session.data.model)
+  assert.equal(target.agent, session.data.agent)
+  await wait(() => events.includes('"status":"ready"'))
+  assert.match(events, /"status":"preparing"/)
+  assert.ok(events.includes(target.id))
+  await api(`/session/${session.data.id}/command`, { name: "handoff", text: "" })
+  const repeated = await api(`/session?directory=${encodeURIComponent(directory)}`)
+  assert.equal(repeated.data.filter((value) => value.title === target.title).length, 1)
+  eventsAbort.abort()
+  await eventTask
+  await wait(() => requests.slice(manualStart).some((value) => JSON.stringify(value.input).includes("Continue the next authorized step")))
+  const continued = requests.slice(manualStart).find((value) => JSON.stringify(value.input).includes("Continue the next authorized step"))
+  assert.match(JSON.stringify(continued.input), /Continue the next authorized step/)
+  assert.match(JSON.stringify(continued.input), /Handoff fixture/)
+  assert.doesNotMatch(JSON.stringify(continued.input), /Initial context fixture/)
+  assert.match(fs.readFileSync(path.join(directory, "HANDOFF.md"), "utf8"), /Handoff fixture/)
+  await api(`/experimental/session/${target.id}/wait`, {})
+  const targetContext = await api(`/session/${target.id}/context`)
+  assert.ok(targetContext.data.some((value) => value.type === "assistant" && value.time.completed))
+  const deepseekSession = await api("/session", {
+    agent: "build", title: "DeepSeek routing fixture", location: { directory },
+    model: { providerID: "deepseek", id: "deepseek-flash" }
+  })
+  const deepseekID = deepseekSession.data.id
+  await api(`/session/${deepseekID}/prompt`, { text: "PRIVATE_PARENT_HISTORY: implement the accepted plan." })
+  await api(`/experimental/session/${deepseekID}/wait`, {})
+  const flashRequest = requests.find(value => value.model === "deepseek-flash" && JSON.stringify(value.input).includes("PRIVATE_PARENT_HISTORY"))
+  assert.ok(flashRequest)
+  assert.match(JSON.stringify(flashRequest), /DeepSeek model routing/)
+  for (const name of ["harness-brief", "harness-plan", "harness-review"]) {
+    const start = requests.length
+    await api(`/session/${deepseekID}/command`, { name, text: `Inspect ${name} scoped task.` })
+    await api(`/experimental/session/${deepseekID}/wait`, {})
+    const pro = requests.slice(start).find(value => value.model === "deepseek-v4-pro")
+    assert.ok(pro, `${name}: ${JSON.stringify(requests.slice(start).map(value => ({ model: value.model, input: value.input })))}`)
+    assert.match(JSON.stringify(pro.input), /scoped task/)
+    assert.doesNotMatch(JSON.stringify(pro.input), /PRIVATE_PARENT_HISTORY/)
+  }
+  const handoffStart = requests.length
+  await api(`/session/${deepseekID}/command`, { name: "handoff", text: "" })
+  const flashHandoff = requests.slice(handoffStart).find(value => JSON.stringify(value).includes("Harness automatic Handoff."))
+  assert.equal(flashHandoff?.model, "deepseek-flash")
+  await wait(() => requests.slice(handoffStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value.input).includes("Continue the next authorized step")))
+  const sourceAfter = await api(`/session/${deepseekID}`)
+  assert.equal(sourceAfter.data.model.id, "deepseek-flash")
 })
 
 test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
@@ -673,58 +758,6 @@ for (const extension of ["json", "jsonc"]) {
   })
 }
 
-test("Qwen import copies models and private keys, preserves user settings and supports check mode", (t) => {
-  const directory = sandbox(t)
-  const qwenHome = path.join(directory, "qwen")
-  fs.mkdirSync(qwenHome)
-  const envKey = "HARNESS_TEST_QWEN_KEY"
-  const originalHome = process.env.QWEN_HOME
-  t.after(() => {
-    if (originalHome === undefined) delete process.env.QWEN_HOME
-    else process.env.QWEN_HOME = originalHome
-    delete process.env[envKey]
-  })
-  process.env.QWEN_HOME = qwenHome
-  process.env[envKey] = "fixture-key"
-  const model = {
-    id: "chat",
-    baseUrl: "https://api.example.test/v1",
-    envKey,
-    wireApi: "chat-completions"
-  }
-  fs.writeFileSync(
-    path.join(qwenHome, "settings.json"),
-    JSON.stringify({
-      model: { name: "chat" },
-      modelProviders: {
-        openai: [model, { ...model, id: "responses", wireApi: "responses" }]
-      }
-    })
-  )
-
-  const preview = importQwen({}, directory, true)
-  assert.equal(fs.existsSync(path.join(directory, "keys")), false)
-  assert.equal(preview.model, "qwen-example/chat")
-  const desired = importQwen({ model: "custom/model" }, directory, false)
-  const provider = desired.providers["qwen-example"]
-  const keyFile = path.join(directory, "keys/import-qwen-example")
-  assert.equal(desired.model, "custom/model")
-  assert.equal(provider.models.chat.settings.api, "chat")
-  assert.equal(provider.models.responses.settings.api, "responses")
-  assert.equal(provider.settings.apiKey, `{file:${keyFile}}`)
-  assert.equal(fs.readFileSync(keyFile, "utf8"), "fixture-key")
-  assert.equal(fs.statSync(keyFile).mode & 0o777, 0o600)
-  assert.ok(!JSON.stringify(desired).includes("fixture-key"))
-  delete process.env[envKey]
-  assert.deepEqual(importQwen(desired, directory, false), desired)
-  assert.throws(
-    () => importQwen({}, directory, false),
-    /missing from environment/
-  )
-  process.env[envKey] = "fixture-key"
-  assert.throws(() => importQwen({}, directory, false), /Refusing to overwrite/)
-})
-
 for (const type of [
   "session.execution.succeeded",
   "session.execution.failed",
@@ -734,7 +767,7 @@ for (const type of [
     const directory = sandbox(t)
     const harnessRoot = path.join(directory, "harness clone #1")
     fs.mkdirSync(path.join(harnessRoot, "opencode"), { recursive: true })
-    for (const file of ["harness.js", "AGENTS.md", "package.json"]) {
+    for (const file of ["harness.js", "handoff.mjs", "handoff-rpc.mjs", "model-routing.mjs", "AGENTS.md", "package.json"]) {
       fs.copyFileSync(
         path.resolve(import.meta.dirname, "../../opencode", file),
         path.join(harnessRoot, "opencode", file)
@@ -769,6 +802,8 @@ for (const type of [
       };
       await plugin.setup({
         location: { directory: process.env.TEST_PROJECT },
+        command: { transform: async () => {} },
+        rpc: { register: async () => ({}) },
         model: { transform: async callback => callback({ list: () => [] }) },
         event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT }; })() },
         session: { hook: async () => {} }

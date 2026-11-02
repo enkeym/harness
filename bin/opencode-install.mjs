@@ -5,25 +5,35 @@ import { execFileSync } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
 import { installShell } from './shell-install.mjs';
 import { configDirectory, loadConfig, writeConfig } from '../opencode/config.mjs';
-import { importQwen } from '../opencode/qwen-import.mjs';
-import { contextPolicy, handoffCommand } from '../ai-hooks/bin/context-policy.mjs';
+import { contextPolicy } from '../ai-hooks/bin/context-policy.mjs';
+import { configureDeepSeek } from '../opencode/model-routing.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const home = os.homedir();
 const directory = configDirectory();
 const args = process.argv.slice(2);
-if (args.some(arg => !['--check', '--yes', '--import-qwen'].includes(arg))) {
-  console.error('Использование: ./install.sh --opencode [--check] [--yes] [--import-qwen]');
+if (args.some(arg => !['--check', '--yes'].includes(arg))) {
+  console.error('Использование: ./install.sh --opencode [--check] [--yes]');
   process.exit(2);
 }
 const check = args.includes('--check');
 const { settings, current } = loadConfig(directory);
-const desired = args.includes('--import-qwen') ? importQwen(current, directory, check) : structuredClone(current);
+const desired = structuredClone(current);
+configureDeepSeek(desired);
 desired.instructions = [...new Set([...(current.instructions ?? []), path.join(root, 'opencode/AGENTS.md'), path.join(root, 'rules/core.md')])];
-desired.commands = { ...current.commands, handoff: { description: 'Save Handoff and the remaining plan', template: handoffCommand } };
+desired.commands = { ...desired.commands };
+delete desired.commands.handoff;
 desired.compaction = { ...current.compaction, auto: true, keep: { tokens: contextPolicy.keepTokens }, buffer: contextPolicy.maxTokens - contextPolicy.startTokens };
 desired.plugins = (current.plugins ?? []).filter(plugin => plugin !== new URL('../opencode/harness.mjs', import.meta.url).href);
 let drift = 0;
+const legacyPlugin = path.join(directory, 'plugins/harness.js');
+try {
+  const stat = fs.lstatSync(legacyPlugin);
+  if (stat.isSymbolicLink() && fs.realpathSync(legacyPlugin) === path.join(root, 'opencode/harness.js')) {
+    if (check) { console.error('✗ OpenCode legacy plugin entry'); drift++; }
+    else fs.unlinkSync(legacyPlugin);
+  }
+} catch (error) { if (error.code !== 'ENOENT') throw error; }
 if (!isDeepStrictEqual(current, desired) || !fs.existsSync(settings)) {
   if (check) { console.error('✗ OpenCode instructions/plugins'); drift++; }
   else {
@@ -31,7 +41,7 @@ if (!isDeepStrictEqual(current, desired) || !fs.existsSync(settings)) {
   }
 }
 const links = [
-  [path.join(directory, 'plugins/harness.js'), 'opencode/harness.js'],
+  [path.join(directory, 'plugins/harness'), 'opencode'],
   [path.join(directory, 'agents/ask.md'), 'opencode/agent/ask.md'],
   [path.join(home, '.ai-hooks'), 'ai-hooks'],
   [path.join(home, '.config/harness/repo'), '.'],

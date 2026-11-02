@@ -9,6 +9,11 @@ const HARNESS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
 const LOCAL_ENV = path.join(HARNESS, '.env.local');
 const CHECK = process.argv.includes('--check');
+const args = process.argv.slice(2);
+if (args.some(arg => !['--check', '--codex', '--opencode'].includes(arg)) || (args.includes('--codex') && args.includes('--opencode'))) {
+  console.error('Использование: node bin/mcp-sync.mjs [--codex | --opencode] [--check]');
+  process.exit(2);
+}
 
 let drift = 0;
 const good = (s) => console.log(`  \x1b[32m✓\x1b[0m ${s}`);
@@ -126,47 +131,6 @@ async function syncCodex() {
   }
 }
 
-function syncQwen() {
-  const settings = path.join(process.env.QWEN_HOME || path.join(os.homedir(), '.qwen'), 'settings.json');
-  const current = fs.existsSync(settings) ? readJson(settings) : {};
-  current.mcpServers ??= {};
-  let changed = false;
-  for (const [name, registered] of Object.entries(servers)) {
-    let server = registered;
-    // Qwen probes prompts/resources during discovery, so a catalog proxy is
-    // not lazy here and can negotiate a different protocol than its snapshot.
-    const separator = registered.args.indexOf('--');
-    if (registered.args.includes('--catalog') && registered.args.some(arg => path.basename(arg) === 'mcp-proxy.mjs')
-      && separator >= 0 && registered.args[separator + 1]) {
-      const catalogAt = registered.args.indexOf('--catalog');
-      server = { ...registered, args: registered.args.filter((_, index) => index !== catalogAt && index !== catalogAt + 1) };
-    }
-    const have = current.mcpServers[name];
-    server = { ...server, env: { ...(have?.env ?? {}), ...server.env } };
-    for (const [key, value] of Object.entries(have?.env ?? {})) {
-      if (typeof value === 'string' && /\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(value)) server.env[key] = value;
-    }
-    if (name === 'playwright') Object.assign(server.env, playwrightEnv({ ...process.env, ...server.env }));
-    if (have?.command === server.command && sameJson(have.args ?? [], server.args)
-      && sameJson(have.env ?? {}, server.env) && !have.url && !have.httpUrl) {
-      good(name);
-      continue;
-    }
-    drift++;
-    if (CHECK) { warn(`${name} — требуется синхронизация Qwen`); continue; }
-    // Preserve trust, timeouts and other Qwen-specific server options.
-    const { url, httpUrl, ...options } = have ?? {};
-    current.mcpServers[name] = { ...options, ...server };
-    changed = true;
-    good(`${name} — зарегистрирован в Qwen`);
-  }
-  if (changed) {
-    fs.mkdirSync(path.dirname(settings), { recursive: true });
-    if (fs.existsSync(settings)) fs.copyFileSync(settings, `${settings}.bak-${Date.now()}`, fs.constants.COPYFILE_EXCL);
-    fs.writeFileSync(settings, `${JSON.stringify(current, null, 2)}\n`, { mode: 0o600 });
-  }
-}
-
 async function syncOpenCode() {
   const { loadConfig, writeConfig } = await import('../opencode/config.mjs');
   const { settings, current } = loadConfig();
@@ -192,6 +156,5 @@ async function syncOpenCode() {
 }
 
 if (process.argv.includes('--opencode')) await syncOpenCode();
-else if (process.argv.includes('--qwen')) syncQwen();
 else await syncCodex();
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);

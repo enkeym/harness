@@ -88,13 +88,6 @@ for (const [event, warm] of [['SessionStart', true], ['Stop', false]]) {
 }
 
 {
-  const sb = sandbox();
-  const result = sb.run({ QWEN_PROJECT_DIR: sb.root, CODEX_PROJECT_DIR: sb.home }, ['--warm']);
-  check('Qwen без аргумента: прогрев и sync индекса сессии',
-    [result.status, sb.waitCalls(2)], [0, [['warm'], ['sync', sb.root, '--quiet']]]);
-}
-
-{
   const sb = sandbox({ db: false });
   sb.runHook('SessionStart');
   check('hook не создаёт первичный индекс', [fs.existsSync(path.join(sb.dir, 'rag.db')), sb.readCalls()], [false, []]);

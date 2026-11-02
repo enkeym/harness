@@ -10,7 +10,7 @@
 - `~/.rag-mcp/venv/bin/python ragsave/tests/test_ragsave.py`: 224/224.
 - `~/.rag-mcp/venv/bin/python -m unittest discover -s ragsave/tests`: 9/9.
 - Проверка `docs/links`: все ссылки разрешились; битых symlink среди
-  `~/.agents/skills` и `~/.qwen/skills` нет.
+  `~/.agents/skills` нет.
 
 Из основных правил убраны повторения маршрутизации поиска и повторных проверок;
 детали остаются в профильных skills. Исправлены три битые ссылки Markdown в

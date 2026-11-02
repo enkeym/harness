@@ -167,8 +167,7 @@ function readKey(params) {
   const project =
     typeof params.graph_root === "string"
       ? params.graph_root
-      : process.env.QWEN_PROJECT_DIR ||
-        process.env.CODEX_PROJECT_DIR ||
+      : process.env.CODEX_PROJECT_DIR ||
         process.cwd()
   let branch
   try {
@@ -216,7 +215,6 @@ function prepareCall(message) {
     (params.name?.startsWith("rag_")
       ? params.arguments?.project
       : params.arguments?.graph_root) ||
-    process.env.QWEN_PROJECT_DIR ||
     process.env.CODEX_PROJECT_DIR ||
     process.cwd()
   const indexState = safe
@@ -245,7 +243,6 @@ function prepareCall(message) {
       normalize([
         command,
         args.slice(split + 2),
-        process.env.QWEN_PROJECT_DIR,
         process.env.CODEX_PROJECT_DIR,
         process.cwd(),
         indexState,

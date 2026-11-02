@@ -2,6 +2,11 @@
   "name": "harness-opencode",
   "private": true,
   "type": "module",
+  "exports": {
+    "./server": "./harness.js",
+    "./tui": "./tui.js",
+    "./rpc": "./handoff-rpc.mjs"
+  },
   "dependencies": {
     "jsonc-parser": "3.3.1"
   }

@@ -11,7 +11,7 @@ SessionStart/UserPromptSubmit вызывают `skill-context.mjs`: он пер�
 Поисковый PreToolUse не устанавливается; MCP выбирается по инструкциям.
 Конфигурацию hooks устанавливает выбранный установщик; доверие, разрешения
 и sandbox управляются клиентом. Настройка интеграций: [Codex](../docs/codex.md)
-и [Qwen](../docs/qwen.md). Успешная установка не доказывает исполнение hooks.
+и [OpenCode](../docs/opencode.md). Успешная установка не доказывает исполнение hooks.
 
 Проверка: node --test --test-concurrency=1 ai-hooks/test/test-*.mjs.
 
