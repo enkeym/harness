@@ -1044,12 +1044,6 @@
     "when": "listFocus && !inputFocus && !treestickyScrollFocused"
   },
   {
-    "key": "ctrl+с",
-    "command": "workbench.action.terminal.sendSequence",
-    "args": { "text": "\u0003" },
-    "when": "terminalFocus"
-  },
-  {
     "key": "ctrl+l",
     "command": "runCommands",
     "args": {
