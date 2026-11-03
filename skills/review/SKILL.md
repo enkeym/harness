@@ -9,6 +9,10 @@ Report first, edit never — until the user picks fixes in the closing menu.
 Run only when the user requests a review, on their selected model. Do not
 switch models or launch reviewers automatically; delegation requires an
 explicit user request.
+Load `tokensave-routing` before reading project files. Resolve every linked
+reference from this skill's installed directory (the skill tool returns its
+base directory), including after continuation. For the report, read
+`reference/report.md` there directly; never search `/` or the home tree.
 The checks are `review-standards` and `review-security`; this skill replaces
 their step 1 (scope), their triage step (edits) and their Output sections.
 

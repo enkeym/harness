@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig } from "../../opencode/cost-report.mjs"
+import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport } from "../../opencode/cost-report.mjs"
 import { observationDirectory } from "../../opencode/observations.mjs"
 
 const stamp = Date.parse("2026-11-02T12:00:00Z")
@@ -27,6 +27,22 @@ test("daily report attributes messages by timezone and never sums native parent 
   assert.equal(data.families[0].nativeFamilyTotalUSD, null)
   assert.deepEqual(data.families[0].missingSessionIDs, ["ses_missing"])
   assert.equal(data.families[0].complete, false)
+})
+
+test("recomputed cost follows message time and separates input, cache and output", () => {
+  const peak = step("peak", { time: { created: Date.parse("2026-11-02T02:00:00Z") }, model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" } })
+  const off = step("off", { time: { created: Date.parse("2026-11-02T12:00:00Z") }, model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" } })
+  const data = report([record("ses_priced", [peak, off])])
+
+  assert.equal(data.usage.recomputedMessages, 2)
+  assert.equal(data.usage.unpricedMessages, 0)
+  assert.equal(data.usage.recomputedComplete, true)
+  assert.ok(Math.abs(data.usage.recomputedUSD - 0.000009945) < 1e-15)
+  assert.ok(Math.abs(data.usage.recomputedInputUSD - 0.0000045) < 1e-15)
+  assert.ok(Math.abs(data.usage.recomputedCacheReadUSD - 0.000000045) < 1e-15)
+  assert.ok(Math.abs(data.usage.recomputedOutputUSD - 0.0000054) < 1e-15)
+  assert.ok(Math.abs(data.usage.recomputedDeltaUSD + 0.199990055) < 1e-12)
+  assert.match(formatCostReport(data), /Пересчёт по тарифу/)
 })
 
 test("missing usage stays unknown and snapshots are not treated as complete history", () => {

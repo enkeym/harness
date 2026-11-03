@@ -1,8 +1,16 @@
 ---
 paths:
   - "bin/codex-install.mjs"
+  - "bin/install-files.mjs"
+  - "bin/shell-install.mjs"
+  - "ai-hooks/test/test-install-files.mjs"
+  - "ai-hooks/test/test-project-init.mjs"
   - "bin/codex-context.mjs"
   - "ai-hooks/bin/context-policy.mjs"
+  - "ai-hooks/bin/brief-policy.mjs"
+  - "ai-hooks/brief-routing.json"
+  - "ai-hooks/test/test-brief.mjs"
+  - "ai-hooks/test/test-task-context.mjs"
   - "skills/handoff/SKILL.md"
   - "skills/task-brief/SKILL.md"
   - "skills/review/**"
@@ -24,8 +32,12 @@ paths:
 ---
 
 ## Каталоги и установка клиентов
+- `opencode/retrieval-routing.mjs:registerRetrievalRouting` дополняет описания native read/grep/glob/shell/skill/subagent в `opencode/harness.js`: MCP перед проектным чтением, точная база ссылок skill, без обхода диска и shell-заглушек; делегирование требует явного запроса. Не меняет выполнение, разрешения или схемы инструментов. Проверять `test-retrieval-routing.mjs` и native `test-opencode.mjs`; правила ссылок согласованы с `opencode/AGENTS.md` и `skills/review/SKILL.md`.
+- `opencode/read-results.mjs:readTexts` распознаёт полные текстовые и JSON-ответы TokenSave, включая native metrics и вложенные MCP-обёртки. Общий разбор используют наблюдение диапазонов в `task-context.mjs` и устранение повторов в `context-cache.mjs`; проверять `test-task-context.mjs` и `test-opencode-context-cache.mjs`, включая отказ от усечённых ответов и unchanged-заглушек.
+- `opencode/task-context.mjs:registerTaskContext` регистрирует `task_context`, сохраняет checkpoint и выбранные прочитанные диапазоны в игнорируемой `.opencode/task-context/`. `opencode/handoff.mjs` вызывает `prepare` перед созданием продолжения, включая оба перехода brief: ограниченное автоматическое сохранение последних прочитанных диапазонов, приоритет ручного выбора, перечень путей и строк без исходников. Переносит ссылку и привязку сессии; hook `compaction` в `registerTaskContext` сохраняет диапазоны до свёртки и включает checkpoint в запрос на сводку. Лимиты задаёт `cache-policy.mjs`, приватную запись и Git ignore обеспечивает `local-state.mjs`. Восстановление проверяет хеш текущего файла; очистка только по `complete`. Согласованно проверять `test-task-context.mjs`, `test-handoff.mjs`, `test-brief.mjs`, `test-opencode.mjs`, skills task-brief/handoff/tokensave-routing и `docs/opencode.md`.
 - `/review mr` → `skills/review/reference/mr-delegation.md`: ревью на выбранной пользователем модели, делегирование только по явному запросу. Согласованно обновлять `skills/review/SKILL.md`, `docs/opencode.md` и `ai-hooks/test/test-opencode.mjs`.
-- `skills/task-brief/SKILL.md` задаёт пути `.codex/plans/<task-id>.md` и `.opencode/plans/<task-id>.md` и очистку завершённой задачи. Модель скиллом не определяется; при изменении согласованно обновлять `docs/context-automation.md` и `docs/opencode.md`.
+- `skills/task-brief/SKILL.md` задаёт пути `.codex/plans/<task-id>.md` и `.opencode/plans/<task-id>.md`, интерактивные существенные вопросы и очистку завершённой задачи. Ответы сохраняются до перехода в реализацию; `ai-hooks/bin/brief-policy.mjs:planningInstructions` напоминает это в свежем контексте. Модель скиллом не определяется; при изменении согласованно обновлять `docs/context-automation.md` и `docs/opencode.md`.
+- `ai-hooks/brief-routing.json` → `ai-hooks/bin/brief-policy.mjs`: `opencode/brief.mjs` регистрирует `brief_transition`, завершённые execution-события в `opencode/harness.js` передают очередь в существующий Handoff. `brief:<sessionID>` хранит фазу, исходную модель/variant и ожидающий перенос; `opencode/handoff.mjs` переносит метаданные. `harness-context brief` использует свежие потоки, `planReady`/`needsBrief`, исходные effort и sandbox, сохраняет `plan.json`. Согласованно проверять `test-brief.mjs`, `test-context-runner.mjs`, `test-handoff.mjs` и `docs/context-automation.md`.
 - `session.execution.succeeded` → синхронизация индексов и сбор наблюдений в `opencode/harness.js`; автоматической эскалации на Pro нет. Проверять отсутствие перехода после старого маркера тупика в `ai-hooks/test/test-opencode.mjs`.
 - `session.execution.succeeded/failed/interrupted`, `session.hook("compaction")` — `opencode/harness.js` запускает `opencode/observations.mjs:collectObservations`; `bin/opencode-observe.mjs` читает полные страницы OpenCode 2.2.5. Контракт `sessions/<id>.json` и границы покрытия описаны в `docs/opencode.md`, читает `skills/shared/optimization-observations.md`; проверять нативное выполнение и сохранение истории в `ai-hooks/test/test-opencode.mjs` и `ai-hooks/test/test-opencode-observations.mjs`.
 - `opencode/model-routing.mjs:configureModelRouting` удаляет прежние команды/агентов `harness-brief`, `harness-plan`, `harness-review`, `harness-review-flash` и старые модельные привязки встроенных агентов. Глобальная модель и пользовательские агенты сохраняются. Согласованно проверять установщик, `ai-hooks/test/test-opencode.mjs` и `docs/opencode.md`.
@@ -40,4 +52,6 @@ paths:
   При переносе entrypoint согласованно менять установку и `docs/context-automation.md`.
 - MCP registry: при изменении `mcp/servers.json` согласованно обновлять `bin/mcp-sync.mjs`, `mcp/servers.md` и установку через `bin/codex-install.mjs` и `bin/opencode-install.mjs`; `ai-hooks/test/test-codex.mjs` и `ai-hooks/test/test-opencode.mjs` проверяют регистрацию, сохранение сторонних настроек и проверку `--check` без записи.
 - `OPENCODE_CONFIG_DIR` — `opencode/config.mjs:configDirectory` используется установщиком и MCP-синхронизацией; `docs/opencode.md` и `ai-hooks/test/test-opencode.mjs` закрепляют приоритет JSONC, сохранение настроек и `--check` без записи.
-- `CODEX_HOME` — `bin/codex-install.mjs:codexHome` задаёт каталог установки; `ai-hooks/bin/project-init.sh:lock_dir` размещает блокировки в `$CODEX_HOME/state`, если не задан `AI_HOOKS_STATE_DIR`. `docs/codex.md` описывает этот контракт; `ai-hooks/test/test-codex.mjs` проверяет пользовательский каталог и отсутствие записей при `--check`. Согласованно обновлять установщик, блокировки, документацию и тест при изменении поведения.
+- `CODEX_HOME` — `bin/codex-install.mjs:codexHome` задаёт каталог установки. `docs/codex.md` и `ai-hooks/test/test-codex.mjs` закрепляют пользовательский каталог и отсутствие записей при `--check`.
+- `AI_HOOKS_STATE_DIR` → `ai-hooks/bin/project-init.sh:lock_dir`: общий init использует `$XDG_STATE_HOME/harness` по умолчанию, не каталог отдельного клиента; согласованно проверять `ai-hooks/test/test-project-init.mjs`, `docs/codex.md` и `docs/opencode.md`.
+- Shell bootstrap и сохранение активных инструкций/hooks/config: `bin/install-files.mjs` и `bin/shell-install.mjs` используются обоими установщиками. `ai-hooks/test/test-install-files.mjs` проверяет конфликты, объединение и повторную установку; `test-codex.mjs` и `test-opencode.mjs` — конфигурацию клиента. Не заменять объединение резервным копированием с последующей утратой активных настроек.

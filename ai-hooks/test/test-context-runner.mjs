@@ -14,14 +14,14 @@ function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-runner-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true })); return dir;
 }
-function backend({ finishAt = 4, unresolved = false, crash = false, stalled = false, pendingTools = false, reroute = false } = {}) {
+function backend({ finishAt = 4, unresolved = false, crash = false, stalled = false, pendingTools = false, reroute = false, rebriefAt = 0, readyAt = 1 } = {}) {
   const requests = []; let turn = 0; let threads = 0; let pending; let onEvent;
   const observations = [];
   return { requests, observations, factory(options) {
     onEvent = options.onEvent;
     return { async initialize() {}, close() {}, async request(method, params) {
       requests.push({ method, params });
-      if (method === 'thread/start') return { thread: { id: `thread-${++threads}` } };
+      if (method === 'thread/start') return { thread: { id: `thread-${++threads}` }, model: 'daily-model', modelProvider: 'fixture', reasoningEffort: 'high', approvalPolicy: 'on-request', sandbox: { type: 'workspaceWrite', writableRoots: [options.cwd], networkAccess: false, excludeTmpdirEnvVar: true, excludeSlashTmp: true }, serviceTier: 'default' };
       if (method === 'thread/compact/start') {
         onEvent({ method: 'item/completed', params: { threadId: params.threadId, item: { id: 'compact', type: 'contextCompaction' } } });
         pending = { method: 'item/completed', params: { threadId: params.threadId, item: { type: 'contextCompaction' } } }; return {};
@@ -36,6 +36,10 @@ function backend({ finishAt = 4, unresolved = false, crash = false, stalled = fa
         const ack = params.input[0].text.match(/ack must equal ([\w-]+)/)[1];
         turn++;
         const cp = checkpoint(ack, stalled ? 1 : turn, turn >= finishAt ? 'completed' : 'running');
+        if (params.outputSchema.properties.needsBrief) {
+          cp.needsBrief = turn === rebriefAt;
+          cp.planReady = params.input[0].text.includes('Planning phase.') && turn >= readyAt;
+        }
         if (unresolved) cp.unresolved = 'write may still be running';
         onEvent({ method: 'thread/tokenUsage/updated', params: { threadId: params.threadId, tokenUsage: {
           total: { inputTokens: turn * 100, outputTokens: turn * 10 }, last: { inputTokens: 100 }, modelContextWindow: 100 } } });
@@ -90,6 +94,59 @@ test('context pressure transfers the handoff and continues automatically in a fr
   assert.equal(saved.permissions, 'no push');
   assert.equal(saved.thread, 'thread-2');
   assert.equal(fs.existsSync(path.join(dir, 'lease.json')), false);
+});
+
+test('brief plans in a fresh read-only thread and implements with the original model, effort and sandbox', async t => {
+  const dir = setup(t); const fake = backend({ finishAt: 2 });
+  const state = await runObjective({ project: dir, dir, objective: 'develop module', permissions: 'no push', brief: true, clientFactory: fake.factory });
+  const starts = fake.requests.filter(c => c.method === 'thread/start');
+  const turns = fake.requests.filter(c => c.method === 'turn/start');
+
+  assert.equal(state.phase, 'completed');
+  assert.equal(starts.length, 3);
+  assert.equal(starts[1].params.model, 'gpt-6.1-sol');
+  assert.equal(starts[1].params.sandbox, 'read-only');
+  assert.equal(starts[1].params.approvalPolicy, 'never');
+  assert.equal(turns[0].params.threadId, 'thread-2');
+  assert.equal(turns[0].params.effort, 'medium');
+  assert.equal(starts[2].params.model, 'daily-model');
+  assert.equal(starts[2].params.modelProvider, 'fixture');
+  assert.equal(starts[2].params.approvalPolicy, 'on-request');
+  assert.equal(turns[1].params.threadId, 'thread-3');
+  assert.equal(turns[1].params.effort, 'high');
+  assert.deepEqual(turns[1].params.sandboxPolicy, state.working.sandboxPolicy);
+  assert.match(turns[1].params.input[0].text, /"completedSteps":1/);
+  const plan = JSON.parse(fs.readFileSync(path.join(dir, 'plan.json')));
+  assert.equal(plan.permissions, 'no push');
+  assert.equal(plan.checkpoint.planReady, true);
+  assert.equal(fake.requests.some(c => /resume|fork/.test(c.method)), false);
+});
+
+test('invalidated implementation plans rebrief and restore the same working model', async t => {
+  const dir = setup(t); const fake = backend({ finishAt: 4, rebriefAt: 2 });
+  const state = await runObjective({ project: dir, dir, objective: 'fix complex bug', permissions: 'no push', brief: true, clientFactory: fake.factory });
+  const starts = fake.requests.filter(c => c.method === 'thread/start');
+  const turns = fake.requests.filter(c => c.method === 'turn/start');
+
+  assert.equal(state.phase, 'completed');
+  assert.deepEqual(starts.slice(1).map(c => c.params.model), ['gpt-6.1-sol', 'daily-model', 'gpt-6.1-sol', 'daily-model']);
+  assert.deepEqual(turns.map(c => c.params.effort), ['medium', 'high', 'medium', 'high']);
+  assert.match(turns[2].params.input[0].text, /"needsBrief":true/);
+});
+
+test('unfinished planning stays read-only and analysis-only objectives never start implementation', async t => {
+  for (const [options, expectedTurns, expectedStarts] of [[{ finishAt: 3, readyAt: 2 }, 3, 3], [{ finishAt: 1 }, 1, 2]]) {
+    const dir = setup(t); const fake = backend(options);
+    const state = await runObjective({ project: dir, dir, objective: 'analyze architecture', permissions: 'no push', brief: true, clientFactory: fake.factory });
+    const starts = fake.requests.filter(c => c.method === 'thread/start');
+    const turns = fake.requests.filter(c => c.method === 'turn/start');
+
+    assert.equal(state.phase, 'completed');
+    assert.equal(turns.length, expectedTurns);
+    assert.equal(starts.length, expectedStarts);
+    if (options.readyAt) assert.deepEqual(turns.slice(0, 2).map(c => c.params.effort), ['medium', 'medium']);
+    else assert.equal(state.stage, 'planning');
+  }
 });
 
 test('uncertain operations stop maintenance; no-progress and turn budgets stop loops', async t => {

@@ -50,7 +50,7 @@ need_rag() {
 
 # Ключ замка: sha256 корня, 16 символов.
 key="$(printf '%s' "$repo_root" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
-lock_dir="${AI_HOOKS_STATE_DIR:-${CODEX_HOME:-$HOME/.codex}/state}/project-init"
+lock_dir="${AI_HOOKS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/harness}/project-init"
 lock="$lock_dir/$key.lock"
 
 # Замок держит живой прогон. Без pid — mkdir уже был, pid ещё не записан:

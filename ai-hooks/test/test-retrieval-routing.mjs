@@ -1,0 +1,31 @@
+import assert from "node:assert/strict"
+import { test } from "node:test"
+import { registerRetrievalRouting } from "../../opencode/retrieval-routing.mjs"
+
+test("retrieval guidance reaches native tools without changing execution or schemas", async () => {
+  const execute = async () => ({ content: "original result" })
+  const tools = new Map(["read", "grep", "glob", "shell", "skill", "subagent", "execute", "edit"].map(name => [name, { name, description: `Original ${name}`, input: { type: "object" }, execute }]))
+  const context = { tool: { transform: async transform => transform({ get: name => tools.get(name), update: (name, update) => update(tools.get(name)) }) } }
+
+  await registerRetrievalRouting(context)
+
+  for (const name of ["read", "grep", "glob", "shell"]) assert.match(tools.get(name).description, /^Indexed project files must be searched\/read with TokenSave/)
+  assert.match(tools.get("shell").description, /never search \/ or the home tree/)
+  assert.match(tools.get("shell").description, /do not create placeholder\/background shells/)
+  assert.match(tools.get("skill").description, /returned Base directory/)
+  assert.match(tools.get("subagent").description, /^Use only when the user explicitly requests delegation/)
+  assert.match(tools.get("execute").description, /scoped tokensave_context with task/)
+  assert.equal(tools.get("edit").description, "Original edit")
+  for (const tool of tools.values()) {
+    assert.equal(tool.execute, execute)
+    assert.deepEqual(tool.input, { type: "object" })
+    assert.deepEqual(await tool.execute(), { content: "original result" })
+  }
+  const before = structuredClone([...tools.values()].map(({ name, description }) => ({ name, description })))
+  await registerRetrievalRouting(context)
+  assert.deepEqual([...tools.values()].map(({ name, description }) => ({ name, description })), before)
+})
+
+test("routing supports clients with only a subset of native tools", async () => {
+  await registerRetrievalRouting({ tool: { transform: async transform => transform({ get: () => undefined, update: () => assert.fail("missing tool updated") }) } })
+})

@@ -20,6 +20,21 @@ test("context keeps one complete identical MCP read without mutating stored hist
   assert.deepEqual(messages, before)
 })
 
+test("JSON MCP reads with native metrics deduplicate only complete identical results", () => {
+  const body = Array.from({ length: 60 }, (_, index) => `${index + 1}\tsource evidence`).join("\n")
+  const value = { file: "source.mjs", mode: "lines", digest: "a".repeat(64), body }
+  const json = `${JSON.stringify(value, null, 2)}\n\ntokensave_metrics: before=10 after=20 result=15 saved=0`
+  const messages = [result("first", json), result("second", json)]
+
+  assert.match(deduplicateContext(messages)[1].content[0].result.value, /tool call first/)
+  assert.equal(messages[1].content[0].result.value, json)
+  for (const changed of [JSON.stringify({ ...value, unchanged: true }), json + "\n[full_result=/tmp/truncated]"]) {
+    assert.equal(deduplicateContext([result("a", changed), result("b", changed)])[1].content[0].result.value, changed)
+  }
+  const changed = JSON.stringify({ ...value, body: body + "changed" })
+  assert.equal(deduplicateContext([result("first", json), result("changed", changed)])[1].content[0].result.value, changed)
+})
+
 test("changed, truncated, uncertain and generic tool outputs remain complete", () => {
   for (const [value, name] of [[source.replace("source evidence", "changed evidence"), "execute"], [source + "\nfull_result=/tmp/log", "execute"], ["ordinary shell output".repeat(60), "shell"]]) {
     const messages = [result("first"), result("second", value, name)]

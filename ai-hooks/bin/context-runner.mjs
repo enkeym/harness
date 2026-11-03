@@ -9,6 +9,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Accounting, acquireLease, atomicJson, readJson, hash, transition, ingestRollout, classify, redactDiagnostic } from './context-state.mjs';
 import { contextPolicy } from './context-policy.mjs';
+import { readBriefPolicy, planningInstructions } from './brief-policy.mjs';
 
 const strings = ['ack', 'latestSteering', 'constraints', 'decisions', 'changedPaths', 'verification', 'unresolved', 'nextAction', 'result'];
 export const checkpointSchema = {
@@ -151,8 +152,10 @@ export function policyFor(overrides = {}) {
   return policy;
 }
 
-export async function runObjective({ project, objective, permissions, dir, policy = defaultPolicy, clientFactory = options => new AppServer(options) }) {
+export async function runObjective({ project, objective, permissions, dir, policy = defaultPolicy, brief = false, clientFactory = options => new AppServer(options) }) {
   policy = policyFor(policy);
+  const routing = brief ? readBriefPolicy('codex') : null;
+  const schema = routing ? { ...checkpointSchema, properties: { ...checkpointSchema.properties, needsBrief: { type: 'boolean' }, planReady: { type: 'boolean' } }, required: [...checkpointSchema.required, 'needsBrief', 'planReady'] } : checkpointSchema;
   const release = acquireLease(dir);
   let previous;
   try { previous = readJson(path.join(dir, 'state.json'), null); }
@@ -191,8 +194,17 @@ export async function runObjective({ project, objective, permissions, dir, polic
         }
       } });
     await client.initialize(remaining());
-    const startThread = async () => {
-      const thread = await client.request('thread/start', { cwd: project }, remaining());
+    let working;
+    const startThread = async (planning = false) => {
+      const settings = !working ? {} : planning
+        ? { model: routing.planner.model, ...(routing.planner.modelProvider ? { modelProvider: routing.planner.modelProvider } : {}), sandbox: 'read-only', approvalPolicy: 'never' }
+        : { model: working.model, modelProvider: working.modelProvider, approvalPolicy: working.approvalPolicy, serviceTier: working.serviceTier };
+      const thread = await client.request('thread/start', { cwd: project, ...settings }, remaining());
+      if (routing && !working) {
+        if (!thread.model || !thread.modelProvider || !thread.sandbox || thread.approvalPolicy === undefined) throw new Error('Missing original model or permission settings');
+        working = { model: thread.model, modelProvider: thread.modelProvider, effort: thread.reasoningEffort, sandboxPolicy: thread.sandbox, approvalPolicy: thread.approvalPolicy, serviceTier: thread.serviceTier };
+        state.working = working;
+      }
       if (!thread.thread?.id || state.threads.includes(thread.thread.id)) throw new Error('Missing or reused new thread id');
       state.thread = thread.thread.id; state.threads.push(state.thread); invalidate();
       accounting.state.context = 0; accounting.state.growth = 0; accounting.state.contextWindow = null;
@@ -200,29 +212,46 @@ export async function runObjective({ project, objective, permissions, dir, polic
       emit('thread-started');
     };
     await startThread();
+    if (routing) { state.stage = 'planning'; await startThread(true); }
     let ack = crypto.randomUUID(); let transferred = false;
     while (!stopped) {
       if (Date.now() - state.started >= policy.maxMs) { emit('budget'); break; }
       const prompt = state.turns === 0 || transferred ? `Continue this authorized objective. Read project instructions and the handoff skill.\nObjective: ${objective}\nUser permissions and constraints (never expand them): ${permissions}\nHandoff checkpoint: ${JSON.stringify(state.checkpoint ?? null)}\nRestore the remaining plan and execute its next action without confirmation.\n` : 'Continue from the last checkpoint and latest user steering.\n';
-      const instructions = `Work autonomously for one useful, bounded step, then return the checkpoint JSON (<=3000 characters). No subagents. Never push unless explicitly permitted. Stop all tools/tests before returning. Preserve user changes. Do not replay uncertain writes. status=completed only after objective and verification are actually finished; blocked for missing user input. unresolved lists pending/uncertain operations (empty if none). completedSteps must increase only after useful progress. Include input-specific verification, changed paths, decisions, latest steering and the remaining plan in nextAction. Keep secrets out of the checkpoint. ack must equal ${ack}.`;
+      const stageInstructions = !routing ? '' : state.stage === 'planning'
+        ? `${planningInstructions} Return the executable plan in decisions and nextAction; the runner persists it. Set planReady=true only when the plan is executable and implementation is authorized; otherwise continue investigating with planReady=false. needsBrief=false in planning. status=completed is only for an analysis-only objective. Do not edit files. `
+        : 'Execute the adequate plan. Set needsBrief=true only if new evidence invalidates the plan or diagnosis stalls; include a compact Handoff in the checkpoint. Otherwise needsBrief=false. planReady=false during implementation. ';
+      const instructions = stageInstructions + `Work autonomously for one useful, bounded step, then return the checkpoint JSON (<=3000 characters). No subagents. Never push unless explicitly permitted. Stop all tools/tests before returning. Preserve user changes. Do not replay uncertain writes. status=completed only after objective and verification are actually finished; blocked for missing user input. unresolved lists pending/uncertain operations (empty if none). completedSteps must increase only after useful progress. Include input-specific verification, changed paths, decisions, latest steering and the remaining plan in nextAction. Keep secrets out of the checkpoint. ack must equal ${ack}.`;
       finalText = ''; emit('turn-pending');
       fs.writeFileSync(outputBudgetFile, '', { mode: 0o600 });
       const result = await client.request('turn/start', { threadId: state.thread,
-        input: [{ type: 'text', text: prompt + instructions }], outputSchema: checkpointSchema }, remaining());
+        ...(routing ? { effort: state.stage === 'planning' ? routing.planner.effort : working.effort, ...(state.stage === 'implementation' ? { sandboxPolicy: working.sandboxPolicy } : {}) } : {}),
+        input: [{ type: 'text', text: prompt + instructions }], outputSchema: schema }, remaining());
       const completed = await client.wait(e => e.method === 'turn/completed' && e.params.threadId === state.thread && e.params.turn.id === result.turn.id,
         Math.max(1, policy.maxMs - (Date.now() - state.started)));
       if (completed.params.turn.status !== 'completed' || active.size) throw new Error('Turn not safely completed; inspect native thread');
       const checkpoint = validateCheckpoint(JSON.parse(finalText), ack);
+      if (routing && (typeof checkpoint.needsBrief !== 'boolean' || typeof checkpoint.planReady !== 'boolean')) throw new Error('Missing brief phase checkpoint');
       transferred = false;
       state.progress = checkpoint.completedSteps > (state.checkpoint?.completedSteps ?? 0);
       state.checkpoint = checkpoint; state.turns++;
-      atomicJson(path.join(dir, 'checkpoint.json'), { v: 1, task, project, objective, permissions, thread: state.thread, checkpoint });
+      atomicJson(path.join(dir, 'checkpoint.json'), { v: 1, task, project, objective, permissions, thread: state.thread, ...(routing ? { stage: state.stage, working } : {}), checkpoint });
       emit('checkpoint');
       const action = chooseAction(state, policy);
       if (['completed', 'blocked', 'budget', 'stalled'].includes(action)) { emit(action); break; }
+      if (routing && state.stage === 'planning' && checkpoint.needsBrief) throw new Error('Recursive brief request');
+      if (routing && ((state.stage === 'planning' && checkpoint.planReady) || (state.stage === 'implementation' && checkpoint.needsBrief))) {
+        if (state.stage === 'planning') atomicJson(path.join(dir, 'plan.json'), { task, objective, permissions, checkpoint });
+        state.stage = state.stage === 'planning' ? 'implementation' : 'planning';
+        emit('brief-transfer-pending');
+        await startThread(state.stage === 'planning');
+        ack = crypto.randomUUID(); transferred = true;
+        state.lastMaintenance = state.turns;
+        emit('brief-transfer-started');
+        continue;
+      }
       if (action === 'handoff') {
         emit('handoff-pending');
-        await startThread();
+        await startThread(state.stage === 'planning');
         ack = crypto.randomUUID(); transferred = true;
         state.lastMaintenance = state.turns;
         emit('handoff-started');
@@ -258,8 +287,8 @@ export function stateDirectory(project) {
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
-  if (!['run', 'status', 'observe', 'recover'].includes(command)) {
-    console.log('harness-context run PROJECT OBJECTIVE_FILE PERMISSIONS_FILE [POLICY_JSON]\nharness-context status PROJECT\nharness-context observe PROJECT ROLLOUT_JSONL\nharness-context recover PROJECT (manual audit required; never replays work)');
+  if (!['run', 'brief', 'status', 'observe', 'recover'].includes(command)) {
+    console.log('harness-context run|brief PROJECT OBJECTIVE_FILE PERMISSIONS_FILE [POLICY_JSON]\nharness-context status PROJECT\nharness-context observe PROJECT ROLLOUT_JSONL\nharness-context recover PROJECT (manual audit required; never replays work)');
     process.exitCode = command ? 2 : 0; return;
   }
   const project = fs.realpathSync(args[0]); const dir = stateDirectory(project);
@@ -294,7 +323,7 @@ async function main() {
   const objective = fs.readFileSync(args[1], 'utf8'); const permissions = fs.readFileSync(args[2], 'utf8');
   if (!objective.trim() || !permissions.trim() || objective.length + permissions.length > 16000) throw new Error('Objective and explicit permissions must be nonempty and <=16000 characters combined');
   const policy = policyFor(args[3] ? readJson(args[3], {}) : {});
-  const state = await runObjective({ project, objective, permissions, dir, policy });
+  const state = await runObjective({ project, objective, permissions, dir, policy, brief: command === 'brief' });
   if (state.phase !== 'completed') process.exitCode = 1;
 }
 

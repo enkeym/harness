@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { installShell } from './shell-install.mjs';
+import { installInstructions, installHooks, installDefaults, installLink } from './install-files.mjs';
 import { syncCodexContext } from './codex-context.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -38,12 +39,9 @@ try {
   drift++;
 }
 const links = [
-  [path.join(codexHome, 'AGENTS.md'), 'codex/AGENTS.md'],
-  [path.join(codexHome, 'hooks.json'), 'codex/hooks.json'],
   [path.join(home, '.ai-hooks'), 'ai-hooks'],
   [path.join(home, '.config/harness/repo'), '.'],
   [path.join(home, '.config/harness/bashrc'), 'shell/harness.bash'],
-  [path.join(home, '.tokensave/config.toml'), 'tokensave/config.toml'],
   [path.join(home, '.local/bin/ragsave'), 'bin/ragsave'],
   [path.join(home, '.local/bin/harness-context'), 'ai-hooks/bin/context-runner.mjs'],
   ...['ragsave', 'tests', 'README.md'].map((name) => [path.join(ragHome, name), `ragsave/${name}`]),
@@ -54,28 +52,12 @@ for (const name of fs.readdirSync(path.join(root, 'skills'))) {
 }
 
 for (const [target, relative] of links) {
-  const source = path.resolve(root, relative);
-  let stat;
-  try { stat = fs.lstatSync(target); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (stat?.isSymbolicLink() && path.resolve(path.dirname(target), fs.readlinkSync(target)) === source) {
-    console.log(`✓ ${target}`);
-    continue;
-  }
-  if (check) {
-    console.error(`✗ ${target} — требуется установка`);
-    drift++;
-    continue;
-  }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  if (stat) {
-    const backup = `${target}.bak-${Date.now()}`;
-    fs.renameSync(target, backup);
-    console.log(`Бэкап: ${backup}`);
-  }
-  fs.symlinkSync(source, target);
-  console.log(`✓ ${target} → ${source}`);
+  drift += installLink(target, path.resolve(root, relative), check);
 }
 
+drift += installInstructions(path.join(codexHome, 'AGENTS.md'), path.join(root, 'codex/AGENTS.md'), check);
+drift += installHooks(path.join(codexHome, 'hooks.json'), path.join(root, 'codex/hooks.json'), check);
+drift += installDefaults(path.join(home, '.tokensave/config.toml'), path.join(root, 'tokensave/config.toml'), check);
 drift += installShell(home, check);
 try { drift += await syncCodexContext({ check, cwd: home }); }
 catch { console.error('✗ Codex context policy'); drift++; }

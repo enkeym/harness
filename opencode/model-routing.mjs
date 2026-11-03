@@ -1,6 +1,14 @@
+import { deepseekTokenRates } from "./cost-policy.mjs"
+
 export const deepseekModels = {
   flash: { providerID: "deepseek", id: "deepseek-flash" },
   pro: { providerID: "deepseek", id: "deepseek-v4-pro" }
+}
+
+export function offPeakModelID(id) {
+  if (typeof id !== "string") return id
+  const canonical = id.replace(/-(offpeak|peak)$/, "")
+  return canonical in deepseekTokenRates ? `${canonical}-offpeak` : id
 }
 
 export function configureModelRouting(config) {

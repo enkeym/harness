@@ -11,6 +11,15 @@ revisions, command output/logs and files outside the index use local tools.
 Discover the tool schema before calling it through the active client's MCP
 interface. Use its discovered callable name and arguments; do not assume that
 server display labels and client callable names are interchangeable.
+Before calling, check required fields and JSON types against that exact schema;
+examples and retained plans do not override it. `tokensave_context` uses `task`,
+whereas `tokensave_search` uses `query`; `path_include` and `path_exclude` are
+arrays of strings, including for one path. Do not silently invent aliases.
+
+On an argument/schema error, refresh only the affected tool's schema and make
+one corrected retry. If it still fails, preserve the error and diagnose that
+boundary with doctor; do not repeat the same payload, restart the plan or ask
+for a new dialogue as a substitute for diagnosis.
 
 | Question | Tool |
 | --- | --- |
@@ -28,6 +37,10 @@ server display labels and client callable names are interchangeable.
 - Use `format: "text"` where supported. Reuse `if_digest` only for the same
   range still held in context. Read a whole small file when its full contract
   is needed; avoid large `full`, `map`, `signatures` or whole-symbol bodies.
+- For TokenSave ranges use `mode: "lines", lines: "A-B"`; unsupported
+  `offset`/`limit` arguments do not bound a read. Never truncate a serialized
+  tool response with `.slice()`: narrow the query before calling it and return
+  complete selected content, preserving its header and real line numbers.
 - Exact-text lookup: a small `limit` and `exact_total: false` when counting
   every match is unnecessary. Increase limits only to answer a specific gap.
 - Extra commands may be discoverable through `tokensave_more`; obtain their
@@ -40,6 +53,11 @@ server display labels and client callable names are interchangeable.
   requires it. If an error says `graph_root selects the same project already
   served`, retry once without both selectors; this is an argument error,
   not a missing index or permission to fall back to shell reads.
+- At the first project lookup, confirm the served `project_root` with
+  `tokensave_status`; reuse that result until the server or target changes.
+  If the requested path belongs to another project, select its verified,
+  initialized root through `graph_root`. Do not guess the root or interpret
+  empty results from the wrong project as missing code or a broken index.
 - No index, unavailable/broken MCP, a file explicitly reported unscanned or
   excluded by the project's index configuration →
   state the failing call or coverage evidence and affected paths once, then

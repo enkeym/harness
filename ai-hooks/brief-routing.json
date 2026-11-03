@@ -1,0 +1,9 @@
+{
+  "opencode": {
+    "enabled": true,
+    "planner": { "providerID": "deepseek", "id": "deepseek-v4-pro" }
+  },
+  "codex": {
+    "planner": { "model": "gpt-6.1-sol", "effort": "medium" }
+  }
+}

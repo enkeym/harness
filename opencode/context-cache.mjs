@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { cachePolicy } from "./cache-policy.mjs"
+import { readTexts } from "./read-results.mjs"
 
 export function deduplicateContext(messages) {
   const held = new Map()
@@ -21,10 +22,7 @@ export function deduplicateContext(messages) {
               ? result.value.map((item) => item.text).join("\n")
               : null
         if (text === null) return part
-        const read =
-          /^file: .+\nmode: (?:lines|full|map|signatures)\ndigest: [a-f0-9]{64}\n/m.test(
-            text
-          )
+        const read = readTexts(text).length > 0
         if (
           (!read && part.name !== "skill") ||
           Buffer.byteLength(text) < cachePolicy.readResultMinBytes ||

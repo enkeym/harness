@@ -4,14 +4,15 @@ import { createHash } from "node:crypto"
 import { readHandoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
 import { readInstructions } from "./instructions.mjs"
 import { cachePolicy } from "./cache-policy.mjs"
+import { ensureProjectIgnore, writePrivateText } from "./local-state.mjs"
 import handoffRpc from "./handoff-rpc.mjs"
 import {
   resolveHandoffModel,
   stripHandoffRoute
 } from "./model-routing.mjs"
 
-export async function registerHandoff(context, onTransfer) {
-  const active = new Set()
+export async function registerHandoff(context, onTransfer, taskContext) {
+  const active = new Map()
   const expired = (target) =>
     !target?.submitted &&
     (!Number.isFinite(target?.generatedAt) ||
@@ -59,16 +60,22 @@ export async function registerHandoff(context, onTransfer) {
       message,
       ...(targetID ? { targetID } : {})
     })
-  const execute = async ({ sessionID, prompt }) => {
+  const execute = async ({ sessionID, prompt, transfer, isCurrent }) => {
     if (active.has(sessionID)) {
+      if (transfer) {
+        await active.get(sessionID)
+        if (isCurrent && !await isCurrent()) return false
+        return execute({ sessionID, prompt, transfer, isCurrent })
+      }
       await notify(
         sessionID,
         "preparing",
         "Перенос уже выполняется. Дождитесь открытия новой сессии."
       )
-      return
+      return false
     }
-    active.add(sessionID)
+    const completed = Promise.withResolvers()
+    active.set(sessionID, completed.promise)
     try {
       await notify(
         sessionID,
@@ -77,7 +84,13 @@ export async function registerHandoff(context, onTransfer) {
       )
       const key = `handoff:${sessionID}`
       await context.session.wait({ sessionID })
+      if (isCurrent && !await isCurrent()) return false
       const source = await context.session.get({ sessionID })
+      const brief = await context.storage.get(`brief:${sessionID}`)
+      if (!transfer && brief?.pending) {
+        transfer = brief.pending
+        isCurrent = async () => (await context.storage.get(`brief:${sessionID}`))?.pending?.id === transfer.id
+      } else if (!transfer && brief?.stage) transfer = { brief: { stage: brief.stage, originalModel: brief.originalModel } }
       const messages = await context.session.context({ sessionID })
       const handoffPrompt = readHandoffPrompt()
       const { core, instructions } = readInstructions()
@@ -92,6 +105,7 @@ export async function registerHandoff(context, onTransfer) {
             model: source.model,
             permissions: source.permissions,
             request: prompt.text ?? "",
+            ...(transfer ? { transfer } : {}),
             policy: handoffPrompt,
             rules: core,
             instructions
@@ -113,7 +127,7 @@ export async function registerHandoff(context, onTransfer) {
         await prune(key, target)
         target = null
       }
-      if (target?.fingerprint !== fingerprint) target = null
+      if (target?.fingerprint !== fingerprint && (!transfer?.id || target?.transfer?.id !== transfer.id)) target = null
       if (target?.id) {
         try {
           await context.session.get({ sessionID: target.id })
@@ -140,7 +154,7 @@ export async function registerHandoff(context, onTransfer) {
           "Открываю существующее продолжение.",
           target.id
         )
-        return
+        return true
       }
       if (!target) {
         const routeOption = /(?:^|\s)--route=(\S+)(?=\s|$)/
@@ -148,20 +162,24 @@ export async function registerHandoff(context, onTransfer) {
         const override = ["pro", "flash"].includes(routeValue)
           ? routeValue
           : null
-        const summary = await context.session.generate({ sessionID, prompt: handoffPrompt })
+        const summary = transfer?.summary === undefined
+          ? await context.session.generate({ sessionID, prompt: handoffPrompt })
+          : { text: transfer.summary }
         const text = stripHandoffRoute(summary.text)
         if (!text.trim()) throw new Error("Empty Handoff; transfer stopped")
+        const checkpoint = await taskContext?.prepare(sessionID, text, messages)
         const file = path.resolve(
           source.location.directory,
-          (prompt.text ?? "").replace(routeOption, "").trim() || "HANDOFF.md"
+          (prompt.text ?? "").replace(routeOption, "").trim() || ".opencode/HANDOFF.md"
         )
         target = {
           fingerprint,
           file,
-          summary: text,
+          summary: checkpoint ? `${text}\n\n${checkpoint}` : text,
           submitted: false,
           previousIDs,
-          model: resolveHandoffModel(source.model, override),
+          model: transfer?.model ?? resolveHandoffModel(source.model, override),
+          ...(transfer ? { transfer: { ...transfer, summary: undefined } } : {}),
           generatedAt: Date.now(),
           summaryHits: 0,
           continuationHits: 0
@@ -173,7 +191,23 @@ export async function registerHandoff(context, onTransfer) {
       }
       const existing = Boolean(target.id)
       if (!target.id) {
-        fs.writeFileSync(target.file, target.summary, { mode: 0o600 })
+        if (isCurrent && !await isCurrent()) return false
+        const localDirectory = path.join(source.location.directory, ".opencode")
+        const relativeFile = path.relative(localDirectory, target.file)
+        if (relativeFile === "HANDOFF.md" || relativeFile.startsWith(`handoffs${path.sep}`)) {
+          const local = await ensureProjectIgnore(source.location.directory, ["/HANDOFF.md", "/handoffs/"])
+          target.file = path.join(local, relativeFile)
+          let directory = local
+          for (const segment of path.dirname(relativeFile).split(path.sep).filter(segment => segment !== ".")) {
+            directory = path.join(directory, segment)
+            await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 })
+            if (await fs.promises.realpath(directory) !== directory) throw new Error("Handoff directory must not be a symlink")
+          }
+          await writePrivateText(target.file, target.summary)
+        } else {
+          if (transfer) fs.mkdirSync(path.dirname(target.file), { recursive: true })
+          fs.writeFileSync(target.file, target.summary, { mode: 0o600 })
+        }
         const created = await context.session.create({
           location: source.location,
           agent: source.agent,
@@ -184,7 +218,11 @@ export async function registerHandoff(context, onTransfer) {
         target = { ...target, id: created.id }
         await context.storage.set(key, target)
       }
-      const text = `Restore this Handoff. Read project instructions and applicable skills. Continue the next authorized step of the remaining plan immediately. Keep completed or blocked work stopped. Do not launch another worker or transfer again.\n\n${target.summary}`
+      if (target.transfer?.brief && !await context.storage.get(`brief:${target.id}`)) {
+        await context.storage.set(`brief:${target.id}`, target.transfer.brief)
+      }
+      await taskContext?.transfer(sessionID, target.id)
+      const text = `${target.transfer?.instructions ?? "Restore this Handoff. Read project instructions and applicable skills. Continue the next authorized step of the remaining plan immediately. Keep completed or blocked work stopped. Do not launch another worker or transfer again."}\n\n${target.summary}`
       const continuation = await context.session.context({
         sessionID: target.id
       })
@@ -203,6 +241,7 @@ export async function registerHandoff(context, onTransfer) {
         )
       }
       if (!delivered) {
+        if (isCurrent && !await isCurrent()) return false
         await context.session.prompt({ sessionID: target.id, text })
       }
       await context.storage.set(key, {
@@ -217,6 +256,7 @@ export async function registerHandoff(context, onTransfer) {
         "План передан. Открываю новую сессию.",
         target.id
       )
+      return true
     } catch (error) {
       await notify(
         sessionID,
@@ -226,6 +266,7 @@ export async function registerHandoff(context, onTransfer) {
       throw error
     } finally {
       active.delete(sessionID)
+      completed.resolve()
     }
   }
   await context.command.transform((editor) => {

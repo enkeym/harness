@@ -1086,12 +1086,12 @@
     "key": "alt+[KeyP]",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
-      "text": "/model\r"
+      "text": "\u0018m"
     },
     "when": "terminalFocus"
   },
   {
-    "key": "ctrl+[KeyO]",
+    "key": "alt+[KeyO]",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
       "text": "\u000f"

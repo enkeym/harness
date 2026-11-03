@@ -4,13 +4,17 @@ import { contextPolicy, readHandoffPrompt } from "../ai-hooks/bin/context-policy
 import { readInstructions } from "./instructions.mjs"
 import { deduplicateContext } from "./context-cache.mjs"
 import { registerHandoff } from "./handoff.mjs"
+import { registerBrief } from "./brief.mjs"
+import { registerTaskContext } from "./task-context.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
 import { refreshCostReport } from "./cost-report.mjs"
+import { registerRetrievalRouting } from "./retrieval-routing.mjs"
 
 export default {
   id: "harness",
   setup: async (context) => {
     const directory = context.location.directory
+    await registerRetrievalRouting(context)
     const sync = (warm = false) => {
       for (const script of ["tokensave-sync.sh", "ragsave-sync.sh"]) {
         const child = spawn(
@@ -52,7 +56,9 @@ export default {
       })
       return observationQueue
     }
-    await registerHandoff(context, observe)
+    const taskContext = await registerTaskContext(context)
+    const handoff = await registerHandoff(context, observe, taskContext)
+    const brief = await registerBrief(context, handoff)
     await context.session.hook("compaction", async (event) => {
       await observe(event.sessionID)
       event.system.push({ type: "text", text: readHandoffPrompt() })
@@ -71,6 +77,11 @@ export default {
         if (event.type.startsWith("session.execution.")) {
           sync()
           await observe(event.data.sessionID)
+          try {
+            await brief.settle(event.data.sessionID, event.type === "session.execution.succeeded")
+          } catch (error) {
+            process.stderr.write(`Harness brief transfer failed: ${error.message}\n`)
+          }
         }
       }
     }

@@ -85,7 +85,7 @@ test("OpenCode preserves settings and detects drift without writing", (t) => {
   assert.equal(fs.statSync(settings).mtimeMs, before)
 })
 
-test("OpenCode installer preserves both configs and repairs skills", (t) => {
+test("OpenCode installer preserves both configs and reports conflicting skills", (t) => {
   const home = sandbox(t)
   const directory = path.join(home, "opencode")
   fs.mkdirSync(path.join(directory, "skills"), { recursive: true })
@@ -100,7 +100,7 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
   fs.writeFileSync(alternative, '{"model":"user/model"}')
   fs.writeFileSync(
     settings,
-    '{ // user config\n "instructions": ["custom.md"],\n}'
+    '{ // user config\n "instructions": ["custom.md"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n}'
   )
   const before = fs.readFileSync(settings, "utf8")
   const run = (...args) =>
@@ -115,6 +115,7 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
         env: {
           ...process.env,
           HOME: home,
+          SHELL: "/bin/bash",
           OPENCODE_CONFIG_DIR: directory
         },
         encoding: "utf8",
@@ -128,6 +129,10 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
     fs.readlinkSync(path.join(directory, "skills/task-brief")),
     "/missing/skill"
   )
+  const conflict = run()
+  assert.equal(conflict.status, 1)
+  assert.equal(fs.readlinkSync(path.join(directory, "skills/task-brief")), "/missing/skill")
+  fs.unlinkSync(path.join(directory, "skills/task-brief"))
   const installed = run()
   assert.equal(installed.status, 0, installed.stderr + installed.stdout)
   assert.equal(loadConfig(directory).current.model, "user/model")
@@ -142,7 +147,7 @@ test("OpenCode installer preserves both configs and repairs skills", (t) => {
     fs.realpathSync(path.join(directory, "plugins/harness")),
     path.resolve(import.meta.dirname, "../../opencode")
   )
-  assert.equal(loadConfig(directory).current.commands.handoff, undefined)
+  assert.deepEqual(loadConfig(directory).current.commands.handoff, { template: "Personal handoff" })
   assert.equal(loadConfig(directory).current.compaction.auto, true)
   assert.equal(
     loadConfig(directory).current.compaction.buffer,
@@ -230,6 +235,7 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   const duplicateRead = `file: fixture.mjs\nmode: lines\ndigest: ${"a".repeat(64)}\n\n${"CACHE_EVIDENCE_BODY\n".repeat(60)}`
   fs.writeFileSync(path.join(fixturePlugin, "server.mjs"), `
 import harness from ${JSON.stringify(pathToFileURL(path.resolve(import.meta.dirname, "../../opencode/harness.js")).href)}
+import fs from "node:fs"
 export default { id: "harness", setup: async context => {
   await context.session.hook("context", event => {
     if (!JSON.stringify(event.messages).includes("CACHE_PROJECTION_FIXTURE")) return
@@ -240,13 +246,18 @@ export default { id: "harness", setup: async context => {
       { role: "tool", content: [{ type: "tool-result", id, name: "execute", result: { type: "text", value: text } }] }
     ]))
   })
-  return harness.setup(context)
+  const cleanup = await harness.setup(context)
+  const tools = await context.tool.list()
+  fs.writeFileSync(${JSON.stringify(path.join(directory, "native-tools.json"))}, JSON.stringify(tools.map(tool => ({ name: tool.name, description: tool.description, input: tool.input }))))
+  return cleanup
 } }
 `)
   const requests = []
   let successful = false
   let primaryCalls = 0
   let stallNextFlash = false
+  const briefStages = new Set()
+  let completedTask = false
   server = createServer(async (request, response) => {
     let body = ""
     for await (const chunk of request) body += chunk
@@ -273,7 +284,23 @@ export default { id: "harness", setup: async context => {
         total_tokens: primary && primaryCalls === 1 ? 120020 : 1020
       }
       const part = { type: "output_text", text, annotations: [] }
-      const item = {
+      const briefStage = input.tools?.some(tool => tool.name === "execute")
+        ? JSON.stringify(input).includes("BRIEF_NATIVE_ANSWERS") ? "implement" : JSON.stringify(input).includes("BRIEF_NATIVE_START") ? "plan" : undefined
+        : undefined
+      const transition = briefStage && !briefStages.has(briefStage)
+      if (transition) briefStages.add(briefStage)
+      const completeTask = primary && JSON.stringify(input).includes("TASK_NATIVE_COMPLETE") && !completedTask
+      if (completeTask) completedTask = true
+      const callStage = completeTask ? "complete" : briefStage
+      const handoff = briefStage === "plan" ? "BRIEF_NATIVE_HANDOFF. Design the module; resolve nodata. Implementation authorized." : "BRIEF_NATIVE_HANDOFF. Plan: .opencode/plans/native.md. Answers: neutral nodata. Implementation authorized."
+      const item = transition || completeTask ? {
+        id: `fc_brief_${callStage}`,
+        type: "function_call",
+        call_id: `call_brief_${callStage}`,
+        name: "execute",
+        arguments: JSON.stringify({ code: completeTask ? 'return await tools.task_context({action:"complete"});' : `${briefStage === "plan" ? 'await tools.task_context({action:"save",checkpoint:"NATIVE_TASK_CHECKPOINT: next edit source.mjs"});' : 'await tools.task_context({action:"restore"});'} return await tools.brief_transition(${JSON.stringify({ stage: briefStage, handoff })});` }),
+        status: "completed"
+      } : {
         id: "msg_fixture",
         type: "message",
         role: "assistant",
@@ -292,7 +319,13 @@ export default { id: "harness", setup: async context => {
       if (input.stream) {
         response.writeHead(200, { "content-type": "text/event-stream" })
         response.end(
-          [
+          (transition || completeTask ? [
+            { type: "response.created", response: { ...result, status: "in_progress", output: [] } },
+            { type: "response.output_item.added", output_index: 0, item: { ...item, status: "in_progress", arguments: "" } },
+            { type: "response.function_call_arguments.delta", output_index: 0, item_id: item.id, delta: item.arguments },
+            { type: "response.output_item.done", output_index: 0, item },
+            { type: "response.completed", response: result }
+          ] : [
             {
               type: "response.created",
               response: { ...result, status: "in_progress", output: [] }
@@ -332,7 +365,7 @@ export default { id: "harness", setup: async context => {
             },
             { type: "response.output_item.done", output_index: 0, item },
             { type: "response.completed", response: result }
-          ]
+          ])
             .map(
               (value, sequence_number) =>
                 `event: ${value.type}\ndata: ${JSON.stringify({ ...value, sequence_number })}\n\n`
@@ -474,6 +507,9 @@ export default { id: "harness", setup: async context => {
     assert.equal(system.split("# OpenCode harness").length - 1, primary.length, agent)
     assert.match(system, /Never add or rewrite code\/documentation comments/, agent)
     assert.match(system, /Read applicable SKILL.md/, agent)
+    assert.match(system, /exact, case-sensitive `id` from the current available-skills catalog/, agent)
+    assert.match(system, /load it with `\{"id":"opencode"\}`/, agent)
+    assert.match(system, /never repeat an unchanged invalid ID/, agent)
     assert.match(system, /tokensave_search/, agent)
     assert.match(system, /rag_search/, agent)
     assert.match(system, /outside the index/, agent)
@@ -497,6 +533,11 @@ export default { id: "harness", setup: async context => {
           JSON.stringify(value).includes("Harness automatic Handoff.")
         )
     )
+    const compaction = requests.slice(summaryStart).find(value => JSON.stringify(value).includes("Harness automatic Handoff."))
+    assert.match(JSON.stringify(compaction), /Saved task context:/, agent)
+    assert.match(JSON.stringify(compaction), /Reply OK without tools\./, agent)
+    const cached = fs.readdirSync(path.join(directory, ".opencode/task-context")).map(file => JSON.parse(fs.readFileSync(path.join(directory, ".opencode/task-context", file), "utf8")))
+    assert.ok(cached.some(value => value.checkpoint === "Reply OK without tools."), agent)
   }
   successful = true
   const session = await api("/session", {
@@ -664,7 +705,7 @@ export default { id: "harness", setup: async context => {
     /Initial context fixture/
   )
   assert.match(
-    fs.readFileSync(path.join(directory, "HANDOFF.md"), "utf8"),
+    fs.readFileSync(path.join(directory, ".opencode", "HANDOFF.md"), "utf8"),
     /Handoff fixture/
   )
   await api(`/experimental/session/${target.id}/wait`, {})
@@ -751,6 +792,58 @@ export default { id: "harness", setup: async context => {
   assert.equal(list.data.some(value => value.title === "Handoff: Stalled investigation"), false)
   assert.equal(requests.slice(escalationStart).some(value => value.model === "deepseek-v4-pro"), false)
   assert.equal((await api(`/session/${stalledID}`)).data.model.id, "deepseek-flash")
+  const nativeTools = JSON.parse(fs.readFileSync(path.join(directory, "native-tools.json"), "utf8"))
+  assert.ok(nativeTools.some(tool => tool.name === "question"))
+  assert.ok(nativeTools.some(tool => tool.name === "brief_transition"))
+  assert.ok(nativeTools.some(tool => tool.name === "task_context"))
+  for (const name of ["read", "grep", "glob", "shell"]) {
+    assert.match(nativeTools.find(tool => tool.name === name)?.description ?? "", /^Indexed project files must be searched\/read with TokenSave/)
+  }
+  assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /returned Base directory/)
+  assert.match(nativeTools.find(tool => tool.name === "subagent")?.description ?? "", /^Use only when the user explicitly requests delegation/)
+  const briefStart = requests.length
+  const briefSource = await api("/session", {
+    agent: "build",
+    location: { directory },
+    model: { providerID: "deepseek", id: "deepseek-flash" },
+    permissions: [{ action: "edit", resource: "private/**", effect: "deny" }]
+  })
+  await api(`/session/${briefSource.data.id}/prompt`, { text: "BRIEF_NATIVE_START" })
+  const continuations = async () => (await api(`/session?directory=${encodeURIComponent(directory)}`)).data
+  let planner
+  const briefDeadline = Date.now() + 15000
+  while (!planner && Date.now() < briefDeadline) {
+    planner = (await continuations()).find(value => value.model?.id === "deepseek-v4-pro")
+    if (!planner) await setTimeout(25)
+  }
+  assert.ok(planner, "Native execution must deliver the queued brief to Pro")
+  await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-v4-pro" && JSON.stringify(value).includes("Planning phase")))
+  await api(`/experimental/session/${planner.id}/wait`, {})
+  assert.ok(requests.slice(briefStart).some(value => value.model === "deepseek-v4-pro" && JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")))
+  assert.notEqual(planner.id, briefSource.data.id)
+  assert.deepEqual(planner.permissions, (await api(`/session/${briefSource.data.id}`)).data.permissions)
+  assert.equal((await continuations()).filter(value => value.model?.id === "deepseek-v4-pro").length, 1)
+  await api(`/session/${planner.id}/prompt`, { text: "BRIEF_NATIVE_ANSWERS: neutral nodata; implementation authorized" })
+  let implementation
+  const implementationDeadline = Date.now() + 15000
+  while (!implementation && Date.now() < implementationDeadline) {
+    implementation = (await continuations()).find(value => value.id !== briefSource.data.id && value.title === `Handoff: ${planner.title}`)
+    if (!implementation) await setTimeout(25)
+  }
+  assert.ok(implementation, "Answers must be carried into a fresh implementation session")
+  await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Restore the Handoff and executable plan")))
+  await api(`/experimental/session/${implementation.id}/wait`, {})
+  assert.equal(implementation.model.id, "deepseek-flash")
+  assert.deepEqual(implementation.permissions, planner.permissions)
+  const implementationRequest = requests.slice(briefStart).find(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Restore the Handoff and executable plan"))
+  assert.ok(implementationRequest)
+  assert.match(JSON.stringify(implementationRequest), /Answers: neutral nodata/)
+  assert.match(JSON.stringify(implementationRequest), /\.opencode\/plans\/native.md/)
+  assert.doesNotMatch(JSON.stringify(implementationRequest), /BRIEF_NATIVE_START|BRIEF_NATIVE_ANSWERS/)
+  const completionStart = requests.length
+  await api(`/session/${implementation.id}/prompt`, { text: "TASK_NATIVE_COMPLETE" })
+  await api(`/experimental/session/${implementation.id}/wait`, {})
+  assert.ok(requests.slice(completionStart).some(value => JSON.stringify(value).includes("Task cache cleared. Other tasks and plan files were preserved.")))
 })
 
 test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
@@ -981,6 +1074,8 @@ for (const type of [
     fs.mkdirSync(path.join(harnessRoot, "opencode"), { recursive: true })
     for (const file of [
       "harness.js",
+      "brief.mjs",
+      "task-context.mjs",
       "handoff.mjs",
       "handoff-rpc.mjs",
       "model-routing.mjs",
@@ -991,6 +1086,8 @@ for (const type of [
       "instructions.mjs",
       "cache-policy.mjs",
       "context-cache.mjs",
+      "retrieval-routing.mjs",
+      "read-results.mjs",
       "AGENTS.md",
       "package.json"
     ]) {
@@ -1030,8 +1127,9 @@ for (const type of [
         location: { directory: process.env.TEST_PROJECT },
         app: { version: "2.2.5" },
         command: { transform: async () => {} },
+        tool: { transform: async () => {} },
         rpc: { register: async () => ({}) },
-        storage: { scan: async () => ({ entries: [] }) },
+        storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
         model: { transform: async callback => callback({ list: () => [] }) },
         event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT, data: { sessionID: "ses_fixture" } }; })() },
         session: { hook: async () => {}, get: async () => ({ location: { directory: "/different-project" } }) }

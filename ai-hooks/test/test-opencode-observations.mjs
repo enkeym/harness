@@ -135,7 +135,7 @@ test("context snapshots preserve earlier steps across compaction and full pages 
   let record = JSON.parse(await fs.readFile(file))
   assert.deepEqual(record.sequence.map((step) => step.id), ["msg_1", "msg_2"])
   assert.equal(record.accounting.messageSum.tokens.input, 20)
-  assert.equal(record.priceSnapshot.validatedForBilling, false)
+  assert.equal(record.priceSnapshot.validatedForBilling, true)
   assert.equal(record.priceSnapshot.models[0].cost[0].output, 2)
   assert.doesNotMatch(JSON.stringify(record), /private-key/)
   assert.ok(record.gaps.includes("context-snapshots-need-full-history-check"))

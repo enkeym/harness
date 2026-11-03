@@ -173,10 +173,11 @@ export async function collectObservations(api, sessionID, { stateDirectory, dire
     try {
       const models = await api.prices(info.location.directory)
       const used = new Set(record.sequence.filter((step) => step.model).map((step) => `${step.model.providerID}/${step.model.id}`))
-      record.priceSnapshot = { capturedAt: record.observedAt, source: "opencode-model-registry", validatedForBilling: false, models: models.filter((model) => used.has(`${model.providerID}/${model.id}`)).map((model) => ({ providerID: model.providerID, id: model.id, cost: model.cost })) }
-      if (record.priceSnapshot.models.some(model => model.providerID === "deepseek")) {
+      const snapshotModels = models.filter((model) => used.has(`${model.providerID}/${model.id}`)).map((model) => ({ providerID: model.providerID, id: model.id, cost: model.cost }))
+      const deepseekModels = snapshotModels.filter((model) => model.providerID === "deepseek")
+      record.priceSnapshot = { capturedAt: record.observedAt, source: "opencode-model-registry", validatedForBilling: snapshotModels.length > 0 && deepseekModels.length === snapshotModels.length && deepseekPricing.validatedForBilling, models: snapshotModels }
+      if (deepseekModels.length > 0) {
         record.priceSnapshot.timeDependentPricing = deepseekPricing
-        record.gaps.push("time-dependent-pricing-unverified")
       }
     } catch {
       record.priceSnapshot = null

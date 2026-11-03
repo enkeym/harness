@@ -3,7 +3,9 @@ import { test } from "node:test"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { execFileSync } from "node:child_process"
 import { registerHandoff } from "../../opencode/handoff.mjs"
+import { registerTaskContext } from "../../opencode/task-context.mjs"
 import { resolveHandoffModel, stripHandoffRoute } from "../../opencode/model-routing.mjs"
 import { cachePolicy } from "../../opencode/cache-policy.mjs"
 
@@ -37,6 +39,110 @@ function fixture(t) {
   }
   return { context, directory, stored, events, created, prompts, run: (text = "") => execute({ sessionID: "source", prompt: { text } }) }
 }
+
+test("Handoff carries the saved task checkpoint into its continuation", async t => {
+  const f = fixture(t)
+  let run
+  f.context.location = { directory: f.directory }
+  f.context.tool = { transform: async edit => edit({ add: tool => { run = tool.execute } }) }
+  f.context.session.hook = async () => {}
+  const memory = await registerTaskContext(f.context)
+  await run({ action: "save", checkpoint: "Implement step 2; edit source.mjs next" }, { sessionID: "source" })
+  await registerHandoff(f.context, undefined, memory)
+
+  await f.run()
+
+  assert.match(f.prompts[0].text, /Implement step 2/)
+  assert.match(await memory.reference("target-0"), /Implement step 2/)
+  assert.match(fs.readFileSync(path.join(f.directory, ".opencode/HANDOFF.md"), "utf8"), /task-context/)
+})
+
+test("Handoff caches observed ranges without an agent save and reuses a failed delivery", async t => {
+  const f = fixture(t)
+  let run
+  let generations = 0
+  fs.writeFileSync(path.join(f.directory, "source.mjs"), "first\nsecond\n")
+  const text = `file: source.mjs\nmode: lines\ndigest: ${"a".repeat(64)}\n\n     2\tsecond`
+  f.context.location = { directory: f.directory }
+  f.context.tool = { transform: async edit => edit({ add: tool => { run = tool.execute } }) }
+  f.context.session.hook = async () => {}
+  f.context.session.context = async ({ sessionID }) => sessionID === "source"
+    ? [{ type: "assistant", content: [{ type: "tool", name: "execute", state: { status: "completed", content: [{ type: "text", text }] } }] }]
+    : []
+  f.context.session.generate = async () => { generations++; return { text: "Next edit source.mjs:2" } }
+  const memory = await registerTaskContext(f.context)
+  await registerHandoff(f.context, undefined, memory)
+  const prompt = f.context.session.prompt
+  f.context.session.prompt = async () => { throw new Error("connection lost") }
+
+  await assert.rejects(f.run(), /connection lost/)
+  f.context.session.prompt = prompt
+  await f.run()
+
+  assert.equal(generations, 1)
+  assert.equal(f.created.length, 1)
+  assert.match(f.prompts[0].text, /Cached ranges: source.mjs:2-2/)
+  assert.doesNotMatch(f.prompts[0].text, /2\tsecond/)
+  const restored = await run({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] }, { sessionID: "target-0" })
+  assert.match(restored.content, /2\tsecond/)
+})
+
+test("Handoff keeps its default note out of Git and preserves existing ignore rules", async (t) => {
+  const f = fixture(t)
+  execFileSync("git", ["init", "--quiet", f.directory])
+  fs.mkdirSync(path.join(f.directory, ".opencode"))
+  const ignore = path.join(f.directory, ".opencode", ".gitignore")
+  fs.writeFileSync(ignore, "personal.json\n")
+  await registerHandoff(f.context)
+
+  await f.run()
+
+  assert.equal(fs.existsSync(path.join(f.directory, "HANDOFF.md")), false)
+  assert.match(fs.readFileSync(path.join(f.directory, ".opencode", "HANDOFF.md"), "utf8"), /remaining plan/)
+  assert.match(fs.readFileSync(ignore, "utf8"), /^personal.json\n/)
+  for (const file of [".opencode/HANDOFF.md", ".opencode/handoffs/brief.md"]) {
+    assert.equal(execFileSync("git", ["-C", f.directory, "check-ignore", file], { encoding: "utf8" }).trim(), file)
+  }
+})
+
+test("Handoff replaces a default note symlink without changing its destination", async t => {
+  const f = fixture(t)
+  const outside = fixture(t)
+  const destination = path.join(outside.directory, "private.md")
+  fs.writeFileSync(destination, "KEEP")
+  fs.mkdirSync(path.join(f.directory, ".opencode"))
+  const note = path.join(f.directory, ".opencode/HANDOFF.md")
+  fs.symlinkSync(destination, note)
+  await registerHandoff(f.context)
+
+  await f.run()
+
+  assert.equal(fs.readFileSync(destination, "utf8"), "KEEP")
+  assert.equal(fs.lstatSync(note).isSymbolicLink(), false)
+  assert.equal(fs.statSync(note).mode & 0o777, 0o600)
+})
+
+test("Handoff rejects a symlinked automatic notes directory", async t => {
+  const f = fixture(t)
+  const outside = fixture(t)
+  fs.mkdirSync(path.join(f.directory, ".opencode"))
+  fs.symlinkSync(outside.directory, path.join(f.directory, ".opencode/handoffs"))
+  await registerHandoff(f.context)
+
+  await assert.rejects(f.run(".opencode/handoffs/brief.md"), /symlink/)
+
+  assert.deepEqual(fs.readdirSync(outside.directory), [])
+  assert.equal(f.created.length, 0)
+})
+
+test("Handoff creates its default directory in a new project", async (t) => {
+  const f = fixture(t)
+  await registerHandoff(f.context)
+
+  await f.run()
+
+  assert.equal(fs.existsSync(path.join(f.directory, ".opencode", "HANDOFF.md")), true)
+})
 
 test("Handoff recreates a deleted continuation instead of reopening a missing ID", async (t) => {
   const f = fixture(t)

@@ -22,6 +22,8 @@ fs.writeFileSync(path.join(codexHome, 'AGENTS.md'), 'my old instructions');
 fs.mkdirSync(path.join(home, '.agents/skills/custom'), { recursive: true });
 fs.writeFileSync(path.join(home, '.agents/skills/custom/SKILL.md'), 'custom skill');
 fs.writeFileSync(path.join(home, '.codex.json'), 'untouched');
+const gitConfig = '[user]\n\tname = Personal User\n\temail = personal@example.test\n[include]\n\tpath = ~/.gitconfig-work\n';
+fs.writeFileSync(path.join(home, '.gitconfig'), gitConfig);
 fs.writeFileSync(path.join(fakeBin, 'tokensave'), '#!/bin/sh\necho tokensave-test\n', { mode: 0o755 });
 fs.symlinkSync(process.execPath, path.join(fakeBin, 'node'));
 const stateFile = path.join(home, 'servers.json');
@@ -60,7 +62,7 @@ if (args[1] === 'add') {
 fs.writeFileSync(file, JSON.stringify(servers));
 }
 `, { mode: 0o755 });
-const env = { ...process.env, HOME: home, CODEX_HOME: codexHome, RAGSAVE_HOME: path.join(home, '.rag-mcp'), PATH: `${fakeBin}:${process.env.PATH}`, FAKE_CODEX_STATE: stateFile };
+const env = { ...process.env, HOME: home, SHELL: '/bin/bash', CODEX_HOME: codexHome, RAGSAVE_HOME: path.join(home, '.rag-mcp'), PATH: `${fakeBin}:${process.env.PATH}`, FAKE_CODEX_STATE: stateFile };
 delete env.CODEX_SESSION_ID;
 const install = (...args) => spawnSync('bash', [path.join(root, 'install.sh'), '--codex', ...args], { env, encoding: 'utf8', timeout: 30000 });
 let result = install('--check');
@@ -71,9 +73,13 @@ result = install();
 assert.equal(result.status, 0, result.stdout + result.stderr);
 assert.equal(fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8'), customConfig);
 assert.equal(fs.readFileSync(path.join(home, '.codex.json'), 'utf8'), 'untouched');
+assert.equal(fs.readFileSync(path.join(home, '.gitconfig'), 'utf8'), gitConfig);
+assert.equal(fs.existsSync(path.join(home, '.config/opencode')), false);
+assert.equal(fs.existsSync(path.join(home, '.zshenv')), false);
 assert.equal(fs.readFileSync(path.join(home, '.agents/skills/custom/SKILL.md'), 'utf8'), 'custom skill');
 assert.ok(fs.readdirSync(codexHome).some((name) => name.startsWith('AGENTS.md.bak-')));
-assert.ok(fs.lstatSync(path.join(codexHome, 'hooks.json')).isSymbolicLink());
+assert.ok(fs.lstatSync(path.join(codexHome, 'hooks.json')).isFile());
+assert.ok(fs.readFileSync(path.join(codexHome, 'AGENTS.md'), 'utf8').startsWith('my old instructions'));
 assert.equal(fs.realpathSync(path.join(home, '.local/bin/harness-context')), path.join(root, 'ai-hooks/bin/context-runner.mjs'));
 assert.deepEqual(JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8')),
   JSON.parse(fs.readFileSync(path.join(root, 'codex/hooks.json'), 'utf8')), 'установщик подключает RAG hooks');

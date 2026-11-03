@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { readJSON, writePrivateJSON, writePrivateText } from "./local-state.mjs"
+import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
@@ -127,6 +128,14 @@ function usage(steps, conflicts = 0) {
     compactions: 0,
     tokens: Object.fromEntries(counterKeys.map((key) => [key, 0])),
     nativeRequestReportedUSD: 0,
+    recomputedUSD: 0,
+    recomputedInputUSD: 0,
+    recomputedCacheReadUSD: 0,
+    recomputedOutputUSD: 0,
+    recomputedMessages: 0,
+    unpricedMessages: 0,
+    recomputedDeltaUSD: null,
+    recomputedComplete: false,
     validatedUSD: null,
     unknownMessages: 0,
     zeroCostWithUsage: 0
@@ -144,6 +153,21 @@ function usage(steps, conflicts = 0) {
     if (!numeric(step.nativeReportedUSD)) totals.nativeRequestReportedUSD = null
     else if (totals.nativeRequestReportedUSD !== null)
       totals.nativeRequestReportedUSD += step.nativeReportedUSD
+    const breakdown =
+      knownTokens && numeric(step.time?.created)
+        ? deepseekCostBreakdownAt(
+            step.model?.id,
+            step.tokens,
+            step.time.created
+          )
+        : null
+    if (breakdown) {
+      totals.recomputedUSD += breakdown.total
+      totals.recomputedInputUSD += breakdown.input
+      totals.recomputedCacheReadUSD += breakdown.cacheRead
+      totals.recomputedOutputUSD += breakdown.output
+      totals.recomputedMessages++
+    } else totals.unpricedMessages++
     if (
       step.nativeReportedUSD === 0 &&
       knownTokens &&
@@ -154,7 +178,18 @@ function usage(steps, conflicts = 0) {
   if (conflicts) {
     totals.tokens = null
     totals.nativeRequestReportedUSD = null
+    totals.recomputedUSD = null
+    totals.recomputedInputUSD = null
+    totals.recomputedCacheReadUSD = null
+    totals.recomputedOutputUSD = null
   }
+  totals.recomputedComplete =
+    totals.recomputedUSD !== null && totals.unpricedMessages === 0
+  totals.recomputedDeltaUSD =
+    totals.recomputedUSD !== null &&
+    totals.nativeRequestReportedUSD !== null
+      ? totals.recomputedUSD - totals.nativeRequestReportedUSD
+      : null
   return totals
 }
 
@@ -664,6 +699,8 @@ export function formatCostReport(report) {
     `OpenCode: ${report.date} (${report.timeZone})`,
     `Наблюдаемых сессий: ${report.coverage.observedSessions}; сообщений с расходом: ${report.usage.messages}; компактаций: ${report.usage.compactions}.`,
     `Нативная оценка по сообщениям: ${value(report.usage.nativeRequestReportedUSD)} USD; подтверждённый расход: неизвестно.`,
+    `Пересчёт по тарифу на момент сообщения: ${value(report.usage.recomputedUSD)} USD; без тарифа: ${report.usage.unpricedMessages}; расхождение с нативной оценкой: ${value(report.usage.recomputedDeltaUSD)} USD.`,
+    `Пересчёт по компонентам: input ${value(report.usage.recomputedInputUSD)}, cacheRead ${value(report.usage.recomputedCacheReadUSD)}, output ${value(report.usage.recomputedOutputUSD)} USD.`,
     `История: ${report.coverage.completeHistory ? "полные страницы наблюдаемых сессий" : "неполное покрытие"}; покрытие аккаунта провайдера не проверено.`,
     `Токены: ${report.usage.tokens ? counterKeys.map((key) => `${key}=${report.usage.tokens[key]}`).join(", ") : "есть неизвестные счётчики"}.`,
     `Семейства задач: ${report.families.length}; неполных: ${report.families.filter((family) => !family.complete).length}.`,
@@ -675,21 +712,21 @@ export function formatCostReport(report) {
     )
   lines.push(
     "",
-    "Модель / вариант / агент | сообщений | нативная оценка USD",
-    "--- | ---: | ---:"
+    "Модель / вариант / агент | сообщений | нативная оценка USD | пересчёт USD",
+    "--- | ---: | ---: | ---:"
   )
   for (const model of report.models)
     lines.push(
-      `${model.provider}/${model.model} / ${model.variant ?? "по умолчанию"} / ${model.agent ?? "неизвестен"} | ${model.messages} | ${value(model.nativeRequestReportedUSD)}`
+      `${model.provider}/${model.model} / ${model.variant ?? "по умолчанию"} / ${model.agent ?? "неизвестен"} | ${model.messages} | ${value(model.nativeRequestReportedUSD)} | ${value(model.recomputedUSD)}`
     )
   lines.push(
     "",
-    "Сессия | сообщений за день | нативная оценка USD",
-    "--- | ---: | ---:"
+    "Сессия | сообщений за день | нативная оценка USD | пересчёт USD",
+    "--- | ---: | ---: | ---:"
   )
   for (const session of report.expensiveSessions)
     lines.push(
-      `${session.sessionID} | ${session.messages} | ${value(session.nativeRequestReportedUSD)}`
+      `${session.sessionID} | ${session.messages} | ${value(session.nativeRequestReportedUSD)} | ${value(session.recomputedUSD)}`
     )
   lines.push(
     "",
