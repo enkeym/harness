@@ -686,18 +686,18 @@ export default { id: "harness", setup: async context => {
       .slice(manualStart)
       .some((value) =>
         JSON.stringify(value.input).includes(
-          "Continue the next authorized step"
+          "continue the first unfinished step"
         )
       )
   )
   const continued = requests
     .slice(manualStart)
     .find((value) =>
-      JSON.stringify(value.input).includes("Continue the next authorized step")
+      JSON.stringify(value.input).includes("continue the first unfinished step")
     )
   assert.match(
     JSON.stringify(continued.input),
-    /Continue the next authorized step/
+    /continue the first unfinished step/
   )
   assert.match(JSON.stringify(continued.input), /Handoff fixture/)
   assert.doesNotMatch(
@@ -767,7 +767,7 @@ export default { id: "harness", setup: async context => {
         (value) =>
           value.model === "deepseek-flash" &&
           JSON.stringify(value.input).includes(
-            "Continue the next authorized step"
+            "continue the first unfinished step"
           )
       )
   )
@@ -1065,56 +1065,77 @@ for (const extension of ["json", "jsonc"]) {
   })
 }
 
+function executionSandbox(t) {
+  const directory = sandbox(t)
+  const harnessRoot = path.join(directory, "harness clone #1")
+  fs.mkdirSync(path.join(harnessRoot, "opencode"), { recursive: true })
+  for (const file of [
+    "harness.js",
+    "brief.mjs",
+    "task-context.mjs",
+    "handoff.mjs",
+    "handoff-rpc.mjs",
+    "model-routing.mjs",
+    "observations.mjs",
+    "cost-policy.mjs",
+    "cost-report.mjs",
+    "local-state.mjs",
+    "instructions.mjs",
+    "cache-policy.mjs",
+    "context-cache.mjs",
+    "retrieval-routing.mjs",
+    "read-results.mjs",
+    "AGENTS.md",
+    "package.json"
+  ]) {
+    fs.copyFileSync(
+      path.resolve(import.meta.dirname, "../../opencode", file),
+      path.join(harnessRoot, "opencode", file)
+    )
+  }
+  for (const folder of ["ai-hooks", "rules"]) {
+    fs.symlinkSync(
+      path.resolve(import.meta.dirname, "../..", folder),
+      path.join(harnessRoot, folder)
+    )
+  }
+  const project = path.join(directory, "other project $(literal)")
+  fs.mkdirSync(project)
+  assert.equal(spawnSync("git", ["init", "-q", project]).status, 0)
+  for (const [folder, file] of [
+    [".tokensave", "tokensave.db"],
+    [".ragsave", "rag.db"]
+  ]) {
+    fs.mkdirSync(path.join(project, folder))
+    fs.writeFileSync(path.join(project, folder, file), "")
+  }
+  const calls = path.join(directory, "calls")
+  return {
+    directory,
+    harnessRoot,
+    project,
+    calls,
+    env: {
+      FAKE_INDEXER_CALLS: calls,
+      AI_HOOKS_TOKENSAVE_CMD: path.resolve(
+        import.meta.dirname,
+        "fixtures/fake-indexer.mjs"
+      ),
+      AI_HOOKS_RAGSAVE_CMD: path.resolve(
+        import.meta.dirname,
+        "fixtures/fake-indexer.mjs"
+      )
+    }
+  }
+}
+
 for (const type of [
   "session.execution.succeeded",
   "session.execution.failed",
   "session.execution.interrupted"
 ]) {
   test(`OpenCode ${type} syncs indexes in the session project`, async (t) => {
-    const directory = sandbox(t)
-    const harnessRoot = path.join(directory, "harness clone #1")
-    fs.mkdirSync(path.join(harnessRoot, "opencode"), { recursive: true })
-    for (const file of [
-      "harness.js",
-      "brief.mjs",
-      "task-context.mjs",
-      "handoff.mjs",
-      "handoff-rpc.mjs",
-      "model-routing.mjs",
-      "observations.mjs",
-      "cost-policy.mjs",
-      "cost-report.mjs",
-      "local-state.mjs",
-      "instructions.mjs",
-      "cache-policy.mjs",
-      "context-cache.mjs",
-      "retrieval-routing.mjs",
-      "read-results.mjs",
-      "AGENTS.md",
-      "package.json"
-    ]) {
-      fs.copyFileSync(
-        path.resolve(import.meta.dirname, "../../opencode", file),
-        path.join(harnessRoot, "opencode", file)
-      )
-    }
-    for (const folder of ["ai-hooks", "rules"]) {
-      fs.symlinkSync(
-        path.resolve(import.meta.dirname, "../..", folder),
-        path.join(harnessRoot, folder)
-      )
-    }
-    const project = path.join(directory, "other project $(literal)")
-    fs.mkdirSync(project)
-    assert.equal(spawnSync("git", ["init", "-q", project]).status, 0)
-    for (const [folder, file] of [
-      [".tokensave", "tokensave.db"],
-      [".ragsave", "rag.db"]
-    ]) {
-      fs.mkdirSync(path.join(project, folder))
-      fs.writeFileSync(path.join(project, folder, file), "")
-    }
-    const calls = path.join(directory, "calls")
+    const { directory, harnessRoot, project, calls, env } = executionSandbox(t)
     const runner = `
       import fs from 'node:fs';
       import { setTimeout } from 'node:timers/promises';
@@ -1148,17 +1169,9 @@ for (const type of [
         timeout: 10000,
         env: {
           ...process.env,
+          ...env,
           TEST_PROJECT: project,
-          TEST_EVENT: type,
-          FAKE_INDEXER_CALLS: calls,
-          AI_HOOKS_TOKENSAVE_CMD: path.resolve(
-            import.meta.dirname,
-            "fixtures/fake-indexer.mjs"
-          ),
-          AI_HOOKS_RAGSAVE_CMD: path.resolve(
-            import.meta.dirname,
-            "fixtures/fake-indexer.mjs"
-          )
+          TEST_EVENT: type
         }
       }
     )
@@ -1179,3 +1192,65 @@ for (const type of [
     await setTimeout(25)
   })
 }
+
+test("OpenCode handles one execution event once across plugin instances", async (t) => {
+  const { directory, harnessRoot, project, env } = executionSandbox(t)
+  const runner = `
+    import fs from 'node:fs';
+    import { setTimeout } from 'node:timers/promises';
+    import plugin from ${JSON.stringify(pathToFileURL(path.join(harnessRoot, "opencode/harness.js")).href)};
+    const calls = () => fs.existsSync(process.env.FAKE_INDEXER_CALLS) ? fs.readFileSync(process.env.FAKE_INDEXER_CALLS, 'utf8').trim().split('\\n').filter(Boolean) : [];
+    let release;
+    const gate = new Promise(resolve => { release = resolve });
+    const context = () => ({
+      location: { directory: process.env.TEST_PROJECT },
+      app: { version: "2.2.5" },
+      command: { transform: async () => {} },
+      tool: { transform: async () => {} },
+      rpc: { register: async () => ({}) },
+      storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
+      model: { transform: async callback => callback({ list: () => [] }) },
+      event: { subscribe: async () => (async function* () { await gate; yield { id: "evt_shared", type: process.env.TEST_EVENT, data: { sessionID: "ses_fixture" } }; })() },
+      session: { hook: async () => {}, get: async () => ({ location: { directory: process.env.TEST_PROJECT } }) }
+    });
+    const stopFirst = await plugin.setup(context());
+    const stopSecond = await plugin.setup(context());
+    const settle = async (min = 0) => {
+      let last = -1;
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline && (calls().length < min || last !== calls().length)) {
+        last = calls().length;
+        await setTimeout(150);
+      }
+      return calls().length;
+    };
+    const startup = await settle();
+    fs.writeFileSync(process.env.FAKE_INDEXER_CALLS, "");
+    release();
+    await settle(2);
+    await setTimeout(300);
+    process.stdout.write(JSON.stringify({ startup, total: calls().length }));
+    await stopFirst();
+    await stopSecond();
+  `
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", runner],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      timeout: 15000,
+      env: {
+        ...process.env,
+        ...env,
+        TEST_PROJECT: project,
+        TEST_EVENT: "session.execution.succeeded"
+      }
+    }
+  )
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+  const { startup, total } = JSON.parse(result.stdout)
+  assert.ok(startup >= 4, `both instances synced their project first, saw ${startup}`)
+  assert.equal(total, 2)
+})
+

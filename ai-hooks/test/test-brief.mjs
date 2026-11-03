@@ -205,6 +205,41 @@ test("accepted delivery is not replayed and retries preserve work already queued
   assert.deepEqual(f.sessions.get("target-2").model, f.original)
 })
 
+test("a continuation cannot restart planning or fork an authorized implementation", async t => {
+  const f = fixture(t)
+  const brief = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+  await f.call("source", "plan")
+  await brief.settle("source", true)
+  await assert.rejects(f.call("target-1", "plan"), /Already planning/)
+  await f.call("target-1", "implement", "Plan ready; edit the module next")
+  await brief.settle("target-1", true)
+
+  assert.equal(f.stored.get("brief:target-2").stage, "implementation")
+  assert.equal(f.stored.get("brief:target-2").planned, true)
+  assert.equal(f.stored.get("brief:target-2").implemented, true)
+  await assert.rejects(f.call("target-2", "plan"), /Implementation is authorized/)
+  await assert.rejects(f.call("target-2", "implement"), /Implementation is already authorized/)
+  await f.hooks.prompt({ sessionID: "target-2", prompt: { text: "Continue" } })
+  await assert.rejects(f.call("target-2", "plan"), /Implementation is authorized/)
+  assert.equal(f.sessions.size, 3)
+})
+
+test("separate plugin instances deliver one transfer and create one session", async t => {
+  const f = fixture(t)
+  const first = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+  const second = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+  await f.call("source", "plan")
+
+  const results = await Promise.allSettled([
+    first.settle("source", true),
+    second.settle("source", true)
+  ])
+
+  assert.deepEqual(results.map(value => value.status), ["fulfilled", "fulfilled"])
+  assert.equal(f.sessions.size, 2)
+  assert.equal(f.prompts.length, 1)
+})
+
 test("brief policy validates configured model identifiers and effort", t => {
   const f = fixture(t)
   const file = path.join(f.directory, "policy.json")

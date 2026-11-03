@@ -12,6 +12,15 @@ import { registerRetrievalRouting } from "./retrieval-routing.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
 
+const claimed = (globalThis[Symbol.for("harness.events.claimed")] ??= new Set())
+const claim = (event) => {
+  if (!event.id) return true
+  if (claimed.has(event.id)) return false
+  claimed.add(event.id)
+  if (claimed.size > 500) claimed.delete(claimed.values().next().value)
+  return true
+}
+
 export default {
   id: "harness",
   setup: async (context) => {
@@ -46,10 +55,10 @@ export default {
       }
     })
     let observationQueue = Promise.resolve()
-    const observe = (sessionID) => {
+    const observe = (sessionID, target = directory) => {
       observationQueue = observationQueue.then(async () => {
         try {
-          await collectObservations(observationAPI(context), sessionID, { directory })
+          await collectObservations(observationAPI(context), sessionID, { directory: target })
           const { newWarnings } = await refreshCostReport()
           for (const warning of newWarnings) process.stderr.write(`Harness cost warning: ${warning.code}; ${warning.sessionID ?? "daily"}; observed=${warning.observed}; limit=${warning.limit}.\n`)
         } catch (error) {
@@ -83,6 +92,7 @@ export default {
     }
     const consume = async () => {
       for await (const event of events) {
+        if (!claim(event)) continue
         if (event.type === "session.model.selected") {
           const model = event.data.model
           const modelId = model?.id ?? model?.modelID
@@ -100,10 +110,12 @@ export default {
           continue
         }
         if (event.type.startsWith("session.execution.")) {
+          const sessionID = event.data.sessionID
+          const owner = await context.session.get({ sessionID }).then(source => source.location.directory).catch(() => undefined)
           sync()
-          await observe(event.data.sessionID)
+          await observe(sessionID, owner ?? directory)
           try {
-            await brief.settle(event.data.sessionID, event.type === "session.execution.succeeded")
+            await brief.settle(sessionID, event.type === "session.execution.succeeded")
           } catch (error) {
             process.stderr.write(`Harness brief transfer failed: ${error.message}\n`)
           }

@@ -398,6 +398,16 @@ test("Handoff ignores legacy escalation markers and honors a manual model overri
   }
 })
 
+test("Handoff restore treats its checkpoint as authoritative over a stale plan file", async (t) => {
+  const f = fixture(t)
+  await registerHandoff(f.context)
+  await f.run()
+
+  assert.match(f.prompts[0].text, /Handoff checkpoint is authoritative/)
+  assert.match(f.prompts[0].text, /do not read the whole plan or reload already-loaded skills/)
+  assert.match(f.prompts[0].text, /Continue the remaining plan/)
+})
+
 test("Handoff ignores duplicate calls while generating the note", async (t) => {
   const f = fixture(t)
   let release

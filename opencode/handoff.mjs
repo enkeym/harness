@@ -11,8 +11,14 @@ import {
   stripHandoffRoute
 } from "./model-routing.mjs"
 
+const active =
+  (globalThis[Symbol.for("harness.handoff.active")] ??= new Map())
+
+const restorePrompt = (transfer) =>
+  transfer?.instructions ??
+  "Restore this Handoff. The Handoff checkpoint is authoritative: a task plan file may lag behind it, so do not read the whole plan or reload already-loaded skills to reconstruct progress. Read project instructions and only the missing applicable skills, then continue the first unfinished step immediately. Keep completed or blocked work stopped. Do not launch another worker or transfer again."
+
 export async function registerHandoff(context, onTransfer, taskContext) {
-  const active = new Map()
   const expired = (target) =>
     !target?.submitted &&
     (!Number.isFinite(target?.generatedAt) ||
@@ -222,7 +228,7 @@ export async function registerHandoff(context, onTransfer, taskContext) {
         await context.storage.set(`brief:${target.id}`, target.transfer.brief)
       }
       await taskContext?.transfer(sessionID, target.id)
-      const text = `${target.transfer?.instructions ?? "Restore this Handoff. Read project instructions and applicable skills. Continue the next authorized step of the remaining plan immediately. Keep completed or blocked work stopped. Do not launch another worker or transfer again."}\n\n${target.summary}`
+      const text = `${restorePrompt(target.transfer)}\n\n${target.summary}`
       const continuation = await context.session.context({
         sessionID: target.id
       })

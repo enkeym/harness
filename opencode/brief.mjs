@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from "node:crypto"
 import { readBriefPolicy, planningInstructions } from "../ai-hooks/bin/brief-policy.mjs"
 
+const registry = (name) =>
+  (globalThis[Symbol.for(`harness.brief.${name}`)] ??= new Set())
+
 export async function registerBrief(context, handoff, policy = readBriefPolicy("opencode")) {
   if (!policy.enabled) return { settle: async () => {} }
-  const queueing = new Set()
-  const settling = new Set()
+  const queueing = registry("queueing")
+  const settling = registry("settling")
   await context.tool.transform(editor => editor.add({
     name: "brief_transition",
     description: "Task-brief lifecycle: queue fresh-context planning, or return an executable plan to the original model. End the current turn after success. Never use for routine edits or an adequate existing plan.",
@@ -24,8 +27,10 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
       try {
         const current = await context.storage.get(`brief:${sessionID}`)
         if (current?.pending || current?.submitted) throw new Error("Brief transfer already queued; finish this turn")
+        if (stage === "implement" && current?.implemented) throw new Error("Implementation is already authorized; continue it")
         if (stage === "implement" && current?.stage !== "planning") throw new Error("No planning phase to complete")
         if (stage === "plan" && current?.stage === "planning") throw new Error("Already planning; do not transfer recursively")
+        if (stage === "plan" && current?.stage === "implementation") throw new Error("Implementation is authorized; continue the remaining plan instead of planning again")
         if (typeof summary !== "string" || !summary.trim() || summary.length > 6000) throw new Error("Expected a compact Handoff")
         const source = await context.session.get({ sessionID })
         const originalModel = stage === "plan" ? source.model : current.originalModel
@@ -36,8 +41,13 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
           model: originalModel,
           instructions: stage === "plan"
             ? `${planningInstructions} When an authorized implementation plan is ready, call brief_transition with stage=implement and a compact Handoff containing the plan, then end your turn.`
-            : "Restore the Handoff and executable plan. Read project instructions and missing applicable skills, inspect the working tree, and continue the next authorized action. Do not repeat the brief for an adequate plan. No other worker.",
-          brief: { stage: next, originalModel }
+            : "Restore the Handoff and executable plan. The Handoff checkpoint is authoritative: a task plan file may lag behind it, so do not read the whole plan or reload already-loaded skills to reconstruct progress. Start with the first unfinished step, read only the contracts or ranges it names, inspect the working tree, and continue. Do not repeat the brief for an adequate plan. No other worker.",
+          brief: {
+            stage: next,
+            originalModel,
+            planned: stage === "plan" || Boolean(current?.planned),
+            implemented: stage === "implement"
+          }
         }
         await context.storage.set(`brief:${sessionID}`, { ...current, originalModel, pending: transfer })
         return { content: "Brief transfer queued. Finish this turn now; the harness will continue in a fresh session after execution succeeds. Do not implement, call more tools or launch another worker." }
@@ -49,7 +59,8 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
   await context.session.hook("prompt", async event => {
     const state = await context.storage.get(`brief:${event.sessionID}`)
     if (state?.pending || state?.submitted) {
-      await context.storage.set(`brief:${event.sessionID}`, { stage: state.stage, originalModel: state.originalModel })
+      const { pending, submitted, ...rest } = state
+      await context.storage.set(`brief:${event.sessionID}`, rest)
     }
   })
   await context.session.hook("context", async event => {
