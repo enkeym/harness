@@ -33,7 +33,7 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
         const transfer = {
           id: randomUUID(),
           summary,
-          model: stage === "plan" ? policy.planner : originalModel,
+          model: originalModel,
           instructions: stage === "plan"
             ? `${planningInstructions} When an authorized implementation plan is ready, call brief_transition with stage=implement and a compact Handoff containing the plan, then end your turn.`
             : "Restore the Handoff and executable plan. Read project instructions and missing applicable skills, inspect the working tree, and continue the next authorized action. Do not repeat the brief for an adequate plan. No other worker.",

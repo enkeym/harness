@@ -817,7 +817,8 @@ export default { id: "harness", setup: async context => {
     planner = (await continuations()).find(value => !existingSessions.has(value.id) && value.model?.id === "deepseek-flash")
     if (!planner) await setTimeout(25)
   }
-  assert.ok(planner, "Native execution must deliver the queued brief to Flash")
+  assert.ok(planner, "Native execution must deliver the queued brief to a fresh session")
+  assert.deepEqual(planner.model, briefSource.data.model)
   await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Planning phase")))
   await api(`/experimental/session/${planner.id}/wait`, {})
   assert.ok(requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")))

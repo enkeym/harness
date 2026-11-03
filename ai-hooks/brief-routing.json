@@ -1,7 +1,6 @@
 {
   "opencode": {
-    "enabled": true,
-    "planner": { "providerID": "deepseek", "id": "deepseek-flash" }
+    "enabled": true
   },
   "codex": {
     "planner": { "model": "gpt-6.1-sol", "effort": "medium" }

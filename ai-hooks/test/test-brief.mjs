@@ -30,12 +30,12 @@ function fixture(t) {
       prompt: async value => { await hooks.prompt({ sessionID: value.sessionID, prompt: { text: value.text } }); prompts.push(value) }
     }
   }
-  const policy = { enabled: true, planner: { providerID: "fixture", id: "planner", variant: "medium" } }
+  const policy = { enabled: true }
   return { directory, context, policy, original, sessions, stored, prompts, hooks, tools,
     call: (sessionID, stage, handoff = "Goal: fix module. No push. Plan path: .opencode/plans/task.md") => tools.get("brief_transition").execute({ stage, handoff }, { sessionID }) }
 }
 
-test("brief transfers only the Handoff to a fresh planner, then restores the original model and permissions", async t => {
+test("brief transfers only the Handoff to a fresh session that keeps the source model and permissions", async t => {
   const f = fixture(t)
   const handoff = await registerHandoff(f.context)
   const brief = await registerBrief(f.context, handoff, f.policy)
@@ -47,7 +47,7 @@ test("brief transfers only the Handoff to a fresh planner, then restores the ori
   assert.deepEqual(event.tools, {})
 
   await brief.settle("source", true)
-  assert.deepEqual(f.sessions.get("target-1").model, f.policy.planner)
+  assert.deepEqual(f.sessions.get("target-1").model, f.original)
   assert.deepEqual(f.sessions.get("target-1").permissions, f.sessions.get("source").permissions)
   assert.doesNotMatch(f.prompts.at(-1).text, /PRIVATE_OLD_HISTORY/)
   assert.match(f.prompts.at(-1).text, /Planning phase/)
@@ -152,7 +152,7 @@ test("brief waits for a manual Handoff and delivers the queued phase exactly onc
   assert.ok(whileWaiting.pending)
   assert.equal(f.sessions.size, 2)
   assert.equal(f.prompts.length, 1)
-  assert.deepEqual(f.sessions.get("target-1").model, f.policy.planner)
+  assert.deepEqual(f.sessions.get("target-1").model, f.original)
   assert.equal(f.stored.get("brief:source").submitted, true)
   await f.call("target-1", "implement")
   await brief.settle("target-1", true)
@@ -171,7 +171,7 @@ test("manual Handoff during planning retains the original implementation model",
   await f.call("target-2", "implement")
   await brief.settle("target-2", true)
 
-  assert.deepEqual(f.sessions.get("target-2").model, f.policy.planner)
+  assert.deepEqual(f.sessions.get("target-2").model, f.original)
   assert.deepEqual(f.sessions.get("target-3").model, f.original)
 })
 
@@ -212,4 +212,5 @@ test("brief policy validates configured model identifiers and effort", t => {
   assert.throws(() => readBriefPolicy("codex", file), /Invalid brief routing policy/)
   assert.equal(readBriefPolicy("codex").planner.effort, "medium")
   assert.equal(readBriefPolicy("opencode").enabled, true)
+  assert.equal(readBriefPolicy("opencode").planner, undefined)
 })

@@ -4,11 +4,10 @@ export function readBriefPolicy(client, file = new URL("../brief-routing.json", 
   const policy = JSON.parse(fs.readFileSync(file, "utf8"))[client]
   const planner = policy?.planner
   const nonempty = value => typeof value === "string" && value.trim().length > 0
-  if (!planner || (client === "opencode"
-    ? !nonempty(planner.providerID) || !nonempty(planner.id) || typeof policy.enabled !== "boolean"
-    : client !== "codex" || !nonempty(planner.model) || !["minimal", "low", "medium", "high", "xhigh", "max"].includes(planner.effort))) {
-    throw new Error(`Invalid brief routing policy: ${client}`)
-  }
+  const valid = client === "opencode"
+    ? typeof policy?.enabled === "boolean" && (!planner || (nonempty(planner.providerID) && nonempty(planner.id)))
+    : client === "codex" && Boolean(planner) && nonempty(planner.model) && ["minimal", "low", "medium", "high", "xhigh", "max"].includes(planner.effort)
+  if (!valid) throw new Error(`Invalid brief routing policy: ${client}`)
   return policy
 }
 
