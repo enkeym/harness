@@ -9,6 +9,8 @@ import { registerTaskContext } from "./task-context.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
 import { refreshCostReport } from "./cost-report.mjs"
 import { registerRetrievalRouting } from "./retrieval-routing.mjs"
+import { deepseekModels } from "./model-routing.mjs"
+import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
 
 export default {
   id: "harness",
@@ -69,11 +71,34 @@ export default {
       types: [
         "session.execution.succeeded",
         "session.execution.failed",
-        "session.execution.interrupted"
+        "session.execution.interrupted",
+        "session.model.selected"
       ]
     })
+    const notify = (title, message) => {
+      const pending = context.client.tui?.showToast?.({
+        body: { title, message, variant: "warning", duration: 12000 }
+      })
+      pending?.catch?.(() => {})
+    }
     const consume = async () => {
       for await (const event of events) {
+        if (event.type === "session.model.selected") {
+          const model = event.data.model
+          const modelId = model?.id ?? model?.modelID
+          if (
+            model?.providerID === deepseekModels.pro.providerID &&
+            modelId === deepseekModels.pro.id
+          ) {
+            const flash = deepseekTokenRates[deepseekModels.flash.id].offPeak
+            const pro = deepseekTokenRates[deepseekModels.pro.id].offPeak
+            notify(
+              "DeepSeek Pro",
+              `Pro дороже Flash: вход ×${Math.round(pro.input / flash.input)}, выход ×${Math.round(pro.output / flash.output)}, чтение кеша ×${Math.round(pro.cacheRead / flash.cacheRead)}${isPeakAt(new Date()) ? "; сейчас пиковое окно, обе модели вдвое дороже" : ""}. Автоматические маршруты harness используют Flash, Pro — ручной выбор.`
+            )
+          }
+          continue
+        }
         if (event.type.startsWith("session.execution.")) {
           sync()
           await observe(event.data.sessionID)

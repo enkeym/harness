@@ -45,6 +45,16 @@ test("recomputed cost follows message time and separates input, cache and output
   assert.match(formatCostReport(data), /Пересчёт по тарифу/)
 })
 
+test("report prices a message by model and agent and shows the cabinet request gap", () => {
+  const priced = step("priced", { agent: "build", model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" }, time: { created: Date.parse("2026-11-02T12:00:00Z") } })
+  const data = report([record("ses_model", [priced])], { billing: [{ date: "2026-11-02", currency: "CNY", cost: 26, apiRequests: 4, tokens: 100, source: "user-provided", accountScope: null }] })
+  const text = formatCostReport(data)
+
+  assert.match(text, /USD\/сообщение/)
+  assert.match(text, /deepseek\/deepseek-flash \/ high \/ build \| 1 \| 0\.1 \| 0\.000003 \| 0\.000003/)
+  assert.match(text, /Кабинет против локальных сообщений: запросов 4, локальных 1; расхождение 75%/)
+})
+
 test("missing usage stays unknown and snapshots are not treated as complete history", () => {
   const data = report([record("ses_partial", [step("unknown", { tokens: null, nativeReportedUSD: null })], { messageCoverage: "active-context" })])
 

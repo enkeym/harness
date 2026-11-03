@@ -23,6 +23,7 @@ test("/cost recomputes the open session from message time and tariffs", async ()
     {
       role: "assistant",
       modelID: "deepseek-flash",
+      agent: "build",
       time: { created: Date.parse("2026-11-02T12:00:00Z") },
       tokens: { input: 10, output: 2, reasoning: 1, cache: { read: 5 } },
       cost: 0.1
@@ -37,6 +38,8 @@ test("/cost recomputes the open session from message time and tariffs", async ()
   assert.match(notifications[0].message, /cacheRead \$0\.000000/)
   assert.match(notifications[0].message, /панель \$0\.100000/)
   assert.match(notifications[0].message, /без тарифа: 0/)
+  assert.match(notifications[0].message, /сейчас (пик|непик)/)
+  assert.match(notifications[0].message, /deepseek-flash \/ build: 1 сообщ\., \$0\.000003, \$0\.000003 за сообщение/)
   assert.equal(notifications[0].variant, "info")
 })
 

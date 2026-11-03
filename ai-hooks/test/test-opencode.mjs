@@ -810,19 +810,20 @@ export default { id: "harness", setup: async context => {
   })
   await api(`/session/${briefSource.data.id}/prompt`, { text: "BRIEF_NATIVE_START" })
   const continuations = async () => (await api(`/session?directory=${encodeURIComponent(directory)}`)).data
+  const existingSessions = new Set((await continuations()).map(value => value.id))
   let planner
   const briefDeadline = Date.now() + 15000
   while (!planner && Date.now() < briefDeadline) {
-    planner = (await continuations()).find(value => value.model?.id === "deepseek-v4-pro")
+    planner = (await continuations()).find(value => !existingSessions.has(value.id) && value.model?.id === "deepseek-flash")
     if (!planner) await setTimeout(25)
   }
-  assert.ok(planner, "Native execution must deliver the queued brief to Pro")
-  await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-v4-pro" && JSON.stringify(value).includes("Planning phase")))
+  assert.ok(planner, "Native execution must deliver the queued brief to Flash")
+  await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Planning phase")))
   await api(`/experimental/session/${planner.id}/wait`, {})
-  assert.ok(requests.slice(briefStart).some(value => value.model === "deepseek-v4-pro" && JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")))
+  assert.ok(requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")))
   assert.notEqual(planner.id, briefSource.data.id)
   assert.deepEqual(planner.permissions, (await api(`/session/${briefSource.data.id}`)).data.permissions)
-  assert.equal((await continuations()).filter(value => value.model?.id === "deepseek-v4-pro").length, 1)
+  assert.equal((await continuations()).filter(value => !existingSessions.has(value.id)).length, 1)
   await api(`/session/${planner.id}/prompt`, { text: "BRIEF_NATIVE_ANSWERS: neutral nodata; implementation authorized" })
   let implementation
   const implementationDeadline = Date.now() + 15000

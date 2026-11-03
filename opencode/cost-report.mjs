@@ -710,14 +710,22 @@ export function formatCostReport(report) {
     lines.push(
       `Провайдер (введено вручную): ${point.cost} ${point.currency}; запросов: ${value(point.apiRequests)}; токенов: ${value(point.tokens)}; область: ${point.accountScope ?? "неизвестна"}.`
     )
+  const billedRequests = report.providerBilling.reduce(
+    (sum, point) => (numeric(point.apiRequests) ? sum + point.apiRequests : sum),
+    0
+  )
+  if (billedRequests && report.usage.messages)
+    lines.push(
+      `Кабинет против локальных сообщений: запросов ${billedRequests}, локальных ${report.usage.messages}; расхождение ${Math.round((Math.abs(billedRequests - report.usage.messages) / billedRequests) * 1000) / 10}% — локально видны не все запросы аккаунта.`
+    )
   lines.push(
     "",
-    "Модель / вариант / агент | сообщений | нативная оценка USD | пересчёт USD",
-    "--- | ---: | ---: | ---:"
+    "Модель / вариант / агент | сообщений | нативная оценка USD | пересчёт USD | USD/сообщение",
+    "--- | ---: | ---: | ---: | ---:"
   )
   for (const model of report.models)
     lines.push(
-      `${model.provider}/${model.model} / ${model.variant ?? "по умолчанию"} / ${model.agent ?? "неизвестен"} | ${model.messages} | ${value(model.nativeRequestReportedUSD)} | ${value(model.recomputedUSD)}`
+      `${model.provider}/${model.model} / ${model.variant ?? "по умолчанию"} / ${model.agent ?? "неизвестен"} | ${model.messages} | ${value(model.nativeRequestReportedUSD)} | ${value(model.recomputedUSD)} | ${value(model.messages && model.recomputedUSD !== null ? model.recomputedUSD / model.messages : null)}`
     )
   lines.push(
     "",
