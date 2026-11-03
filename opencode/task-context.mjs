@@ -103,6 +103,45 @@ export async function registerTaskContext(context) {
       )
     return canonical
   }
+  const prune = async () => {
+    if (!context.storage.scan) return
+    const real = await fs.realpath(directory).catch((error) => {
+      if (error.code === "ENOENT") return null
+      throw error
+    })
+    if (real !== directory) return
+    const live = new Set()
+    let after
+    do {
+      const page = await context.storage.scan({
+        prefix: "task-context:",
+        limit: cachePolicy.scanEntries,
+        ...(after ? { after } : {})
+      })
+      for (const { value } of page.entries)
+        if (typeof value === "string") live.add(value)
+      after = page.next
+    } while (after)
+    const entries = await fs.readdir(directory).catch((error) => {
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") return []
+      throw error
+    })
+    for (const entry of entries) {
+      const id = entry.endsWith(".json") ? entry.slice(0, -".json".length) : ""
+      if (!/^[a-f0-9]{64}$/.test(id) || live.has(id)) continue
+      try {
+        const stat = await fs.lstat(fileFor(id))
+        if (
+          !stat.isFile() ||
+          Date.now() - stat.mtimeMs < cachePolicy.taskContextMs
+        )
+          continue
+        await fs.unlink(fileFor(id))
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error
+      }
+    }
+  }
   const reference = async (sessionID, includeCheckpoint = true) => {
     const saved = await load(sessionID)
     return saved
@@ -303,7 +342,7 @@ export async function registerTaskContext(context) {
     })
   )
   await context.session.hook("context", async (event) => {
-    const text = await reference(event.sessionID)
+    const text = await reference(event.sessionID, false)
     if (text) event.system.push({ type: "text", text })
   })
   const memory = {
@@ -421,16 +460,21 @@ export async function registerTaskContext(context) {
     },
     async transfer(sourceID, targetID) {
       const saved = await load(sourceID)
-      if (saved) await context.storage.set(key(targetID), saved.id)
+      if (!saved) return
+      await context.storage.set(key(targetID), saved.id)
+      await context.storage.remove(key(sourceID))
     }
   }
   await context.session.hook("compaction", async event => {
     const messages = await context.session.context({ sessionID: event.sessionID })
     const saved = await load(event.sessionID)
     const request = messages.findLast(message => message.type === "user" && message.text?.trim())
-    const checkpoint = saved?.checkpoint || request?.text || "Resume the active objective and next unfinished step from the compaction summary."
+    const checkpoint = saved
+      ? saved.checkpoint
+      : request?.text || "Resume the active objective and next unfinished step from the compaction summary."
     await memory.prepare(event.sessionID, checkpoint, messages)
     event.system.push({ type: "text", text: await reference(event.sessionID) })
   })
+  await prune()
   return memory
 }

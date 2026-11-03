@@ -6,5 +6,6 @@ export const cachePolicy = Object.freeze({
   taskCheckpointChars: 6000,
   taskSourceEntries: 8,
   taskSourceLines: 160,
-  taskSourceBytes: 24000
+  taskSourceBytes: 24000,
+  taskContextMs: 24 * 60 * 60 * 1000
 })

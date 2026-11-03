@@ -22,6 +22,7 @@ function fixture(t) {
     rpc: { register: async () => ({ events: { emit: async (name, data) => events.push({ name, data }) } }) },
     storage: {
       get: async (key) => stored.get(key), set: async (key, value) => stored.set(key, value),
+      remove: async (key) => stored.delete(key),
       scan: async ({ prefix, after, limit }) => {
         const entries = [...stored].filter(([key]) => key.startsWith(prefix) && (!after || key > after)).sort(([a], [b]) => a.localeCompare(b)).slice(0, limit).map(([key, value]) => ({ key, value }))
         return { entries, next: entries.length === limit ? entries.at(-1).key : undefined }

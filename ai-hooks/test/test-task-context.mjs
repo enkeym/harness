@@ -28,7 +28,7 @@ async function fixture(t) {
   const memory = await registerTaskContext(context)
   const run = (args, sessionID = "source") => execute(args, { sessionID })
   const save = () => run({ action: "save", checkpoint: "Implement step 2; next edit source.mjs:2; plan .opencode/plans/task.md", sources: [{ file: "source.mjs", lines: "2-3" }] })
-  return { directory, context, hooks, memory, run, save }
+  return { directory, context, hooks, memory, run, save, stored }
 }
 
 test("task context survives a transfer and restores only selected unchanged evidence", async t => {
@@ -255,4 +255,78 @@ test("automatic preparation skips truncated, changed, missing and outside source
 
   assert.match(await f.memory.reference("source"), /Cached ranges: none/)
   assert.match((await f.run({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] })).content, /Missing cached range/)
+})
+
+test("a transfer releases the source binding and keeps the continuation pointed at the cache", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const id = f.stored.get("task-context:source")
+  assert.match(id, /^[a-f0-9]{64}$/)
+
+  await f.memory.transfer("source", "target")
+
+  assert.equal(f.stored.get("task-context:target"), id)
+  assert.equal(f.stored.has("task-context:source"), false)
+  assert.match((await f.run({ action: "restore" }, "source")).content, /No saved/)
+  assert.match((await f.run({ action: "restore" }, "target")).content, /Implement step 2/)
+})
+
+test("ordinary turns receive the cache pointer without repeating the checkpoint", async t => {
+  const f = await fixture(t)
+  await f.save()
+
+  const turn = { sessionID: "source", system: [] }
+  await f.hooks.get("context")(turn)
+  assert.match(turn.system[0].text, /Saved task context:/)
+  assert.match(turn.system[0].text, /source\.mjs:2-3/)
+  assert.doesNotMatch(turn.system[0].text, /Implement step 2/)
+
+  const compaction = { sessionID: "source", system: [] }
+  await f.hooks.get("compaction")(compaction)
+  assert.match(compaction.system[0].text, /Implement step 2/)
+})
+
+test("plugin startup prunes orphaned caches older than the retention window", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const directory = path.join(f.directory, ".opencode/task-context")
+  const live = f.stored.get("task-context:source")
+  const orphan = "b".repeat(64)
+  const recent = "c".repeat(64)
+  fs.writeFileSync(path.join(directory, `${orphan}.json`), "{}")
+  fs.writeFileSync(path.join(directory, `${recent}.json`), "{}")
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  fs.utimesSync(path.join(directory, `${orphan}.json`), old, old)
+  f.context.storage.scan = async ({ prefix = "" } = {}) => ({
+    entries: [...f.stored.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => ({ key, value })),
+    next: null
+  })
+
+  await registerTaskContext(f.context)
+
+  assert.deepEqual(
+    fs.readdirSync(directory).sort(),
+    [`${live}.json`, `${recent}.json`].sort()
+  )
+})
+
+test("plugin startup never prunes through a symlinked cache directory", async t => {
+  const f = await fixture(t)
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "harness-task-context-outside-"))
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }))
+  const orphan = "d".repeat(64)
+  const file = path.join(outside, `${orphan}.json`)
+  fs.writeFileSync(file, "{}")
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  fs.utimesSync(file, old, old)
+  const directory = path.join(f.directory, ".opencode/task-context")
+  fs.mkdirSync(path.dirname(directory), { recursive: true })
+  fs.symlinkSync(outside, directory)
+  f.context.storage.scan = async () => ({ entries: [], next: null })
+
+  await registerTaskContext(f.context)
+
+  assert.equal(fs.existsSync(file), true)
 })

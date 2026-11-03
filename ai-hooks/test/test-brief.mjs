@@ -16,7 +16,7 @@ function fixture(t) {
   const original = { providerID: "fixture", id: "daily", variant: "high" }
   sessions.set("source", { location: { directory }, model: original, agent: "build", permissions: [{ action: "edit", resource: "secret/**", effect: "deny" }] })
   const context = {
-    storage: { get: async key => stored.get(key), set: async (key, value) => stored.set(key, structuredClone(value)) },
+    storage: { get: async key => stored.get(key), set: async (key, value) => stored.set(key, structuredClone(value)), remove: async key => stored.delete(key) },
     rpc: { register: async () => ({ events: { emit: async () => {} } }) },
     command: { transform: async edit => edit({ add() {} }) },
     tool: { transform: async edit => edit({ add: value => tools.set(value.name, value) }) },
@@ -89,9 +89,10 @@ test("brief preserves observed TokenSave evidence through planning and implement
   assert.match(saved.checkpoint, /next edit source.mjs:2/)
   for (const sessionID of ["target-1", "target-2"]) {
     assert.match(f.prompts.find(value => value.sessionID === sessionID).text, /Cached ranges: source.mjs:2-2/)
-    const restored = await f.tools.get("task_context").execute({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] }, { sessionID })
-    assert.match(restored.content, /2\tsecond/)
   }
+  const restored = await f.tools.get("task_context").execute({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] }, { sessionID: "target-2" })
+  assert.match(restored.content, /2\tsecond/)
+  assert.match((await f.tools.get("task_context").execute({ action: "restore" }, { sessionID: "target-1" })).content, /No saved/)
 })
 
 test("routine turns, disabled routing, errors and cancellation create no continuation", async t => {
