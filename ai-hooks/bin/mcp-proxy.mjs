@@ -302,12 +302,11 @@ let shutdownTimer
 const handshakeId = "harness:initialize"
 
 function transform(message, method) {
-  if (method === "resources/templates/list" && message.error?.code === -32601)
-    return {
-      jsonrpc: "2.0",
-      id: message.id,
-      result: { resourceTemplates: [] }
-    }
+  if (
+    method === "initialize" &&
+    message.result?.serverInfo?.name === "tokensave"
+  )
+    delete message.result.capabilities?.resources
   if (
     message.method === "notifications/tools/list_changed" ||
     method === "tools/list"

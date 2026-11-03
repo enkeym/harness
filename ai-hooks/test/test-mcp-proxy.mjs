@@ -13,7 +13,7 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, protocol, policy = {}, stubborn = false, descendant = false, templates = false } = {}) {
+function client(t, { lazy = false, protocol, policy = {}, stubborn = false, descendant = false, name, resources = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
   const catalog = path.join(dir, 'catalog.json');
@@ -21,7 +21,7 @@ function client(t, { lazy = false, protocol, policy = {}, stubborn = false, desc
   fs.writeFileSync(policyFile, JSON.stringify(policy));
   fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: [backend], initialize, tools: [{ name: 'read', description: 'Cached description', inputSchema: { type: 'object' } }] }));
   const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog] : ['--compact']), '--', process.execPath, backend], {
-    env: { ...process.env, HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_TEMPLATES: templates ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
   const notifications = [];
@@ -109,20 +109,17 @@ test('direct mode negotiates the backend protocol and preserves prompts, resourc
   assert.equal(resources.id, 'resources'); assert.deepEqual(resources.result, { resources: [] });
 });
 
-test('an unsupported template list answers an empty list instead of an error', async t => {
-  const c = client(t);
-  await c.rpc('initialize', initialize);
-  const templates = await c.rpc('resources/templates/list');
-  assert.equal(templates.error, undefined);
-  assert.deepEqual(templates.result, { resourceTemplates: [] });
+test('tokensave stops advertising resources so no client asks for templates', async t => {
+  const c = client(t, { name: 'tokensave', resources: true });
+  const init = await c.rpc('initialize', initialize);
+  assert.equal(init.result.capabilities.resources, undefined);
+  assert.deepEqual(init.result.capabilities.tools, { listChanged: true });
 });
 
-test('template lists the backend does support pass through unchanged', async t => {
-  const c = client(t, { templates: true });
-  await c.rpc('initialize', initialize);
-  const templates = await c.rpc('resources/templates/list');
-  assert.equal(templates.error, undefined);
-  assert.deepEqual(templates.result.resourceTemplates.map(item => item.uriTemplate), ['fake://item{/id}']);
+test('other backends keep the resources they advertise', async t => {
+  const c = client(t, { resources: true });
+  const init = await c.rpc('initialize', initialize);
+  assert.deepEqual(init.result.capabilities.resources, {});
 });
 
 test('a hung backend fails pending requests and exits without replaying operations', async t => {
