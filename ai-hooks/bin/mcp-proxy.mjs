@@ -167,8 +167,7 @@ function readKey(params) {
   const project =
     typeof params.graph_root === "string"
       ? params.graph_root
-      : process.env.CODEX_PROJECT_DIR ||
-        process.cwd()
+      : process.env.CODEX_PROJECT_DIR || process.cwd()
   let branch
   try {
     branch = execFileSync(
@@ -303,6 +302,12 @@ let shutdownTimer
 const handshakeId = "harness:initialize"
 
 function transform(message, method) {
+  if (method === "resources/templates/list" && message.error?.code === -32601)
+    return {
+      jsonrpc: "2.0",
+      id: message.id,
+      result: { resourceTemplates: [] }
+    }
   if (
     message.method === "notifications/tools/list_changed" ||
     method === "tools/list"
@@ -392,19 +397,29 @@ function write(message) {
 
 function backendAlive() {
   if (!child?.pid) return false
-  if (process.platform === "win32") return child.exitCode === null && child.signalCode === null
-  try { process.kill(-child.pid, 0); return true }
-  catch (error) { if (error.code === "ESRCH") return false; throw error }
+  if (process.platform === "win32")
+    return child.exitCode === null && child.signalCode === null
+  try {
+    process.kill(-child.pid, 0)
+    return true
+  } catch (error) {
+    if (error.code === "ESRCH") return false
+    throw error
+  }
 }
 function terminateBackend(signal) {
   try {
     if (process.platform === "win32") {
       if (child.exitCode === null && child.signalCode === null)
-        execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" })
+        execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+          stdio: "ignore"
+        })
     } else process.kill(-child.pid, signal)
   } catch (error) {
     if (error.code !== "ESRCH")
-      console.error(`mcp-proxy: backend shutdown failed: ${redactDiagnostic(error.message)}`)
+      console.error(
+        `mcp-proxy: backend shutdown failed: ${redactDiagnostic(error.message)}`
+      )
   }
 }
 function stop() {
@@ -427,7 +442,10 @@ function stop() {
     shutdownTimer = setTimeout(() => {
       terminateBackend("SIGTERM")
       if (backendAlive())
-        shutdownTimer = setTimeout(() => terminateBackend("SIGKILL"), policy.shutdownGraceMs)
+        shutdownTimer = setTimeout(
+          () => terminateBackend("SIGKILL"),
+          policy.shutdownGraceMs
+        )
     }, policy.shutdownGraceMs)
   }
 }

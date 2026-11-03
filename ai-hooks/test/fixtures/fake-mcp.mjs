@@ -41,6 +41,22 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     result = { prompts: [] }
   } else if (request.method === "resources/list") {
     result = { resources: [] }
+  } else if (request.method === "resources/templates/list" && process.env.FAKE_MCP_TEMPLATES) {
+    result = {
+      resourceTemplates: [
+        { uriTemplate: "fake://item{/id}", name: "item", mimeType: "application/json" }
+      ]
+    }
+  } else if (request.method === "resources/templates/list") {
+    send({
+      jsonrpc: "2.0",
+      id: request.id,
+      error: {
+        code: -32601,
+        message: "method not found: resources/templates/list"
+      }
+    })
+    return
   } else if (request.method === "tools/call") {
     if (request.params.name === "hang") return
     if (request.params.name === "fail") {
