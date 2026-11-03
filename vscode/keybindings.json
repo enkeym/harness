@@ -856,11 +856,6 @@
     "when": "editorTextFocus && foldingEnabled"
   },
   {
-    "key": "ctrl+m ctrl+c",
-    "command": "-editor.action.addCommentLine",
-    "when": "editorTextFocus && !editorReadonly"
-  },
-  {
     "key": "ctrl+m ctrl+k",
     "command": "-editor.action.selectFromAnchorToCursor",
     "when": "editorTextFocus && selectionAnchorSet"
@@ -1088,7 +1083,7 @@
     }
   },
   {
-    "key": "alt+p",
+    "key": "alt+[KeyP]",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
       "text": "/model\r"
@@ -1096,7 +1091,7 @@
     "when": "terminalFocus"
   },
   {
-    "key": "ctrl+o",
+    "key": "ctrl+[KeyO]",
     "command": "workbench.action.terminal.sendSequence",
     "args": {
       "text": "\u000f"
