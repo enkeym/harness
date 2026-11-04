@@ -25,12 +25,14 @@ function client(t, { lazy = false, protocol, policy = {}, stubborn = false, desc
   });
   const pending = new Map();
   const notifications = [];
+  const messages = [];
   let nextId = 0;
   let stderr = '';
   p.stderr.on('data', (data) => { stderr += data; });
   createInterface({ input: p.stdout }).on('line', (line) => {
     const message = JSON.parse(line);
     if (message.method) { notifications.push(message); return; }
+    messages.push(message);
     pending.get(message.id)?.(message);
     pending.delete(message.id);
   });
@@ -42,15 +44,18 @@ function client(t, { lazy = false, protocol, policy = {}, stubborn = false, desc
     clearTimeout(timer);
     fs.rmSync(dir, { recursive: true, force: true });
   });
+  function send(message) {
+    p.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  }
   function rpc(method, params = {}, requestId) {
     const id = requestId ?? ++nextId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { pending.delete(id); reject(new Error(`No response to ${method}: ${stderr}`)); }, 3000);
       pending.set(id, (message) => { clearTimeout(timer); resolve(message); });
-      p.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+      send({ id, method, params });
     });
   }
-  return { rpc, starts, notifications, exited, p };
+  return { rpc, send, starts, notifications, messages, exited, p };
 }
 
 test('catalog discovery and ping do not launch the lazy backend; concurrent calls launch it once', async (t) => {
@@ -135,5 +140,44 @@ test('a hung backend fails pending requests and exits without replaying operatio
   }
   assert.equal(await c.exited, 1);
   assert.ok(c.notifications.some(message => message.method === 'test/descendant'));
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+});
+
+test('catalog mode reports a request timeout and keeps serving after a backend restart', async t => {
+  const c = client(t, { lazy: true, policy: { requestTimeoutMs: 200, shutdownGraceMs: 20 } });
+  const init = await c.rpc('initialize', initialize);
+  assert.equal(init.result.protocolVersion, initialize.protocolVersion);
+
+  const hung = await c.rpc('tools/call', { name: 'hang' });
+  assert.equal(hung.error.code, -32603);
+  assert.match(hung.error.message, /timed out; completion unknown/);
+  assert.equal(c.p.exitCode, null);
+
+  assert.deepEqual((await c.rpc('ping')).result, {});
+
+  const call = await c.rpc('tools/call', { name: 'read' });
+  assert.equal(call.error, undefined);
+  assert.equal(call.result.content[0].text, 'file content once');
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\nstart\n');
+});
+
+test('a cancelled request is dropped and forwarded instead of timing out the backend', async t => {
+  const c = client(t, { lazy: true, policy: { requestTimeoutMs: 150, shutdownGraceMs: 20 } });
+  await c.rpc('initialize', initialize);
+  assert.equal((await c.rpc('tools/call', { name: 'read' })).result.content[0].text, 'file content once');
+
+  c.send({ id: 'hang', method: 'tools/call', params: { name: 'hang' } });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  c.send({ method: 'notifications/cancelled', params: { requestId: 'hang' } });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  assert.equal(c.messages.filter((message) => message.id === 'hang').length, 0);
+  assert.ok(c.notifications.some((message) => message.method === 'test/cancelled'));
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+  assert.equal(c.p.exitCode, null);
+
+  const call = await c.rpc('tools/call', { name: 'read' });
+  assert.equal(call.error, undefined);
+  assert.equal(call.result.content[0].text, 'file content once');
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
 });

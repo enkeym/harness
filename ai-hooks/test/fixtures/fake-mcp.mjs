@@ -14,7 +14,11 @@ if (process.env.FAKE_MCP_STUBBORN) {
 }
 createInterface({ input: process.stdin }).on("line", (line) => {
   const request = JSON.parse(line)
-  if (!Object.hasOwn(request, "id")) return
+  if (!Object.hasOwn(request, "id")) {
+    if (request.method === "notifications/cancelled")
+      send({ jsonrpc: "2.0", method: "test/cancelled", params: request.params })
+    return
+  }
   let result = {}
   if (request.method === "initialize") {
     result = {

@@ -47,6 +47,15 @@ const retryTimers = new Set()
 const calls = new Map()
 const failures = new Map()
 const reads = new Map()
+
+function dropPending(id) {
+  if (!pending.has(id)) return false
+  pending.delete(id)
+  clearTimeout(requestTimers.get(id))
+  requestTimers.delete(id)
+  calls.delete(id)
+  return true
+}
 const generationFile = process.env.HARNESS_CONTEXT_GENERATION_FILE
 const artifactDir = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
@@ -394,26 +403,26 @@ function write(message) {
   child.stdin.write(`${JSON.stringify(message)}\n`)
 }
 
-function backendAlive() {
-  if (!child?.pid) return false
+function backendAlive(target = child) {
+  if (!target?.pid) return false
   if (process.platform === "win32")
-    return child.exitCode === null && child.signalCode === null
+    return target.exitCode === null && target.signalCode === null
   try {
-    process.kill(-child.pid, 0)
+    process.kill(-target.pid, 0)
     return true
   } catch (error) {
     if (error.code === "ESRCH") return false
     throw error
   }
 }
-function terminateBackend(signal) {
+function terminateBackend(target, signal) {
   try {
     if (process.platform === "win32") {
-      if (child.exitCode === null && child.signalCode === null)
-        execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+      if (target.exitCode === null && target.signalCode === null)
+        execFileSync("taskkill", ["/pid", String(target.pid), "/t", "/f"], {
           stdio: "ignore"
         })
-    } else process.kill(-child.pid, signal)
+    } else process.kill(-target.pid, signal)
   } catch (error) {
     if (error.code !== "ESRCH")
       console.error(
@@ -434,19 +443,44 @@ function stop() {
   process.stdin.destroy()
   if (child?.pid) {
     if (process.platform === "win32") {
-      terminateBackend("SIGKILL")
+      terminateBackend(child, "SIGKILL")
       return
     }
     child.stdin.end()
     shutdownTimer = setTimeout(() => {
-      terminateBackend("SIGTERM")
-      if (backendAlive())
+      terminateBackend(child, "SIGTERM")
+      if (backendAlive(child))
         shutdownTimer = setTimeout(
-          () => terminateBackend("SIGKILL"),
+          () => terminateBackend(child, "SIGKILL"),
           policy.shutdownGraceMs
         )
     }, policy.shutdownGraceMs)
   }
+}
+
+function restartBackend(error) {
+  if (closing) return
+  console.error(`mcp-proxy: ${redactDiagnostic(error.message)}`)
+  const previous = child
+  const previousStarting = starting
+  child = undefined
+  starting = undefined
+  clearTimeout(handshakeTimer)
+  for (const id of pending.keys()) {
+    send({
+      jsonrpc: "2.0",
+      id,
+      error: { code: -32603, message: error.message }
+    })
+  }
+  pending.clear()
+  for (const timer of requestTimers.values()) clearTimeout(timer)
+  requestTimers.clear()
+  for (const timer of retryTimers) clearTimeout(timer)
+  retryTimers.clear()
+  calls.clear()
+  previousStarting?.resolve()
+  if (previous?.pid) terminateBackend(previous, "SIGKILL")
 }
 
 function fail(error) {
@@ -466,20 +500,27 @@ function fail(error) {
 }
 
 function launch() {
-  child = spawn(command, args.slice(split + 2), {
+  const launched = spawn(command, args.slice(split + 2), {
     detached: process.platform !== "win32",
     stdio: ["pipe", "pipe", "inherit"]
   })
-  child.on("error", fail)
-  child.stdin.on("error", fail)
-  child.on("exit", (code, signal) => {
+  child = launched
+  launched.on("error", (error) => {
+    if (child === launched) fail(error)
+  })
+  launched.stdin.on("error", (error) => {
+    if (child === launched) fail(error)
+  })
+  launched.on("exit", (code, signal) => {
+    if (child !== launched) return
     clearTimeout(handshakeTimer)
     if (!closing) fail(new Error(`MCP backend exited (${signal || code})`))
-    if (!backendAlive()) clearTimeout(shutdownTimer)
+    if (!backendAlive(launched)) clearTimeout(shutdownTimer)
     process.exitCode = code || process.exitCode || (signal ? 1 : 0)
     process.stdin.destroy()
   })
-  createInterface({ input: child.stdout }).on("line", (line) => {
+  createInterface({ input: launched.stdout }).on("line", (line) => {
+    if (child !== launched) return
     let message
     try {
       message = JSON.parse(line)
@@ -544,7 +585,7 @@ function launch() {
           const delay = retryDelay(call.retries++, policy)
           const timer = setTimeout(() => {
             retryTimers.delete(timer)
-            if (!closing) write(call.message)
+            if (!closing && pending.has(call.message.id)) write(call.message)
           }, delay)
           retryTimers.add(timer)
           return
@@ -601,7 +642,10 @@ function launch() {
 }
 
 async function ready() {
-  if (!catalog) return
+  if (!catalog) {
+    if (!closing && !backendAlive()) launch()
+    return
+  }
   if (!starting) {
     let resolve
     const promise = new Promise((done) => {
@@ -641,6 +685,11 @@ input.on("line", (line) => {
     return
   }
   if (artifactCall(message)) return
+  if (message.method === "notifications/cancelled") {
+    if (!dropPending(message.params?.requestId)) return
+    if (catalog ? starting?.ready : backendAlive()) write(message)
+    return
+  }
   if (catalog && message.method === "initialize") {
     initialization = message
     reply(message, catalog.initialize)
@@ -664,13 +713,19 @@ input.on("line", (line) => {
     requestTimers.set(
       message.id,
       setTimeout(() => {
-        fail(new Error("MCP backend request timed out; completion unknown"))
+        const error = new Error(
+          "MCP backend request timed out; completion unknown"
+        )
+        if (catalog) restartBackend(error)
+        else fail(error)
       }, policy.requestTimeoutMs)
     )
   }
   ready()
     .then(() => {
-      if (!closing) write(message)
+      if (closing) return
+      if (Object.hasOwn(message, "id") && !pending.has(message.id)) return
+      write(message)
     })
     .catch(fail)
 })
