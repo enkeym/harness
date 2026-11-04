@@ -49,13 +49,28 @@ test("Handoff carries the saved task checkpoint into its continuation", async t 
   f.context.session.hook = async () => {}
   const memory = await registerTaskContext(f.context)
   await run({ action: "save", checkpoint: "Implement step 2; edit source.mjs next" }, { sessionID: "source" })
+  f.context.session.generate = async () => { assert.fail("An explicit checkpoint must bypass summary generation") }
   await registerHandoff(f.context, undefined, memory)
 
   await f.run()
 
   assert.match(f.prompts[0].text, /Implement step 2/)
+  assert.equal(f.prompts[0].text.match(/Implement step 2/g).length, 1)
   assert.match(await memory.reference("target-0"), /Implement step 2/)
   assert.match(fs.readFileSync(path.join(f.directory, ".opencode/HANDOFF.md"), "utf8"), /task-context/)
+})
+
+test("Handoff rejects raw configuration and oversized generated summaries", async t => {
+  for (const summary of ["PRIVATE_TOKEN=example-value", "A".repeat(cachePolicy.taskCheckpointChars + 1)]) {
+    const f = fixture(t)
+    f.context.session.generate = async () => ({ text: summary })
+    await registerHandoff(f.context)
+
+    await assert.rejects(f.run(), /compact task_context checkpoint/)
+
+    assert.equal(f.created.length, 0)
+    assert.equal(fs.existsSync(path.join(f.directory, ".opencode/HANDOFF.md")), false)
+  }
 })
 
 test("Handoff caches observed ranges without an agent save and reuses a failed delivery", async t => {

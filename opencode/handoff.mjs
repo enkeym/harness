@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import { readHandoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
 import { readInstructions } from "./instructions.mjs"
 import { cachePolicy } from "./cache-policy.mjs"
+import { hasRawConfiguration } from "./task-context.mjs"
 import { ensureProjectIgnore, writePrivateText } from "./local-state.mjs"
 import handoffRpc from "./handoff-rpc.mjs"
 import {
@@ -168,11 +169,16 @@ export async function registerHandoff(context, onTransfer, taskContext) {
         const override = ["pro", "flash"].includes(routeValue)
           ? routeValue
           : null
-        const summary = transfer?.summary === undefined
-          ? await context.session.generate({ sessionID, prompt: handoffPrompt })
-          : { text: transfer.summary }
+        const savedCheckpoint = transfer ? null : await taskContext?.checkpoint(sessionID)
+        const summary = transfer?.summary !== undefined
+          ? { text: transfer.summary }
+          : savedCheckpoint
+            ? { text: savedCheckpoint }
+            : await context.session.generate({ sessionID, prompt: handoffPrompt })
         const text = stripHandoffRoute(summary.text)
         if (!text.trim()) throw new Error("Empty Handoff; transfer stopped")
+        if (text.length > cachePolicy.taskCheckpointChars || hasRawConfiguration(text))
+          throw new Error("Handoff contains oversized or raw configuration content; save a compact task_context checkpoint and retry")
         const checkpoint = await taskContext?.prepare(sessionID, text, messages)
         const file = path.resolve(
           source.location.directory,

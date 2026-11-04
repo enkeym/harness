@@ -3,7 +3,7 @@ export const cachePolicy = Object.freeze({
   previousHandoffs: 32,
   scanEntries: 100,
   readResultMinBytes: 512,
-  taskCheckpointChars: 6000,
+  taskCheckpointChars: 3000,
   taskSourceEntries: 8,
   taskSourceLines: 160,
   taskSourceBytes: 24000,

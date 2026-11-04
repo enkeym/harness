@@ -122,6 +122,18 @@ test("native compaction retains an explicit checkpoint and saves a checkpoint wi
   assert.match(restored.content, /Cached ranges: $/)
 })
 
+test("task context does not carry raw configuration through compaction or explicit saves", async t => {
+  const f = await fixture(t)
+  f.context.session.context = async () => [{ type: "user", text: "PRIVATE_TOKEN=example-value\nContinue setup" }]
+
+  await f.hooks.get("compaction")({ sessionID: "source", system: [] })
+
+  const restored = await f.run({ action: "restore" })
+  assert.doesNotMatch(restored.content, /example-value/)
+  assert.match(restored.content, /raw configuration/)
+  await assert.rejects(f.run({ action: "save", checkpoint: "PRIVATE_TOKEN=example-value" }), /compact task checkpoint/)
+})
+
 test("task context rejects changed files and never fabricates unobserved ranges", async t => {
   const f = await fixture(t)
   await f.save()
