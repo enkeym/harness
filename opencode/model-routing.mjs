@@ -18,8 +18,9 @@ export function configureModelRouting(config) {
     if (config.agents) delete config.agents[name]
     if (config.commands) delete config.commands[name]
   }
-  if (!legacy) return
-  for (const name of ["build", "plan", "general", "explore", "ask", "title", "summary", "compaction"]) {
+  const inherited = ["build", "plan", "general"]
+  const names = legacy ? [...inherited, "explore", "ask", "title", "summary", "compaction"] : inherited
+  for (const name of names) {
     const agent = config.agents?.[name]
     const model = agent?.model
     const id = typeof model === "string" ? model.split("#")[0] : model?.providerID === "deepseek" ? `deepseek/${model.id}` : null

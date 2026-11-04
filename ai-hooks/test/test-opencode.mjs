@@ -194,7 +194,11 @@ test("model routing removes legacy overrides and preserves user configuration", 
   assert.deepEqual(repeated, loaded)
   repeated.agents.plan.model = "deepseek/deepseek-v4-pro#max"
   configureModelRouting(repeated)
-  assert.equal(repeated.agents.plan.model, "deepseek/deepseek-v4-pro#max")
+  assert.equal(repeated.agents.plan.model, undefined)
+  const inherited = { agents: { build: { model: "deepseek/deepseek-v4-pro#max" }, general: { model: { providerID: "deepseek", id: "deepseek-v4-pro" } } } }
+  configureModelRouting(inherited)
+  assert.equal(inherited.agents.build.model, undefined)
+  assert.equal(inherited.agents.general.model, undefined)
   const empty = {}
   configureModelRouting(empty)
   assert.deepEqual(empty, {})

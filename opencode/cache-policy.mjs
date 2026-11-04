@@ -7,5 +7,6 @@ export const cachePolicy = Object.freeze({
   taskSourceEntries: 8,
   taskSourceLines: 160,
   taskSourceBytes: 24000,
-  taskContextMs: 24 * 60 * 60 * 1000
+  taskContextMs: 24 * 60 * 60 * 1000,
+  taskPruneMs: 10 * 60 * 1000
 })

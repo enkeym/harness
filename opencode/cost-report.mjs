@@ -3,11 +3,13 @@ import os from "node:os"
 import path from "node:path"
 import { readJSON, writePrivateJSON, writePrivateText } from "./local-state.mjs"
 import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
+import { deepseekModels } from "./model-routing.mjs"
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
   dailyProviderCNY: 25,
-  dailyNativeUSD: null,
+  dailyNativeUSD: 5,
+  billingDiscrepancyPercent: 5,
   sessionAssistantMessages: 100,
   repeatedToolCalls: 3,
   consecutiveFailures: 3
@@ -478,6 +480,28 @@ export function buildCostReport(
       totals.nativeRequestReportedUSD,
       config.dailyNativeUSD
     )
+  const billedRequests = providerBilling.reduce(
+    (sum, point) => (numeric(point.apiRequests) ? sum + point.apiRequests : sum),
+    0
+  )
+  const requestDiscrepancy =
+    billedRequests > 0
+      ? Math.round(
+          (Math.abs(billedRequests - totals.messages) / billedRequests) *
+            1000
+        ) / 10
+      : null
+  if (
+    requestDiscrepancy !== null &&
+    config.billingDiscrepancyPercent &&
+    requestDiscrepancy > config.billingDiscrepancyPercent
+  )
+    warn(
+      "billing-discrepancy",
+      null,
+      requestDiscrepancy,
+      config.billingDiscrepancyPercent
+    )
   const models = new Map()
   for (const step of unique.steps) {
     const key = JSON.stringify({
@@ -489,6 +513,20 @@ export function buildCostReport(
     if (!models.has(key)) models.set(key, [])
     models.get(key).push(step)
   }
+  const modelRows = [...models].map(([key, steps]) => {
+    const row = { ...JSON.parse(key), ...usage(steps) }
+    row.proInBuild =
+      row.provider === deepseekModels.pro.providerID &&
+      row.model === deepseekModels.pro.id &&
+      row.agent === "build"
+    row.usdPerRequest =
+      row.messages && row.recomputedUSD !== null
+        ? row.recomputedUSD / row.messages
+        : null
+    return row
+  })
+  for (const row of modelRows)
+    if (row.proInBuild) warn("pro-in-build", null, row.messages, 0)
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -508,10 +546,7 @@ export function buildCostReport(
       undatedMessages: unique.undatedMessages,
       scope: "locally observed sessions; provider account coverage unverified"
     },
-    models: [...models].map(([key, steps]) => ({
-      ...JSON.parse(key),
-      ...usage(steps)
-    })),
+    models: modelRows,
     expensiveSessions: sessions
       .sort(
         (a, b) =>
@@ -720,12 +755,12 @@ export function formatCostReport(report) {
     )
   lines.push(
     "",
-    "Модель / вариант / агент | сообщений | нативная оценка USD | пересчёт USD | USD/сообщение",
-    "--- | ---: | ---: | ---: | ---:"
+    "Модель / вариант / агент | сообщений | нативная оценка USD | пересчёт USD | USD/сообщение | pro-in-build",
+    "--- | ---: | ---: | ---: | ---: | :---:"
   )
   for (const model of report.models)
     lines.push(
-      `${model.provider}/${model.model} / ${model.variant ?? "по умолчанию"} / ${model.agent ?? "неизвестен"} | ${model.messages} | ${value(model.nativeRequestReportedUSD)} | ${value(model.recomputedUSD)} | ${value(model.messages && model.recomputedUSD !== null ? model.recomputedUSD / model.messages : null)}`
+      `${model.provider}/${model.model} / ${model.variant ?? "по умолчанию"} / ${model.agent ?? "неизвестен"} | ${model.messages} | ${value(model.nativeRequestReportedUSD)} | ${value(model.recomputedUSD)} | ${value(model.usdPerRequest)} | ${model.proInBuild ? "да" : "нет"}`
     )
   lines.push(
     "",

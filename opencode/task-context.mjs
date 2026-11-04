@@ -103,8 +103,12 @@ export async function registerTaskContext(context) {
       )
     return canonical
   }
-  const prune = async () => {
+  let lastPrune = 0
+  const prune = async (force = false) => {
     if (!context.storage.scan) return
+    const now = Date.now()
+    if (!force && now - lastPrune < cachePolicy.taskPruneMs) return
+    lastPrune = now
     const real = await fs.realpath(directory).catch((error) => {
       if (error.code === "ENOENT") return null
       throw error
@@ -347,6 +351,7 @@ export async function registerTaskContext(context) {
   })
   const memory = {
     reference,
+    prune,
     async prepare(sessionID, checkpoint, messages) {
       const saved = await load(sessionID)
       const sources = []

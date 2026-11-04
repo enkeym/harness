@@ -55,6 +55,17 @@ test("report prices a message by model and agent and shows the cabinet request g
   assert.match(text, /Кабинет против локальных сообщений: запросов 4, локальных 1; расхождение 75%/)
 })
 
+test("flags Pro in build and cabinet request discrepancy", () => {
+  const data = report([
+    record("ses_pro", [step("pro", { agent: "build", model: { providerID: "deepseek", id: "deepseek-v4-pro", variant: "high" } })])
+  ], { billing: [{ date: "2026-11-02", currency: "CNY", cost: 26, apiRequests: 10, tokens: 100, source: "user-provided", accountScope: null }] })
+
+  assert.equal(data.models[0].proInBuild, true)
+  assert.ok(data.warnings.some(w => w.code === "pro-in-build"))
+  assert.ok(data.warnings.some(w => w.code === "billing-discrepancy" && w.observed === 90 && w.limit === 5))
+  assert.match(formatCostReport(data), /pro-in-build/)
+})
+
 test("missing usage stays unknown and snapshots are not treated as complete history", () => {
   const data = report([record("ses_partial", [step("unknown", { tokens: null, nativeReportedUSD: null })], { messageCoverage: "active-context" })])
 
@@ -112,7 +123,7 @@ test("reports and assessments persist privately, reject invalid edits and dedupl
   const options = { stateDirectory, date: "2026-11-02", config: defaultCostConfig }
 
   const first = await refreshCostReport(options)
-  assert.equal(first.newWarnings.length, 1)
+  assert.equal(first.newWarnings.length, 2)
   assert.equal((await refreshCostReport(options)).newWarnings.length, 0)
   assert.equal((await fs.stat(first.file)).mode & 0o777, 0o600)
   assert.equal((await fs.stat(path.dirname(first.file))).mode & 0o777, 0o700)

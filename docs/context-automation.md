@@ -99,11 +99,11 @@ Runner определяет рабочие модель, effort и разреш�
 разрешённой задачи после сжатия не требует подтверждения; готовые и заблокированные
 задачи не перезапускаются. Это не отключает разрешения на остальные операции.
 
-Общая политика — `ai-hooks/bin/context-policy.mjs`: начало 110000, верхний рабочий
+Общая политика — `ai-hooks/bin/context-policy.mjs`: начало 90000, верхний рабочий
 бюджет 150000 токенов, сохранение последних 15000 токенов в OpenCode. Codex получает
-`model_auto_compact_token_limit = 110000`, scope `total` и `compact_prompt` с Handoff
+`model_auto_compact_token_limit = 90000`, scope `total` и `compact_prompt` с Handoff
 через native config API; пользовательский префикс prompt сохраняется. OpenCode
-получает `compaction.auto = true`, `buffer = 40000`, а плагин ограничивает рабочий
+получает `compaction.auto = true`, `buffer = 60000`, а плагин ограничивает рабочий
 `limit.input` максимумом 150000, сохраняя меньшие лимиты моделей. Его hook `compaction`
 передаёт те же инструкции Handoff. Модель и провайдер не меняются. Маленькие окна
 могут сжиматься раньше. Порог проверяется клиентом на границе шага; один большой
@@ -173,7 +173,7 @@ Objective — конкретная задача, permissions — предост�
 ```json
 {
   "contextRatio": 0.75,
-  "contextTokens": 110000,
+  "contextTokens": 90000,
   "cooldownTurns": 2,
   "maxTurns": 12,
   "maxMs": 1800000

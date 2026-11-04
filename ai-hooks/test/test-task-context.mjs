@@ -312,6 +312,32 @@ test("plugin startup prunes orphaned caches older than the retention window", as
   )
 })
 
+test("completion prune removes orphaned caches and honors the throttle window", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const directory = path.join(f.directory, ".opencode/task-context")
+  const live = f.stored.get("task-context:source")
+  f.context.storage.scan = async ({ prefix = "" } = {}) => ({
+    entries: [...f.stored.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => ({ key, value })),
+    next: null
+  })
+  await f.memory.prune(true)
+  const orphan = "e".repeat(64)
+  const file = path.join(directory, `${orphan}.json`)
+  fs.writeFileSync(file, "{}")
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  fs.utimesSync(file, old, old)
+
+  await f.memory.prune()
+  assert.equal(fs.existsSync(file), true)
+
+  await f.memory.prune(true)
+  assert.equal(fs.existsSync(file), false)
+  assert.equal(fs.existsSync(path.join(directory, `${live}.json`)), true)
+})
+
 test("plugin startup never prunes through a symlinked cache directory", async t => {
   const f = await fixture(t)
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), "harness-task-context-outside-"))
