@@ -15,6 +15,8 @@ base directory), including after continuation. For the report, read
 `reference/report.md` there directly; never search `/` or the home tree.
 The checks are `review-standards` and `review-security`; this skill replaces
 their step 1 (scope), their triage step (edits) and their Output sections.
+Load a check or `reference/` file at most once per review; after compaction
+reload only the one the next step needs.
 
 **MR delivery is draft-only.** «Отправь», «отправь в MR», «размести»,
 «оставь комментарии» and approval of findings authorize draft notes only.
@@ -97,6 +99,13 @@ and return evidence under [reference/mr-delegation.md](reference/mr-delegation.m
   (`незакоммиченные` / `мерж <sha>` / `коммиты <KEY>` / `последние <n>` /
   `от <base>` / `аудит <area>`), files
   and `+/-` totals, the reviewed commits as `--oneline` or `коммиты не смотрел`.
+- The header line is the scope record: do not re-derive it with a second
+  `git branch -vv`, `git log` walk or MR-list call. Only a failing range
+  command (`fatal: bad revision`) corrects it, and then the header line is
+  updated.
+- A request to review the current branch (no branch argument) with a dirty tree
+  keeps step 1: the uncommitted scope is the answer, the header line names the
+  unreviewed commits, and the pass does not widen to the branch.
 - Ref other than `HEAD`: `git show <ref>:<path>`, `git grep -n <name> <ref>`,
   the ref a literal sha or branch, never `$var`. The graph holds the working
   tree; use its graph only when the target matches `HEAD` and the index is current.
@@ -132,9 +141,15 @@ of your own changes must not be described as independent review.
 Full review mode of [../shared/review-pass.md](../shared/review-pass.md);
 a fact it leaves open goes to the not-checked line.
 
+The pass is bounded: one scope decision, one inventory, one pass over it. It
+ends when every inventory file is covered; the not-checked line names the rest.
+Do not re-read a file, diff, search result or successful check whose content is
+already in this session, and do not run a second impact or regression pass.
+
 - Inventory first: `git diff --stat <range>` minus review-pass step 5 files,
-  `*.scss`, `*.css`, `*.svg`. Each file is read in its diff before the report;
-  an unread one goes to the coverage line. Review large changes in bounded
+  `*.scss`, `*.css`, `*.svg`. Each tracked file is read in its diff before the
+  report, its whole text only for a concrete suspicion a hunk leaves open; an
+  unread one goes to the coverage line. Review large changes in bounded
   groups and continue in this session; use native compaction, not a line-count gate.
 - A colleague's branch or MR with an open MR: its comments before the pass —
   *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
