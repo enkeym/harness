@@ -8,6 +8,8 @@ import { installDefaults, installLink } from "./install-files.mjs"
 import {
   configDirectory,
   loadConfig,
+  mergeConfig,
+  readConfig,
   writeConfig
 } from "../opencode/config.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
@@ -22,8 +24,9 @@ if (args.some((arg) => !["--check", "--yes"].includes(arg))) {
   process.exit(2)
 }
 const check = args.includes("--check")
+const defaults = readConfig(path.join(root, "opencode/opencode.jsonc"))
 const { settings, current } = loadConfig(directory)
-const desired = structuredClone(current)
+const desired = structuredClone(mergeConfig(defaults, current))
 configureModelRouting(desired)
 const harnessInstructions = new Set(
   ["opencode/AGENTS.md", "rules/core.md"].map((file) => path.join(root, file))

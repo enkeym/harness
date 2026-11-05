@@ -1,3 +1,73 @@
 {
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    { "action": "shell", "resource": "git push *", "effect": "ask" },
+    { "action": "shell", "resource": "rm -rf *", "effect": "ask" },
+    { "action": "read", "resource": "*.env*", "effect": "ask" }
+  ],
+  "providers": {
+    "deepseek": {
+      "name": "deepseek",
+      "package": "@ai-sdk/openai",
+      "settings": {
+        "baseURL": "https://api.deepseek.com/v1",
+        "apiKey": "{file:~/.config/opencode/keys/deepseek}"
+      },
+      "models": {
+        "deepseek-v4-pro": {
+          "name": "deepseek-v4-pro",
+          "modelID": "deepseek-v4-pro",
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
+          },
+          "settings": { "api": "chat", "reasoningEffort": "low" },
+          "cost": {
+            "input": 1.32,
+            "output": 3.96,
+            "cache": { "read": 0.044, "write": 0 }
+          }
+        },
+        "deepseek-v4-pro-offpeak": {
+          "name": "deepseek-v4-pro (off-peak)",
+          "modelID": "deepseek-v4-pro",
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
+          },
+          "settings": { "api": "chat", "reasoningEffort": "low" },
+          "cost": {
+            "input": 0.66,
+            "output": 1.98,
+            "cache": { "read": 0.022, "write": 0 }
+          }
+        },
+        "deepseek-flash": {
+          "name": "deepseek-flash",
+          "modelID": "deepseek-flash",
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
+          },
+          "settings": { "api": "chat", "reasoningEffort": "low" },
+          "cost": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": { "read": 0.006, "write": 0 }
+          }
+        },
+        "deepseek-flash-offpeak": {
+          "name": "deepseek-flash (off-peak)",
+          "modelID": "deepseek-flash",
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
+          },
+          "settings": { "api": "chat", "reasoningEffort": "low" },
+          "cost": {
+            "input": 0.15,
+            "output": 0.6,
+            "cache": { "read": 0.003, "write": 0 }
+          }
+        }
+      }
+    }
+  },
+  "model": "deepseek/deepseek-flash"
 }

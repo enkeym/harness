@@ -90,6 +90,12 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
 }
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+const opencodeEnvironment = (name, environment) => {
+  const discovered = name === 'playwright' ? playwrightEnv({ ...process.env, ...environment }) : {};
+  const keys = new Set([...Object.keys(environment), ...Object.keys(discovered)]);
+  return Object.fromEntries([...keys].map((key) => [key, `{env:${key}}`]));
+};
+
 async function syncCodex() {
   console.log('Codex (config.toml, scope user):');
   const current = JSON.parse(execFileSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', cwd: os.homedir() }));
@@ -139,8 +145,7 @@ async function syncOpenCode() {
   let changed = false;
   for (const [name, server] of Object.entries(servers)) {
     const have = current.mcp.servers[name];
-    const environment = { ...(have?.environment ?? {}), ...server.env };
-    if (name === 'playwright') Object.assign(environment, playwrightEnv({ ...process.env, ...environment }));
+    const environment = opencodeEnvironment(name, { ...(have?.environment ?? {}), ...server.env });
     const desired = { ...have, type: 'local', command: [server.command, ...server.args], environment };
     delete desired.url;
     if (sameJson(have, desired)) { good(name); continue; }

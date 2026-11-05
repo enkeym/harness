@@ -136,7 +136,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   const installed = run()
   assert.equal(installed.status, 0, installed.stderr + installed.stdout)
   assert.equal(loadConfig(directory).current.model, "user/model")
-  assert.equal(loadConfig(directory).current.providers, undefined)
+  assert.ok(loadConfig(directory).current.providers.deepseek)
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
   assert.ok(!loadConfig(directory).current.instructions.some(value => /(?:rules\/core|opencode\/AGENTS)\.md$/.test(value)))
   assert.equal(loadConfig(directory).current.experimental.background_compaction, false)
@@ -958,7 +958,7 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
   )
   fs.writeFileSync(
     settings,
-    '{ // keep\n "mcp": { /* keep nested */ "servers": {} },\n}'
+    '{ // keep\n "mcp": { /* keep nested */ "servers": { "playwright": { "type": "local", "command": ["old"], "environment": { "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "secret-token" } } } },\n}'
   )
   const before = fs.readFileSync(settings, "utf8")
   const run = (...args) =>
@@ -984,6 +984,17 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
     "custom"
   ])
   assert.match(fs.readFileSync(settings, "utf8"), /keep nested/)
+  const synced = loadConfig(directory).current.mcp.servers
+  assert.equal(
+    synced.playwright.environment.PLAYWRIGHT_MCP_EXTENSION_TOKEN,
+    "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
+  )
+  assert.ok(
+    Object.values(synced.playwright.environment).every(value =>
+      /^\{env:[A-Z0-9_]+\}$/.test(value)
+    )
+  )
+  assert.ok(!fs.readFileSync(settings, "utf8").includes("secret-token"))
   assert.equal(run("--check").status, 0)
 })
 
