@@ -970,7 +970,7 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
         ...args
       ],
       {
-        env: { ...process.env, OPENCODE_CONFIG_DIR: directory },
+        env: { ...process.env, OPENCODE_CONFIG_DIR: directory, PLAYWRIGHT_MCP_EXTENSION_TOKEN: "test-token" },
         encoding: "utf8"
       }
     )
@@ -985,10 +985,9 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
   ])
   assert.match(fs.readFileSync(settings, "utf8"), /keep nested/)
   const synced = loadConfig(directory).current.mcp.servers
-  assert.equal(
-    synced.playwright.environment.PLAYWRIGHT_MCP_EXTENSION_TOKEN,
-    "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
-  )
+  assert.equal(synced.playwright.environment.PLAYWRIGHT_MCP_EXTENSION_TOKEN, undefined)
+  assert.ok(synced.playwright.command.includes("--manual-extension"))
+  assert.ok(synced.playwright.command.includes("--existing-tabs-only"))
   assert.ok(
     Object.values(synced.playwright.environment).every(value =>
       /^\{env:[A-Z0-9_]+\}$/.test(value)

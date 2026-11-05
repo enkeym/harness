@@ -93,6 +93,7 @@ const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const opencodeEnvironment = (name, environment) => {
   const discovered = name === 'playwright' ? playwrightEnv({ ...process.env, ...environment }) : {};
   const keys = new Set([...Object.keys(environment), ...Object.keys(discovered)]);
+  if (name === 'playwright') keys.delete('PLAYWRIGHT_MCP_EXTENSION_TOKEN');
   return Object.fromEntries([...keys].map((key) => [key, `{env:${key}}`]));
 };
 
@@ -146,7 +147,9 @@ async function syncOpenCode() {
   for (const [name, server] of Object.entries(servers)) {
     const have = current.mcp.servers[name];
     const environment = opencodeEnvironment(name, { ...(have?.environment ?? {}), ...server.env });
-    const desired = { ...have, type: 'local', command: [server.command, ...server.args], environment };
+    const command = [server.command, ...server.args];
+    if (name === 'playwright') command.splice(command.indexOf('--'), 0, '--manual-extension');
+    const desired = { ...have, type: 'local', command, environment };
     delete desired.url;
     if (sameJson(have, desired)) { good(name); continue; }
     drift++;

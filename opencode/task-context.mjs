@@ -207,11 +207,13 @@ export async function registerTaskContext(context) {
           action: { type: "string", enum: ["save", "restore", "complete"] },
           checkpoint: {
             type: "string",
+            description: "Compact current-step summary for save; omit for restore and complete.",
             minLength: 1,
             maxLength: cachePolicy.taskCheckpointChars
           },
           sources: {
             type: "array",
+            description: `Optional cached ranges, each at most ${cachePolicy.taskSourceLines} lines. Omit when restoring only the checkpoint.`,
             maxItems: cachePolicy.taskSourceEntries,
             items: {
               type: "object",
@@ -249,7 +251,7 @@ export async function registerTaskContext(context) {
             end < start ||
             end - start >= cachePolicy.taskSourceLines
           )
-            throw new Error("Source range is too large")
+            throw new Error(`Source range is too large (maximum ${cachePolicy.taskSourceLines} lines). Restore without sources to get the checkpoint, then request smaller ranges.`)
           return { ...source, start, end }
         })
         const saved = await load(sessionID)

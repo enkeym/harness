@@ -50,6 +50,17 @@ test("task context survives a transfer and restores only selected unchanged evid
   assert.equal(fs.statSync(directory).mode & 0o777, 0o700)
 })
 
+test("task context explains oversized restore ranges and still restores the checkpoint", async t => {
+  const f = await fixture(t)
+  await f.save()
+
+  await assert.rejects(
+    f.run({ action: "restore", sources: [{ file: "source.mjs", lines: `1-${cachePolicy.taskSourceLines + 1}` }] }),
+    new RegExp(`maximum ${cachePolicy.taskSourceLines} lines.*Restore without sources`)
+  )
+  assert.match((await f.run({ action: "restore" })).content, /Implement step 2/)
+})
+
 test("JSON TokenSave results retain selected and automatic evidence through transfers", async t => {
   const f = await fixture(t)
   const source = { file: "source.mjs", mode: "lines", digest: "a".repeat(64), body: "     2\tsecond\n     3\tthird" }

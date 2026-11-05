@@ -38,6 +38,37 @@ if (
   throw new Error("MCP command changed; refresh the pinned tool catalog")
 }
 const compact = options.includes("--compact")
+const eager = options.includes("--eager")
+const playwrightCompat = options.includes("--playwright-compat")
+const existingTabsOnly = options.includes("--existing-tabs-only")
+const manualExtension = options.includes("--manual-extension")
+if ((eager || playwrightCompat || existingTabsOnly || manualExtension) && !catalog)
+  throw new Error("--eager, --playwright-compat, --existing-tabs-only and --manual-extension require --catalog")
+if (existingTabsOnly && !playwrightCompat)
+  throw new Error("--existing-tabs-only requires --playwright-compat")
+if (playwrightCompat) {
+  for (const tool of catalog.tools) {
+    const schema = tool.inputSchema
+    if (tool.name === "browser_tabs") {
+      schema.required = (schema.required || []).filter((key) => key !== "action")
+      schema.properties.action.default = "list"
+      if (existingTabsOnly) {
+        schema.properties.action.enum = schema.properties.action.enum.filter((action) => action !== "new")
+        schema.properties.action.description = "List or select an attached tab; opening new tabs is disabled."
+      }
+    } else if (tool.name === "browser_click") {
+      schema.properties.ref = { type: "string", description: "Alias for target" }
+      schema.required = (schema.required || []).filter((key) => key !== "target")
+      schema.anyOf = [{ required: ["target"] }, { required: ["ref"] }]
+    } else if (tool.name === "browser_evaluate") {
+      schema.properties.expression = { type: "string", description: "JavaScript expression to evaluate" }
+      schema.required = (schema.required || []).filter((key) => key !== "function")
+      schema.anyOf = [{ required: ["function"] }, { required: ["expression"] }]
+    } else if (tool.name === "browser_take_screenshot") {
+      schema.required = (schema.required || []).filter((key) => key !== "scale")
+    }
+  }
+}
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
 const reply = (request, result) =>
   send({ jsonrpc: "2.0", id: request.id, result })
@@ -205,6 +236,24 @@ function readKey(params) {
 function prepareCall(message) {
   if (message.method !== "tools/call") return true
   const params = message.params || {}
+  if (playwrightCompat) {
+    const input = params.arguments || {}
+    if (params.name === "browser_tabs" && input.action === undefined)
+      input.action = "list"
+    if (existingTabsOnly && params.name === "browser_tabs" && input.action === "new") {
+      send({ jsonrpc: "2.0", id: message.id, error: { code: -32602, message: "New tabs are disabled. Attach the existing page to this Playwright client and select it." } })
+      return false
+    }
+    else if (params.name === "browser_click" && input.target === undefined && input.ref !== undefined)
+      input.target = input.ref
+    else if (params.name === "browser_evaluate" && input.function === undefined && input.expression !== undefined)
+      input.function = `() => (${input.expression})`
+    else if (params.name === "browser_take_screenshot" && input.scale === undefined)
+      input.scale = "css"
+    if (params.name === "browser_click") delete input.ref
+    if (params.name === "browser_evaluate") delete input.expression
+    params.arguments = input
+  }
   const safe =
     /^(tokensave_(read|search|files|context|callers|callees|impact|status)|rag_(search|status))$/.test(
       params.name
@@ -500,9 +549,12 @@ function fail(error) {
 }
 
 function launch() {
+  const env = { ...process.env }
+  if (manualExtension) delete env.PLAYWRIGHT_MCP_EXTENSION_TOKEN
   const launched = spawn(command, args.slice(split + 2), {
     detached: process.platform !== "win32",
-    stdio: ["pipe", "pipe", "inherit"]
+    stdio: ["pipe", "pipe", "inherit"],
+    env
   })
   child = launched
   launched.on("error", (error) => {
@@ -693,20 +745,19 @@ input.on("line", (line) => {
   if (catalog && message.method === "initialize") {
     initialization = message
     reply(message, catalog.initialize)
+    if (eager) void ready().catch(fail)
     return
   }
   if (catalog && message.method === "notifications/initialized") return
-  if (catalog && !starting) {
-    if (message.method === "ping") {
-      reply(message, {})
-      return
-    }
-    if (message.method === "tools/list") {
-      reply(message, { tools: [...catalog.tools, artifactTool] })
-      return
-    }
-    if (message.method?.startsWith("notifications/")) return
+  if (catalog && message.method === "ping") {
+    reply(message, {})
+    return
   }
+  if (catalog && message.method === "tools/list") {
+    reply(message, { tools: [...catalog.tools, artifactTool] })
+    return
+  }
+  if (catalog && !starting && message.method?.startsWith("notifications/")) return
   if (!prepareCall(message)) return
   if (Object.hasOwn(message, "id") && message.method) {
     pending.set(message.id, message.method)

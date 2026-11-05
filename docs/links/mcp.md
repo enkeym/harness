@@ -26,10 +26,10 @@ paths:
   сохранение настроек и выбор проекта.
 `mcp/servers.json` — общий источник списка серверов: `bin/mcp-sync.mjs:syncCodex` и `bin/mcp-sync.mjs:syncOpenCode` регистрируют его через соответствующий установщик; `ai-hooks/test/test-codex.mjs` и `ai-hooks/test/test-opencode.mjs` проверяют регистрацию и сохранение пользовательских настроек. `ai-hooks/bin/mcp-serve.sh` выбирает ближайший проект с нужным индексом и запускает один сервер; `ai-hooks/test/test-mcp-serve.mjs` проверяет выбор корня, команду запуска и коды отказа. При смене транспорта или правил выбора обновлять документацию и соответствующие проверки.
 
-`mcp-proxy.mjs` сокращает описания TokenSave и откладывает запуск Playwright в Codex
-до первого вызова. Версия и аргументы Playwright связаны с `playwright-tools.json`;
+`mcp-proxy.mjs` сокращает описания TokenSave и запускает Playwright после инициализации
+MCP-клиента. Версия и аргументы Playwright связаны с `playwright-tools.json`;
 после их изменения обновить каталог через `bin/mcp-catalog.mjs playwright` и
-проверить `--check`. `test-mcp-proxy.mjs` проверяет отсутствие раннего запуска,
+проверить `--check`. `test-mcp-proxy.mjs` проверяет ранний запуск Playwright,
 один backend при параллельных вызовах и сохранение схем, уведомлений и ответов.
 
 - `HARNESS_CONTEXT_GENERATION_FILE` и `HARNESS_CONTEXT_OUTPUT_BUDGET_FILE` — пишет

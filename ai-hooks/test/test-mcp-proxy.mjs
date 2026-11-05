@@ -13,15 +13,18 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, protocol, policy = {}, stubborn = false, descendant = false, name, resources = false } = {}) {
+function client(t, { lazy = false, eager = false, playwright = false, existingTabsOnly = false, manualExtension = false, protocol, policy = {}, stubborn = false, descendant = false, name, resources = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
   const catalog = path.join(dir, 'catalog.json');
   const policyFile = path.join(dir, 'policy.json');
   fs.writeFileSync(policyFile, JSON.stringify(policy));
-  fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: [backend], initialize, tools: [{ name: 'read', description: 'Cached description', inputSchema: { type: 'object' } }] }));
-  const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog] : ['--compact']), '--', process.execPath, backend], {
-    env: { ...process.env, HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
+  const tools = playwright
+    ? JSON.parse(fs.readFileSync(path.resolve(here, '../../mcp/playwright-tools.json'), 'utf8')).tools.filter(tool => ['browser_tabs', 'browser_click', 'browser_take_screenshot', 'browser_evaluate'].includes(tool.name))
+    : [{ name: 'read', description: 'Cached description', inputSchema: { type: 'object' } }];
+  fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: [backend], initialize, tools }));
+  const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog, ...(eager ? ['--eager'] : []), ...(playwright ? ['--playwright-compat'] : []), ...(existingTabsOnly ? ['--existing-tabs-only'] : []), ...(manualExtension ? ['--manual-extension'] : [])] : ['--compact']), '--', process.execPath, backend], {
+    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: 'test-token', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
   const notifications = [];
@@ -67,6 +70,38 @@ test('catalog discovery and ping do not launch the lazy backend; concurrent call
   const results = await Promise.all([c.rpc('tools/call', { name: 'read' }), c.rpc('tools/call', { name: 'read' })]);
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
   for (const response of results) assert.equal(response.result.content[0].text, 'file content once');
+});
+
+test('eager Playwright reuses attached tabs and accepts common browser call forms', async t => {
+  const c = client(t, { lazy: true, eager: true, playwright: true, existingTabsOnly: true, manualExtension: true });
+  await c.rpc('initialize', initialize);
+  const listed = (await c.rpc('tools/list')).result.tools;
+  const schema = name => listed.find(tool => tool.name === name).inputSchema;
+  assert.ok(!schema('browser_tabs').required.includes('action'));
+  assert.ok(!schema('browser_tabs').properties.action.enum.includes('new'));
+  assert.deepEqual(schema('browser_click').anyOf, [{ required: ['target'] }, { required: ['ref'] }]);
+  assert.deepEqual(schema('browser_evaluate').anyOf, [{ required: ['function'] }, { required: ['expression'] }]);
+  assert.ok(!schema('browser_take_screenshot').required.includes('scale'));
+
+  const deadline = Date.now() + 2000;
+  while (!fs.existsSync(c.starts) && Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+
+  for (const [name, input, expected] of [
+    ['browser_tabs', {}, { action: 'list' }],
+    ['browser_click', { ref: 'e131', element: 'button' }, { target: 'e131', element: 'button' }],
+    ['browser_take_screenshot', {}, { scale: 'css' }],
+    ['browser_evaluate', { expression: '1 + 1' }, { function: '() => (1 + 1)' }],
+  ]) {
+    const response = await c.rpc('tools/call', { name, arguments: input });
+    assert.deepEqual(response.result.structuredContent.arguments, expected);
+    assert.equal(response.result.structuredContent.tokenPresent, false);
+  }
+  const blocked = await c.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'new', url: 'http://localhost:5173/' } });
+  assert.equal(blocked.error.code, -32602);
+  assert.match(blocked.error.message, /New tabs are disabled/);
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
 });
 
 test('a newer client uses the catalog protocol when the lazy backend starts', async (t) => {
