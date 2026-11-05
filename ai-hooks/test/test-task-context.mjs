@@ -324,6 +324,50 @@ test("plugin startup prunes orphaned caches older than the retention window", as
   )
 })
 
+test("plugin startup clears an expired cache even when a closed session still has a binding", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const directory = path.join(f.directory, ".opencode/task-context")
+  const id = f.stored.get("task-context:source")
+  const file = path.join(directory, `${id}.json`)
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  fs.utimesSync(file, old, old)
+  f.context.storage.scan = async ({ prefix = "" } = {}) => ({
+    entries: [...f.stored.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => ({ key, value })),
+    next: null
+  })
+
+  await registerTaskContext(f.context)
+
+  assert.equal(fs.existsSync(file), false)
+  assert.equal(f.stored.has("task-context:source"), false)
+  const turn = { sessionID: "source", system: [] }
+  await f.hooks.get("context")(turn)
+  assert.equal(turn.system.length, 0)
+  assert.match((await f.run({ action: "restore" })).content, /No saved/)
+})
+
+test("active task context refreshes its idle window and a missing file clears its binding", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const directory = path.join(f.directory, ".opencode/task-context")
+  const id = f.stored.get("task-context:source")
+  const file = path.join(directory, `${id}.json`)
+  const old = new Date(Date.now() - cachePolicy.taskPruneMs - 1000)
+  fs.utimesSync(file, old, old)
+
+  await f.memory.reference("source")
+
+  assert.ok(Date.now() - fs.statSync(file).mtimeMs < cachePolicy.taskPruneMs)
+  fs.unlinkSync(file)
+  const turn = { sessionID: "source", system: [] }
+  await f.hooks.get("context")(turn)
+  assert.equal(turn.system.length, 0)
+  assert.equal(f.stored.has("task-context:source"), false)
+})
+
 test("completion prune removes orphaned caches and honors the throttle window", async t => {
   const f = await fixture(t)
   await f.save()

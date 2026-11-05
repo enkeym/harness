@@ -81,6 +81,14 @@ export async function registerTaskContext(context) {
     const id = await context.storage.get(key(sessionID))
     if (typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)) return null
     await validateCache(id)
+    const stat = await fs.stat(fileFor(id)).catch((error) => {
+      if (error.code === "ENOENT") return null
+      throw error
+    })
+    if (!stat || Date.now() - stat.mtimeMs >= cachePolicy.taskContextMs) {
+      await context.storage.remove(key(sessionID))
+      return null
+    }
     const saved = await readJSON(fileFor(id), null)
     if (!saved) return null
     if (
@@ -90,6 +98,8 @@ export async function registerTaskContext(context) {
       !Array.isArray(saved.sources)
     )
       throw new Error("Unsupported task context")
+    if (Date.now() - stat.mtimeMs >= cachePolicy.taskPruneMs)
+      await fs.utimes(fileFor(id), new Date(), new Date())
     return { ...saved, id }
   }
   const sourceFile = async (file) => {
@@ -118,7 +128,7 @@ export async function registerTaskContext(context) {
       throw error
     })
     if (real !== directory) return
-    const live = new Set()
+    const bindings = new Map()
     let after
     do {
       const page = await context.storage.scan({
@@ -126,8 +136,12 @@ export async function registerTaskContext(context) {
         limit: cachePolicy.scanEntries,
         ...(after ? { after } : {})
       })
-      for (const { value } of page.entries)
-        if (typeof value === "string") live.add(value)
+      for (const { key, value } of page.entries)
+        if (typeof value === "string" && /^[a-f0-9]{64}$/.test(value)) {
+          const keys = bindings.get(value) ?? []
+          keys.push(key)
+          bindings.set(value, keys)
+        }
       after = page.next
     } while (after)
     const entries = await fs.readdir(directory).catch((error) => {
@@ -136,19 +150,23 @@ export async function registerTaskContext(context) {
     })
     for (const entry of entries) {
       const id = entry.endsWith(".json") ? entry.slice(0, -".json".length) : ""
-      if (!/^[a-f0-9]{64}$/.test(id) || live.has(id)) continue
+      if (!/^[a-f0-9]{64}$/.test(id)) continue
       try {
         const stat = await fs.lstat(fileFor(id))
-        if (
-          !stat.isFile() ||
-          Date.now() - stat.mtimeMs < cachePolicy.taskContextMs
-        )
+        if (!stat.isFile()) continue
+        if (Date.now() - stat.mtimeMs < cachePolicy.taskContextMs) {
+          bindings.delete(id)
           continue
+        }
         await fs.unlink(fileFor(id))
+        for (const key of bindings.get(id) ?? []) await context.storage.remove(key)
+        bindings.delete(id)
       } catch (error) {
         if (error.code !== "ENOENT") throw error
       }
     }
+    for (const keys of bindings.values())
+      for (const key of keys) await context.storage.remove(key)
   }
   const reference = async (sessionID, includeCheckpoint = true) => {
     const saved = await load(sessionID)
