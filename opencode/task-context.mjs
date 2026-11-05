@@ -371,8 +371,7 @@ export async function registerTaskContext(context) {
     })
   )
   await context.session.hook("context", async (event) => {
-    const text = await reference(event.sessionID, false)
-    if (text) event.system.push({ type: "text", text })
+    await load(event.sessionID)
   })
   const memory = {
     reference,

@@ -180,10 +180,9 @@ test("task context completes through the native storage removal API and can be c
 test("task context keeps active work across answers and compaction until explicit completion", async t => {
   const f = await fixture(t)
   await f.save()
-  const event = { sessionID: "source", system: [] }
-  await f.hooks.get("context")(event)
-  assert.match(event.system[0].text, /task_context/)
-  assert.doesNotMatch(event.system[0].text, /second/)
+  const turn = { sessionID: "source", system: [] }
+  await f.hooks.get("context")(turn)
+  assert.equal(turn.system.length, 0)
   assert.match((await f.run({ action: "restore" })).content, /Implement step 2/)
   await f.memory.transfer("source", "target")
 
@@ -294,19 +293,18 @@ test("a transfer releases the source binding and keeps the continuation pointed 
   assert.match((await f.run({ action: "restore" }, "target")).content, /Implement step 2/)
 })
 
-test("ordinary turns receive the cache pointer without repeating the checkpoint", async t => {
+test("ordinary turns do not receive task cache while compaction keeps the checkpoint", async t => {
   const f = await fixture(t)
   await f.save()
 
   const turn = { sessionID: "source", system: [] }
   await f.hooks.get("context")(turn)
-  assert.match(turn.system[0].text, /Saved task context:/)
-  assert.match(turn.system[0].text, /source\.mjs:2-3/)
-  assert.doesNotMatch(turn.system[0].text, /Implement step 2/)
+  assert.equal(turn.system.length, 0)
 
   const compaction = { sessionID: "source", system: [] }
   await f.hooks.get("compaction")(compaction)
   assert.match(compaction.system[0].text, /Implement step 2/)
+  assert.doesNotMatch(compaction.system[0].text, /2\tsecond/)
 })
 
 test("plugin startup prunes orphaned caches older than the retention window", async t => {
@@ -369,13 +367,13 @@ test("active task context refreshes its idle window and a missing file clears it
   const old = new Date(Date.now() - cachePolicy.taskPruneMs - 1000)
   fs.utimesSync(file, old, old)
 
-  await f.memory.reference("source")
-
-  assert.ok(Date.now() - fs.statSync(file).mtimeMs < cachePolicy.taskPruneMs)
-  fs.unlinkSync(file)
   const turn = { sessionID: "source", system: [] }
   await f.hooks.get("context")(turn)
+
+  assert.ok(Date.now() - fs.statSync(file).mtimeMs < cachePolicy.taskPruneMs)
   assert.equal(turn.system.length, 0)
+  fs.unlinkSync(file)
+  await f.hooks.get("context")(turn)
   assert.equal(f.stored.has("task-context:source"), false)
 })
 
