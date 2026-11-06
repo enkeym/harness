@@ -56,11 +56,12 @@ export async function registerLoopGuard(context, taskContext) {
         type: "text",
         text: [
           "Harness resume after compaction:",
-          reference,
+          reference ||
+            "No cached task ranges. Do not rebuild the plan; use the compaction summary.",
           s.skills.size
             ? `Active skills before compaction: ${[...s.skills].join(", ")}. Do not reload them unless the step changes stack.`
             : "",
-          `Resume protocol: make the first source edit within ${policy.resumeEditBudget} tool calls. Do not call tokensave_read with mode="full". Read only named ranges you still need. Do not rebuild the plan.`
+          `Resume protocol: make the first source edit within ${policy.resumeEditBudget} tool calls. Do not call tokensave_read with mode="full". Read only named ranges you still need.`
         ]
           .filter(Boolean)
           .join("\n")

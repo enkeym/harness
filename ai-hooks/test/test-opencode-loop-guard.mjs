@@ -8,7 +8,11 @@ import { injectDigests, registerLoopGuard } from "../../opencode/loop-guard.mjs"
 const digest = "a".repeat(64)
 const otherDigest = "b".repeat(64)
 
-async function fixture(t) {
+async function fixture(t, referenceText = [
+  "Saved task context: .opencode/task-context/aa.json",
+  "Cached ranges: source.mjs:2-3",
+  "Resume the next unfinished step. Do not rebuild the plan."
+].join("\n")) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-loop-guard-"))
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const sessionHooks = new Map()
@@ -22,11 +26,7 @@ async function fixture(t) {
   const taskContext = {
     reference: async (sessionID, includeCheckpoint) => {
       references.push({ sessionID, includeCheckpoint })
-      return [
-        "Saved task context: .opencode/task-context/aa.json",
-        "Cached ranges: source.mjs:2-3",
-        "Resume the next unfinished step."
-      ].join("\n")
+      return referenceText
     }
   }
   await registerLoopGuard(context, taskContext)
@@ -268,10 +268,25 @@ test("compaction resumes once with cached ranges, skills and the edit budget", a
     resume,
     /Resume protocol: make the first source edit within 12 tool calls/
   )
+  assert.equal((resume.match(/Do not rebuild the plan/g) ?? []).length, 1)
   assert.equal(f.references.length, 1)
   assert.equal(f.references[0].includeCheckpoint, false)
 
   const second = await f.contextHook()
   assert.equal(second.system.length, 0)
   assert.equal(f.references.length, 1)
+})
+
+test("compaction without cached ranges states the resume protocol once", async t => {
+  const f = await fixture(t, "")
+  await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
+
+  const event = await f.contextHook()
+  const resume = event.system[0].text
+  assert.match(resume, /No cached task ranges\. Do not rebuild the plan/)
+  assert.match(
+    resume,
+    /Resume protocol: make the first source edit within 12 tool calls/
+  )
+  assert.equal((resume.match(/Do not rebuild the plan/g) ?? []).length, 1)
 })
