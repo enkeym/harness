@@ -711,6 +711,20 @@ export default { id: "harness", setup: async context => {
     JSON.stringify(continued.input),
     /Initial context fixture/
   )
+  const continuedSystem = [
+    continued.instructions ?? "",
+    ...(continued.messages ?? [])
+      .filter((value) => value.role === "system" || value.role === "developer")
+      .map((value) => value.content)
+  ].join("\n")
+  assert.equal(continuedSystem.split("# Working rules").length - 1, 1)
+  assert.equal(continuedSystem.split("# OpenCode harness").length - 1, 1)
+  assert.doesNotMatch(continuedSystem, /Harness resume after compaction/)
+  assert.doesNotMatch(continuedSystem, /Harness progress guard/)
+  assert.ok(
+    (JSON.stringify(continued.input).match(/Saved task context:/g) ?? [])
+      .length <= 1
+  )
   assert.match(
     fs.readFileSync(path.join(directory, ".opencode", "HANDOFF.md"), "utf8"),
     /Handoff fixture/
@@ -827,6 +841,12 @@ export default { id: "harness", setup: async context => {
   assert.ok(planner, "Native execution must deliver the queued brief to a fresh session")
   assert.deepEqual(planner.model, briefSource.data.model)
   await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Planning phase")))
+  const plannerRequest = requests.slice(briefStart).find(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Planning phase"))
+  assert.equal(
+    (JSON.stringify(plannerRequest).match(/Planning phase\./g) ?? []).length,
+    1,
+    "The restored planning session must carry the planning instructions once"
+  )
   await api(`/experimental/session/${planner.id}/wait`, {})
   assert.ok(requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")))
   assert.notEqual(planner.id, briefSource.data.id)

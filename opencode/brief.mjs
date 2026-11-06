@@ -40,7 +40,7 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
           summary,
           model: originalModel,
           instructions: stage === "plan"
-            ? `${planningInstructions} When an authorized implementation plan is ready, call brief_transition with stage=implement and a compact Handoff containing only the remaining steps with their decisions and contracts, not the completed parts of the plan; the plan file keeps them. Then end your turn.`
+            ? "When an authorized implementation plan is ready, call brief_transition with stage=implement and a compact Handoff containing only the remaining steps with their decisions and contracts, not the completed parts of the plan; the plan file keeps them. Then end your turn."
             : "Restore the Handoff and executable plan. The Handoff checkpoint is authoritative: a task plan file may lag behind it, so do not read the whole plan or reload already-loaded skills to reconstruct progress. Start with the first unfinished step, read only the contracts or ranges it names, inspect the working tree, and continue. Do not repeat the brief for an adequate plan. No other worker.",
           brief: {
             stage: next,

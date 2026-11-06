@@ -50,7 +50,10 @@ test("brief transfers only the Handoff to a fresh session that keeps the source 
   assert.deepEqual(f.sessions.get("target-1").model, f.original)
   assert.deepEqual(f.sessions.get("target-1").permissions, f.sessions.get("source").permissions)
   assert.doesNotMatch(f.prompts.at(-1).text, /PRIVATE_OLD_HISTORY/)
-  assert.match(f.prompts.at(-1).text, /Planning phase/)
+  const planningContext = { sessionID: "target-1", system: [] }
+  await f.hooks.context(planningContext)
+  const planningSystem = planningContext.system.map(value => value.text).join("\n")
+  assert.equal((planningSystem.match(/Planning phase\./g) ?? []).length, 1)
   assert.match(f.prompts.at(-1).text, /\.opencode\/plans\/task.md/)
   await f.call("target-1", "implement", "Executable plan: update module contract; verify existing callers. No push.")
   await brief.settle("target-1", true)
