@@ -100,8 +100,8 @@ Runner определяет рабочие модель, effort и разреш�
 задачи не перезапускаются. Это не отключает разрешения на остальные операции.
 
 Общая политика — `ai-hooks/bin/context-policy.mjs`: начало 90000, верхний рабочий
-бюджет 150000 токенов, сохранение последних 15000 токенов по умолчанию. Codex получает
-`model_auto_compact_token_limit = 90000`, scope `total` и `compact_prompt` с Handoff
+бюджет 150000 токенов. Codex получает `model_auto_compact_token_limit = 90000`,
+scope `total` и `compact_prompt` с Handoff
 через native config API; пользовательский префикс prompt сохраняется. OpenCode
 получает собственные значения (`contextPolicy.opencode`): сжатие начинается на
 120000 токенах, `buffer = 30000`, последние 20000 токенов сохраняются. Плагин
