@@ -30,4 +30,7 @@ test('native Codex config preserves custom settings and prompt across installati
   assert.equal(installed.split('Harness automatic Handoff.').length, 2);
   assert.match(handoffPrompt, /remaining plan/);
   assert.equal(contextPolicy.maxTokens - contextPolicy.startTokens, 60000);
+  assert.equal(contextPolicy.opencode.startTokens, 120000);
+  assert.equal(contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens, 30000);
+  assert.equal(contextPolicy.opencode.keepTokens, 20000);
 });

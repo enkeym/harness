@@ -6,6 +6,7 @@ import { deduplicateContext } from "./context-cache.mjs"
 import { registerHandoff } from "./handoff.mjs"
 import { registerBrief } from "./brief.mjs"
 import { registerTaskContext } from "./task-context.mjs"
+import { registerLoopGuard } from "./loop-guard.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
 import { refreshCostReport, localDate, defaultCostConfig } from "./cost-report.mjs"
 import { registerRetrievalRouting } from "./retrieval-routing.mjs"
@@ -59,7 +60,7 @@ export default {
           draft.limit.input = Math.min(
             draft.limit.input > 0 ? draft.limit.input : draft.limit.context,
             draft.limit.context,
-            contextPolicy.maxTokens
+            contextPolicy.opencode.maxTokens
           )
           draft.limit.output = Math.min(
             draft.limit.output > 0 ? draft.limit.output : draft.limit.context,
@@ -122,6 +123,7 @@ export default {
       return result
     }
     const taskContext = await registerTaskContext(context)
+    await registerLoopGuard(context, taskContext)
     const handoff = await registerHandoff(context, observe, taskContext)
     const brief = await registerBrief(context, handoff)
     await context.session.hook("compaction", async (event) => {

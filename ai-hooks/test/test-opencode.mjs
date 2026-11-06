@@ -151,8 +151,11 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.equal(loadConfig(directory).current.compaction.auto, true)
   assert.equal(
     loadConfig(directory).current.compaction.buffer,
-    contextPolicy.maxTokens - contextPolicy.startTokens
+    contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens
   )
+  assert.deepEqual(loadConfig(directory).current.compaction.keep, {
+    tokens: contextPolicy.opencode.keepTokens
+  })
   assert.equal(
     fs.realpathSync(path.join(directory, "agents/ask.md")),
     path.resolve(import.meta.dirname, "../../opencode/agent/ask.md")
@@ -403,7 +406,7 @@ export default { id: "harness", setup: async context => {
       commands: routing.commands,
       compaction: {
         auto: true,
-        buffer: contextPolicy.maxTokens - contextPolicy.startTokens,
+        buffer: contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens,
         keep: { tokens: 0 }
       },
       providers: {
@@ -1087,6 +1090,7 @@ function executionSandbox(t) {
     "harness.js",
     "brief.mjs",
     "task-context.mjs",
+    "loop-guard.mjs",
     "handoff.mjs",
     "handoff-rpc.mjs",
     "model-routing.mjs",
@@ -1164,7 +1168,7 @@ for (const type of [
         location: { directory: process.env.TEST_PROJECT },
         app: { version: "2.2.5" },
         command: { transform: async () => {} },
-        tool: { transform: async () => {} },
+        tool: { transform: async () => {}, hook: async () => {} },
         rpc: { register: async () => ({}) },
         storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
         model: { transform: async callback => callback({ list: () => [] }) },
@@ -1220,7 +1224,7 @@ test("OpenCode handles one execution event once across plugin instances", async 
       location: { directory: process.env.TEST_PROJECT },
       app: { version: "2.2.5" },
       command: { transform: async () => {} },
-      tool: { transform: async () => {} },
+      tool: { transform: async () => {}, hook: async () => {} },
       rpc: { register: async () => ({}) },
       storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
       model: { transform: async callback => callback({ list: () => [] }) },

@@ -42,8 +42,8 @@ desired.commands = { ...desired.commands }
 desired.compaction = {
   ...current.compaction,
   auto: true,
-  keep: { tokens: contextPolicy.keepTokens },
-  buffer: contextPolicy.maxTokens - contextPolicy.startTokens
+  keep: { tokens: contextPolicy.opencode.keepTokens },
+  buffer: contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens
 }
 desired.experimental = { ...current.experimental, background_compaction: false }
 desired.plugins = (current.plugins ?? []).filter(
