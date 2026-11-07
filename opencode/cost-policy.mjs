@@ -52,7 +52,15 @@ export function isPeakAt(now = new Date()) {
   )
 }
 
-export function deepseekCostBreakdownAt(modelId, tokens, createdAt) {
+function breakdownAtRates(tokens, rates) {
+  const reasoning = numeric(tokens.reasoning) ? tokens.reasoning : 0
+  const input = (tokens.input * rates.input) / 1e6
+  const cacheRead = (tokens.cacheRead * rates.cacheRead) / 1e6
+  const output = ((tokens.output + reasoning) * rates.output) / 1e6
+  return { input, cacheRead, output, total: input + cacheRead + output }
+}
+
+function pricedTokens(modelId, tokens, createdAt) {
   const id = typeof modelId === "string" ? modelId.replace(/-(offpeak|peak)$/, "") : ""
   const model = deepseekTokenRates[id]
   if (!model) return null
@@ -60,12 +68,28 @@ export function deepseekCostBreakdownAt(modelId, tokens, createdAt) {
   if (!Number.isFinite(time.getTime())) return null
   if (!tokens || !["input", "cacheRead", "output"].every((key) => numeric(tokens[key])))
     return null
-  const rates = isPeakAt(time) ? model.peak : model.offPeak
-  const reasoning = numeric(tokens.reasoning) ? tokens.reasoning : 0
-  const input = (tokens.input * rates.input) / 1e6
-  const cacheRead = (tokens.cacheRead * rates.cacheRead) / 1e6
-  const output = ((tokens.output + reasoning) * rates.output) / 1e6
-  return { input, cacheRead, output, total: input + cacheRead + output }
+  return { model, time }
+}
+
+export function deepseekCostBreakdownAt(modelId, tokens, createdAt) {
+  const priced = pricedTokens(modelId, tokens, createdAt)
+  if (!priced) return null
+  return breakdownAtRates(tokens, isPeakAt(priced.time) ? priced.model.peak : priced.model.offPeak)
+}
+
+export function deepseekPricingWindowAt(modelId, tokens, costUSD, createdAt) {
+  const priced = pricedTokens(modelId, tokens, createdAt)
+  if (!priced || !numeric(costUSD)) return null
+  const near = (value) =>
+    Math.abs(value - costUSD) <= Math.max(1e-9, Math.abs(costUSD) * 0.005)
+  const peak = breakdownAtRates(tokens, priced.model.peak).total
+  const offPeak = breakdownAtRates(tokens, priced.model.offPeak).total
+  const clockPeak = isPeakAt(priced.time)
+  if (near(peak) && !near(offPeak))
+    return { window: "peak", source: "native-cost", agreesWithClock: clockPeak }
+  if (near(offPeak) && !near(peak))
+    return { window: "offPeak", source: "native-cost", agreesWithClock: !clockPeak }
+  return { window: clockPeak ? "peak" : "offPeak", source: "clock", agreesWithClock: true }
 }
 
 export function deepseekCostAt(modelId, tokens, createdAt) {

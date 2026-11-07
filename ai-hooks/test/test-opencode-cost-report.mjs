@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport } from "../../opencode/cost-report.mjs"
+import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport, readCostEvidence } from "../../opencode/cost-report.mjs"
 import { observationDirectory } from "../../opencode/observations.mjs"
 
 const stamp = Date.parse("2026-11-02T12:00:00Z")
@@ -111,6 +111,53 @@ test("provider budgets stay separate from native USD and quality cohorts retain 
   assert.equal(data.comparisons[0].before.accepted, 1)
   assert.equal(data.comparisons[0].after.unknownAcceptance, 1)
   assert.equal(data.comparisons[0].savingsPercent, null)
+})
+
+test("pricing aggregates expose required usage fields per window and request type", () => {
+  const withRequest = (id, extra = {}) => step(id, {
+    request: {
+      requestType: "assistant",
+      pricingWindow: "offPeak",
+      pricingWindowClockAgrees: true
+    },
+    tools: [{ name: "read" }, { name: "grep" }],
+    time: { created: stamp, completed: stamp + 250 },
+    ...extra
+  })
+  const data = report([
+    record("ses_aggregates", [
+      withRequest("a"),
+      withRequest("b", { request: { requestType: "assistant", pricingWindow: "peak", pricingWindowClockAgrees: false } })
+    ])
+  ])
+
+  assert.equal(data.usage.cacheMissTokens, 20)
+  assert.equal(data.usage.toolCalls, 4)
+  assert.equal(data.usage.durationMs, 500)
+  assert.deepEqual(data.usage.requestTypes, { assistant: 2 })
+  assert.deepEqual(data.usage.pricingWindows, { offPeak: 1, peak: 1 })
+  assert.equal(data.usage.pricingWindowMismatches, 1)
+  assert.ok(data.warnings.some((warning) => warning.code === "pricing-window-mismatch"))
+  assert.match(formatCostReport(data), /Типы запросов: assistant=2/)
+  assert.match(formatCostReport(data), /тарифные окна: offPeak=1, peak=1/)
+})
+
+test("evidence accepts schema 2 records from 2.2 patch releases and rejects other versions", async t => {
+  const stateDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cost-report-version-"))
+  t.after(() => fs.rm(stateDirectory, { recursive: true, force: true }))
+  const base = observationDirectory("/project", stateDirectory)
+  await fs.mkdir(path.join(base, "sessions"), { recursive: true })
+  const write = (name, value) =>
+    fs.writeFile(path.join(base, "sessions", name), JSON.stringify(value))
+
+  await write("ses_v2.json", record("ses_v2", [step("v2")], { schemaVersion: 2, clientVersion: "2.2.6" }))
+  await write("ses_v3.json", record("ses_v3", [step("v3")], { schemaVersion: 2, clientVersion: "2.3.0" }))
+  await write("ses_future.json", record("ses_future", [step("future")], { schemaVersion: 3, clientVersion: "2.2.6" }))
+
+  const { records, errors } = await readCostEvidence({ stateDirectory })
+
+  assert.deepEqual(records.map((entry) => entry.sessionID), ["ses_v2"])
+  assert.deepEqual(errors.map((entry) => entry.file).sort(), ["ses_future.json", "ses_v3.json"])
 })
 
 test("reports and assessments persist privately, reject invalid edits and deduplicate notifications", async t => {

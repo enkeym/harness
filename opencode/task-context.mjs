@@ -10,7 +10,7 @@ import {
 } from "./local-state.mjs"
 
 const hash = (text) => createHash("sha256").update(text).digest("hex")
-const key = (sessionID) => `task-context:${sessionID}`
+export const taskContextKey = (sessionID) => `task-context:${sessionID}`
 export const hasRawConfiguration = (text) => /^\s*(?:export\s+)?[A-Z][A-Z0-9_]*\s*=\s*\S+/m.test(text)
 const safeCheckpoint = (checkpoint) => hasRawConfiguration(checkpoint)
   ? "Resume the active task from the compaction summary; the last user message contained raw configuration."
@@ -78,7 +78,7 @@ export async function registerTaskContext(context) {
     }
   }
   const load = async (sessionID) => {
-    const id = await context.storage.get(key(sessionID))
+    const id = await context.storage.get(taskContextKey(sessionID))
     if (typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)) return null
     await validateCache(id)
     const stat = await fs.stat(fileFor(id)).catch((error) => {
@@ -86,7 +86,7 @@ export async function registerTaskContext(context) {
       throw error
     })
     if (!stat || Date.now() - stat.mtimeMs >= cachePolicy.taskContextMs) {
-      await context.storage.remove(key(sessionID))
+      await context.storage.remove(taskContextKey(sessionID))
       return null
     }
     const saved = await readJSON(fileFor(id), null)
@@ -193,7 +193,7 @@ export async function registerTaskContext(context) {
       checkpointSource,
       sources
     })
-    await context.storage.set(key(sessionID), id)
+    await context.storage.set(taskContextKey(sessionID), id)
     return id
   }
   await context.tool.transform((editor) =>
@@ -257,7 +257,7 @@ export async function registerTaskContext(context) {
         const saved = await load(sessionID)
         if (action === "complete") {
           if (saved) await fs.unlink(fileFor(saved.id))
-          await context.storage.remove(key(sessionID))
+          await context.storage.remove(taskContextKey(sessionID))
           return {
             content:
               "Task cache cleared. Other tasks and plan files were preserved."
@@ -494,8 +494,8 @@ export async function registerTaskContext(context) {
     async transfer(sourceID, targetID) {
       const saved = await load(sourceID)
       if (!saved) return
-      await context.storage.set(key(targetID), saved.id)
-      await context.storage.remove(key(sourceID))
+      await context.storage.set(taskContextKey(targetID), saved.id)
+      await context.storage.remove(taskContextKey(sourceID))
     }
   }
   await context.session.hook("compaction", async event => {

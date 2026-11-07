@@ -4,7 +4,8 @@ import os from "node:os"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 import { test } from "node:test"
-import { registerTaskContext } from "../../opencode/task-context.mjs"
+import { registerTaskContext, taskContextKey } from "../../opencode/task-context.mjs"
+import { observationAPI } from "../../opencode/observations.mjs"
 import { cachePolicy } from "../../opencode/cache-policy.mjs"
 
 async function fixture(t) {
@@ -17,6 +18,7 @@ async function fixture(t) {
   const hooks = new Map()
   let execute
   const context = {
+    app: { version: "2.2.6" },
     location: { directory },
     storage: { get: async key => stored.get(key), set: async (key, value) => stored.set(key, value), remove: async key => stored.delete(key) },
     tool: { transform: async edit => edit({ add: tool => { execute = tool.execute } }) },
@@ -175,6 +177,17 @@ test("task context completes through the native storage removal API and can be c
 
   assert.equal(stored.has("task-context:source"), false)
   assert.match((await f.run({ action: "restore" })).content, /No saved/)
+})
+
+test("task context storage key stays shared with observations", async t => {
+  const f = await fixture(t)
+  await f.save()
+
+  assert.equal(taskContextKey("source"), "task-context:source")
+  const [storedKey, storedID] = [...f.stored.entries()][0]
+  assert.equal(storedKey, taskContextKey("source"))
+  assert.equal(await observationAPI(f.context).task("source"), storedID)
+  assert.equal(await observationAPI(f.context).task("other"), null)
 })
 
 test("task context keeps active work across answers and compaction until explicit completion", async t => {

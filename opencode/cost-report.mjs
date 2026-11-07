@@ -4,6 +4,7 @@ import path from "node:path"
 import { readJSON, writePrivateJSON, writePrivateText } from "./local-state.mjs"
 import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
 import { deepseekModels } from "./model-routing.mjs"
+import { requestTypeOf, supportedObservationVersion } from "./observations.mjs"
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
@@ -129,6 +130,12 @@ function usage(steps, conflicts = 0) {
     assistantMessages: 0,
     compactions: 0,
     tokens: Object.fromEntries(counterKeys.map((key) => [key, 0])),
+    cacheMissTokens: 0,
+    toolCalls: 0,
+    durationMs: 0,
+    requestTypes: {},
+    pricingWindows: {},
+    pricingWindowMismatches: 0,
     nativeRequestReportedUSD: 0,
     recomputedUSD: 0,
     recomputedInputUSD: 0,
@@ -149,9 +156,24 @@ function usage(steps, conflicts = 0) {
       step.tokens && counterKeys.every((key) => numeric(step.tokens[key]))
     if (!knownTokens || !numeric(step.nativeReportedUSD))
       totals.unknownMessages++
-    if (!knownTokens) totals.tokens = null
-    else if (totals.tokens)
+    if (!knownTokens) {
+      totals.tokens = null
+      totals.cacheMissTokens = null
+    } else if (totals.tokens) {
       for (const key of counterKeys) totals.tokens[key] += step.tokens[key]
+      if (totals.cacheMissTokens !== null) totals.cacheMissTokens += step.tokens.input
+    }
+    if (Array.isArray(step.tools)) totals.toolCalls += step.tools.length
+    if (numeric(step.time?.completed) && numeric(step.time?.created))
+      totals.durationMs += step.time.completed - step.time.created
+    const requestType = step.request?.requestType ?? requestTypeOf(step)
+    if (typeof requestType === "string")
+      totals.requestTypes[requestType] = (totals.requestTypes[requestType] ?? 0) + 1
+    const window = step.request?.pricingWindow
+    if (typeof window === "string")
+      totals.pricingWindows[window] = (totals.pricingWindows[window] ?? 0) + 1
+    if (step.request?.pricingWindowClockAgrees === false)
+      totals.pricingWindowMismatches++
     if (!numeric(step.nativeReportedUSD)) totals.nativeRequestReportedUSD = null
     else if (totals.nativeRequestReportedUSD !== null)
       totals.nativeRequestReportedUSD += step.nativeReportedUSD
@@ -179,6 +201,7 @@ function usage(steps, conflicts = 0) {
   }
   if (conflicts) {
     totals.tokens = null
+    totals.cacheMissTokens = null
     totals.nativeRequestReportedUSD = null
     totals.recomputedUSD = null
     totals.recomputedInputUSD = null
@@ -527,8 +550,10 @@ export function buildCostReport(
   })
   for (const row of modelRows)
     if (row.proInBuild) warn("pro-in-build", null, row.messages, 0)
+  if (totals.pricingWindowMismatches > 0)
+    warn("pricing-window-mismatch", null, totals.pricingWindowMismatches, 0)
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     date,
     timeZone: config.timeZone,
@@ -584,9 +609,9 @@ export async function readCostEvidence({ stateDirectory } = {}) {
       try {
         const record = await readJSON(path.join(base, "sessions", file.name))
         if (
-          record?.schemaVersion !== 1 ||
+          ![1, 2].includes(record?.schemaVersion) ||
           record.client !== "opencode" ||
-          record.clientVersion !== "2.2.5" ||
+          !supportedObservationVersion(record.clientVersion) ||
           !Array.isArray(record.sequence) ||
           !record.project ||
           `${record.sessionID}.json` !== file.name
@@ -738,6 +763,8 @@ export function formatCostReport(report) {
     `Пересчёт по компонентам: input ${value(report.usage.recomputedInputUSD)}, cacheRead ${value(report.usage.recomputedCacheReadUSD)}, output ${value(report.usage.recomputedOutputUSD)} USD.`,
     `История: ${report.coverage.completeHistory ? "полные страницы наблюдаемых сессий" : "неполное покрытие"}; покрытие аккаунта провайдера не проверено.`,
     `Токены: ${report.usage.tokens ? counterKeys.map((key) => `${key}=${report.usage.tokens[key]}`).join(", ") : "есть неизвестные счётчики"}.`,
+    `Кеш-промахи (input): ${value(report.usage.cacheMissTokens)}; вызовов инструментов: ${report.usage.toolCalls ?? 0}; суммарная длительность запросов: ${report.usage.durationMs ?? 0} мс.`,
+    `Типы запросов: ${Object.entries(report.usage.requestTypes ?? {}).map(([type, count]) => `${type}=${count}`).join(", ") || "неизвестно"}; тарифные окна: ${Object.entries(report.usage.pricingWindows ?? {}).map(([window, count]) => `${window}=${count}`).join(", ") || "неизвестно"}; расхождений с тарифом: ${report.usage.pricingWindowMismatches ?? 0}.`,
     `Семейства задач: ${report.families.length}; неполных: ${report.families.filter((family) => !family.complete).length}.`,
     ""
   ]

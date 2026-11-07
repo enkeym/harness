@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { collectObservations, summarizeSession, observationDirectory, requestObservation } from "../../opencode/observations.mjs"
+import { collectObservations, summarizeSession, observationDirectory, requestObservation, supportedObservationVersion } from "../../opencode/observations.mjs"
 
 const tokens = (input = 10) => ({ input, output: 2, reasoning: 3, cache: { read: 5, write: 0 } })
 const info = (id = "ses_root") => ({ id, location: { directory: "/project" }, time: { created: 1, updated: 10 }, cost: 0, tokens: tokens(12), outcome: "succeeded" })
@@ -101,6 +101,29 @@ test("collector paginates children and messages, upserts private records and pre
   assert.equal(bounded.handoff.targetID, "ses_latest")
 })
 
+test("collector links the task-context id to records and requests", async (t) => {
+  const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-observations-"))
+  t.after(() => fs.rm(state, { recursive: true, force: true }))
+  const api = {
+    version: "2.2.6",
+    task: async (id) => (id === "ses_root" ? "task-hash" : null),
+    get: async () => info(),
+    messages: async () => ({ data: [message()], cursor: {} }),
+    children: async () => ({ data: [], cursor: {} })
+  }
+
+  const [file] = await collectObservations(api, "ses_root", { stateDirectory: state })
+  const record = JSON.parse(await fs.readFile(file))
+  assert.equal(record.taskId, "task-hash")
+  assert.equal(record.sequence[0].request.taskId, "task-hash")
+
+  api.task = async () => { throw new Error("unavailable") }
+  await collectObservations(api, "ses_root", { stateDirectory: state })
+  const fallback = JSON.parse(await fs.readFile(file))
+  assert.equal(fallback.taskId, null)
+  assert.equal(fallback.sequence[0].request.taskId, null)
+})
+
 test("collector does not certify missing children or cyclic pagination", async (t) => {
   const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-observations-"))
   t.after(() => fs.rm(state, { recursive: true, force: true }))
@@ -145,3 +168,101 @@ test("context snapshots preserve earlier steps across compaction and full pages 
   assert.deepEqual(record.sequence.map((step) => step.id), ["msg_2"])
   assert.equal(record.messageCoverage, "complete-pages")
 })
+
+test("supported observation versions cover 2.2 patch releases only", () => {
+  assert.equal(supportedObservationVersion("2.2.5"), true)
+  assert.equal(supportedObservationVersion("2.2.6"), true)
+  assert.equal(supportedObservationVersion("2.2.10"), true)
+  assert.equal(supportedObservationVersion("2.1.9"), false)
+  assert.equal(supportedObservationVersion("2.3.0"), false)
+  assert.equal(supportedObservationVersion("3.0.0"), false)
+  assert.equal(supportedObservationVersion("2.2"), false)
+  assert.equal(supportedObservationVersion(undefined), false)
+})
+
+test("request records carry every required usage field without leaking content", () => {
+  const messageWithRequest = {
+    ...message(),
+    native: { responseId: "resp_abc" },
+    model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" },
+    cost: 0.3,
+    tokens: { input: 1000000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+  }
+  const record = summarizeSession(
+    { info: info(), messages: [messageWithRequest], taskId: "task-hash" },
+    "2.2.6"
+  )
+  const request = record.sequence[0].request
+  const time = new Date(message().time.created).toISOString()
+
+  assert.equal(record.schemaVersion, 2)
+  assert.equal(record.clientVersion, "2.2.6")
+  assert.equal(record.taskId, "task-hash")
+  assert.deepEqual(Object.keys(request).sort(), [
+    "cacheMissTokens",
+    "cacheReadTokens",
+    "compactionEvent",
+    "costUSD",
+    "durationMs",
+    "inputTokens",
+    "model",
+    "outputTokens",
+    "pricingWindow",
+    "pricingWindowClockAgrees",
+    "pricingWindowSource",
+    "reasoningTokens",
+    "reasoningVariant",
+    "requestId",
+    "requestType",
+    "sessionId",
+    "taskId",
+    "timestamp",
+    "toolCalls"
+  ])
+  assert.equal(request.requestId, "resp_abc")
+  assert.equal(request.sessionId, "ses_root")
+  assert.equal(request.taskId, "task-hash")
+  assert.equal(request.model, "deepseek/deepseek-flash")
+  assert.equal(request.reasoningVariant, "high")
+  assert.equal(request.inputTokens, 1000000)
+  assert.equal(request.cacheMissTokens, 1000000)
+  assert.equal(request.cacheReadTokens, 0)
+  assert.equal(request.outputTokens, 0)
+  assert.equal(request.reasoningTokens, 0)
+  assert.equal(request.costUSD, 0.3)
+  assert.equal(request.requestType, "assistant")
+  assert.equal(request.toolCalls, 1)
+  assert.equal(request.durationMs, 3)
+  assert.equal(request.compactionEvent, false)
+  assert.equal(request.timestamp, time)
+  assert.doesNotMatch(JSON.stringify(record), /private reasoning|secret output|private.txt/)
+})
+
+test("pricing window follows the native cost and reports a clock mismatch", () => {
+  const saturday = Date.parse("2026-11-07T12:00:00Z")
+  const messageWithMismatch = {
+    ...message(),
+    time: { created: saturday, completed: saturday + 3 },
+    model: { providerID: "deepseek", id: "deepseek-flash" },
+    cost: 0.3,
+    tokens: { input: 1000000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+  }
+  const record = summarizeSession({ info: info(), messages: [messageWithMismatch] }, "2.2.6")
+  const request = record.sequence[0].request
+
+  assert.equal(request.pricingWindow, "peak")
+  assert.equal(request.pricingWindowSource, "native-cost")
+  assert.equal(request.pricingWindowClockAgrees, false)
+  assert.ok(record.gaps.includes("pricing-window-mismatch"))
+})
+
+test("compaction steps expose an explicit compaction event", () => {
+  const auxiliary = { ...message("msg_compaction"), type: "compaction", status: "succeeded", reason: "context" }
+  const record = summarizeSession({ info: info(), messages: [auxiliary] }, "2.2.6")
+  const request = record.sequence[0].request
+
+  assert.equal(request.requestType, "compaction")
+  assert.equal(request.compactionEvent, true)
+  assert.equal(request.toolCalls, 0)
+})
+
