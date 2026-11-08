@@ -42,6 +42,17 @@ const eager = options.includes("--eager")
 const playwrightCompat = options.includes("--playwright-compat")
 const existingTabsOnly = options.includes("--existing-tabs-only")
 const manualExtension = options.includes("--manual-extension")
+const symbolAliases = new Map([
+  ["tokensave_body", ["symbol", "node_id"]],
+  ["tokensave_callers", ["symbol", "node_id"]],
+  ["tokensave_callees", ["symbol", "node_id"]],
+  ["tokensave_impact", ["symbol", "node_id"]],
+  ["tokensave_similar", ["symbol"]],
+  ["tokensave_type_hierarchy", ["symbol", "node_id"]],
+  ["tokensave_node", ["node_id"]],
+  ["tokensave_signature", ["node_id"]],
+  ["tokensave_derives", ["node_id"]]
+])
 if ((eager || playwrightCompat || existingTabsOnly || manualExtension) && !catalog)
   throw new Error("--eager, --playwright-compat, --existing-tabs-only and --manual-extension require --catalog")
 if (existingTabsOnly && !playwrightCompat)
@@ -253,6 +264,17 @@ function prepareCall(message) {
       input.scale = "css"
     if (params.name === "browser_click") delete input.ref
     if (params.name === "browser_evaluate") delete input.expression
+    params.arguments = input
+  }
+  const aliases = symbolAliases.get(params.name)
+  if (aliases) {
+    const input = params.arguments || {}
+    if (aliases.includes("symbol") && input.symbol === undefined && input.name !== undefined)
+      input.symbol = input.name
+    if (aliases.includes("node_id") && input.node_id === undefined && input.id !== undefined)
+      input.node_id = input.id
+    delete input.name
+    delete input.id
     params.arguments = input
   }
   const safe =

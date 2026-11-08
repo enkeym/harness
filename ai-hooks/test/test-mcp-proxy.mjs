@@ -104,6 +104,26 @@ test('eager Playwright reuses attached tabs and accepts common browser call form
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
 });
 
+test('tokensave symbol tools accept name and id aliases', async (t) => {
+  const c = client(t);
+  await c.rpc('initialize', initialize);
+  for (const [name, input, expected] of [
+    ['tokensave_body', { name: '_clash' }, { symbol: '_clash' }],
+    ['tokensave_callers', { id: 'method:1' }, { node_id: 'method:1' }],
+    ['tokensave_callees', { name: '_clash', id: 'method:1' }, { symbol: '_clash', node_id: 'method:1' }],
+    ['tokensave_impact', { symbol: 'Tunnel::_clash', name: 'ignored', node_id: 'method:1' }, { symbol: 'Tunnel::_clash', node_id: 'method:1' }],
+    ['tokensave_similar', { name: '_clash' }, { symbol: '_clash' }],
+    ['tokensave_signature', { id: 'method:1' }, { node_id: 'method:1' }],
+    ['tokensave_search', { name: 'keep' }, { name: 'keep' }],
+    ['tokensave_find_exact_symbol', { name: '_clash' }, { name: '_clash' }],
+  ]) {
+    const response = await c.rpc('tools/call', { name, arguments: input });
+    assert.deepEqual(response.result.structuredContent.arguments, expected);
+  }
+  const read = await c.rpc('tools/call', { name: 'read', arguments: { name: '_clash' } });
+  assert.deepEqual(read.result.structuredContent, { distinctMetadata: 42 });
+});
+
 test('a newer client uses the catalog protocol when the lazy backend starts', async (t) => {
   const c = client(t, { lazy: true });
   const response = await c.rpc('initialize', {

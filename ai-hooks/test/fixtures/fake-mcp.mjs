@@ -70,7 +70,15 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" })
     result = {
       content: [{ type: "text", text: "file content once" }],
-      structuredContent: { distinctMetadata: 42, ...(request.params.name.startsWith("browser_") ? { arguments: request.params.arguments, tokenPresent: Boolean(process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN) } : {}) },
+      structuredContent: {
+        distinctMetadata: 42,
+        ...(request.params.name.startsWith("browser_") || request.params.name.startsWith("tokensave_")
+          ? { arguments: request.params.arguments }
+          : {}),
+        ...(request.params.name.startsWith("browser_")
+          ? { tokenPresent: Boolean(process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN) }
+          : {})
+      },
       isError: false
     }
   }
