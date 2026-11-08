@@ -43,7 +43,10 @@ export async function registerLoopGuard(context, taskContext) {
   const sessionOf = (event) => event.sessionID ?? currentSession
 
   await context.session.hook("compaction", async (event) => {
-    state(sessionOf(event)).resume = true
+    const s = state(sessionOf(event))
+    s.resume = true
+    s.reads = 0
+    s.warned = 0
   })
 
   await context.session.hook("context", async (event) => {
@@ -116,4 +119,12 @@ export async function registerLoopGuard(context, taskContext) {
       `Harness loop guard: injected ${result.changed} read digest(s) from earlier full reads.\n`
     )
   })
+
+  return {
+    finishTurn(sessionID) {
+      const s = state(sessionID ?? currentSession)
+      s.reads = 0
+      s.warned = 0
+    }
+  }
 }

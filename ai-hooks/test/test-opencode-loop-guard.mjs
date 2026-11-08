@@ -29,7 +29,7 @@ async function fixture(t, referenceText = [
       return referenceText
     }
   }
-  await registerLoopGuard(context, taskContext)
+  const guard = await registerLoopGuard(context, taskContext)
   const after = (
     tool,
     input,
@@ -82,6 +82,7 @@ async function fixture(t, referenceText = [
     after,
     before,
     contextHook,
+    guard,
     sessionHooks,
     directory,
     references
@@ -258,6 +259,31 @@ test("shell reads count and execute edits reset the budget", async t => {
   const reset = await f.contextHook()
   assert.equal(reset.system.length, 0)
   assert.ok(reset.tools.execute)
+})
+
+test("a finished turn resets the read budget for the next user message", async t => {
+  const f = await fixture(t)
+  for (let i = 0; i < 21; i++) await f.after("shell", { command: "ls" })
+  const warned = await f.contextHook()
+  assert.match(warned.system[0].text, /21 read calls since the last file change/)
+
+  for (let i = 0; i < 19; i++) await f.after("shell", { command: "ls" })
+  const blocked = await f.contextHook()
+  assert.equal(blocked.tools.shell, undefined)
+  assert.equal(blocked.tools.read, undefined)
+
+  f.guard.finishTurn("session")
+  const fresh = await f.contextHook()
+  assert.ok(fresh.tools.shell)
+  assert.ok(fresh.tools.read)
+  assert.equal(fresh.system.length, 0)
+
+  for (let i = 0; i < 40; i++) await f.after("read", { file: "a.mjs" })
+  await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
+  const resumed = await f.contextHook()
+  assert.ok(resumed.tools.shell)
+  assert.match(resumed.system[0].text, /Harness resume after compaction/)
+  assert.doesNotMatch(resumed.system.join("\n"), /progress guard/)
 })
 
 test("plan mode and sessions without edit tools are never blocked", async t => {

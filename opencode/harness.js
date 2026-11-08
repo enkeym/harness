@@ -123,7 +123,7 @@ export default {
       return result
     }
     const taskContext = await registerTaskContext(context)
-    await registerLoopGuard(context, taskContext)
+    const loopGuard = await registerLoopGuard(context, taskContext)
     const handoff = await registerHandoff(context, observe, taskContext)
     const brief = await registerBrief(context, handoff)
     await context.session.hook("compaction", async (event) => {
@@ -182,6 +182,7 @@ export default {
         }
         if (event.type.startsWith("session.execution.")) {
           const sessionID = event.data.sessionID
+          loopGuard.finishTurn(sessionID)
           const owner = await context.session.get({ sessionID }).then(source => source.location.directory).catch(() => undefined)
           sync()
           const warnings = await observe(sessionID, owner ?? directory)
