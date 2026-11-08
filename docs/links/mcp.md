@@ -26,11 +26,13 @@ paths:
   сохранение настроек и выбор проекта.
 `mcp/servers.json` — общий источник списка серверов: `bin/mcp-sync.mjs:syncCodex` и `bin/mcp-sync.mjs:syncOpenCode` регистрируют его через соответствующий установщик; `ai-hooks/test/test-codex.mjs` и `ai-hooks/test/test-opencode.mjs` проверяют регистрацию и сохранение пользовательских настроек. `ai-hooks/bin/mcp-serve.sh` выбирает ближайший проект с нужным индексом и запускает один сервер; `ai-hooks/test/test-mcp-serve.mjs` проверяет выбор корня, команду запуска и коды отказа. При смене транспорта или правил выбора обновлять документацию и соответствующие проверки.
 
-`mcp-proxy.mjs` сокращает описания TokenSave и запускает Playwright после инициализации
-MCP-клиента. Версия и аргументы Playwright связаны с `playwright-tools.json`;
-после их изменения обновить каталог через `bin/mcp-catalog.mjs playwright` и
-проверить `--check`. `test-mcp-proxy.mjs` проверяет ранний запуск Playwright,
-один backend при параллельных вызовах и сохранение схем, уведомлений и ответов.
+`mcp-proxy.mjs` сокращает описания TokenSave и запускает Playwright при первом
+браузерном вызове. Без `PLAYWRIGHT_MCP_EXTENSION_TOKEN` такой вызов сразу получает
+ошибку, а backend не запускается. Версия и аргументы Playwright связаны с
+`playwright-tools.json`; после их изменения обновить каталог через
+`bin/mcp-catalog.mjs playwright` и проверить `--check`. `test-mcp-proxy.mjs` проверяет
+запуск по первому вызову, отказ без токена, один backend при параллельных вызовах
+и сохранение схем, уведомлений и ответов.
 
 - `HARNESS_CONTEXT_GENERATION_FILE` и `HARNESS_CONTEXT_OUTPUT_BUDGET_FILE` — пишет
   `ai-hooks/bin/context-runner.mjs:runObjective`, читает
@@ -48,8 +50,11 @@ MCP-клиента. Версия и аргументы Playwright связаны
   `ai-hooks/bin/context-runner.mjs:AppServer` для точечного обновления команд;
   remove/add вместо этого теряет пользовательские опции сервера.
 - `PLAYWRIGHT_MCP_EXECUTABLE_PATH` — определяет `bin/playwright-env.mjs:playwrightEnv`,
-  сохраняют `bin/mcp-sync.mjs:syncCodex` и `bin/mcp-sync.mjs:syncOpenCode`;
-  `mcp/playwright-tools.json` не должен закреплять путь или профиль в аргументах.
+  сохраняют `bin/mcp-sync.mjs:syncCodex` и `bin/mcp-sync.mjs:syncOpenCode`.
+- `PLAYWRIGHT_MCP_EXTENSION_TOKEN` — берётся из `~/.config/harness/env`;
+  `bin/mcp-sync.mjs:syncCodex` передаёт значение, `bin/mcp-sync.mjs:syncOpenCode`
+  ссылку `{env:...}`. `mcp/playwright-tools.json` не должен закреплять путь, профиль
+  или токен в аргументах.
 - Ссылки на переменные окружения в env OpenCode сохраняет `bin/mcp-sync.mjs:syncOpenCode`; `ai-hooks/test/test-opencode.mjs` проверяет, что локальное значение не заменяет ссылку в opencode.jsonc.
 - `project` у RAG и `graph_root` у TokenSave — `ai-hooks/bin/mcp-proxy.mjs:prepareCall`
   выбирает по ним БД для снятия защиты ошибок; отслеживание cwd вместо явно

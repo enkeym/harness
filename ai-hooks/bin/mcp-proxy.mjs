@@ -38,10 +38,11 @@ if (
   throw new Error("MCP command changed; refresh the pinned tool catalog")
 }
 const compact = options.includes("--compact")
-const eager = options.includes("--eager")
 const playwrightCompat = options.includes("--playwright-compat")
 const existingTabsOnly = options.includes("--existing-tabs-only")
-const manualExtension = options.includes("--manual-extension")
+const backendArgs = args.slice(split + 2)
+const extensionTokenRequired =
+  playwrightCompat && backendArgs.includes("--extension")
 const symbolAliases = new Map([
   ["tokensave_body", ["symbol", "node_id"]],
   ["tokensave_callers", ["symbol", "node_id"]],
@@ -53,8 +54,8 @@ const symbolAliases = new Map([
   ["tokensave_signature", ["node_id"]],
   ["tokensave_derives", ["node_id"]]
 ])
-if ((eager || playwrightCompat || existingTabsOnly || manualExtension) && !catalog)
-  throw new Error("--eager, --playwright-compat, --existing-tabs-only and --manual-extension require --catalog")
+if ((playwrightCompat || existingTabsOnly) && !catalog)
+  throw new Error("--playwright-compat and --existing-tabs-only require --catalog")
 if (existingTabsOnly && !playwrightCompat)
   throw new Error("--existing-tabs-only requires --playwright-compat")
 if (playwrightCompat) {
@@ -250,6 +251,22 @@ function prepareCall(message) {
   const params = message.params || {}
   if (playwrightCompat) {
     const input = params.arguments || {}
+    if (
+      extensionTokenRequired &&
+      params.name?.startsWith("browser_") &&
+      !process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN
+    ) {
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: {
+          code: -32603,
+          message:
+            "Playwright extension token is missing. Put the token from the extension into PLAYWRIGHT_MCP_EXTENSION_TOKEN and start a new session."
+        }
+      })
+      return false
+    }
     if (params.name === "browser_tabs" && input.action === undefined)
       input.action = "list"
     if (existingTabsOnly && params.name === "browser_tabs" && input.action === "new") {
@@ -577,12 +594,9 @@ function fail(error) {
 }
 
 function launch() {
-  const env = { ...process.env }
-  if (manualExtension) delete env.PLAYWRIGHT_MCP_EXTENSION_TOKEN
   const launched = spawn(command, args.slice(split + 2), {
     detached: process.platform !== "win32",
-    stdio: ["pipe", "pipe", "inherit"],
-    env
+    stdio: ["pipe", "pipe", "inherit"]
   })
   child = launched
   launched.on("error", (error) => {
@@ -775,7 +789,6 @@ input.on("line", (line) => {
   if (catalog && message.method === "initialize") {
     initialization = message
     reply(message, catalog.initialize)
-    if (eager) void ready().catch(fail)
     return
   }
   if (catalog && message.method === "notifications/initialized") return
