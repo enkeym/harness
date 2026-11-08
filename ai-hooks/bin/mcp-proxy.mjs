@@ -167,6 +167,7 @@ function artifactCall(message) {
       reply(message, {
         content: [{ type: "text", text }],
         structuredContent: {
+          text,
           offset,
           nextOffset: offset + Buffer.byteLength(text),
           totalBytes: data.length
@@ -449,7 +450,12 @@ function write(message) {
     call.autoDigest = false
     call.generation = currentGeneration()
   }
-  child.stdin.write(`${JSON.stringify(message)}\n`)
+  try {
+    child.stdin.write(`${JSON.stringify(message)}\n`)
+  } catch (error) {
+    if (catalog && ["EPIPE", "ECONNRESET"].includes(error.code)) restartBackend(error)
+    else fail(error)
+  }
 }
 
 function backendAlive(target = child) {
@@ -561,7 +567,9 @@ function launch() {
     if (child === launched) fail(error)
   })
   launched.stdin.on("error", (error) => {
-    if (child === launched) fail(error)
+    if (child !== launched || closing) return
+    if (catalog && ["EPIPE", "ECONNRESET"].includes(error.code)) restartBackend(error)
+    else fail(error)
   })
   launched.on("exit", (code, signal) => {
     if (child !== launched) return

@@ -108,7 +108,7 @@ test('ordinary sessions bound text and retrieve exact artifacts or UTF-8 ranges 
   assert.match(result.content.at(-1).text, /harness_read_result/);
   const range = (await c.call('harness_read_result', { path: file, offset: 2, bytes: 9 })).result;
   assert.equal(range.content[0].text, 'я'.repeat(4));
-  assert.deepEqual(range.structuredContent, { offset: 2, nextOffset: 10, totalBytes: 40000 });
+  assert.deepEqual(range.structuredContent, { text: 'я'.repeat(4), offset: 2, nextOffset: 10, totalBytes: 40000 });
   const full = (await c.call('harness_read_result', { path: file, full: true })).result;
   assert.equal(full.content[0].text, 'я'.repeat(20000));
   assert.equal(full._meta, undefined);

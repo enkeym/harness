@@ -3,6 +3,7 @@ import { spawn } from "node:child_process"
 import { createInterface } from "node:readline"
 
 fs.appendFileSync(process.env.FAKE_MCP_STARTS, "start\n")
+const breakOnce = process.env.FAKE_MCP_BREAK_ONCE && fs.readFileSync(process.env.FAKE_MCP_STARTS, "utf8").trim().split("\n").length === 1
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
 if (process.env.FAKE_MCP_DESCENDANT) {
   const descendant = spawn(process.execPath, ["-e", "process.on('SIGTERM', () => {}); process.stdout.write(''); setInterval(() => {}, 1000)"], { stdio: "inherit" })
@@ -49,6 +50,13 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   } else if (request.method === "resources/list") {
     result = { resources: [] }
   } else if (request.method === "tools/call") {
+    if (breakOnce && request.params.name === "break") {
+      send({ jsonrpc: "2.0", method: "test/pipe_closed" })
+      process.stdin.destroy()
+      try { fs.closeSync(0) } catch {}
+      setInterval(() => {}, 1000)
+      return
+    }
     if (request.params.name === "hang") return
     if (request.params.name === "fail") {
       send({

@@ -13,7 +13,7 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, eager = false, playwright = false, existingTabsOnly = false, manualExtension = false, protocol, policy = {}, stubborn = false, descendant = false, name, resources = false } = {}) {
+function client(t, { lazy = false, eager = false, playwright = false, existingTabsOnly = false, manualExtension = false, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
   const catalog = path.join(dir, 'catalog.json');
@@ -24,7 +24,7 @@ function client(t, { lazy = false, eager = false, playwright = false, existingTa
     : [{ name: 'read', description: 'Cached description', inputSchema: { type: 'object' } }];
   fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: [backend], initialize, tools }));
   const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog, ...(eager ? ['--eager'] : []), ...(playwright ? ['--playwright-compat'] : []), ...(existingTabsOnly ? ['--existing-tabs-only'] : []), ...(manualExtension ? ['--manual-extension'] : [])] : ['--compact']), '--', process.execPath, backend], {
-    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: 'test-token', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: 'test-token', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_BREAK_ONCE: breakOnce ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
   const notifications = [];
@@ -193,6 +193,24 @@ test('catalog mode reports a request timeout and keeps serving after a backend r
   const call = await c.rpc('tools/call', { name: 'read' });
   assert.equal(call.error, undefined);
   assert.equal(call.result.content[0].text, 'file content once');
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\nstart\n');
+});
+
+test('catalog mode recovers from a broken backend pipe without replaying the pending call', async t => {
+  const c = client(t, { lazy: true, breakOnce: true, policy: { requestTimeoutMs: 1000, shutdownGraceMs: 20 } });
+  await c.rpc('initialize', initialize);
+  const listed = (await c.rpc('tools/list')).result.tools;
+  const failed = c.rpc('tools/call', { name: 'break' });
+  const deadline = Date.now() + 1000;
+  while (!c.notifications.some(message => message.method === 'test/pipe_closed') && Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(c.notifications.some(message => message.method === 'test/pipe_closed'));
+  c.send({ id: 'trigger', method: 'tools/call', params: { name: 'read' } });
+  const response = await failed;
+  assert.equal(response.error.code, -32603);
+  assert.match(response.error.message, /EPIPE|ECONNRESET|broken pipe/i);
+  assert.deepEqual((await c.rpc('tools/list')).result.tools, listed);
+  assert.equal((await c.rpc('tools/call', { name: 'read' })).result.content[0].text, 'file content once');
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\nstart\n');
 });
 
