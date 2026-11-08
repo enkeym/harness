@@ -1,6 +1,6 @@
 ---
 name: test-conventions
-description: "Test conventions for TypeScript projects — Jest/Vitest, NestJS TestingModule, supertest, Testing Library, Playwright: assertions, structure, mocking boundaries, focused runs. Load before writing, fixing or reviewing any test, one test on a named symbol included."
+description: "Test conventions for TypeScript projects — Jest/Vitest, NestJS TestingModule, supertest, Testing Library, Playwright: assertions, structure, mocking boundaries, focused runs. Load before writing or fixing a test, one test on a named symbol included; running an existing suite or reporting its result does not load it."
 ---
 
 # TypeScript test conventions

@@ -514,6 +514,8 @@ export default { id: "harness", setup: async context => {
     assert.equal(system.split("# OpenCode harness").length - 1, primary.length, agent)
     assert.match(system, /Never add or rewrite code\/documentation comments/, agent)
     assert.match(system, /Read applicable SKILL.md/, agent)
+    assert.match(system, /Never load the same skill twice in a session/, agent)
+    assert.equal(system.includes("load both review checks before every commit"), false, agent)
     assert.match(system, /exact, case-sensitive `id` from the current available-skills catalog/, agent)
     assert.match(system, /load it with `\{"id":"opencode"\}`/, agent)
     assert.match(system, /never repeat an unchanged invalid ID/, agent)
@@ -818,8 +820,11 @@ export default { id: "harness", setup: async context => {
   assert.ok(nativeTools.some(tool => tool.name === "brief_transition"))
   assert.ok(nativeTools.some(tool => tool.name === "task_context"))
   for (const name of ["read", "grep", "glob", "shell"]) {
-    assert.match(nativeTools.find(tool => tool.name === name)?.description ?? "", /^Indexed project files must be searched\/read with TokenSave/)
+    assert.match(nativeTools.find(tool => tool.name === name)?.description ?? "", /^For indexed project files, search\/read through TokenSave/)
+    assert.match(nativeTools.find(tool => tool.name === name)?.description ?? "", /Without an index, do not load tokensave-routing or call MCP/)
   }
+  assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /Load only a skill whose described scope this task actually touches/)
+  assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /Load tokensave-routing only when the project root has an index/)
   assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /returned Base directory/)
   assert.match(nativeTools.find(tool => tool.name === "subagent")?.description ?? "", /^Use only when the user explicitly requests delegation/)
   const briefStart = requests.length

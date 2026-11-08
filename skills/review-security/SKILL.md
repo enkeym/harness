@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: "Security checklist for a diff or module — secrets, env fallbacks, input validation, auth and ownership, injection, SSRF, webhooks, data in logs and bundles, dependencies, docker and CI. Load on the diff before every commit, after review-standards, and when asked to check security or audit a module."
+description: "Security checklist for a diff or module — secrets, env fallbacks, input validation, auth and ownership, injection, SSRF, webhooks, data in logs and bundles, dependencies, docker and CI. Loaded once after review-standards by the review, commit and git-flow workflows, or for a standalone security question or module audit; not a trigger for ordinary code reading or every commit step."
 ---
 
 # Security review

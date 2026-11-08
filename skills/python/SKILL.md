@@ -1,6 +1,6 @@
 ---
 name: python
-description: "Python conventions — interpreter and checks, data shapes, exceptions, threads and locks, files and processes, platform-bound imports, pytest with monkeypatch and tmp_path. Load before analyzing, diagnosing, writing, reviewing or testing Python code, tests or dependency configuration."
+description: "Python conventions — interpreter and checks, data shapes, exceptions, threads and locks, files and processes, platform-bound imports, pytest with monkeypatch and tmp_path. Load before writing, fixing or reviewing Python code, tests or dependency configuration; running or reading an existing script that is not being changed does not load it."
 ---
 
 # Python conventions

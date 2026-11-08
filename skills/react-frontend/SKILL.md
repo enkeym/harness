@@ -1,6 +1,6 @@
 ---
 name: react-frontend
-description: "React client conventions — components, hooks, state, data fetching, forms, styling through project tokens, accessibility. Load before analyzing, diagnosing, writing, reviewing or testing React components, pages, hooks, stores, forms or stylesheets."
+description: "React client conventions — components, hooks, state, data fetching, forms, styling through project tokens, accessibility. Load before writing, fixing or reviewing React components, pages, hooks, stores, forms or stylesheets; a read-only explanation that changes nothing does not load it."
 ---
 
 # React frontend conventions

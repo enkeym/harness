@@ -7,7 +7,7 @@ description: "Commits the current changes and pushes the branch — message writ
 
 `/commit` = commit **and push** this branch. Write the commit yourself.
 
-Load review-standards, review-security and git-flow; review the diff before committing.
+Load review-standards, review-security and git-flow once — reuse them if the session already holds them — and review the diff before committing.
 
 1. One line: branch (`git branch --show-current`) and `git status --short`.
    Nothing to commit → say so, stop.

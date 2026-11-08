@@ -1,9 +1,14 @@
 ---
 name: tokensave-routing
-description: "Choose tokensave/ragsave searches and small line-range reads for code navigation; handle missing indexes or tools. Load before non-trivial indexed code exploration."
+description: "Choose tokensave/ragsave searches and small line-range reads for code navigation in a project with an initialized index (`.tokensave/` or `.ragsave/rag.db`); handle broken indexes or tools. Load only in that case and when the task needs code navigation. Without an index, skip this skill and use local tools; not for routine edits or one known file."
 ---
 
 # Search and read only what is needed
+
+Check for an index marker before any MCP call. If the project root has neither
+`.tokensave/` nor `.ragsave/rag.db`, this skill does not apply: use the client's
+local search and read tools without MCP discovery or `tokensave_status`, and do
+not report a failed call that was never made.
 
 For indexed files, MCP search/read is required; a shell read is not an
 alternative just because the path is already known. Git diffs and other

@@ -1,6 +1,6 @@
 ---
 name: nextjs-app
-description: "Next.js App Router conventions on top of react-frontend — the 'use client' boundary, Server Actions, route handlers, data access, caching, proxy.ts, metadata, NEXT_PUBLIC_ exposure. Load with react-frontend before analyzing, diagnosing, writing, reviewing or testing App Router routes, actions, route handlers, proxy or configuration in a Next.js project."
+description: "Next.js App Router conventions on top of react-frontend — the 'use client' boundary, Server Actions, route handlers, data access, caching, proxy.ts, metadata, NEXT_PUBLIC_ exposure. Load together with react-frontend before writing, fixing or reviewing App Router routes, actions, route handlers, proxy or configuration in a Next.js project; not for a read-only explanation."
 ---
 
 # Next.js App Router

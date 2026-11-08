@@ -1,6 +1,6 @@
 ---
 name: nestjs-backend
-description: "NestJS server conventions — modules, DI, DTOs and validation, exceptions, config, database. Load before analyzing, diagnosing, writing, reviewing or testing NestJS modules, controllers, services, DTOs, entities, guards or migrations."
+description: "NestJS server conventions — modules, DI, DTOs and validation, exceptions, config, database. Load before writing, fixing or reviewing NestJS modules, controllers, services, DTOs, entities, guards or migrations; a read-only explanation that changes nothing does not load it."
 ---
 
 # NestJS backend conventions

@@ -1,6 +1,6 @@
 ---
 name: review-standards
-description: "Cross-stack TypeScript and Python review of a diff — broken callers, edge cases, architecture drift, types, reuse, naming, duplication, error handling, leftovers. Load on the diff before every commit and when asked to review code, a branch or an MR."
+description: "Cross-stack TypeScript and Python review of a diff — broken callers, edge cases, architecture drift, types, reuse, naming, duplication, error handling, leftovers. Loaded once as the quality check by the review, commit and git-flow workflows, or for a standalone quality question on a diff; not a trigger for ordinary code reading or every commit step."
 ---
 
 # Standards review

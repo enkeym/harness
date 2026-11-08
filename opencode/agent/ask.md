@@ -49,10 +49,10 @@ apply it. A refusal without code is a failure.
 
 ## Before code
 
-- Read through tokensave and `rag_search`; built-in `read`/`grep` only for files
-  outside the index.
-- Load the area skill first — `nestjs-backend`, `react-frontend`,
-  `test-conventions` —
+- In an indexed project read through tokensave and `rag_search`; built-in
+  `read`/`grep` are the default without an index and for files outside it.
+- Load only the area skill whose conventions the answer depends on — the stack
+  one for changed code, `test-conventions` only when writing or fixing tests —
   and reuse the project's types, constants, helpers and style tokens.
 - Answer at once: no preamble, no restating the task.
 

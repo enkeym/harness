@@ -20,6 +20,7 @@ for (const event of ['SessionStart', 'UserPromptSubmit']) {
         assert.ok(context.includes(skill), skill);
       }
       assert.match(context, /Read applicable SKILL.md only when its contents are missing from the current context or have changed/);
+      assert.match(context, /Never load the same skill twice in a session/);
       assert.match(context, /restore missing instructions after compaction or session transfer/);
     } else {
       assert.match(context, /core\.md/);
