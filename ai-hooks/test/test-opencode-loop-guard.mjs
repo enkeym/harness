@@ -195,7 +195,7 @@ test("after hook collects full-read digests from text and JSON results only", as
   assert.doesNotMatch(lines.code, /if_digest/)
 })
 
-test("read budget warns at 20 reads and disables read tools at 40", async t => {
+test("read budget warns at 20 reads and disables native read tools at 40", async t => {
   const f = await fixture(t)
   for (let i = 0; i < 20; i++) await f.after("read", { file: "a.mjs" })
 
@@ -213,8 +213,9 @@ test("read budget warns at 20 reads and disables read tools at 40", async t => {
   await f.after("read", { file: "a.mjs" })
   const forty = await f.contextHook()
   assert.match(forty.system.at(-1).text, /40 read calls without a file change/)
-  for (const name of ["execute", "shell", "read", "grep", "glob", "skill"])
+  for (const name of ["shell", "read", "grep", "glob", "skill"])
     assert.equal(forty.tools[name], undefined)
+  assert.ok(forty.tools.execute)
   assert.ok(forty.tools.edit)
 
   await f.after("edit", { file: "a.mjs" })
@@ -222,6 +223,27 @@ test("read budget warns at 20 reads and disables read tools at 40", async t => {
   assert.ok(resumed.tools.execute)
   assert.ok(resumed.tools.read)
   assert.equal(resumed.system.length, 0)
+})
+
+test("hard read budget keeps the Code Mode execute gateway in the request", async t => {
+  const f = await fixture(t)
+  for (let i = 0; i < 40; i++) await f.after("read", { file: "a.mjs" })
+
+  const event = await f.contextHook()
+  assert.ok(
+    event.tools.execute,
+    "execute must stay available because Code Mode is the only MCP gateway"
+  )
+  assert.match(event.system.at(-1).text, /Code Mode \(execute\) remains available/)
+
+  await f.after("execute", {
+    code: 'await tools.tokensave.tokensave_read({ file: "a.mjs", mode: "lines", lines: "1-2" })'
+  })
+  const afterExecuteRead = await f.contextHook()
+  assert.ok(
+    afterExecuteRead.tools.execute,
+    "reading through execute must not remove the gateway"
+  )
 })
 
 test("shell reads count and execute edits reset the budget", async t => {
