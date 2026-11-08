@@ -131,6 +131,26 @@ test('tokensave symbol tools accept name and id aliases', async (t) => {
   assert.deepEqual(read.result.structuredContent, { distinctMetadata: 42 });
 });
 
+test('tokensave_read accepts comma-separated and spaced line ranges', async (t) => {
+  const c = client(t);
+  await c.rpc('initialize', initialize);
+  for (const [lines, expected] of [
+    ['590,615', '590-615'],
+    ['590, 615', '590-615'],
+    ['590 615', '590-615'],
+    ['590;615', '590-615'],
+    [' 590,615 ', '590-615'],
+    ['590-615', '590-615'],
+    ['590', '590'],
+    ['590615', '590615'],
+  ]) {
+    const response = await c.rpc('tools/call', { name: 'tokensave_read', arguments: { file: 'a.mjs', mode: 'lines', lines } });
+    assert.equal(response.result.structuredContent.arguments.lines, expected);
+  }
+  const untouched = await c.rpc('tools/call', { name: 'tokensave_search', arguments: { query: 'a', lines: '590,615' } });
+  assert.equal(untouched.result.structuredContent.arguments.lines, '590,615');
+});
+
 test('a newer client uses the catalog protocol when the lazy backend starts', async (t) => {
   const c = client(t, { lazy: true });
   const response = await c.rpc('initialize', {

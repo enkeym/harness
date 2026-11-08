@@ -15,6 +15,8 @@ TokenSave работает через `ai-hooks/bin/mcp-proxy.mjs --compact`: о
 остаются в `rules/core.md` и skill `tokensave-routing`.
 Для символьных инструментов TokenSave proxy переводит `name` в `symbol` и `id`
 в `node_id`; инструменты, где `name` — собственный параметр, не затрагиваются.
+В `tokensave_read` значение `lines` в форме `590,615` или `590 615` переводится
+в ожидаемое `590-615`.
 
 Playwright закреплён на `@playwright/mcp@0.0.83` и в WSL подключается к Windows
 Chrome через расширение в профиле текущего пользователя. Для Codex глобальная

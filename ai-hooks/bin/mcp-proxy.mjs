@@ -294,6 +294,16 @@ function prepareCall(message) {
     delete input.id
     params.arguments = input
   }
+  if (params.name === "tokensave_read") {
+    const input = params.arguments || {}
+    if (typeof input.lines === "string") {
+      const range = /^(\d+)\s*(?:[,;]\s*|\s+)(\d+)$/.exec(input.lines.trim())
+      if (range) {
+        input.lines = `${range[1]}-${range[2]}`
+        params.arguments = input
+      }
+    }
+  }
   const safe =
     /^(tokensave_(read|search|files|context|callers|callees|impact|status)|rag_(search|status))$/.test(
       params.name
