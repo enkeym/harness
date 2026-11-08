@@ -91,8 +91,10 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const opencodeEnvironment = (name, environment) => {
-  const discovered = name === 'playwright' ? playwrightEnv({ ...process.env, ...environment }) : {};
+  const source = { ...process.env, ...environment };
+  const discovered = name === 'playwright' ? playwrightEnv(source) : {};
   const keys = new Set([...Object.keys(environment), ...Object.keys(discovered)]);
+  if (name === 'playwright' && source.PLAYWRIGHT_MCP_EXTENSION_TOKEN) keys.add('PLAYWRIGHT_MCP_EXTENSION_TOKEN');
   return Object.fromEntries([...keys].map((key) => [key, `{env:${key}}`]));
 };
 

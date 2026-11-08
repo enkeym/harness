@@ -1025,6 +1025,41 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
   assert.equal(run("--check").status, 0)
 })
 
+test("OpenCode MCP sync references the Playwright extension token in a clean config", (t) => {
+  const directory = sandbox(t)
+  const settings = path.join(directory, "opencode.jsonc")
+  fs.writeFileSync(settings, '{"model":"user/model"}')
+  const run = (token) =>
+    spawnSync(
+      process.execPath,
+      [path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), "--opencode"],
+      {
+        env: {
+          ...process.env,
+          OPENCODE_CONFIG_DIR: directory,
+          PLAYWRIGHT_MCP_EXECUTABLE_PATH: "/opt/chrome",
+          PLAYWRIGHT_MCP_EXTENSION_TOKEN: token
+        },
+        encoding: "utf8"
+      }
+    )
+  const missing = run("")
+  assert.equal(missing.status, 0, missing.stderr + missing.stdout)
+  assert.equal(
+    loadConfig(directory).current.mcp.servers.playwright.environment
+      .PLAYWRIGHT_MCP_EXTENSION_TOKEN,
+    undefined
+  )
+  const present = run("test-token")
+  assert.equal(present.status, 0, present.stderr + present.stdout)
+  assert.equal(
+    loadConfig(directory).current.mcp.servers.playwright.environment
+      .PLAYWRIGHT_MCP_EXTENSION_TOKEN,
+    "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
+  )
+  assert.ok(!fs.readFileSync(settings, "utf8").includes("test-token"))
+})
+
 for (const extension of ["json", "jsonc"]) {
   test(`OpenCode MCP sync removes remote URLs from ${extension} when installing a local server`, (t) => {
     const directory = sandbox(t)
