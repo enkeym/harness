@@ -76,6 +76,7 @@ if (!isDeepStrictEqual(current, desired) || !fs.existsSync(settings)) {
 }
 const links = [
   [path.join(directory, "plugins/harness"), "opencode"],
+  [path.join(directory, "cli.json"), "opencode/cli.json"],
   [path.join(directory, "agents/ask.md"), "opencode/agent/ask.md"],
   [path.join(home, ".ai-hooks"), "ai-hooks"],
   [path.join(home, ".config/harness/repo"), "."],

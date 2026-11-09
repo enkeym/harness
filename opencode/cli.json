@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "tabs": {
+    "mode": "off"
+  },
+  "keybinds": {
+    "variant.cycle": "alt+o",
+    "open.menu": "alt+i",
+    "command.palette.show": "alt+p"
+  }
+}
