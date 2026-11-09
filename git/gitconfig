@@ -21,3 +21,5 @@
 	tool = vscode
 [difftool "vscode"]
 	cmd = code --wait --diff $LOCAL $REMOTE
+[credential "https://git.stormapi.su"]
+	helper = store

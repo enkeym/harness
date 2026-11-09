@@ -69,5 +69,67 @@
       }
     }
   },
-  "model": "deepseek/deepseek-flash"
+  "model": "deepseek/deepseek-flash-offpeak",
+  "instructions": [],
+  "commands": {},
+  "compaction": {
+    "auto": true,
+    "keep": {
+      "tokens": 20000
+    },
+    "buffer": 30000
+  },
+  "experimental": {
+    "background_compaction": false
+  },
+  "plugins": [],
+  "mcp": {
+    "servers": {
+      "tokensave": {
+        "type": "local",
+        "command": [
+          "/usr/bin/node",
+          "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
+          "--compact",
+          "--",
+          "bash",
+          "/home/korolev/.ai-hooks/bin/mcp-serve.sh",
+          "tokensave"
+        ],
+        "environment": {}
+      },
+      "ragsave": {
+        "type": "local",
+        "command": [
+          "/usr/bin/node",
+          "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
+          "--",
+          "bash",
+          "/home/korolev/.ai-hooks/bin/mcp-serve.sh",
+          "ragsave"
+        ],
+        "environment": {}
+      },
+      "playwright": {
+        "type": "local",
+        "command": [
+          "/usr/bin/node",
+          "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
+          "--catalog",
+          "/home/korolev/.config/harness/repo/mcp/playwright-tools.json",
+          "--playwright-compat",
+          "--existing-tabs-only",
+          "--",
+          "npx",
+          "-y",
+          "@playwright/mcp@0.0.83",
+          "--extension",
+          "--browser=chrome"
+        ],
+        "environment": {
+          "PLAYWRIGHT_MCP_EXECUTABLE_PATH": "{env:PLAYWRIGHT_MCP_EXECUTABLE_PATH}"
+        }
+      }
+    }
+  }
 }
