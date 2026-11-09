@@ -4,8 +4,9 @@
     "mode": "off"
   },
   "keybinds": {
-    "variant.cycle": "alt+o",
-    "open.menu": "alt+i",
-    "command.palette.show": "alt+p"
+    "variant.cycle": "alt+o,alt+щ",
+    "open.menu": "alt+i,alt+ш",
+    "command.palette.show": "ctrl+p,ctrl+з",
+    "model.list": "alt+p,alt+з,<leader>m"
   }
 }

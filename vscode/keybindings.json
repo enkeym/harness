@@ -1008,14 +1008,6 @@
     "when": "inKeybindings"
   },
   {
-    "key": "ctrl+alt+a",
-    "command": "workbench.action.terminal.sendSequence",
-    "args": {
-      "text": "!node ~/.ai-hooks/bin/ask-mode.mjs toggle\r"
-    },
-    "when": "terminalFocus"
-  },
-  {
     "key": "insert",
     "command": "-editor.action.toggleOvertypeInsertMode"
   },
@@ -1081,42 +1073,5 @@
     "args": {
       "text": "opencode\n"
     }
-  },
-  {
-    "key": "alt+[KeyP]",
-    "command": "workbench.action.terminal.sendSequence",
-    "args": {
-      "text": "\u0018m"
-    },
-    "when": "terminalFocus"
-  },
-  {
-    "key": "alt+[KeyO]",
-    "command": "workbench.action.terminal.sendSequence",
-    "args": {
-      "text": "\u000f"
-    },
-    "when": "terminalFocus"
   }
-  // {
-  //   "key": "ctrl+shift+l",
-  //   "command": "workbench.action.terminal.sendSequence",
-  //   "args": {
-  //     "text": "~/awg-start.sh\n"
-  //   }
-  // },
-  // {
-  //   "key": "ctrl+k",
-  //   "command": "workbench.action.terminal.sendSequence",
-  //   "args": {
-  //     "text": "~/awg-start.sh --repair\n"
-  //   }
-  // },
-  // {
-  //   "key": "ctrl+shift+k",
-  //   "command": "workbench.action.terminal.sendSequence",
-  //   "args": {
-  //     "text": "~/awg-stop.sh\n"
-  //   }
-  // }
 ]

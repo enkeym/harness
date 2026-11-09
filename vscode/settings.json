@@ -139,6 +139,7 @@
   "keyboard.dispatch": "keyCode",
   "window.confirmBeforeClose": "keyboardOnly",
   "claudeCode.preferredLocation": "panel",
-  "terminal.integrated.suggest.enabled": false
+  "terminal.integrated.suggest.enabled": false,
+  "terminal.integrated.enableKittyKeyboardProtocol": true
   // test
 }
