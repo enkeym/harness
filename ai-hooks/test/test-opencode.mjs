@@ -212,6 +212,25 @@ test("model routing removes legacy overrides and preserves user configuration", 
   assert.equal(other.agents["harness-plan"], undefined)
 })
 
+test("every bundled DeepSeek model carries the working input limit", () => {
+  const config = readConfig(
+    path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
+  )
+  const models = config.providers.deepseek.models
+  for (const [name, model] of Object.entries(models)) {
+    assert.equal(
+      model.limit?.input,
+      contextPolicy.opencode.maxTokens,
+      `${name} must declare the working input limit`
+    )
+    assert.equal(
+      model.limit?.output,
+      contextPolicy.maxOutputTokens,
+      `${name} must declare the working output limit`
+    )
+  }
+})
+
 test("OpenCode sends skill and search routing to custom and built-in agents", async (t) => {
   let child
   let server

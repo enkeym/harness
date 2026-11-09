@@ -17,6 +17,7 @@
         "deepseek-v4-pro": {
           "name": "deepseek-v4-pro",
           "modelID": "deepseek-v4-pro",
+          "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
           },
@@ -30,6 +31,7 @@
         "deepseek-v4-pro-offpeak": {
           "name": "deepseek-v4-pro (off-peak)",
           "modelID": "deepseek-v4-pro",
+          "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
           },
@@ -43,6 +45,7 @@
         "deepseek-flash": {
           "name": "deepseek-flash",
           "modelID": "deepseek-flash",
+          "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
           },
@@ -56,6 +59,7 @@
         "deepseek-flash-offpeak": {
           "name": "deepseek-flash (off-peak)",
           "modelID": "deepseek-flash",
+          "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
           },
