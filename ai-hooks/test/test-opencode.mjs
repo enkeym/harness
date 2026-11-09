@@ -303,11 +303,11 @@ export default { id: "harness", setup: async context => {
           ? "Fixture step completed."
           : "## Objective\n- Handoff fixture: continue the authorized objective.\n\n## Requirements\n- Preserve permissions.\n\n## Decisions\n- Continue the remaining plan.\n\n## Work State\n### Completed\n- First step.\n### Active\n- Next step.\n### Blocked\n- (none)\n\n## Next Move\n1. Execute the next authorized step.\n\n## Relevant Files\n- (none)\n\n## Important Context\n- Local compaction fixture."
       const usage = {
-        input_tokens: primary && primaryCalls === 1 ? 120000 : 1000,
+        input_tokens: primary && primaryCalls === 1 ? contextPolicy.opencode.startTokens : 1000,
         input_tokens_details: { cached_tokens: 0 },
         output_tokens: 20,
         output_tokens_details: { reasoning_tokens: 0 },
-        total_tokens: primary && primaryCalls === 1 ? 120020 : 1020
+        total_tokens: primary && primaryCalls === 1 ? contextPolicy.opencode.startTokens + 20 : 1020
       }
       const part = { type: "output_text", text, annotations: [] }
       const briefStage = input.tools?.some(tool => tool.name === "execute")
@@ -591,7 +591,7 @@ export default { id: "harness", setup: async context => {
   } while (Date.now() < deadline)
   assert.ok(
     first.data.some(
-      (value) => value.type === "assistant" && value.tokens?.input === 120000
+      (value) => value.type === "assistant" && value.tokens?.input === contextPolicy.opencode.startTokens
     ),
     JSON.stringify({
       context: first,
@@ -614,7 +614,7 @@ export default { id: "harness", setup: async context => {
   const observation = JSON.parse(fs.readFileSync(observationFile, "utf8"))
   assert.equal(observation.sessionID, session.data.id)
   assert.equal(observation.delegation.childrenComplete, true)
-  assert.ok(observation.sequence.some((step) => step.tokens?.input === 120000))
+  assert.ok(observation.sequence.some((step) => step.tokens?.input === contextPolicy.opencode.startTokens))
   assert.equal(observation.money.validatedUSD, null)
   const summaryStart = requests.length
   await api(`/session/${session.data.id}/prompt`, {
@@ -1170,6 +1170,7 @@ function executionSandbox(t) {
     "brief.mjs",
     "task-context.mjs",
     "loop-guard.mjs",
+    "output-bounds.mjs",
     "handoff.mjs",
     "handoff-rpc.mjs",
     "model-routing.mjs",

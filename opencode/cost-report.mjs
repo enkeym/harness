@@ -5,6 +5,7 @@ import { readJSON, writePrivateJSON, writePrivateText } from "./local-state.mjs"
 import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { requestTypeOf, supportedObservationVersion } from "./observations.mjs"
+import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
@@ -12,10 +13,11 @@ export const defaultCostConfig = Object.freeze({
   dailyNativeUSD: 5,
   billingDiscrepancyPercent: 5,
   sessionAssistantMessages: 100,
-  repeatedToolCalls: 3,
+  repeatedToolCalls: 2,
   consecutiveFailures: 3
 })
 const counterKeys = ["input", "output", "reasoning", "cacheRead", "cacheWrite"]
+const largeToolOutputBytes = contextPolicy.opencode.toolOutputBytes
 const numeric = (value) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0
 export const costStateRoot = (
@@ -131,6 +133,14 @@ function usage(steps, conflicts = 0) {
     compactions: 0,
     tokens: Object.fromEntries(counterKeys.map((key) => [key, 0])),
     cacheMissTokens: 0,
+    cacheHitRate: null,
+    cacheHitSteps: 0,
+    compactionInputTokens: 0,
+    compactionInputShare: null,
+    toolOutputBytes: 0,
+    largeToolOutputs: 0,
+    largeToolOutputBytes: 0,
+    largeToolOutputShare: null,
     toolCalls: 0,
     durationMs: 0,
     requestTypes: {},
@@ -149,6 +159,7 @@ function usage(steps, conflicts = 0) {
     unknownMessages: 0,
     zeroCostWithUsage: 0
   }
+  const cached = { input: 0, cacheRead: 0, steps: 0 }
   for (const step of steps) {
     if (step.type === "assistant") totals.assistantMessages++
     if (step.type === "compaction") totals.compactions++
@@ -159,10 +170,24 @@ function usage(steps, conflicts = 0) {
     if (!knownTokens) {
       totals.tokens = null
       totals.cacheMissTokens = null
-    } else if (totals.tokens) {
-      for (const key of counterKeys) totals.tokens[key] += step.tokens[key]
-      if (totals.cacheMissTokens !== null) totals.cacheMissTokens += step.tokens.input
+    } else {
+      cached.input += step.tokens.input
+      cached.cacheRead += step.tokens.cacheRead
+      cached.steps++
+      if (totals.tokens) {
+        for (const key of counterKeys) totals.tokens[key] += step.tokens[key]
+        if (totals.cacheMissTokens !== null) totals.cacheMissTokens += step.tokens.input
+      }
+      if (step.type === "compaction") totals.compactionInputTokens += step.tokens.input
     }
+    for (const tool of step.tools ?? [])
+      if (numeric(tool.outputBytes)) {
+        totals.toolOutputBytes += tool.outputBytes
+        if (tool.outputBytes >= largeToolOutputBytes) {
+          totals.largeToolOutputs++
+          totals.largeToolOutputBytes += tool.outputBytes
+        }
+      }
     if (Array.isArray(step.tools)) totals.toolCalls += step.tools.length
     if (numeric(step.time?.completed) && numeric(step.time?.created))
       totals.durationMs += step.time.completed - step.time.created
@@ -199,9 +224,21 @@ function usage(steps, conflicts = 0) {
     )
       totals.zeroCostWithUsage++
   }
+  if (cached.input + cached.cacheRead > 0)
+    totals.cacheHitRate = cached.cacheRead / (cached.input + cached.cacheRead)
+  totals.cacheHitSteps = cached.steps
+  totals.compactionInputShare =
+    cached.input > 0 ? totals.compactionInputTokens / cached.input : null
+  totals.largeToolOutputShare =
+    totals.toolOutputBytes > 0
+      ? totals.largeToolOutputBytes / totals.toolOutputBytes
+      : null
   if (conflicts) {
     totals.tokens = null
     totals.cacheMissTokens = null
+    totals.cacheHitRate = null
+    totals.compactionInputTokens = null
+    totals.compactionInputShare = null
     totals.nativeRequestReportedUSD = null
     totals.recomputedUSD = null
     totals.recomputedInputUSD = null
@@ -244,7 +281,6 @@ function repeatsFor(record, date, config) {
       }
       if (
         !tool.inputFingerprint ||
-        !tool.outputFingerprint ||
         !numeric(step.time?.created) ||
         localDate(step.time.created, config.timeZone) !== date
       )
@@ -253,7 +289,6 @@ function repeatsFor(record, date, config) {
         epoch,
         tool.name,
         tool.inputFingerprint,
-        tool.outputFingerprint,
         tool.status
       ])
       const group = groups.get(key) ?? {
@@ -755,6 +790,10 @@ export function formatCostReport(report) {
       : typeof number === "number"
         ? String(Math.round(number * 1000000) / 1000000)
         : String(number)
+  const percent = (fraction) =>
+    fraction === null || fraction === undefined
+      ? "неизвестно"
+      : `${Math.round(fraction * 1000) / 10}%`
   const lines = [
     `OpenCode: ${report.date} (${report.timeZone})`,
     `Наблюдаемых сессий: ${report.coverage.observedSessions}; сообщений с расходом: ${report.usage.messages}; компактаций: ${report.usage.compactions}.`,
@@ -764,6 +803,7 @@ export function formatCostReport(report) {
     `История: ${report.coverage.completeHistory ? "полные страницы наблюдаемых сессий" : "неполное покрытие"}; покрытие аккаунта провайдера не проверено.`,
     `Токены: ${report.usage.tokens ? counterKeys.map((key) => `${key}=${report.usage.tokens[key]}`).join(", ") : "есть неизвестные счётчики"}.`,
     `Кеш-промахи (input): ${value(report.usage.cacheMissTokens)}; вызовов инструментов: ${report.usage.toolCalls ?? 0}; суммарная длительность запросов: ${report.usage.durationMs ?? 0} мс.`,
+    `Кэш: попадание ${percent(report.usage.cacheHitRate)} по ${report.usage.cacheHitSteps ?? 0} запросам с известными счётчиками; input от компактаций: ${percent(report.usage.compactionInputShare)} (${value(report.usage.compactionInputTokens ?? null)}); вывод инструментов: ${value(report.usage.toolOutputBytes ?? 0)} байт, из них >20 KB: ${value(report.usage.largeToolOutputBytes ?? 0)} байт в ${report.usage.largeToolOutputs ?? 0} вызовах.`,
     `Типы запросов: ${Object.entries(report.usage.requestTypes ?? {}).map(([type, count]) => `${type}=${count}`).join(", ") || "неизвестно"}; тарифные окна: ${Object.entries(report.usage.pricingWindows ?? {}).map(([window, count]) => `${window}=${count}`).join(", ") || "неизвестно"}; расхождений с тарифом: ${report.usage.pricingWindowMismatches ?? 0}.`,
     `Семейства задач: ${report.families.length}; неполных: ${report.families.filter((family) => !family.complete).length}.`,
     ""

@@ -4,10 +4,10 @@ import fs from "node:fs"
 import { spawn } from "node:child_process"
 import { createInterface } from "node:readline"
 import path from "node:path"
-import os from "node:os"
 import {
   boundTextResult,
   classify,
+  contextOutputDir,
   hash,
   reserveTextBudget,
   redactDiagnostic,
@@ -100,10 +100,7 @@ function dropPending(id) {
   return true
 }
 const generationFile = process.env.HARNESS_CONTEXT_GENERATION_FILE
-const artifactDir = path.join(
-  process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
-  "harness/context-output"
-)
+const artifactDir = contextOutputDir()
 let generation
 const artifactTool = {
   name: "harness_read_result",

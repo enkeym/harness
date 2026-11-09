@@ -1,10 +1,13 @@
 // Private, versioned context accounting. No provider pricing assumptions.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { mcpPolicy, retryAllowed, retryDelay } from './mcp-policy.mjs';
 
 export const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+export const contextOutputDir = (stateDirectory = process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state')) =>
+  path.join(stateDirectory, 'harness/context-output');
 export function redactDiagnostic(value) {
   return String(value)
     .replace(/\bBearer\s+[^\s"']+/gi, 'Bearer [redacted]')
@@ -177,16 +180,18 @@ export function utf8Prefix(text, bytes) {
 
 // Only explicitly plain text may be bounded. JSON, MCP errors, images and
 // structuredContent are returned intact; never parse warning-prefixed text as JSON.
-export function plainTextResult(result) {
+export function plainTextResult(result, { anyText = false } = {}) {
   return result && !result.isError && !Object.hasOwn(result, 'structuredContent') && Array.isArray(result.content) &&
     result.content.every(b => {
-      if (b.type !== 'text' || typeof b.text !== 'string' || /^[\s]*[\[{]/.test(b.text)) return false;
+      if (b.type !== 'text' || typeof b.text !== 'string') return false;
+      if (anyText) return true;
+      if (/^[\s]*[\[{]/.test(b.text)) return false;
       try { JSON.parse(b.text); return false; } catch { return true; }
     });
 }
 
-export function boundTextResult(result, budget, dir, policy = mcpPolicy) {
-  if (!plainTextResult(result)) return result;
+export function boundTextResult(result, budget, dir, policy = mcpPolicy, options) {
+  if (!plainTextResult(result, options)) return result;
   const bytes = result.content.reduce((n, b) => n + Buffer.byteLength(b.text), 0);
   if (bytes <= budget) return result;
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });

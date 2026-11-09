@@ -98,6 +98,27 @@ test("repeat candidates require matching fingerprints and reset after compaction
   assert.ok(data.warnings.some(w => w.code === "repeated-tool-result"))
 })
 
+test("repeat candidates match identical inputs even when the output differs", () => {
+  const first = { name: "read", status: "completed", inputFingerprint: "same", outputFingerprint: "one" }
+  const second = { name: "read", status: "completed", inputFingerprint: "same", outputFingerprint: "two" }
+  const data = report([record("ses_repeat_output", [step("a", { tools: [first] }), step("b", { tools: [second] })])])
+
+  assert.equal(data.repeats.length, 1)
+  assert.equal(data.repeats[0].occurrences, 2)
+})
+
+test("large tool outputs are measured separately", () => {
+  const small = { name: "read", outputBytes: 20 * 1024 - 1 }
+  const large = { name: "read", outputBytes: 20 * 1024 }
+  const data = report([record("ses_large", [step("a", { tools: [small, large] })])])
+
+  assert.equal(data.usage.toolOutputBytes, 40959)
+  assert.equal(data.usage.largeToolOutputs, 1)
+  assert.equal(data.usage.largeToolOutputBytes, 20480)
+  assert.ok(Math.abs(data.usage.largeToolOutputShare - 20480 / 40959) < 1e-12)
+  assert.match(formatCostReport(data), />20 KB: 20480 байт в 1 вызовах/)
+})
+
 test("provider budgets stay separate from native USD and quality cohorts retain unknown acceptance", () => {
   const before = { workload: "implementation", comparisonKey: "same-scope", phase: "before", accepted: true, checksPassed: 2, checksFailed: 0, correctionCount: 0 }
   const data = report([
@@ -120,7 +141,7 @@ test("pricing aggregates expose required usage fields per window and request typ
       pricingWindow: "offPeak",
       pricingWindowClockAgrees: true
     },
-    tools: [{ name: "read" }, { name: "grep" }],
+    tools: [{ name: "read", outputBytes: 100 }, { name: "grep", outputBytes: 50 }],
     time: { created: stamp, completed: stamp + 250 },
     ...extra
   })
@@ -132,6 +153,14 @@ test("pricing aggregates expose required usage fields per window and request typ
   ])
 
   assert.equal(data.usage.cacheMissTokens, 20)
+  assert.ok(Math.abs(data.usage.cacheHitRate - 1 / 3) < 1e-12)
+  assert.equal(data.usage.cacheHitSteps, 2)
+  assert.equal(data.usage.compactionInputTokens, 0)
+  assert.equal(data.usage.compactionInputShare, 0)
+  assert.equal(data.usage.toolOutputBytes, 300)
+  assert.equal(data.usage.largeToolOutputs, 0)
+  assert.equal(data.usage.largeToolOutputBytes, 0)
+  assert.equal(data.usage.largeToolOutputShare, 0)
   assert.equal(data.usage.toolCalls, 4)
   assert.equal(data.usage.durationMs, 500)
   assert.deepEqual(data.usage.requestTypes, { assistant: 2 })
@@ -140,6 +169,8 @@ test("pricing aggregates expose required usage fields per window and request typ
   assert.ok(data.warnings.some((warning) => warning.code === "pricing-window-mismatch"))
   assert.match(formatCostReport(data), /Типы запросов: assistant=2/)
   assert.match(formatCostReport(data), /тарифные окна: offPeak=1, peak=1/)
+  assert.match(formatCostReport(data), /Кэш: попадание 33\.3%/)
+  assert.match(formatCostReport(data), /вывод инструментов: 300 байт/)
 })
 
 test("evidence accepts schema 2 records from 2.2 patch releases and rejects other versions", async t => {
