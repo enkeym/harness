@@ -214,8 +214,9 @@ test("read budget warns at 20 reads and disables native read tools at 40", async
   await f.after("read", { file: "a.mjs" })
   const forty = await f.contextHook()
   assert.match(forty.system.at(-1).text, /40 read calls without a file change/)
-  for (const name of ["shell", "read", "grep", "glob", "skill"])
+  for (const name of ["read", "grep", "glob", "skill"])
     assert.equal(forty.tools[name], undefined)
+  assert.ok(forty.tools.shell, "shell must stay available for commands and tests")
   assert.ok(forty.tools.execute)
   assert.ok(forty.tools.edit)
 
@@ -235,7 +236,8 @@ test("hard read budget keeps the Code Mode execute gateway in the request", asyn
     event.tools.execute,
     "execute must stay available because Code Mode is the only MCP gateway"
   )
-  assert.match(event.system.at(-1).text, /Code Mode \(execute\) remains available/)
+  assert.match(event.system.at(-1).text, /shell and Code Mode \(execute\) remain available/)
+  assert.ok(event.tools.shell, "shell must stay available on the hard read budget")
 
   await f.after("execute", {
     code: 'await tools.tokensave.tokensave_read({ file: "a.mjs", mode: "lines", lines: "1-2" })'
@@ -247,11 +249,13 @@ test("hard read budget keeps the Code Mode execute gateway in the request", asyn
   )
 })
 
-test("shell reads count and execute edits reset the budget", async t => {
+test("shell commands neither consume the read budget nor get disabled", async t => {
   const f = await fixture(t)
-  for (let i = 0; i < 21; i++) await f.after("shell", { command: "ls" })
-  const warned = await f.contextHook()
-  assert.match(warned.system[0].text, /21 read calls since the last file change/)
+  for (let i = 0; i < 41; i++) await f.after("shell", { command: "npm test" })
+  const afterShell = await f.contextHook()
+  assert.equal(afterShell.system.length, 0)
+  assert.ok(afterShell.tools.shell)
+  assert.ok(afterShell.tools.read)
 
   await f.after("execute", {
     code: 'await tools.tokensave.tokensave_multi_str_replace({ path: "a.mjs", replacements: [] })'
@@ -263,13 +267,13 @@ test("shell reads count and execute edits reset the budget", async t => {
 
 test("a finished turn resets the read budget for the next user message", async t => {
   const f = await fixture(t)
-  for (let i = 0; i < 21; i++) await f.after("shell", { command: "ls" })
+  for (let i = 0; i < 21; i++) await f.after("read", { file: "a.mjs" })
   const warned = await f.contextHook()
   assert.match(warned.system[0].text, /21 read calls since the last file change/)
 
-  for (let i = 0; i < 19; i++) await f.after("shell", { command: "ls" })
+  for (let i = 0; i < 19; i++) await f.after("read", { file: "a.mjs" })
   const blocked = await f.contextHook()
-  assert.equal(blocked.tools.shell, undefined)
+  assert.ok(blocked.tools.shell)
   assert.equal(blocked.tools.read, undefined)
 
   f.guard.finishTurn("session")

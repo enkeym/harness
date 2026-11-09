@@ -2,9 +2,9 @@ import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 import { readTexts } from "./read-results.mjs"
 
 const policy = contextPolicy.opencode
-const readTools = new Set(["read", "grep", "glob", "skill", "shell", "execute"])
+const readTools = new Set(["read", "grep", "glob", "skill", "execute"])
 const editTools = new Set(["edit", "write", "apply_patch", "patch"])
-const guardedTools = ["shell", "read", "grep", "glob", "skill"]
+const guardedTools = ["read", "grep", "glob", "skill"]
 const digestHeader = /^file: (.+)\nmode: full\ndigest: ([a-f0-9]{64})\n/
 
 export function injectDigests(code, digests) {
@@ -76,7 +76,7 @@ export async function registerLoopGuard(context, taskContext) {
       for (const name of guardedTools) delete event.tools[name]
       event.system.push({
         type: "text",
-        text: `Harness progress guard: ${s.reads} read calls without a file change. Native read tools are disabled until you edit; Code Mode (execute) remains available for the edit or for reporting a concrete blocker.`
+        text: `Harness progress guard: ${s.reads} read calls without a file change. Native file-read tools (read, grep, glob, skill) are disabled until you edit; shell and Code Mode (execute) remain available for the edit, commands and reporting a concrete blocker.`
       })
       return
     }
