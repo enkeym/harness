@@ -105,6 +105,14 @@ async function syncCodex() {
   for (const [name, s] of Object.entries(servers)) {
     const have = current.find((entry) => entry.name === name);
     const transport = have?.transport;
+    if (name === 'playwright' && !(transport?.env_vars ?? []).includes('PLAYWRIGHT_MCP_EXTENSION_TOKEN')) {
+      if (CHECK) {
+        warn('playwright — токен расширения не передаётся из окружения');
+        drift += 1;
+      } else {
+        edits.push({ keyPath: `mcp_servers.${JSON.stringify(name)}.env_vars`, value: [...(transport?.env_vars ?? []), 'PLAYWRIGHT_MCP_EXTENSION_TOKEN'], mergeStrategy: 'replace' });
+      }
+    }
     const env = { ...(transport?.env ?? {}), ...s.env };
     if (name === 'playwright') Object.assign(env, playwrightEnv({ ...process.env, ...env }));
     if (transport?.type === 'stdio' && transport.command === s.command

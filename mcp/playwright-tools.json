@@ -1,6 +1,7 @@
 {
   "command": "npx",
   "args": [
+    "--prefer-offline",
     "-y",
     "@playwright/mcp@0.0.83",
     "--extension",

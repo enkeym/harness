@@ -13,7 +13,7 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, playwright = false, existingTabsOnly = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false } = {}) {
+function client(t, { lazy = false, playwright = false, existingTabsOnly = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
   const catalog = path.join(dir, 'catalog.json');
@@ -35,7 +35,11 @@ function client(t, { lazy = false, playwright = false, existingTabsOnly = false,
   p.stderr.on('data', (data) => { stderr += data; });
   createInterface({ input: p.stdout }).on('line', (line) => {
     const message = JSON.parse(line);
-    if (message.method) { notifications.push(message); return; }
+    if (message.method) {
+      notifications.push(message);
+      if (Object.hasOwn(message, 'id') && onRequest) send({ id: message.id, ...onRequest(message) });
+      return;
+    }
     messages.push(message);
     pending.get(message.id)?.(message);
     pending.delete(message.id);
@@ -72,6 +76,25 @@ test('catalog discovery and ping do not launch the lazy backend; concurrent call
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
   for (const response of results) assert.equal(response.result.content[0].text, 'file content once');
 });
+
+for (const lazy of [false, true]) {
+  test(`backend requests receive client results and errors (${lazy ? 'lazy' : 'compact'})`, async t => {
+    const roots = { roots: [{ uri: 'file:///workspace', name: 'workspace' }] };
+    const error = { code: -32601, message: 'Roots unavailable' };
+    let response = { result: roots };
+    const c = client(t, { lazy, onRequest: request => {
+      assert.equal(request.method, 'roots/list');
+      return response;
+    } });
+    await c.rpc('initialize', initialize);
+
+    const success = await c.rpc('tools/call', { name: 'request_roots' });
+    assert.deepEqual(JSON.parse(success.result.content[0].text), roots);
+    response = { error };
+    const failure = await c.rpc('tools/call', { name: 'request_roots' });
+    assert.deepEqual(JSON.parse(failure.result.content[0].text), error);
+  });
+}
 
 test('Playwright starts on the first browser call, reuses attached tabs and accepts common browser call forms', async t => {
   const c = client(t, { lazy: true, playwright: true, existingTabsOnly: true });

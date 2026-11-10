@@ -825,7 +825,7 @@ input.on("line", (line) => {
   ready()
     .then(() => {
       if (closing) return
-      if (Object.hasOwn(message, "id") && !pending.has(message.id)) return
+      if (Object.hasOwn(message, "id") && message.method && !pending.has(message.id)) return
       write(message)
     })
     .catch(fail)

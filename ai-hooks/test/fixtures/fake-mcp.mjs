@@ -5,6 +5,7 @@ import { createInterface } from "node:readline"
 fs.appendFileSync(process.env.FAKE_MCP_STARTS, "start\n")
 const breakOnce = process.env.FAKE_MCP_BREAK_ONCE && fs.readFileSync(process.env.FAKE_MCP_STARTS, "utf8").trim().split("\n").length === 1
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
+const clientRequests = new Map()
 if (process.env.FAKE_MCP_DESCENDANT) {
   const descendant = spawn(process.execPath, ["-e", "process.on('SIGTERM', () => {}); process.stdout.write(''); setInterval(() => {}, 1000)"], { stdio: "inherit" })
   send({ jsonrpc: "2.0", method: "test/descendant", params: { pid: descendant.pid } })
@@ -15,6 +16,12 @@ if (process.env.FAKE_MCP_STUBBORN) {
 }
 createInterface({ input: process.stdin }).on("line", (line) => {
   const request = JSON.parse(line)
+  if (!request.method && clientRequests.has(request.id)) {
+    const id = clientRequests.get(request.id)
+    clientRequests.delete(request.id)
+    send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(request.result ?? request.error) }] } })
+    return
+  }
   if (!Object.hasOwn(request, "id")) {
     if (request.method === "notifications/cancelled")
       send({ jsonrpc: "2.0", method: "test/cancelled", params: request.params })
@@ -50,6 +57,12 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   } else if (request.method === "resources/list") {
     result = { resources: [] }
   } else if (request.method === "tools/call") {
+    if (request.params.name === "request_roots") {
+      const id = `roots-${request.id}`
+      clientRequests.set(id, request.id)
+      send({ jsonrpc: "2.0", id, method: "roots/list" })
+      return
+    }
     if (breakOnce && request.params.name === "break") {
       send({ jsonrpc: "2.0", method: "test/pipe_closed" })
       process.stdin.destroy()

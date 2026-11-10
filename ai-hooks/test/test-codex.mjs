@@ -40,7 +40,15 @@ if (args[0] === 'app-server') {
     if (!message.id) return;
     const config = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile)) : {};
     if (message.method === 'config/batchWrite') {
-      for (const edit of message.params.edits) config[edit.keyPath] = edit.value;
+      for (const edit of message.params.edits) {
+        config[edit.keyPath] = edit.value;
+        const match = /^mcp_servers\\."([^"]+)"\\.env_vars$/.exec(edit.keyPath);
+        if (match) {
+          const servers = JSON.parse(fs.readFileSync(process.env.FAKE_CODEX_STATE));
+          servers.find(server => server.name === match[1]).transport.env_vars = edit.value;
+          fs.writeFileSync(process.env.FAKE_CODEX_STATE, JSON.stringify(servers));
+        }
+      }
       fs.writeFileSync(configFile, JSON.stringify(config));
     }
     console.log(JSON.stringify({ id: message.id, result: message.method === 'config/read' ? { config } : {} }));
@@ -104,13 +112,15 @@ if (cli.status === 0) {
   const parsed = spawnSync('codex', ['mcp', 'list', '--json'], { env: cliEnv, encoding: 'utf8', timeout: 30000 });
   assert.equal(parsed.status, 0, parsed.stderr);
   assert.deepEqual(JSON.parse(parsed.stdout).map((s) => s.name).sort(), managedServers);
+  assert.ok(JSON.parse(parsed.stdout).find(s => s.name === 'playwright').transport.env_vars.includes('PLAYWRIGHT_MCP_EXTENSION_TOKEN'));
   assert.ok(fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8').includes(customConfig.trim()));
   const configFile = path.join(codexHome, 'config.toml');
-  const original = fs.readFileSync(configFile, 'utf8');
+  const original = fs.readFileSync(configFile, 'utf8').replace('env_vars = ["PLAYWRIGHT_MCP_EXTENSION_TOKEN"]', 'env_vars = ["CUSTOM_FORWARDED"]');
   fs.writeFileSync(configFile, original.replace('[mcp_servers.ragsave]', '[mcp_servers.ragsave]\nstartup_timeout_sec = 47\ntool_timeout_sec = 91\ndefault_tools_approval_mode = "approve"\nenabled = false\nenv = { CUSTOM_AUTH = "fixture-value" }').replace(/(\[mcp_servers\.ragsave\][\s\S]*?command = )[^\n]+/, '$1"obsolete"'));
   const resync = spawnSync(process.execPath, [path.join(root, 'bin/mcp-sync.mjs'), '--codex'], { env: cliEnv, encoding: 'utf8', timeout: 30000 });
   assert.equal(resync.status, 0, resync.stdout + resync.stderr);
   const preserved = fs.readFileSync(configFile, 'utf8');
+  assert.ok(preserved.includes('"CUSTOM_FORWARDED", "PLAYWRIGHT_MCP_EXTENSION_TOKEN"'));
   for (const option of ['startup_timeout_sec = 47', 'tool_timeout_sec = 91', 'default_tools_approval_mode = "approve"', 'enabled = false', 'CUSTOM_AUTH = "fixture-value"']) assert.ok(preserved.includes(option));
   assert.ok(!preserved.includes('obsolete'));
   const recheck = spawnSync(process.execPath, [path.join(root, 'bin/mcp-sync.mjs'), '--codex', '--check'], { env: cliEnv, encoding: 'utf8', timeout: 30000 });
