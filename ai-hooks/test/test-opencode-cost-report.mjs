@@ -75,6 +75,17 @@ test("missing usage stays unknown and snapshots are not treated as complete hist
   assert.equal(data.usage.unknownMessages, 1)
 })
 
+test("cache hit rate states incomplete native counter coverage", () => {
+  const data = report([record("ses_partial_cache", [step("known"), step("unknown", { tokens: null, nativeReportedUSD: null })])])
+
+  assert.ok(Math.abs(data.usage.cacheHitRate - 1 / 3) < 1e-12)
+  assert.equal(data.usage.cacheCoverage, 0.5)
+  assert.equal(data.usage.cacheComplete, false)
+  assert.equal(data.usage.cacheUnknownSteps, 1)
+  assert.ok(data.warnings.some(w => w.code === "cache-telemetry-incomplete"))
+  assert.match(formatCostReport(data), /покрытие 50% \(неполное\)/)
+})
+
 test("quality comparisons include worker and handoff requests once per task", () => {
   const assessment = { workload: "implementation", comparisonKey: "scope", phase: "after", accepted: true }
   const data = report([
@@ -108,15 +119,28 @@ test("repeat candidates match identical inputs even when the output differs", ()
 })
 
 test("large tool outputs are measured separately", () => {
-  const small = { name: "read", outputBytes: 20 * 1024 - 1 }
-  const large = { name: "read", outputBytes: 20 * 1024 }
+  const small = { name: "read", outputBytes: 16 * 1024 - 1 }
+  const large = { name: "read", outputBytes: 16 * 1024 }
   const data = report([record("ses_large", [step("a", { tools: [small, large] })])])
 
-  assert.equal(data.usage.toolOutputBytes, 40959)
+  assert.equal(data.usage.toolOutputBytes, 32767)
   assert.equal(data.usage.largeToolOutputs, 1)
-  assert.equal(data.usage.largeToolOutputBytes, 20480)
-  assert.ok(Math.abs(data.usage.largeToolOutputShare - 20480 / 40959) < 1e-12)
-  assert.match(formatCostReport(data), />20 KB: 20480 байт в 1 вызовах/)
+  assert.equal(data.usage.largeToolOutputBytes, 16384)
+  assert.ok(Math.abs(data.usage.largeToolOutputShare - 16384 / 32767) < 1e-12)
+  assert.match(formatCostReport(data), />16 KB: 16384 байт в 1 вызовах/)
+})
+
+test("cache, compaction and tool-output controls warn only from complete measurements", () => {
+  const compact = (id) => ({ id, type: "compaction", time: { created: stamp }, tokens, nativeReportedUSD: 0.1, tools: [] })
+  const data = report([record("ses_controls", [step("assistant", { tokens: { ...tokens, input: 10, cacheRead: 0 }, tools: [{ name: "read", outputBytes: 20 * 1024 }] }), compact("compact_one"), compact("compact_two")])])
+
+  assert.equal(data.usage.cacheByRequestType.assistant.complete, true)
+  assert.equal(data.usage.cacheByRequestType.compaction.knownSteps, 2)
+  assert.ok(data.warnings.some(w => w.code === "assistant-cache-hit-rate"))
+  assert.ok(data.warnings.some(w => w.code === "compaction-input-share"))
+  assert.ok(data.warnings.some(w => w.code === "large-tool-output-share"))
+  assert.ok(data.warnings.some(w => w.code === "session-compactions"))
+  assert.match(formatCostReport(data), /Кэш по типам: assistant=0%/)
 })
 
 test("provider budgets stay separate from native USD and quality cohorts retain unknown acceptance", () => {
@@ -155,6 +179,9 @@ test("pricing aggregates expose required usage fields per window and request typ
   assert.equal(data.usage.cacheMissTokens, 20)
   assert.ok(Math.abs(data.usage.cacheHitRate - 1 / 3) < 1e-12)
   assert.equal(data.usage.cacheHitSteps, 2)
+  assert.equal(data.usage.cacheCoverage, 1)
+  assert.equal(data.usage.cacheComplete, true)
+  assert.equal(data.usage.cacheUnknownSteps, 0)
   assert.equal(data.usage.compactionInputTokens, 0)
   assert.equal(data.usage.compactionInputShare, 0)
   assert.equal(data.usage.toolOutputBytes, 300)
@@ -169,7 +196,7 @@ test("pricing aggregates expose required usage fields per window and request typ
   assert.ok(data.warnings.some((warning) => warning.code === "pricing-window-mismatch"))
   assert.match(formatCostReport(data), /Типы запросов: assistant=2/)
   assert.match(formatCostReport(data), /тарифные окна: offPeak=1, peak=1/)
-  assert.match(formatCostReport(data), /Кэш: попадание 33\.3%/)
+  assert.match(formatCostReport(data), /Кэш: наблюдаемое попадание 33\.3%/)
   assert.match(formatCostReport(data), /вывод инструментов: 300 байт/)
 })
 
@@ -198,7 +225,7 @@ test("reports and assessments persist privately, reject invalid edits and dedupl
   await fs.mkdir(path.join(base, "sessions"), { recursive: true })
   const file = path.join(base, "sessions/ses_long.json")
   await fs.writeFile(file, JSON.stringify(record("ses_long", Array.from({ length: 100 }, (_, i) => step(`msg_${i}`)))))
-  const options = { stateDirectory, date: "2026-11-02", config: defaultCostConfig }
+  const options = { stateDirectory, date: "2026-11-02", config: { ...defaultCostConfig, sessionCompactions: null, minimumAssistantCacheHitRate: null, maximumCompactionInputShare: null, maximumLargeToolOutputShare: null } }
 
   const first = await refreshCostReport(options)
   assert.equal(first.newWarnings.length, 2)

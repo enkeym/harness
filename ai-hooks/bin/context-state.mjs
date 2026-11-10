@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { mcpPolicy, retryAllowed, retryDelay } from './mcp-policy.mjs';
+import { cacheMetrics } from './cache-metrics.mjs';
 
 export const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 export const contextOutputDir = (stateDirectory = process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state')) =>
@@ -54,7 +55,7 @@ export function transition(dir, event, data = {}) {
 export class Accounting {
   constructor(state = {}) {
     this.state = { v: 1, threads: {}, input: 0, cachedInput: 0, output: 0,
-      reasoning: 0, outputBytes: 0, errors: {}, repeatedReads: 0, context: 0,
+      reasoning: 0, outputBytes: 0, errors: {}, repeatedReads: 0, cache: null, context: 0,
       growth: 0, contextWindow: null, money: null, quota: null, ...state };
     this.reads = new Set();
   }
@@ -72,6 +73,7 @@ export class Accounting {
     const reset = Object.keys(normalized).some(k => normalized[k] < (before[k] || 0));
     for (const key of Object.keys(fields)) this.state[key] += normalized[key] - (reset ? 0 : before[key] || 0);
     this.state.threads[thread] = normalized;
+    this.state.cache = cacheMetrics([{ inputTokens: this.state.input, cacheReadTokens: this.state.cachedInput }]);
     // CLI 0.166 compaction reports inputTokens=0 and totalTokens=context estimate.
     const context = Number(last.totalTokens ?? last.total_tokens ?? last.inputTokens ?? last.input_tokens ?? 0);
     this.state.growth = context - this.state.context;

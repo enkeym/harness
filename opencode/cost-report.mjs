@@ -6,13 +6,18 @@ import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { requestTypeOf, supportedObservationVersion } from "./observations.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
+import { cacheMetrics } from "../ai-hooks/bin/cache-metrics.mjs"
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
   dailyProviderCNY: 25,
   dailyNativeUSD: 5,
   billingDiscrepancyPercent: 5,
-  sessionAssistantMessages: 100,
+  sessionAssistantMessages: 80,
+  sessionCompactions: 2,
+  minimumAssistantCacheHitRate: 0.95,
+  maximumCompactionInputShare: 0.2,
+  maximumLargeToolOutputShare: 0.2,
   repeatedToolCalls: 2,
   consecutiveFailures: 3
 })
@@ -44,6 +49,13 @@ export function validateCostConfig(config) {
     if (merged[key] !== null && (!numeric(merged[key]) || merged[key] <= 0))
       throw new Error("Invalid cost threshold")
   }
+  for (const key of [
+    "minimumAssistantCacheHitRate",
+    "maximumCompactionInputShare",
+    "maximumLargeToolOutputShare"
+  ])
+    if (merged[key] !== null && merged[key] > 1)
+      throw new Error("Invalid cost ratio")
   return merged
 }
 
@@ -135,6 +147,10 @@ function usage(steps, conflicts = 0) {
     cacheMissTokens: 0,
     cacheHitRate: null,
     cacheHitSteps: 0,
+    cacheCoverage: null,
+    cacheComplete: false,
+    cacheUnknownSteps: 0,
+    cacheByRequestType: {},
     compactionInputTokens: 0,
     compactionInputShare: null,
     toolOutputBytes: 0,
@@ -159,7 +175,6 @@ function usage(steps, conflicts = 0) {
     unknownMessages: 0,
     zeroCostWithUsage: 0
   }
-  const cached = { input: 0, cacheRead: 0, steps: 0 }
   for (const step of steps) {
     if (step.type === "assistant") totals.assistantMessages++
     if (step.type === "compaction") totals.compactions++
@@ -171,9 +186,6 @@ function usage(steps, conflicts = 0) {
       totals.tokens = null
       totals.cacheMissTokens = null
     } else {
-      cached.input += step.tokens.input
-      cached.cacheRead += step.tokens.cacheRead
-      cached.steps++
       if (totals.tokens) {
         for (const key of counterKeys) totals.tokens[key] += step.tokens[key]
         if (totals.cacheMissTokens !== null) totals.cacheMissTokens += step.tokens.input
@@ -224,11 +236,23 @@ function usage(steps, conflicts = 0) {
     )
       totals.zeroCostWithUsage++
   }
-  if (cached.input + cached.cacheRead > 0)
-    totals.cacheHitRate = cached.cacheRead / (cached.input + cached.cacheRead)
-  totals.cacheHitSteps = cached.steps
+  const cacheFor = (subset) =>
+    cacheMetrics(subset.map((step) => step.tokens && {
+      inputTokens: step.tokens.input + step.tokens.cacheRead,
+      cacheReadTokens: step.tokens.cacheRead
+    }))
+  const cache = cacheFor(steps)
+  for (const requestType of ["assistant", "compaction", "auxiliary"]) {
+    const subset = steps.filter((step) => requestTypeOf(step) === requestType)
+    if (subset.length) totals.cacheByRequestType[requestType] = cacheFor(subset)
+  }
+  totals.cacheHitRate = cache.hitRate
+  totals.cacheHitSteps = cache.knownSteps
+  totals.cacheCoverage = cache.coverage
+  totals.cacheComplete = cache.complete
+  totals.cacheUnknownSteps = cache.unknownSteps
   totals.compactionInputShare =
-    cached.input > 0 ? totals.compactionInputTokens / cached.input : null
+    cache.cacheMissTokens > 0 ? totals.compactionInputTokens / cache.cacheMissTokens : null
   totals.largeToolOutputShare =
     totals.toolOutputBytes > 0
       ? totals.largeToolOutputBytes / totals.toolOutputBytes
@@ -237,6 +261,10 @@ function usage(steps, conflicts = 0) {
     totals.tokens = null
     totals.cacheMissTokens = null
     totals.cacheHitRate = null
+    totals.cacheCoverage = null
+    totals.cacheComplete = false
+    totals.cacheUnknownSteps = null
+    totals.cacheByRequestType = null
     totals.compactionInputTokens = null
     totals.compactionInputShare = null
     totals.nativeRequestReportedUSD = null
@@ -463,6 +491,43 @@ export function buildCostReport(
   const sessions = []
   const warn = (code, sessionID, observed, limit) =>
     warnings.push({ code, sessionID, observed, limit, date })
+  const assistantCache = totals.cacheByRequestType.assistant
+  if (assistantCache && !assistantCache.complete)
+    warn("cache-telemetry-incomplete", null, assistantCache.coverage, 1)
+  if (
+    config.minimumAssistantCacheHitRate &&
+    assistantCache?.complete &&
+    assistantCache.hitRate !== null &&
+    assistantCache.hitRate < config.minimumAssistantCacheHitRate
+  )
+    warn(
+      "assistant-cache-hit-rate",
+      null,
+      assistantCache.hitRate,
+      config.minimumAssistantCacheHitRate
+    )
+  if (
+    config.maximumCompactionInputShare &&
+    totals.compactionInputShare !== null &&
+    totals.compactionInputShare >= config.maximumCompactionInputShare
+  )
+    warn(
+      "compaction-input-share",
+      null,
+      totals.compactionInputShare,
+      config.maximumCompactionInputShare
+    )
+  if (
+    config.maximumLargeToolOutputShare &&
+    totals.largeToolOutputShare !== null &&
+    totals.largeToolOutputShare >= config.maximumLargeToolOutputShare
+  )
+    warn(
+      "large-tool-output-share",
+      null,
+      totals.largeToolOutputShare,
+      config.maximumLargeToolOutputShare
+    )
   for (const record of records) {
     const daily = uniqueSteps([record], date, config.timeZone)
     if (!daily.steps.length) continue
@@ -493,6 +558,16 @@ export function buildCostReport(
         record.sessionID,
         allAssistants,
         config.sessionAssistantMessages
+      )
+    if (
+      config.sessionCompactions &&
+      summary.compactions >= config.sessionCompactions
+    )
+      warn(
+        "session-compactions",
+        record.sessionID,
+        summary.compactions,
+        config.sessionCompactions
       )
     if (
       config.consecutiveFailures &&
@@ -803,7 +878,8 @@ export function formatCostReport(report) {
     `История: ${report.coverage.completeHistory ? "полные страницы наблюдаемых сессий" : "неполное покрытие"}; покрытие аккаунта провайдера не проверено.`,
     `Токены: ${report.usage.tokens ? counterKeys.map((key) => `${key}=${report.usage.tokens[key]}`).join(", ") : "есть неизвестные счётчики"}.`,
     `Кеш-промахи (input): ${value(report.usage.cacheMissTokens)}; вызовов инструментов: ${report.usage.toolCalls ?? 0}; суммарная длительность запросов: ${report.usage.durationMs ?? 0} мс.`,
-    `Кэш: попадание ${percent(report.usage.cacheHitRate)} по ${report.usage.cacheHitSteps ?? 0} запросам с известными счётчиками; input от компактаций: ${percent(report.usage.compactionInputShare)} (${value(report.usage.compactionInputTokens ?? null)}); вывод инструментов: ${value(report.usage.toolOutputBytes ?? 0)} байт, из них >20 KB: ${value(report.usage.largeToolOutputBytes ?? 0)} байт в ${report.usage.largeToolOutputs ?? 0} вызовах.`,
+    `Кэш: наблюдаемое попадание ${percent(report.usage.cacheHitRate)} по ${report.usage.cacheHitSteps ?? 0}/${report.usage.messages} запросам; покрытие ${percent(report.usage.cacheCoverage)}${report.usage.cacheComplete ? " (полное)" : " (неполное)"}; input от компактаций: ${percent(report.usage.compactionInputShare)} (${value(report.usage.compactionInputTokens ?? null)}); вывод инструментов: ${value(report.usage.toolOutputBytes ?? 0)} байт, из них >${largeToolOutputBytes / 1024} KB: ${value(report.usage.largeToolOutputBytes ?? 0)} байт в ${report.usage.largeToolOutputs ?? 0} вызовах.`,
+    `Кэш по типам: ${Object.entries(report.usage.cacheByRequestType ?? {}).map(([type, cache]) => `${type}=${percent(cache.hitRate)} (${percent(cache.coverage)} покрытия)`).join(", ") || "нет данных"}.`,
     `Типы запросов: ${Object.entries(report.usage.requestTypes ?? {}).map(([type, count]) => `${type}=${count}`).join(", ") || "неизвестно"}; тарифные окна: ${Object.entries(report.usage.pricingWindows ?? {}).map(([window, count]) => `${window}=${count}`).join(", ") || "неизвестно"}; расхождений с тарифом: ${report.usage.pricingWindowMismatches ?? 0}.`,
     `Семейства задач: ${report.families.length}; неполных: ${report.families.filter((family) => !family.complete).length}.`,
     ""

@@ -48,6 +48,7 @@ test('cumulative usage is counted once, reasoning stays a subset, reset starts a
   assert.equal(a.state.input, 200); assert.equal(a.state.output, 20);
   a.usage('a', usage(20, 5), usage(20), 200000);
   assert.equal(a.state.input, 220); assert.equal(a.state.cachedInput, 110);
+  assert.equal(a.state.cache.hitRate, 0.5); assert.equal(a.state.cache.complete, true);
   assert.equal(a.state.output, 25); assert.equal(a.state.money, null);
 });
 
