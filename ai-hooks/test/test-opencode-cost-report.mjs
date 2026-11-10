@@ -84,6 +84,7 @@ test("cache hit rate states incomplete native counter coverage", () => {
   assert.equal(data.usage.cacheUnknownSteps, 1)
   assert.ok(data.warnings.some(w => w.code === "cache-telemetry-incomplete"))
   assert.match(formatCostReport(data), /покрытие 50% \(неполное\)/)
+  assert.match(formatCostReport(data), /Шаги без usage \(прерванные или неуспешные\)/)
 })
 
 test("quality comparisons include worker and handoff requests once per task", () => {

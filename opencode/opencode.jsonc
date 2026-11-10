@@ -29,7 +29,7 @@
           }
         },
         "deepseek-v4-pro-offpeak": {
-          "name": "deepseek-v4-pro (off-peak)",
+          "name": "deepseek-v4-pro (low-cost)",
           "modelID": "deepseek-v4-pro",
           "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
@@ -57,7 +57,7 @@
           }
         },
         "deepseek-flash-offpeak": {
-          "name": "deepseek-flash (off-peak)",
+          "name": "deepseek-flash (low-cost)",
           "modelID": "deepseek-flash",
           "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
@@ -76,6 +76,11 @@
   "model": "deepseek/deepseek-flash-offpeak",
   "instructions": [],
   "commands": {},
+  "agents": {
+    "compaction": {
+      "model": "deepseek/deepseek-flash-offpeak#low"
+    }
+  },
   "compaction": {
     "auto": true,
     "keep": {

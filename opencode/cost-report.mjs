@@ -923,6 +923,10 @@ export function formatCostReport(report) {
     lines.push(
       `- ${warning.code}: ${warning.sessionID ?? "день/аккаунт"}, значение=${warning.observed}, порог=${warning.limit}`
     )
+  if (report.warnings.some((warning) => warning.code === "cache-telemetry-incomplete"))
+    lines.push(
+      "Шаги без usage (прерванные или неуспешные) не дают счётчиков кэша; их число указано в поле «без тарифа»."
+    )
   lines.push(
     "",
     `Групп сравнения качества: ${report.comparisons.length}; сопоставимость задаётся вручную, процент экономии не вычисляется.`

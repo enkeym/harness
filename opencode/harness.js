@@ -45,6 +45,7 @@ export default {
     sync(true)
     let budgetDate = null
     const handoffHints = new Set()
+    const handoffHintedAt = new Map()
     const budgetReached = () =>
       budgetDate !== null && budgetDate === localDate(Date.now())
     const notify = (title, message) => {
@@ -128,6 +129,7 @@ export default {
     const brief = await registerBrief(context, handoff)
     await context.session.hook("compaction", async (event) => {
       await observe(event.sessionID)
+      handoffHints.add(event.sessionID)
       event.system.push({ type: "text", text: readHandoffPrompt() })
     })
     const abort = new AbortController()
@@ -215,11 +217,22 @@ export default {
         type: "text",
         text: readInstructions().text
       })
-      if (handoffHints.delete(event.sessionID))
+      const assistantMessages = event.messages.filter(
+        (message) => message.role === "assistant"
+      ).length
+      const hintedAt = handoffHintedAt.get(event.sessionID)
+      if (
+        handoffHints.delete(event.sessionID) ||
+        (hintedAt !== undefined &&
+          assistantMessages - hintedAt >=
+            contextPolicy.opencode.handoffRepeatMessages)
+      ) {
+        handoffHintedAt.set(event.sessionID, assistantMessages)
         event.system.push({
           type: "text",
           text: "Harness session is long. Finish the current step and continue with /handoff so the next turn uses compact state instead of the full transcript."
         })
+      }
       if (budgetReached()) {
         event.options ??= {}
         event.options.maxTokens = Math.min(event.options.maxTokens ?? contextPolicy.maxOutputTokens, 2048)

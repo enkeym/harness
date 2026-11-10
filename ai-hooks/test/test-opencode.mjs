@@ -1291,6 +1291,65 @@ for (const type of [
   })
 }
 
+test("OpenCode repeats the handoff hint after compaction and every 40 messages", async (t) => {
+  const { directory, harnessRoot, project, env } = executionSandbox(t)
+  const runner = `
+    import assert from 'node:assert/strict';
+    import plugin from ${JSON.stringify(pathToFileURL(path.join(harnessRoot, "opencode/harness.js")).href)};
+    const handlers = { context: [], compaction: [] };
+    const session = {
+      hook: async (name, handler) => { (handlers[name] ??= []).push(handler); },
+      get: async () => ({ location: { directory: process.env.TEST_PROJECT } }),
+      context: async () => []
+    };
+    await plugin.setup({
+      location: { directory: process.env.TEST_PROJECT },
+      app: { version: "2.2.5" },
+      command: { transform: async () => {} },
+      tool: { transform: async () => {}, hook: async () => {}, list: async () => [] },
+      rpc: { register: async () => ({}) },
+      storage: {
+        scan: async () => ({ entries: [] }),
+        get: async () => undefined,
+        set: async () => {},
+        remove: async () => {}
+      },
+      model: { transform: async callback => callback({ list: () => [] }) },
+      event: { subscribe: async () => (async function* () {})() },
+      session
+    });
+    const sessionID = "ses_hint";
+    const hint = event => event.system.filter(part => part.text?.startsWith("Harness session is long.")).length;
+    const run = async (assistants) => {
+      const event = {
+        sessionID,
+        messages: Array.from({ length: assistants }, () => ({ role: "assistant", content: [] })),
+        system: []
+      };
+      for (const handler of handlers.context) await handler(event);
+      return hint(event);
+    };
+    assert.equal(await run(80), 0);
+    const compaction = { sessionID, messages: [], system: [] };
+    for (const handler of handlers.compaction) await handler(compaction);
+    assert.equal(await run(5), 1);
+    assert.equal(await run(44), 0);
+    assert.equal(await run(45), 1);
+    assert.equal(await run(46), 0);
+  `
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", runner],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      timeout: 10000,
+      env: { ...process.env, ...env, TEST_PROJECT: project }
+    }
+  )
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+})
+
 test("OpenCode handles one execution event once across plugin instances", async (t) => {
   const { directory, harnessRoot, project, env } = executionSandbox(t)
   const runner = `

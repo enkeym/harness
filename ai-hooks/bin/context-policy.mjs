@@ -8,6 +8,7 @@ export const contextPolicy = Object.freeze({
     startTokens: 135000,
     maxTokens: 150000,
     keepTokens: 20000,
+    handoffRepeatMessages: 40,
     resumeEditBudget: 12,
     softReads: 20,
     hardReads: 40,
