@@ -113,9 +113,9 @@ test("native compaction persists observed evidence without an agent save and res
   await f.hooks.get("compaction")({ sessionID: "source", system: [] })
 
   assert.equal(fs.readdirSync(path.join(f.directory, ".opencode/task-context")).length, 1)
-  assert.match(event.system[0].text, /Saved task context:/)
-  assert.match(event.system[0].text, /Continue step 2/)
-  assert.doesNotMatch(event.system[0].text, /2\tsecond/)
+  assert.match(event.messages[0].content[0].text, /Saved task context:/)
+  assert.match(event.messages[0].content[0].text, /Continue step 2/)
+  assert.doesNotMatch(event.messages[0].content[0].text, /2\tsecond/)
   const restored = await f.run({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] })
   assert.match(restored.content, /Continue step 2/)
   assert.match(restored.content, /2\tsecond/)
@@ -316,8 +316,8 @@ test("ordinary turns do not receive task cache while compaction keeps the checkp
 
   const compaction = { sessionID: "source", system: [] }
   await f.hooks.get("compaction")(compaction)
-  assert.match(compaction.system[0].text, /Implement step 2/)
-  assert.doesNotMatch(compaction.system[0].text, /2\tsecond/)
+  assert.match(compaction.messages[0].content[0].text, /Implement step 2/)
+  assert.doesNotMatch(compaction.messages[0].content[0].text, /2\tsecond/)
 })
 
 test("plugin startup prunes orphaned caches older than the retention window", async t => {

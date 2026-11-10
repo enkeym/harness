@@ -103,9 +103,9 @@ export async function registerLoopGuard(
     if (s.resume) {
       s.resume = false
       const reference = await taskContext.reference(sessionOf(event), false)
-      event.system.push({
-        type: "text",
-        text: [
+      event.messages.push({
+        role: "user",
+        content: [{ type: "text", text: [
           "Harness resume after compaction:",
           reference ||
             "No cached task ranges. Do not rebuild the plan; use the compaction summary.",
@@ -116,6 +116,7 @@ export async function registerLoopGuard(
         ]
           .filter(Boolean)
           .join("\n")
+        }]
       })
     }
     if (event.agent === "plan" || !(event.tools?.edit || event.tools?.write))

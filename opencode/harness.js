@@ -127,10 +127,21 @@ export default {
     const loopGuard = await registerLoopGuard(context, taskContext)
     const handoff = await registerHandoff(context, observe, taskContext)
     const brief = await registerBrief(context, handoff)
+    readInstructions()
+    const harnessInstructions = () => ({
+      role: "user",
+      content: [{ type: "text", text: readInstructions().text }]
+    })
+    const isHarnessInstructions = (message) =>
+      message.role === "user" &&
+      message.content?.[0]?.type === "text" &&
+      message.content[0].text?.startsWith("Harness skill instructions:\n")
     await context.session.hook("compaction", async (event) => {
       await observe(event.sessionID)
       handoffHints.add(event.sessionID)
-      event.system.push({ type: "text", text: readHandoffPrompt() })
+      event.messages = (event.messages ?? []).filter((message) => !isHarnessInstructions(message))
+      event.messages.unshift(harnessInstructions())
+      event.messages.push({ role: "user", content: [{ type: "text", text: readHandoffPrompt() }] })
     })
     const abort = new AbortController()
     const events = await context.event.subscribe({
@@ -207,16 +218,13 @@ export default {
     consume().catch((error) => {
       if (!abort.signal.aborted) process.stderr.write(`Harness autosync event stream failed: ${error.message}\n`)
     })
-    readInstructions()
     await context.session.hook("context", (event) => {
       event.messages = deduplicateContext(event.messages)
       for (let i = event.system.length - 1; i >= 0; i--) {
         if (event.system[i].text?.startsWith("Harness skill instructions:\n") || event.system[i].text?.startsWith("DeepSeek model routing:")) event.system.splice(i, 1)
       }
-      event.system.push({
-        type: "text",
-        text: readInstructions().text
-      })
+      event.messages = event.messages.filter((message) => !isHarnessInstructions(message))
+      event.messages.unshift(harnessInstructions())
       const assistantMessages = event.messages.filter(
         (message) => message.role === "assistant"
       ).length
@@ -228,9 +236,9 @@ export default {
             contextPolicy.opencode.handoffRepeatMessages)
       ) {
         handoffHintedAt.set(event.sessionID, assistantMessages)
-        event.system.push({
-          type: "text",
-          text: "Harness session is long. Finish the current step and continue with /handoff so the next turn uses compact state instead of the full transcript."
+        event.messages.push({
+          role: "user",
+          content: [{ type: "text", text: "Harness session is long. Finish the current step and continue with /handoff so the next turn uses compact state instead of the full transcript." }]
         })
       }
       if (budgetReached()) {

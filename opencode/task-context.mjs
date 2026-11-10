@@ -506,7 +506,11 @@ export async function registerTaskContext(context) {
       ? saved.checkpoint
       : request?.text || "Resume the active objective and next unfinished step from the compaction summary."
     await memory.prepare(event.sessionID, checkpoint, messages)
-    event.system.push({ type: "text", text: await reference(event.sessionID) })
+    event.messages ??= []
+    event.messages.push({
+      role: "user",
+      content: [{ type: "text", text: await reference(event.sessionID) }]
+    })
   })
   await prune()
   return memory

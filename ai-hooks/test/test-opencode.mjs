@@ -22,6 +22,27 @@ function sandbox(t, beforeCleanup = async () => {}) {
   return directory
 }
 
+function instructionText(value) {
+  const messages = value.messages ?? value.input ?? []
+  const contentText = (message) =>
+    typeof message.content === "string"
+      ? message.content
+      : (message.content ?? []).map((part) => part?.text ?? "").join("\n")
+  return [
+    value.instructions ?? "",
+    ...messages
+      .filter((message) => message.role === "system" || message.role === "developer")
+      .map(contentText),
+    ...messages
+      .filter(
+        (message) =>
+          message.role === "user" &&
+          JSON.stringify(message.content).includes("Harness skill instructions:")
+      )
+      .map(contentText)
+  ].join("\n")
+}
+
 test("MCP sync rejects removed, unknown and conflicting client flags without writing", (t) => {
   const directory = sandbox(t)
   for (const args of [["--qwen"], ["--unknown"], ["--codex", "--opencode"]]) {
@@ -517,18 +538,15 @@ export default { id: "harness", setup: async context => {
     })
     await wait(() => requests.slice(start).some((value) => value.tools?.length))
     const primary = requests.slice(start).filter((value) => value.tools?.length)
-    const messages = primary.flatMap((value) => value.messages ?? [])
-    const system = primary
-      .map((value) => value.instructions ?? "")
-      .concat(
-        messages
-          .filter(
-            (value) => value.role === "system" || value.role === "developer"
-          )
-          .map((value) => value.content)
-      )
-      .join("\n")
+    const system = primary.map(instructionText).join("\n")
     assert.match(system, /Harness skill instructions:/, agent)
+    assert.equal(
+      primary.some((value) =>
+        (value.instructions ?? "").includes("Harness skill instructions:")
+      ),
+      false,
+      agent
+    )
     assert.equal(system.split("# Working rules").length - 1, primary.length, agent)
     assert.equal(system.split("# OpenCode harness").length - 1, primary.length, agent)
     assert.match(system, /Never add or rewrite code\/documentation comments/, agent)
@@ -732,15 +750,10 @@ export default { id: "harness", setup: async context => {
     JSON.stringify(continued.input),
     /Initial context fixture/
   )
-  const continuedSystem = [
-    continued.instructions ?? "",
-    ...(continued.messages ?? [])
-      .filter((value) => value.role === "system" || value.role === "developer")
-      .map((value) => value.content)
-  ].join("\n")
+  const continuedSystem = instructionText(continued)
   assert.equal(continuedSystem.split("# Working rules").length - 1, 1)
   assert.equal(continuedSystem.split("# OpenCode harness").length - 1, 1)
-  assert.doesNotMatch(continuedSystem, /Harness resume after compaction/)
+  assert.doesNotMatch(JSON.stringify(continued.input), /Harness resume after compaction/)
   assert.doesNotMatch(continuedSystem, /Harness progress guard/)
   assert.ok(
     (JSON.stringify(continued.input).match(/Saved task context:/g) ?? [])
@@ -1319,7 +1332,7 @@ test("OpenCode repeats the handoff hint after compaction and every 40 messages",
       session
     });
     const sessionID = "ses_hint";
-    const hint = event => event.system.filter(part => part.text?.startsWith("Harness session is long.")).length;
+    const hint = event => event.messages.filter(message => message.role === "user" && message.content?.[0]?.text?.startsWith("Harness session is long.")).length;
     const run = async (assistants) => {
       const event = {
         sessionID,

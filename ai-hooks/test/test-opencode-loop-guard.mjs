@@ -385,8 +385,8 @@ test("a finished turn resets the read budget for the next user message", async t
   await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
   const resumed = await f.contextHook()
   assert.ok(resumed.tools.shell)
-  assert.match(resumed.system[0].text, /Harness resume after compaction/)
-  assert.doesNotMatch(resumed.system.join("\n"), /progress guard/)
+  assert.match(resumed.messages[0].content[0].text, /Harness resume after compaction/)
+  assert.doesNotMatch(JSON.stringify(resumed.messages), /progress guard/)
 })
 
 test("plan mode and sessions without edit tools are never blocked", async t => {
@@ -410,7 +410,7 @@ test("compaction resumes once with cached ranges, skills and the edit budget", a
   await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
 
   const first = await f.contextHook()
-  const resume = first.system[0].text
+  const resume = first.messages.at(-1).content[0].text
   assert.match(resume, /Harness resume after compaction:/)
   assert.match(resume, /Saved task context/)
   assert.match(resume, /Cached ranges: source\.mjs:2-3/)
@@ -433,7 +433,7 @@ test("compaction without cached ranges states the resume protocol once", async t
   await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
 
   const event = await f.contextHook()
-  const resume = event.system[0].text
+  const resume = event.messages[0].content[0].text
   assert.match(resume, /No cached task ranges\. Do not rebuild the plan/)
   assert.match(
     resume,
