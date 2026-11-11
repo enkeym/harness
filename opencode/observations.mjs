@@ -1,13 +1,12 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { createHash } from "node:crypto"
 import { deepseekPricing, deepseekPricingWindowAt } from "./cost-policy.mjs"
+import { numeric } from "../ai-hooks/bin/cache-metrics.mjs"
+import { hash } from "../ai-hooks/bin/context-state.mjs"
 import { readJSON, writePrivateJSON } from "./local-state.mjs"
 import { taskContextKey } from "./task-context.mjs"
 
-const hash = (value) => createHash("sha256").update(value).digest("hex")
-const validNumber = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0
 const counterKeys = ["input", "output", "reasoning", "cacheRead", "cacheWrite"]
 
 export function supportedObservationVersion(version) {
@@ -30,7 +29,7 @@ export function describeRequest(step, { sessionId = null, taskId = null } = {}) 
     ? deepseekPricingWindowAt(modelId, tokens, step.nativeReportedUSD, step.time?.created)
     : null
   return {
-    timestamp: validNumber(step.time?.created) ? new Date(step.time.created).toISOString() : null,
+    timestamp: numeric(step.time?.created) ? new Date(step.time.created).toISOString() : null,
     sessionId,
     requestId: step.requestId ?? null,
     taskId,
@@ -47,14 +46,14 @@ export function describeRequest(step, { sessionId = null, taskId = null } = {}) 
     pricingWindowClockAgrees: pricing?.agreesWithClock ?? null,
     requestType: requestTypeOf(step),
     toolCalls: Array.isArray(step.tools) ? step.tools.length : 0,
-    durationMs: validNumber(step.time?.completed) && validNumber(step.time?.created) ? step.time.completed - step.time.created : null,
+    durationMs: numeric(step.time?.completed) && numeric(step.time?.created) ? step.time.completed - step.time.created : null,
     compactionEvent: step.type === "compaction"
   }
 }
 
 function counters(value) {
   const result = { input: value?.input, output: value?.output, reasoning: value?.reasoning, cacheRead: value?.cache?.read, cacheWrite: value?.cache?.write }
-  if (!Object.values(result).every(validNumber)) throw new Error("Unsupported OpenCode tokens schema")
+  if (!Object.values(result).every(numeric)) throw new Error("Unsupported OpenCode tokens schema")
   return result
 }
 
@@ -97,7 +96,7 @@ function toolSummary(tool) {
   return {
     id: tool.id, name: tool.name, status: tool.state?.status ?? null,
     time: tool.time ?? null,
-    durationMs: validNumber(tool.time?.completed) && validNumber(tool.time?.created) ? tool.time.completed - tool.time.created : null,
+    durationMs: numeric(tool.time?.completed) && numeric(tool.time?.created) ? tool.time.completed - tool.time.created : null,
     inputFingerprint: input ? hash(JSON.stringify(input)) : null,
     outputBytes: Array.isArray(content) ? Buffer.byteLength(JSON.stringify(content)) : null,
     outputFingerprint: Array.isArray(content) ? hash(JSON.stringify(content)) : null,
@@ -108,7 +107,7 @@ function toolSummary(tool) {
       mentionedTools: mentions, mentionsAreExecutionProof: false,
       mode: ["lines", "full", "map", "signatures"].includes(input?.mode) ? input.mode : null,
       range: typeof input?.lines === "string" && /^\d+(-\d+)?$/.test(input.lines) ? input.lines : null,
-      limit: validNumber(input?.limit) ? input.limit : null,
+      limit: numeric(input?.limit) ? input.limit : null,
       pathFingerprint: typeof (input?.file ?? input?.path) === "string" ? hash(input.file ?? input.path) : null
     }
   }
@@ -119,7 +118,7 @@ export function summarizeSession({ info, messages, previousSequence = [], messag
   if (!/^ses_[a-zA-Z0-9_-]+$/.test(info?.id) || !info.location?.directory || !Array.isArray(messages)) throw new Error("Unsupported OpenCode session schema")
   const ids = new Set()
   const gaps = new Set(["price-not-validated", "task-acceptance-unknown", "workload-not-classified", "parent-inclusive-accounting-unverified", "retrieval-scope-needs-review"])
-  const native = { cost: validNumber(info.cost) ? info.cost : null, tokens: counters(info.tokens) }
+  const native = { cost: numeric(info.cost) ? info.cost : null, tokens: counters(info.tokens) }
   const current = messages.map((message) => {
     if (!message.id || ids.has(message.id)) throw new Error("Duplicate or missing OpenCode message ID")
     ids.add(message.id)
@@ -130,7 +129,7 @@ export function summarizeSession({ info, messages, previousSequence = [], messag
     }
     if (message.type !== "assistant" && message.type !== "compaction" && message.tokens === undefined && message.cost === undefined) return step
     const usage = message.tokens === undefined ? null : counters(message.tokens)
-    const cost = validNumber(message.cost) ? message.cost : null
+    const cost = numeric(message.cost) ? message.cost : null
     const priced = message.type !== "assistant"
       ? { ...step, usageKind: "auxiliary", tokens: usage, nativeReportedUSD: cost, status: message.status ?? null, reason: message.reason ?? null }
       : { ...step, tokens: usage, nativeReportedUSD: cost, finish: message.finish ?? null, retry: message.retry ? { attempt: message.retry.attempt, at: message.retry.at } : null, failed: Boolean(message.error), tools: (message.content ?? []).filter((part) => part.type === "tool").map(toolSummary) }

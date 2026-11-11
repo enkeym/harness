@@ -75,7 +75,7 @@ test("identical skill text is elided only while its complete version remains in 
   assert.equal(deduplicateContext([messages[0], result("updated", text + "changed", "skill")])[1].content[0].result.value, text + "changed")
 })
 
-test("OpenCode instructions deliver the skill policy once without the Codex-only reminder", () => {
+test("OpenCode instructions deliver the skill policy once without the client-specific reminder", () => {
   const { text } = readInstructions()
   assert.match(text, /## Skills and hooks/)
   assert.match(text, /Never load the same skill twice in a session/)

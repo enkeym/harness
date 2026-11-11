@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { installShell } from '../../bin/shell-install.mjs';
-import { installInstructions, installHooks, installDefaults, installLink } from '../../bin/install-files.mjs';
+import { installDefaults, installLink } from '../../bin/install-files.mjs';
 
 function sandbox(t) {
   t.mock.method(console, 'error', () => {});
@@ -48,90 +48,6 @@ test('unsupported shell fails without creating unrelated startup files', t => {
   const home = sandbox(t);
   assert.equal(installShell(home, false, { SHELL: '/bin/fish' }), 1);
   assert.deepEqual(fs.readdirSync(home), []);
-});
-
-test('instructions preserve active user rules and update only their managed section', t => {
-  const home = sandbox(t);
-  const target = path.join(home, 'AGENTS.md');
-  const source = path.join(home, 'source.md');
-  fs.writeFileSync(target, 'Personal rules\n');
-  fs.writeFileSync(source, 'Harness rules\n');
-
-  assert.equal(installInstructions(target, source, true), 1);
-  assert.equal(fs.readFileSync(target, 'utf8'), 'Personal rules\n');
-  installInstructions(target, source, false);
-  fs.writeFileSync(source, 'Updated harness rules\n');
-  installInstructions(target, source, false);
-  const text = fs.readFileSync(target, 'utf8');
-  assert.ok(text.startsWith('Personal rules\n'));
-  assert.ok(text.includes('Updated harness rules'));
-  assert.ok(!text.includes('\nHarness rules\n'));
-  assert.equal(installInstructions(target, source, true), 0);
-});
-
-test('hooks preserve user handlers and settings through repeated updates', t => {
-  const home = sandbox(t);
-  const target = path.join(home, 'hooks.json');
-  const source = path.join(home, 'source.json');
-  const personal = { matcher: 'startup', hooks: [{ type: 'command', command: 'personal-start' }] };
-  const managed = { hooks: [{ type: 'command', command: 'node "$HOME/.ai-hooks/bin/skill-context.mjs"', timeout: 10 }] };
-  fs.writeFileSync(target, JSON.stringify({ custom: true, hooks: { SessionStart: [personal], Other: [] } }));
-  fs.writeFileSync(source, JSON.stringify({ hooks: { SessionStart: [managed] } }));
-
-  installHooks(target, source, false);
-  installHooks(target, source, false);
-  const saved = JSON.parse(fs.readFileSync(target));
-  assert.equal(saved.custom, true);
-  assert.deepEqual(saved.hooks.SessionStart, [personal, managed]);
-  assert.deepEqual(saved.hooks.Other, []);
-  assert.equal(installHooks(target, source, true), 0);
-  fs.writeFileSync(target, '{bad json');
-  assert.throws(() => installHooks(target, source, false));
-  assert.equal(fs.readFileSync(target, 'utf8'), '{bad json');
-});
-
-test('hooks replace managed commands and check detects updates without writing', t => {
-  const home = sandbox(t);
-  const target = path.join(home, 'hooks.json');
-  const source = path.join(home, 'source.json');
-  const personal = { type: 'command', command: 'personal-stop' };
-  const oldHook = { type: 'command', command: 'old-command' };
-  const newGroup = { hooks: [{ type: 'command', command: 'new-command' }] };
-  fs.writeFileSync(source, JSON.stringify({ hooks: { Stop: [{ hooks: [oldHook] }] } }));
-  installHooks(target, source, false);
-  fs.writeFileSync(target, JSON.stringify({ custom: true, hooks: { Stop: [{ hooks: [personal, oldHook] }] } }));
-  fs.writeFileSync(source, JSON.stringify({ hooks: { Stop: [newGroup] } }));
-  const before = fs.readFileSync(target, 'utf8');
-  const names = fs.readdirSync(home);
-
-  assert.equal(installHooks(target, source, true), 1);
-  assert.equal(fs.readFileSync(target, 'utf8'), before);
-  assert.deepEqual(fs.readdirSync(home), names);
-  installHooks(target, source, false);
-
-  assert.deepEqual(JSON.parse(fs.readFileSync(target)), { custom: true, hooks: { Stop: [{ hooks: [personal] }, newGroup] } });
-  assert.equal(installHooks(target, source, true), 0);
-  const installedNames = fs.readdirSync(home);
-  installHooks(target, source, false);
-  assert.deepEqual(fs.readdirSync(home), installedNames);
-});
-
-test('hooks remove deleted managed events while preserving personal events', t => {
-  const home = sandbox(t);
-  const target = path.join(home, 'hooks.json');
-  const source = path.join(home, 'source.json');
-  const personal = { matcher: 'personal', hooks: [{ type: 'command', command: 'personal-start' }] };
-  const managed = { hooks: [{ type: 'command', command: 'managed-stop' }] };
-  fs.writeFileSync(target, JSON.stringify({ hooks: { SessionStart: [personal], Other: [] } }));
-  fs.writeFileSync(source, JSON.stringify({ hooks: { Stop: [managed] } }));
-  installHooks(target, source, false);
-  fs.writeFileSync(source, JSON.stringify({ hooks: {} }));
-
-  assert.equal(installHooks(target, source, true), 1);
-  installHooks(target, source, false);
-
-  assert.deepEqual(JSON.parse(fs.readFileSync(target)).hooks, { SessionStart: [personal], Other: [] });
-  assert.equal(installHooks(target, source, true), 0);
 });
 
 test('defaults preserve personal configuration and bootstrap missing files only', t => {

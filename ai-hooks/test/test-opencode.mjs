@@ -43,9 +43,9 @@ function instructionText(value) {
   ].join("\n")
 }
 
-test("MCP sync rejects removed, unknown and conflicting client flags without writing", (t) => {
+test("MCP sync rejects removed and unknown client flags without writing", (t) => {
   const directory = sandbox(t)
-  for (const args of [["--qwen"], ["--unknown"], ["--codex", "--opencode"]]) {
+  for (const args of [["--qwen"], ["--unknown"]]) {
     const result = spawnSync(
       process.execPath,
       [path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), ...args],

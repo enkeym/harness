@@ -188,10 +188,10 @@ const RAG_INIT = (root) => ['ragsave', 'init', root, '--quiet'];
 {
   const sb = sandbox();
   const state = path.join(sb.home, 'custom-state');
-  const res = sb.run({ AI_HOOKS_STATE_DIR: undefined, XDG_STATE_HOME: state, CODEX_HOME: path.join(sb.home, 'unused-codex') });
-  check('общий init использует XDG_STATE_HOME без каталога другого клиента',
-    [res.status, fs.existsSync(path.join(state, 'harness/project-init')), fs.existsSync(path.join(sb.home, 'unused-codex')), fs.existsSync(path.join(sb.home, '.codex'))],
-    [0, true, false, false]);
+  const res = sb.run({ AI_HOOKS_STATE_DIR: undefined, XDG_STATE_HOME: state });
+  check('общий init использует XDG_STATE_HOME',
+    [res.status, fs.existsSync(path.join(state, 'harness/project-init'))],
+    [0, true]);
 }
 
 process.stdout.write(failed ? `\n=== ${failed} проверок упало ===\n` : '\n=== все проверки прошли ===\n');

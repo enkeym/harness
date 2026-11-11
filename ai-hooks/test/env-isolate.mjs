@@ -19,4 +19,3 @@ const gitConfigs = Number(process.env.GIT_CONFIG_COUNT) || 0;
 process.env[`GIT_CONFIG_KEY_${gitConfigs}`] = 'core.hooksPath';
 process.env[`GIT_CONFIG_VALUE_${gitConfigs}`] = path.join(dir, 'git-hooks');
 process.env.GIT_CONFIG_COUNT = String(gitConfigs + 1);
-delete process.env.CODEX_PROJECT_DIR;

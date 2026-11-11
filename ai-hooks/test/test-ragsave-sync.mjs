@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Тесты bin/ragsave-sync.sh — фонового `ragsave sync` и Codex SessionStart/Stop.
+// Тесты bin/ragsave-sync.sh — фонового `ragsave sync` и SessionStart/Stop плагина.
 // Бинарь подменяет fixtures/fake-indexer.mjs через AI_HOOKS_RAGSAVE_CMD либо
 // симлинком $HOME/.local/bin/ragsave; HOME — песочница с симлинком на настоящий
 // log-error.sh, который скрипт зовёт по пути под $HOME/.ai-hooks. Фоновый синк
@@ -52,7 +52,6 @@ function sandbox({ db = true } = {}) {
     ...process.env, HOME: home, AI_HOOKS_RAGSAVE_CMD: FAKE,
     AI_HOOKS_LOG_DIR: path.join(home, 'logs'), FAKE_INDEXER_CALLS: calls,
   };
-  delete env.CODEX_PROJECT_DIR;
 
   // cwd по умолчанию — HOME: так запасной PWD никогда не попадает в проект случайно.
   const run = (extra = {}, args = [root], cwd = home) => {
@@ -61,36 +60,9 @@ function sandbox({ db = true } = {}) {
     return spawnSync('bash', [SCRIPT, ...args], { cwd, encoding: 'utf8', env: e });
   };
   const readCalls = () => read(calls).split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  const runHook = (event, cwd = root) => {
-    const config = JSON.parse(read(path.join(ROOT, '../codex/hooks.json')));
-    const handler = config.hooks[event][0].hooks[0];
-    return spawnSync('bash', ['-c', handler.command], {
-      cwd, env: { ...env, CODEX_PROJECT_DIR: home }, input: JSON.stringify({ cwd, hook_event_name: event }),
-      encoding: 'utf8', timeout: 10000,
-    });
-  };
   const waitCalls = (n) => (waitFor(() => readCalls().length >= n), readCalls());
   const errors = () => read(path.join(home, 'logs', 'errors.log'));
-  return { home, root, dir, run, runHook, readCalls, waitCalls, errors };
-}
-
-// Запускаем команды из поставляемой конфигурации с реальным скриптом:
-// Codex задаёт cwd, а унаследованный CODEX_PROJECT_DIR не должен увести синк.
-for (const [event, warm] of [['SessionStart', true], ['Stop', false]]) {
-  const sb = sandbox();
-  const cwd = path.join(sb.root, 'nested space $(literal)');
-  fs.mkdirSync(cwd);
-  const result = sb.runHook(event, cwd);
-  check(`${event}: hook завершился без контекста и продолжения хода`,
-    [result.status, result.stdout, result.stderr], [0, '', '']);
-  check(`${event}: выбран индекс cwd и правильные аргументы`, sb.waitCalls(warm ? 2 : 1),
-    [...(warm ? [['warm']] : []), ['sync', sb.root, '--quiet']]);
-}
-
-{
-  const sb = sandbox({ db: false });
-  sb.runHook('SessionStart');
-  check('hook не создаёт первичный индекс', [fs.existsSync(path.join(sb.dir, 'rag.db')), sb.readCalls()], [false, []]);
+  return { home, root, dir, run, readCalls, waitCalls, errors };
 }
 
 // Монорепо: индекс подкаталога — тот, что обслуживает MCP (ближайший вверх от
@@ -199,14 +171,8 @@ const tmpLogs = (sb) => fs.readdirSync(sb.dir).filter((f) => f.startsWith('sync.
 
 {
   const sb = sandbox();
-  sb.run({ CODEX_PROJECT_DIR: sb.root }, []);
-  check('без аргумента — CODEX_PROJECT_DIR', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
-}
-
-{
-  const sb = sandbox();
   sb.run({}, [], sb.root);
-  check('без аргумента и CODEX_PROJECT_DIR — PWD', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
+  check('без аргумента — PWD', sb.waitCalls(1), [['sync', sb.root, '--quiet']]);
 }
 
 {

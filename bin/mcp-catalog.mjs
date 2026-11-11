@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Refresh/verify the catalog of a pinned lazy MCP backend; no browser is opened.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import assert from 'node:assert/strict';
+import { expandHome } from './home-path.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [name, flag] = process.argv.slice(2);
@@ -15,13 +15,12 @@ const args = servers[name]?.args;
 if (!args || !args.includes('--catalog') || (flag && flag !== '--check')) {
   throw new Error('usage: node bin/mcp-catalog.mjs <lazy-server> [--check]');
 }
-const expand = (s) => s.startsWith('~/') ? path.join(os.homedir(), s.slice(2)) : s;
 const catalogArg = args[args.indexOf('--catalog') + 1];
 // Write to this checkout, not to a potentially different installed harness.
 const file = path.join(root, 'mcp', path.basename(catalogArg));
 const split = args.indexOf('--');
 const command = args[split + 1];
-const backendArgs = args.slice(split + 2).map(expand);
+const backendArgs = args.slice(split + 2).map(expandHome);
 const child = spawn(command, backendArgs, { stdio: ['pipe', 'pipe', 'inherit'] });
 const pending = new Map();
 let nextId = 0;

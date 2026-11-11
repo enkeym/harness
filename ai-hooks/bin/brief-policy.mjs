@@ -6,7 +6,7 @@ export function readBriefPolicy(client, file = new URL("../brief-routing.json", 
   const nonempty = value => typeof value === "string" && value.trim().length > 0
   const valid = client === "opencode"
     ? typeof policy?.enabled === "boolean" && (!planner || (nonempty(planner.providerID) && nonempty(planner.id)))
-    : client === "codex" && Boolean(planner) && nonempty(planner.model) && ["minimal", "low", "medium", "high", "xhigh", "max"].includes(planner.effort)
+    : false
   if (!valid) throw new Error(`Invalid brief routing policy: ${client}`)
   return policy
 }

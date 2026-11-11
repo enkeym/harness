@@ -1,12 +1,12 @@
 # Устройство
 
-install.sh выбирает установщик клиента: bin/codex-install.mjs по умолчанию,
-bin/opencode-install.mjs с --opencode. Установщики подключают инструкции, общие skills,
-MCP и фоновые hooks в конфигурации соответствующего клиента.
+install.sh запускает bin/opencode-install.mjs (--opencode принимается как явный
+синоним). Установщик подключает инструкции, общие skills, MCP и фоновые hooks
+в конфигурации OpenCode.
 Поиск через MCP задаётся инструкциями. SessionStart прогревает модель RAG
 и обновляет существующие индексы, Stop запускает фоновое обновление.
 SessionStart и UserPromptSubmit передают агенту общие правила загрузки skills из core.md.
 Доверие и разрешения проверяются средствами активного клиента.
 
 Индексы создаёт пользователь. ragsave-sync.sh обновляет существующий индекс в фоне.
-Сведения о возможностях и запуске: [Codex](docs/codex.md), [OpenCode](docs/opencode.md).
+Сведения о возможностях и запуске: [OpenCode](docs/opencode.md).

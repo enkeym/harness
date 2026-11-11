@@ -1,7 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { createHash, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import { cachePolicy } from "./cache-policy.mjs"
+import { hash } from "../ai-hooks/bin/context-state.mjs"
 import { readTexts } from "./read-results.mjs"
 import {
   ensureProjectIgnore,
@@ -9,7 +10,6 @@ import {
   writePrivateJSON
 } from "./local-state.mjs"
 
-const hash = (text) => createHash("sha256").update(text).digest("hex")
 export const taskContextKey = (sessionID) => `task-context:${sessionID}`
 export const hasRawConfiguration = (text) => /^\s*(?:export\s+)?[A-Z][A-Z0-9_]*\s*=\s*\S+/m.test(text)
 const safeCheckpoint = (checkpoint) => hasRawConfiguration(checkpoint)

@@ -1,3 +1,5 @@
+import { numeric } from "../ai-hooks/bin/cache-metrics.mjs"
+
 export const deepseekTokenRates = {
   "deepseek-flash": {
     peak: { input: 0.3, cacheRead: 0.006, output: 1.2 },
@@ -32,8 +34,6 @@ export const deepseekPricing = {
 }
 
 const beijingOffsetMs = 8 * 60 * 60 * 1000
-const numeric = (value) =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0
 
 function isHoliday(now) {
   const calendar = deepseekPricing.holidayCalendar

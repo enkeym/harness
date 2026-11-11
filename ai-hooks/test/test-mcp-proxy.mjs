@@ -189,7 +189,7 @@ test('a newer client uses the catalog protocol when the lazy backend starts', as
 
 test('compact catalogs preserve schemas, dynamic discovery, errors and complete call results', async (t) => {
   const c = client(t);
-  assert.deepEqual((await c.rpc('initialize', initialize)).result, initialize, 'shared instructions must not be repeated by Codex per tool');
+  assert.deepEqual((await c.rpc('initialize', initialize)).result, initialize, 'shared instructions must not be repeated per tool');
   const list = (await c.rpc('tools/list')).result;
   assert.deepEqual(list.tools.filter(tool => tool.name !== 'harness_read_result'), [{ name: 'read', description: 'Read a bounded range.', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } }]);
   assert.equal(list.tools.find(tool => tool.name === 'harness_read_result').annotations.readOnlyHint, true);

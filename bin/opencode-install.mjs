@@ -4,7 +4,7 @@ import path from "node:path"
 import { execFileSync } from "node:child_process"
 import { isDeepStrictEqual } from "node:util"
 import { installShell } from "./shell-install.mjs"
-import { installDefaults, installLink } from "./install-files.mjs"
+import { harnessLinks, skillLinks, installDefaults, installLink } from "./install-files.mjs"
 import {
   configDirectory,
   loadConfig,
@@ -78,18 +78,8 @@ const links = [
   [path.join(directory, "plugins/harness"), "opencode"],
   [path.join(directory, "cli.json"), "opencode/cli.json"],
   [path.join(directory, "agents/ask.md"), "opencode/agent/ask.md"],
-  [path.join(home, ".ai-hooks"), "ai-hooks"],
-  [path.join(home, ".config/harness/repo"), "."],
-  [path.join(home, ".config/harness/bashrc"), "shell/harness.bash"],
-  [path.join(home, ".local/bin/ragsave"), "bin/ragsave"],
-  ...fs
-    .readdirSync(path.join(root, "skills"))
-    .filter(
-      (name) =>
-        name === "shared" ||
-        fs.existsSync(path.join(root, "skills", name, "SKILL.md"))
-    )
-    .map((name) => [path.join(directory, "skills", name), `skills/${name}`])
+  ...harnessLinks(home),
+  ...skillLinks(root, path.join(directory, "skills"), { shared: true })
 ]
 for (const [target, relative] of links) {
   drift += installLink(target, path.resolve(root, relative), check)

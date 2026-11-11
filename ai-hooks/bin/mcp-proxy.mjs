@@ -217,7 +217,7 @@ function readKey(params) {
   const project =
     typeof params.graph_root === "string"
       ? params.graph_root
-      : process.env.CODEX_PROJECT_DIR || process.cwd()
+      : process.cwd()
   let branch
   try {
     branch = execFileSync(
@@ -319,7 +319,6 @@ function prepareCall(message) {
     (params.name?.startsWith("rag_")
       ? params.arguments?.project
       : params.arguments?.graph_root) ||
-    process.env.CODEX_PROJECT_DIR ||
     process.cwd()
   const indexState = safe
     ? [roots].flat().map((root) => {
@@ -347,7 +346,6 @@ function prepareCall(message) {
       normalize([
         command,
         args.slice(split + 2),
-        process.env.CODEX_PROJECT_DIR,
         process.cwd(),
         indexState,
         params
@@ -456,7 +454,7 @@ function transform(message, method) {
       )
     }
   }
-  // Codex appends initialize.instructions to every tool description. The
+  // Some clients append initialize.instructions to every tool description. The
   // harness already supplies this routing guidance once through its skills.
   if (
     compact &&

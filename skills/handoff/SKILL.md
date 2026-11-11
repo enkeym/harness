@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Prepare or restore a compact handoff and continuation plan. Invoke as $handoff in Codex or /handoff in OpenCode; also load for automatic context compaction and session transfer."
+description: "Prepare or restore a compact handoff and continuation plan. Invoke as /handoff; also load for automatic context compaction and session transfer."
 ---
 
 # handoff
@@ -11,7 +11,7 @@ For a large plan, reference the existing task plan file as its durable cache ins
 
 The Handoff checkpoint supersedes the plan file's own progress notes, which may still describe finished phases. Carry only unfinished steps into the remaining plan; never repeat completed phases as next steps, never copy the executed part of the checklist, and do not tell the receiver to re-read the whole plan or reload already-loaded skills to rediscover progress.
 
-For manual invocation, save a compact note at the requested path, otherwise `.opencode/HANDOFF.md` in OpenCode or `.codex/HANDOFF.md` in Codex, relative to the project. Create the directory if needed and ensure the default note is ignored by Git before writing it; preserve existing ignore rules. For native compaction, preserve these essentials in the client's required summary template without tools or a separate file write. Automatic maintenance and continuation are authorized by the installed context policy; do not request confirmation for them. Use supported client compaction or the harness-owned fresh-thread mechanism. Do not delete history, switch models outside an explicitly configured routing policy, manufacture token measurements or launch another worker to implement the current task.
+For manual invocation, save a compact note at the requested path, otherwise `.opencode/HANDOFF.md` relative to the project. Create the directory if needed and ensure the default note is ignored by Git before writing it; preserve existing ignore rules. For native compaction, preserve these essentials in the client's required summary template without tools or a separate file write. Automatic maintenance and continuation are authorized by the installed context policy; do not request confirmation for them. Use supported client compaction or the harness-owned fresh-thread mechanism. Do not delete history, switch models outside an explicitly configured routing policy, manufacture token measurements or launch another worker to implement the current task.
 
 After automatic compaction or transfer, restore the objective and remaining plan and continue the next authorized action without waiting for another user message. Keep completed and blocked tasks stopped. OpenCode `/handoff` is owned by the harness plugin: it generates the note without tools, creates a fresh session and submits the continuation there. Never emulate transfer with a shell background task or an invented subagent. In clients without a native transfer control, save the note and state the limitation; do not claim a new session exists. Client controls and thresholds are documented in [context automation](../../docs/context-automation.md).
 

@@ -43,11 +43,10 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const cwds = path.join(home, 'cwd.txt');
   const env = {
     ...process.env, HOME: home, AI_HOOKS_TOKENSAVE_CMD: FAKE, AI_HOOKS_RAGSAVE_CMD: FAKE,
-    FAKE_INDEXER_CALLS: calls, FAKE_INDEXER_CWD: cwds, CODEX_PROJECT_DIR: root,
+    FAKE_INDEXER_CALLS: calls, FAKE_INDEXER_CWD: cwds,
   };
 
-  // cwd по умолчанию — HOME: так запасной PWD никогда не попадает в проект случайно.
-  const run = (args, extra = {}, cwd = home) => {
+  const run = (args, extra = {}, cwd = root) => {
     const e = { ...env, ...extra };
     for (const k of Object.keys(e)) if (e[k] === undefined) delete e[k];
     const res = spawnSync('bash', [SCRIPT, ...args], { cwd, encoding: 'utf8', env: e });
@@ -75,7 +74,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 
 {
   const sb = sandbox();
-  const res = sb.run(['tokensave'], { CODEX_PROJECT_DIR: path.join(sb.root, 'src', 'deep') });
+  const res = sb.run(['tokensave'], {}, path.join(sb.root, 'src', 'deep'));
   check('tokensave: из подкаталога — ближайший индекс выше', [res.calls, res.cwds], [[['serve', '-p', sb.root]], [sb.root]]);
 }
 
@@ -83,14 +82,14 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const sb = sandbox();
   const inner = path.join(sb.root, 'src');
   index(inner, 'tokensave');
-  const res = sb.run(['tokensave'], { CODEX_PROJECT_DIR: path.join(inner, 'deep') });
+  const res = sb.run(['tokensave'], {}, path.join(inner, 'deep'));
   check('tokensave: вложенный проект — берётся ближайший', res.calls, [['serve', '-p', inner]]);
 }
 
 {
   const sb = sandbox();
-  const res = sb.run(['tokensave'], { CODEX_PROJECT_DIR: undefined }, path.join(sb.root, 'src'));
-  check('tokensave: без CODEX_PROJECT_DIR — от PWD', res.calls, [['serve', '-p', sb.root]]);
+  const res = sb.run(['tokensave'], {}, path.join(sb.root, 'src'));
+  check('tokensave: каталог сессии — PWD', res.calls, [['serve', '-p', sb.root]]);
 }
 
 {
@@ -113,15 +112,9 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 {
   const sb = sandbox({ indexes: [] });
   index(sb.home, 'tokensave');
-  const res = sb.run(['tokensave'], { CODEX_PROJECT_DIR: path.join(sb.root, 'src') });
+  const res = sb.run(['tokensave'], {}, path.join(sb.root, 'src'));
   check('tokensave: индекс только в $HOME — проектом не считается', [res.status, res.calls], [1, []]);
-  check('tokensave: старт в самом $HOME — не запускается', [sb.run(['tokensave'], { CODEX_PROJECT_DIR: sb.home }).calls], [[]]);
-}
-
-{
-  const sb = sandbox();
-  const res = sb.run(['tokensave'], { CODEX_PROJECT_DIR: path.join(sb.home, 'nonexistent') });
-  check('tokensave: каталога сессии нет — код 1, без запуска', [res.status, res.calls], [1, []]);
+  check('tokensave: старт в самом $HOME — не запускается', [sb.run(['tokensave'], {}, sb.home).calls], [[]]);
 }
 
 // === ragsave ===
@@ -136,7 +129,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 
 {
   const sb = sandbox();
-  const res = sb.run(['ragsave'], { CODEX_PROJECT_DIR: path.join(sb.root, 'src', 'deep') });
+  const res = sb.run(['ragsave'], {}, path.join(sb.root, 'src', 'deep'));
   check('ragsave: из подкаталога — корень проекта', res.cwds, [sb.root]);
 }
 

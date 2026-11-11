@@ -1,17 +1,16 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { playwrightEnv } from './playwright-env.mjs';
+import { expandHome } from './home-path.mjs';
 
 const HARNESS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
 const LOCAL_ENV = path.join(HARNESS, '.env.local');
 const CHECK = process.argv.includes('--check');
 const args = process.argv.slice(2);
-if (args.some(arg => !['--check', '--codex', '--opencode'].includes(arg)) || (args.includes('--codex') && args.includes('--opencode'))) {
-  console.error('Использование: node bin/mcp-sync.mjs [--codex | --opencode] [--check]');
+if (args.some(arg => !['--check', '--opencode'].includes(arg))) {
+  console.error('Использование: node bin/mcp-sync.mjs [--opencode] [--check]');
   process.exit(2);
 }
 
@@ -20,8 +19,6 @@ const good = (s) => console.log(`  \x1b[32m✓\x1b[0m ${s}`);
 const warn = (s) => console.log(`  \x1b[33m!\x1b[0m ${s}`);
 const bad = (s) => console.log(`  \x1b[31m✗\x1b[0m ${s}`);
 
-// `~/` в servers.json раскрывается в домашний каталог пользователя.
-const expand = (p) => (p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -66,7 +63,7 @@ function serverEnv(name, configuredEnv = {}) {
 
 // Голое имя ищется по PATH; --check замечает смену пути, например после nvm.
 function resolveCommand(cmd) {
-  if (cmd.includes('/')) return expand(cmd);
+  if (cmd.includes('/')) return expandHome(cmd);
   for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
     const file = path.join(dir, cmd);
     try {
@@ -86,7 +83,7 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
     unresolved.add(name);
     continue;
   }
-  servers[name] = { command, args: (s.args ?? []).map(expand), env: serverEnv(name, s.env ?? {}) };
+  servers[name] = { command, args: (s.args ?? []).map(expandHome), env: serverEnv(name, s.env ?? {}) };
 }
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -97,55 +94,6 @@ const opencodeEnvironment = (name, environment) => {
   if (name === 'playwright' && source.PLAYWRIGHT_MCP_EXTENSION_TOKEN) keys.add('PLAYWRIGHT_MCP_EXTENSION_TOKEN');
   return Object.fromEntries([...keys].map((key) => [key, `{env:${key}}`]));
 };
-
-async function syncCodex() {
-  console.log('Codex (config.toml, scope user):');
-  const current = JSON.parse(execFileSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', cwd: os.homedir() }));
-  const edits = [];
-  for (const [name, s] of Object.entries(servers)) {
-    const have = current.find((entry) => entry.name === name);
-    const transport = have?.transport;
-    if (name === 'playwright' && !(transport?.env_vars ?? []).includes('PLAYWRIGHT_MCP_EXTENSION_TOKEN')) {
-      if (CHECK) {
-        warn('playwright — токен расширения не передаётся из окружения');
-        drift += 1;
-      } else {
-        edits.push({ keyPath: `mcp_servers.${JSON.stringify(name)}.env_vars`, value: [...(transport?.env_vars ?? []), 'PLAYWRIGHT_MCP_EXTENSION_TOKEN'], mergeStrategy: 'replace' });
-      }
-    }
-    const env = { ...(transport?.env ?? {}), ...s.env };
-    if (name === 'playwright') Object.assign(env, playwrightEnv({ ...process.env, ...env }));
-    if (transport?.type === 'stdio' && transport.command === s.command
-      && sameJson(transport.args ?? [], s.args)
-      && sameJson(transport.env ?? {}, env)) {
-      good(name);
-      continue;
-    }
-    if (CHECK) {
-      warn(`${name} — ${have ? 'отличается от servers.json' : 'не зарегистрирован'}`);
-      drift += 1;
-      continue;
-    }
-    if (have) {
-      for (const [key, value] of Object.entries({ command: s.command, args: s.args, env, url: null })) {
-        edits.push({ keyPath: `mcp_servers.${JSON.stringify(name)}.${key}`, value, mergeStrategy: 'replace' });
-      }
-      continue;
-    }
-    const envArgs = Object.entries(env).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
-    execFileSync('codex', ['mcp', 'add', name, ...envArgs, '--', s.command, ...s.args], { stdio: 'pipe', cwd: os.homedir() });
-    good(`${name} — зарегистрирован`);
-  }
-  if (edits.length) {
-    const { AppServer } = await import('../ai-hooks/bin/context-runner.mjs');
-    const client = new AppServer({ cwd: os.homedir(), env: { ...process.env, HARNESS_CONTEXT_GENERATION_FILE: '' } });
-    try {
-      await client.initialize(10000);
-      await client.request('config/batchWrite', { edits }, 10000);
-      good('MCP — команды обновлены с сохранением пользовательских опций');
-    } finally { client.close(); }
-  }
-}
 
 async function syncOpenCode() {
   const { loadConfig, writeConfig } = await import('../opencode/config.mjs');
@@ -171,6 +119,5 @@ async function syncOpenCode() {
   }
 }
 
-if (process.argv.includes('--opencode')) await syncOpenCode();
-else await syncCodex();
+await syncOpenCode();
 process.exit(unresolved.size || (CHECK && drift > 0) ? 1 : 0);

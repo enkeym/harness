@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 
 const hooksRoot = fileURLToPath(new URL('../', import.meta.url));
 const script = path.join(hooksRoot, 'bin/tokensave-sync.sh');
-const config = JSON.parse(fs.readFileSync(path.join(hooksRoot, '../codex/hooks.json'), 'utf8'));
 
 function sandbox(t, { db = true } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tokensave-sync-'));
@@ -26,11 +25,11 @@ function sandbox(t, { db = true } = {}) {
     fs.symlinkSync(path.join(hooksRoot, 'bin', name), path.join(bin, name));
   }
   const calls = path.join(home, 'calls');
-  const env = { ...process.env, HOME: home, CODEX_PROJECT_DIR: home,
+  const env = { ...process.env, HOME: home,
     AI_HOOKS_TOKENSAVE_CMD: path.join(hooksRoot, 'test/fixtures/fake-indexer.mjs'),
     FAKE_INDEXER_CALLS: calls, AI_HOOKS_LOG_DIR: path.join(home, 'logs') };
-  const run = (cwd = root, extra = {}, command) => {
-    const result = spawnSync('bash', command ? ['-c', command] : [script, cwd],
+  const run = (cwd = root, extra = {}) => {
+    const result = spawnSync('bash', [script, cwd],
       { cwd, env: { ...env, ...extra }, encoding: 'utf8', timeout: 10000 });
     assert.deepEqual([result.status, result.stdout, result.stderr], [0, '', '']);
   };
@@ -43,18 +42,14 @@ async function waitFor(predicate) {
   assert.ok(predicate(), 'фоновая задача завершилась');
 }
 
-for (const event of ['SessionStart', 'Stop']) {
-  test(`${event}: sync ближайшего индекса cwd, независимо от CODEX_PROJECT_DIR`, async (t) => {
-    const sb = sandbox(t);
-    const nested = path.join(sb.root, 'nested');
-    fs.mkdirSync(nested);
-    const handler = config.hooks[event][0].hooks.find(h => h.command.includes('tokensave-sync.sh'));
-    assert.ok(handler);
-    sb.run(nested, {}, handler.command);
-    await waitFor(() => fs.existsSync(sb.log));
-    assert.deepEqual(JSON.parse(fs.readFileSync(sb.calls, 'utf8')), ['sync', sb.root]);
-  });
-}
+test('sync ближайшего индекса относительно каталога сессии', async (t) => {
+  const sb = sandbox(t);
+  const nested = path.join(sb.root, 'nested');
+  fs.mkdirSync(nested);
+  sb.run(nested);
+  await waitFor(() => fs.existsSync(sb.log));
+  assert.deepEqual(JSON.parse(fs.readFileSync(sb.calls, 'utf8')), ['sync', sb.root]);
+});
 
 test('подкаталог со своим индексом выбирается раньше корня', async (t) => {
   const sb = sandbox(t);

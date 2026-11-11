@@ -6,7 +6,7 @@ import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { requestTypeOf, supportedObservationVersion } from "./observations.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
-import { cacheMetrics } from "../ai-hooks/bin/cache-metrics.mjs"
+import { cacheMetrics, numeric } from "../ai-hooks/bin/cache-metrics.mjs"
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
@@ -23,8 +23,6 @@ export const defaultCostConfig = Object.freeze({
 })
 const counterKeys = ["input", "output", "reasoning", "cacheRead", "cacheWrite"]
 const largeToolOutputBytes = contextPolicy.opencode.toolOutputBytes
-const numeric = (value) =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0
 export const costStateRoot = (
   stateDirectory = process.env.XDG_STATE_HOME ||
     path.join(os.homedir(), ".local/state")

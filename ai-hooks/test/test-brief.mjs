@@ -247,9 +247,8 @@ test("separate plugin instances deliver one transfer and create one session", as
 test("brief policy validates configured model identifiers and effort", t => {
   const f = fixture(t)
   const file = path.join(f.directory, "policy.json")
-  fs.writeFileSync(file, JSON.stringify({ codex: { planner: { model: "sol", effort: "invalid" } } }))
-  assert.throws(() => readBriefPolicy("codex", file), /Invalid brief routing policy/)
-  assert.equal(readBriefPolicy("codex").planner.effort, "medium")
+  fs.writeFileSync(file, JSON.stringify({ opencode: { enabled: true, planner: { providerID: "provider", id: "model" } } }))
+  assert.equal(readBriefPolicy("opencode", file).planner.id, "model")
   assert.equal(readBriefPolicy("opencode").enabled, true)
   assert.equal(readBriefPolicy("opencode").planner, undefined)
 })

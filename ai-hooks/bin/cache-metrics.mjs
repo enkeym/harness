@@ -1,4 +1,4 @@
-const numeric = value => typeof value === 'number' && Number.isFinite(value) && value >= 0
+export const numeric = value => typeof value === 'number' && Number.isFinite(value) && value >= 0
 
 export function cacheMetrics(samples) {
   if (!Array.isArray(samples)) throw new Error('Cache samples must be an array')
