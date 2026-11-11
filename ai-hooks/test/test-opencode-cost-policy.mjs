@@ -10,7 +10,6 @@ import {
   deepseekCostAt,
   deepseekCostBreakdownAt
 } from "../../opencode/cost-policy.mjs"
-import { offPeakModelID } from "../../opencode/model-routing.mjs"
 
 test("DeepSeek batch scheduling waits through weekday peak windows and keeps off-peak starts", () => {
   for (const [input, expected] of [
@@ -74,7 +73,7 @@ test("DeepSeek token costs follow the message time, model and cache split", () =
   assert.equal(deepseekCostAt("deepseek-flash", null, "2026-11-02T12:00:00Z"), null)
 })
 
-test("off-peak launcher selects the off-peak model alias and preserves the variant", async () => {
+test("off-peak launcher schedules an off-peak start and keeps the selected model", async () => {
   const script = path.resolve(import.meta.dirname, "../../bin/opencode-offpeak.mjs")
   const run = promisify(execFile)
   const { stdout } = await run(process.execPath, [
@@ -85,9 +84,9 @@ test("off-peak launcher selects the off-peak model alias and preserves the varia
     "deepseek/deepseek-v4-pro#max"
   ])
   const result = JSON.parse(stdout)
-  assert.equal(result.model, "deepseek/deepseek-v4-pro-offpeak#max")
+  assert.equal(result.model, "deepseek/deepseek-v4-pro#max")
   assert.equal(result.pricing.validatedForBilling, true)
-  assert.equal(offPeakModelID("deepseek-flash"), "deepseek-flash-offpeak")
-  assert.equal(offPeakModelID("deepseek-flash-offpeak"), "deepseek-flash-offpeak")
-  assert.equal(offPeakModelID("qwen3"), "qwen3")
+  assert.equal(isPeakAt(new Date(result.scheduledAt)), false)
+  const fallback = await run(process.execPath, [script, "--check", "--", "task"])
+  assert.equal(JSON.parse(fallback.stdout).model, "deepseek/deepseek-flash#high")
 })

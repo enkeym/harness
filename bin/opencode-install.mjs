@@ -13,7 +13,7 @@ import {
   writeConfig
 } from "../opencode/config.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
-import { configureModelRouting } from "../opencode/model-routing.mjs"
+import { configureModelRouting, migrateBundledModels } from "../opencode/model-routing.mjs"
 
 const root = path.resolve(import.meta.dirname, "..")
 const home = os.homedir()
@@ -27,6 +27,7 @@ const check = args.includes("--check")
 const defaults = readConfig(path.join(root, "opencode/opencode.jsonc"))
 const { settings, current } = loadConfig(directory)
 const desired = structuredClone(mergeConfig(defaults, current))
+migrateBundledModels(desired, defaults)
 configureModelRouting(desired)
 const harnessInstructions = new Set(
   ["opencode/AGENTS.md", "rules/core.md"].map((file) => path.join(root, file))

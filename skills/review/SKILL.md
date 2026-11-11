@@ -84,9 +84,9 @@ and return evidence under [reference/mr-delegation.md](reference/mr-delegation.m
 - Открытые MR (<n>)
 ```
 
-- Use the question tool available in the current client and mode, respecting its
-  option limits. Otherwise show a numbered list in chat; selections can be
-  entered as numbers.
+- Use the client's interactive question tool whenever it offers one, within its
+  option limits; a numbered list in chat alone is not a question. Without such
+  a tool, show the numbered list, say so, and accept selections as numbers.
 - `Открытые MR` only when the list call of 1.2 answered, with `<n>` ≥ 1.
 - `Коммиты от <base>` only off a base branch and with `<n>` ≥ 1 — then it
   goes first as Recommended: `<base>` through

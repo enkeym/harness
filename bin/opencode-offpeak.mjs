@@ -1,15 +1,6 @@
 import { spawn } from "node:child_process"
 import { setTimeout } from "node:timers/promises"
-import { nextOffPeakAt, isPeakAt, deepseekPricing } from "../opencode/cost-policy.mjs"
-import { offPeakModelID } from "../opencode/model-routing.mjs"
-
-const offPeakModel = (model) => {
-  const [id, variant] = model.split("#")
-  const separator = id.indexOf("/")
-  if (separator < 0) return model
-  const name = `${id.slice(0, separator)}/${offPeakModelID(id.slice(separator + 1))}`
-  return variant === undefined ? name : `${name}#${variant}`
-}
+import { nextOffPeakAt, deepseekPricing } from "../opencode/cost-policy.mjs"
 
 const args = process.argv.slice(2)
 const check = args[0] === "--check"
@@ -25,12 +16,6 @@ if (args.shift() !== "--" || args.length === 0) {
   } else {
     const scheduledAt = nextOffPeakAt()
     if (!models.length) args.unshift("--model", "deepseek/deepseek-flash#high")
-    if (!isPeakAt(scheduledAt)) {
-      for (let index = 0; index < args.length; index++) {
-        if (args[index] === "--model" || args[index] === "-m") args[index + 1] = offPeakModel(args[index + 1])
-        else if (args[index].startsWith("--model=")) args[index] = `--model=${offPeakModel(args[index].slice(8))}`
-      }
-    }
     if (check) {
       const selected = args.flatMap((arg, index) => arg === "--model" || arg === "-m" ? [args[index + 1] ?? ""] : arg.startsWith("--model=") ? [arg.slice(8)] : [])
       process.stdout.write(`${JSON.stringify({ scheduledAt: scheduledAt.toISOString(), pricing: deepseekPricing, scope: "start-time-only", model: selected[0] ?? null })}\n`)

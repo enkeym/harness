@@ -13,7 +13,7 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, playwright = false, existingTabsOnly = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest } = {}) {
+function client(t, { lazy = false, playwright = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
   const catalog = path.join(dir, 'catalog.json');
@@ -24,7 +24,7 @@ function client(t, { lazy = false, playwright = false, existingTabsOnly = false,
     : [{ name: 'read', description: 'Cached description', inputSchema: { type: 'object' } }];
   const backendArgs = extension ? [backend, '--extension'] : [backend];
   fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: backendArgs, initialize, tools }));
-  const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog, ...(playwright ? ['--playwright-compat'] : []), ...(existingTabsOnly ? ['--existing-tabs-only'] : [])] : ['--compact']), '--', process.execPath, ...backendArgs], {
+  const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog, ...(playwright ? ['--playwright-compat'] : [])] : ['--compact']), '--', process.execPath, ...backendArgs], {
     env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: token ? 'test-token' : '', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_BREAK_ONCE: breakOnce ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
@@ -97,12 +97,12 @@ for (const lazy of [false, true]) {
 }
 
 test('Playwright starts on the first browser call, reuses attached tabs and accepts common browser call forms', async t => {
-  const c = client(t, { lazy: true, playwright: true, existingTabsOnly: true });
+  const c = client(t, { lazy: true, playwright: true });
   await c.rpc('initialize', initialize);
   const listed = (await c.rpc('tools/list')).result.tools;
   const schema = name => listed.find(tool => tool.name === name).inputSchema;
   assert.ok(!schema('browser_tabs').required.includes('action'));
-  assert.ok(!schema('browser_tabs').properties.action.enum.includes('new'));
+  assert.ok(schema('browser_tabs').properties.action.enum.includes('new'));
   assert.deepEqual(schema('browser_click').anyOf, [{ required: ['target'] }, { required: ['ref'] }]);
   assert.deepEqual(schema('browser_evaluate').anyOf, [{ required: ['function'] }, { required: ['expression'] }]);
   assert.ok(!schema('browser_take_screenshot').required.includes('scale'));
@@ -111,6 +111,8 @@ test('Playwright starts on the first browser call, reuses attached tabs and acce
 
   for (const [name, input, expected] of [
     ['browser_tabs', {}, { action: 'list' }],
+    ['browser_tabs', { action: 'select', index: 1 }, { action: 'select', index: 1 }],
+    ['browser_tabs', { action: 'new', url: 'http://localhost:5173/' }, { action: 'new', url: 'http://localhost:5173/' }],
     ['browser_click', { ref: 'e131', element: 'button' }, { target: 'e131', element: 'button' }],
     ['browser_take_screenshot', {}, { scale: 'css' }],
     ['browser_evaluate', { expression: '1 + 1' }, { function: '() => (1 + 1)' }],
@@ -119,10 +121,17 @@ test('Playwright starts on the first browser call, reuses attached tabs and acce
     assert.deepEqual(response.result.structuredContent.arguments, expected);
     assert.equal(response.result.structuredContent.tokenPresent, true);
   }
-  const blocked = await c.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'new', url: 'http://localhost:5173/' } });
-  assert.equal(blocked.error.code, -32602);
-  assert.match(blocked.error.message, /New tabs are disabled/);
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+});
+
+test('the pinned Playwright catalog matches the registered backend command', () => {
+  const servers = JSON.parse(fs.readFileSync(path.resolve(here, '../../mcp/servers.json'), 'utf8'));
+  const catalog = JSON.parse(fs.readFileSync(path.resolve(here, '../../mcp/playwright-tools.json'), 'utf8'));
+  const args = servers.playwright.args;
+  const split = args.indexOf('--');
+  assert.ok(split > 0, 'registry args must separate proxy options with --');
+  assert.deepEqual([catalog.command, ...catalog.args], args.slice(split + 1));
+  assert.ok(catalog.args.includes('--timeout-action'), 'backend keeps an explicit action timeout');
 });
 
 test('Playwright browser calls fail fast without the extension token instead of waiting', async t => {
@@ -162,6 +171,10 @@ test('tokensave_read accepts comma-separated and spaced line ranges', async (t) 
     ['590, 615', '590-615'],
     ['590 615', '590-615'],
     ['590;615', '590-615'],
+    ['590–615', '590-615'],
+    ['590—615', '590-615'],
+    ['590 - 615', '590-615'],
+    ['615,590', '590-615'],
     [' 590,615 ', '590-615'],
     ['590-615', '590-615'],
     ['590', '590'],
@@ -172,6 +185,18 @@ test('tokensave_read accepts comma-separated and spaced line ranges', async (t) 
   }
   const untouched = await c.rpc('tools/call', { name: 'tokensave_search', arguments: { query: 'a', lines: '590,615' } });
   assert.equal(untouched.result.structuredContent.arguments.lines, '590,615');
+});
+
+test('tokensave_body rejects calls without a symbol or node_id', async (t) => {
+  const c = client(t);
+  await c.rpc('initialize', initialize);
+  for (const input of [{}, { symbol: '   ' }, { node_id: '' }]) {
+    const response = await c.rpc('tools/call', { name: 'tokensave_body', arguments: input });
+    assert.equal(response.error.code, -32602);
+    assert.match(response.error.message, /symbol or node_id/);
+  }
+  const accepted = await c.rpc('tools/call', { name: 'tokensave_body', arguments: { name: '_clash' } });
+  assert.deepEqual(accepted.result.structuredContent.arguments, { symbol: '_clash' });
 });
 
 test('a newer client uses the catalog protocol when the lazy backend starts', async (t) => {

@@ -5,7 +5,9 @@
     "-y",
     "@playwright/mcp@0.0.83",
     "--extension",
-    "--browser=chrome"
+    "--browser=chrome",
+    "--timeout-action",
+    "15000"
   ],
   "initialize": {
     "protocolVersion": "2024-11-05",

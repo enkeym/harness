@@ -10,7 +10,7 @@ import { createServer } from "node:http"
 import { setTimeout } from "node:timers/promises"
 import { loadConfig, readConfig, writeConfig } from "../../opencode/config.mjs"
 import { contextPolicy } from "../bin/context-policy.mjs"
-import { configureModelRouting } from "../../opencode/model-routing.mjs"
+import { configureModelRouting, migrateBundledModels } from "../../opencode/model-routing.mjs"
 import { observationDirectory } from "../../opencode/observations.mjs"
 
 function sandbox(t, beforeCleanup = async () => {}) {
@@ -31,13 +31,17 @@ function instructionText(value) {
   return [
     value.instructions ?? "",
     ...messages
-      .filter((message) => message.role === "system" || message.role === "developer")
+      .filter(
+        (message) => message.role === "system" || message.role === "developer"
+      )
       .map(contentText),
     ...messages
       .filter(
         (message) =>
           message.role === "user" &&
-          JSON.stringify(message.content).includes("Harness skill instructions:")
+          JSON.stringify(message.content).includes(
+            "Harness skill instructions:"
+          )
       )
       .map(contentText)
   ].join("\n")
@@ -152,15 +156,25 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   )
   const conflict = run()
   assert.equal(conflict.status, 1)
-  assert.equal(fs.readlinkSync(path.join(directory, "skills/task-brief")), "/missing/skill")
+  assert.equal(
+    fs.readlinkSync(path.join(directory, "skills/task-brief")),
+    "/missing/skill"
+  )
   fs.unlinkSync(path.join(directory, "skills/task-brief"))
   const installed = run()
   assert.equal(installed.status, 0, installed.stderr + installed.stdout)
   assert.equal(loadConfig(directory).current.model, "user/model")
   assert.ok(loadConfig(directory).current.providers.deepseek)
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
-  assert.ok(!loadConfig(directory).current.instructions.some(value => /(?:rules\/core|opencode\/AGENTS)\.md$/.test(value)))
-  assert.equal(loadConfig(directory).current.experimental.background_compaction, false)
+  assert.ok(
+    !loadConfig(directory).current.instructions.some((value) =>
+      /(?:rules\/core|opencode\/AGENTS)\.md$/.test(value)
+    )
+  )
+  assert.equal(
+    loadConfig(directory).current.experimental.background_compaction,
+    false
+  )
   assert.ok(fs.existsSync(path.join(directory, "skills/task-brief/SKILL.md")))
   assert.ok(fs.existsSync(path.join(directory, "skills/handoff/SKILL.md")))
   assert.equal(fs.existsSync(path.join(directory, "plugins/harness.js")), false)
@@ -168,7 +182,9 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
     fs.realpathSync(path.join(directory, "plugins/harness")),
     path.resolve(import.meta.dirname, "../../opencode")
   )
-  assert.deepEqual(loadConfig(directory).current.commands.handoff, { template: "Personal handoff" })
+  assert.deepEqual(loadConfig(directory).current.commands.handoff, {
+    template: "Personal handoff"
+  })
   assert.equal(loadConfig(directory).current.compaction.auto, true)
   assert.equal(
     loadConfig(directory).current.compaction.buffer,
@@ -193,13 +209,19 @@ test("model routing removes legacy overrides and preserves user configuration", 
   const config = {
     model: "deepseek/deepseek-v4-pro#max",
     agents: {
-      plan: { model: "deepseek/deepseek-flash#high", description: "Preserve me" },
+      plan: {
+        model: "deepseek/deepseek-flash#high",
+        description: "Preserve me"
+      },
       explore: { model: "custom/model" },
       compaction: { model: { providerID: "deepseek", id: "deepseek-flash" } },
       "harness-review": { model: "deepseek/deepseek-v4-pro" },
       custom: { model: "deepseek/deepseek-v4-pro#max" }
     },
-    commands: { "harness-review": { agent: "harness-review" }, custom: { template: "Preserve me" } }
+    commands: {
+      "harness-review": { agent: "harness-review" },
+      custom: { template: "Preserve me" }
+    }
   }
   configureModelRouting(config)
   writeConfig(settings, config)
@@ -219,18 +241,77 @@ test("model routing removes legacy overrides and preserves user configuration", 
   repeated.agents.plan.model = "deepseek/deepseek-v4-pro#max"
   configureModelRouting(repeated)
   assert.equal(repeated.agents.plan.model, undefined)
-  const inherited = { agents: { build: { model: "deepseek/deepseek-v4-pro#max" }, general: { model: { providerID: "deepseek", id: "deepseek-v4-pro" } } } }
+  const inherited = {
+    agents: {
+      build: { model: "deepseek/deepseek-v4-pro#max" },
+      general: { model: { providerID: "deepseek", id: "deepseek-v4-pro" } }
+    }
+  }
   configureModelRouting(inherited)
   assert.equal(inherited.agents.build.model, undefined)
   assert.equal(inherited.agents.general.model, undefined)
   const empty = {}
   configureModelRouting(empty)
   assert.deepEqual(empty, {})
-  const other = { model: "custom/model", agents: { build: { model: "custom/model" }, "harness-plan": {} } }
+  const other = {
+    model: "custom/model",
+    agents: { build: { model: "custom/model" }, "harness-plan": {} }
+  }
   configureModelRouting(other)
   assert.equal(other.model, "custom/model")
   assert.equal(other.agents.build.model, "custom/model")
   assert.equal(other.agents["harness-plan"], undefined)
+})
+
+test("stale DeepSeek aliases migrate to bundled model ids and pricing", () => {
+  const defaults = readConfig(
+    path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
+  )
+  const config = {
+    model: "deepseek/deepseek-flash-offpeak#high",
+    providers: {
+      deepseek: {
+        models: {
+          "deepseek-flash": { name: "bundled", cost: { input: 0.3 } },
+          "deepseek-flash-offpeak": { name: "stale" },
+          "deepseek-v4-pro-offpeak": { name: "stale" },
+          "custom-model": { name: "custom" }
+        }
+      }
+    },
+    agents: {
+      compaction: {
+        model: { providerID: "deepseek", id: "deepseek-flash-offpeak" }
+      },
+      custom: { model: "deepseek/deepseek-v4-pro-offpeak#max" }
+    },
+    commands: { batch: { model: "deepseek/deepseek-flash-peak" } }
+  }
+  migrateBundledModels(config, defaults)
+  assert.equal(config.model, "deepseek/deepseek-flash#high")
+  assert.deepEqual(Object.keys(config.providers.deepseek.models).sort(), [
+    "custom-model",
+    "deepseek-flash"
+  ])
+  assert.deepEqual(
+    config.providers.deepseek.models["deepseek-flash"].cost,
+    defaults.providers.deepseek.models["deepseek-flash"].cost
+  )
+  assert.deepEqual(config.agents.compaction.model, {
+    providerID: "deepseek",
+    id: "deepseek-flash"
+  })
+  assert.equal(config.agents.custom.model, "deepseek/deepseek-v4-pro#max")
+  assert.equal(config.commands.batch.model, "deepseek/deepseek-flash")
+  const repeated = structuredClone(config)
+  migrateBundledModels(repeated, defaults)
+  assert.deepEqual(repeated, config)
+  const untouched = { model: "custom/model", providers: {} }
+  migrateBundledModels(untouched, defaults)
+  assert.deepEqual(untouched, { model: "custom/model", providers: {} })
+  const withoutBundled = { model: "deepseek/deepseek-flash-offpeak" }
+  migrateBundledModels(withoutBundled, {})
+  assert.equal(withoutBundled.model, "deepseek/deepseek-flash-offpeak")
 })
 
 test("every bundled DeepSeek model carries the working input limit", () => {
@@ -252,25 +333,37 @@ test("every bundled DeepSeek model carries the working input limit", () => {
   }
 })
 
+test("subscription providers preset low reasoning without inventing token costs", () => {
+  const config = readConfig(
+    path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
+  )
+  for (const id of ["kimi-for-coding-oauth", "openai"]) {
+    const provider = config.providers[id]
+    assert.ok(provider, `${id} preset is missing`)
+    assert.equal(provider.settings?.reasoningEffort, "low", `${id} must default to low effort`)
+    assert.equal(provider.cost, undefined, `${id} is billed by plan, not per token`)
+    for (const [name, model] of Object.entries(provider.models ?? {}))
+      assert.equal(model.cost, undefined, `${id}/${name} must not declare a token cost`)
+  }
+})
+
 test("OpenCode sends skill and search routing to custom and built-in agents", async (t) => {
   let child
   let server
   const directory = sandbox(t, async () => {
     if (child && child.exitCode === null) {
-      const exit = new Promise(resolve => child.once("exit", resolve))
+      const exit = new Promise((resolve) => child.once("exit", resolve))
       child.kill()
       await exit
     }
     server?.closeAllConnections()
-    if (server?.listening) await new Promise(resolve => server.close(resolve))
+    if (server?.listening) await new Promise((resolve) => server.close(resolve))
   })
   const config = path.join(directory, "config")
   for (const name of ["agents", "plugins"]) {
     fs.mkdirSync(path.join(config, name), { recursive: true })
   }
-  for (const [target, source] of [
-    ["agents/ask.md", "opencode/agent/ask.md"]
-  ]) {
+  for (const [target, source] of [["agents/ask.md", "opencode/agent/ask.md"]]) {
     fs.symlinkSync(
       path.resolve(import.meta.dirname, "../..", source),
       path.join(config, target)
@@ -278,9 +371,18 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
   }
   const fixturePlugin = path.join(config, "plugins/harness")
   fs.mkdirSync(fixturePlugin)
-  fs.writeFileSync(path.join(fixturePlugin, "package.json"), JSON.stringify({ name: "harness-fixture", type: "module", exports: { "./server": "./server.mjs" } }))
+  fs.writeFileSync(
+    path.join(fixturePlugin, "package.json"),
+    JSON.stringify({
+      name: "harness-fixture",
+      type: "module",
+      exports: { "./server": "./server.mjs" }
+    })
+  )
   const duplicateRead = `file: fixture.mjs\nmode: lines\ndigest: ${"a".repeat(64)}\n\n${"CACHE_EVIDENCE_BODY\n".repeat(60)}`
-  fs.writeFileSync(path.join(fixturePlugin, "server.mjs"), `
+  fs.writeFileSync(
+    path.join(fixturePlugin, "server.mjs"),
+    `
 import harness from ${JSON.stringify(pathToFileURL(path.resolve(import.meta.dirname, "../../opencode/harness.js")).href)}
 import fs from "node:fs"
 export default { id: "harness", setup: async context => {
@@ -298,7 +400,8 @@ export default { id: "harness", setup: async context => {
   fs.writeFileSync(${JSON.stringify(path.join(directory, "native-tools.json"))}, JSON.stringify(tools.map(tool => ({ name: tool.name, description: tool.description, input: tool.input }))))
   return cleanup
 } }
-`)
+`
+  )
   const requests = []
   let successful = false
   let primaryCalls = 0
@@ -324,36 +427,59 @@ export default { id: "harness", setup: async context => {
           ? "Fixture step completed."
           : "## Objective\n- Handoff fixture: continue the authorized objective.\n\n## Requirements\n- Preserve permissions.\n\n## Decisions\n- Continue the remaining plan.\n\n## Work State\n### Completed\n- First step.\n### Active\n- Next step.\n### Blocked\n- (none)\n\n## Next Move\n1. Execute the next authorized step.\n\n## Relevant Files\n- (none)\n\n## Important Context\n- Local compaction fixture."
       const usage = {
-        input_tokens: primary && primaryCalls === 1 ? contextPolicy.opencode.startTokens : 1000,
+        input_tokens:
+          primary && primaryCalls === 1
+            ? contextPolicy.opencode.startTokens
+            : 1000,
         input_tokens_details: { cached_tokens: 0 },
         output_tokens: 20,
         output_tokens_details: { reasoning_tokens: 0 },
-        total_tokens: primary && primaryCalls === 1 ? contextPolicy.opencode.startTokens + 20 : 1020
+        total_tokens:
+          primary && primaryCalls === 1
+            ? contextPolicy.opencode.startTokens + 20
+            : 1020
       }
       const part = { type: "output_text", text, annotations: [] }
-      const briefStage = input.tools?.some(tool => tool.name === "execute")
-        ? JSON.stringify(input).includes("BRIEF_NATIVE_ANSWERS") ? "implement" : JSON.stringify(input).includes("BRIEF_NATIVE_START") ? "plan" : undefined
+      const briefStage = input.tools?.some((tool) => tool.name === "execute")
+        ? JSON.stringify(input).includes("BRIEF_NATIVE_ANSWERS")
+          ? "implement"
+          : JSON.stringify(input).includes("BRIEF_NATIVE_START")
+            ? "plan"
+            : undefined
         : undefined
       const transition = briefStage && !briefStages.has(briefStage)
       if (transition) briefStages.add(briefStage)
-      const completeTask = primary && JSON.stringify(input).includes("TASK_NATIVE_COMPLETE") && !completedTask
+      const completeTask =
+        primary &&
+        JSON.stringify(input).includes("TASK_NATIVE_COMPLETE") &&
+        !completedTask
       if (completeTask) completedTask = true
       const callStage = completeTask ? "complete" : briefStage
-      const handoff = briefStage === "plan" ? "BRIEF_NATIVE_HANDOFF. Design the module; resolve nodata. Implementation authorized." : "BRIEF_NATIVE_HANDOFF. Plan: .opencode/plans/native.md. Answers: neutral nodata. Implementation authorized."
-      const item = transition || completeTask ? {
-        id: `fc_brief_${callStage}`,
-        type: "function_call",
-        call_id: `call_brief_${callStage}`,
-        name: "execute",
-        arguments: JSON.stringify({ code: completeTask ? 'return await tools.task_context({action:"complete"});' : `${briefStage === "plan" ? 'await tools.task_context({action:"save",checkpoint:"NATIVE_TASK_CHECKPOINT: next edit source.mjs"});' : 'await tools.task_context({action:"restore"});'} return await tools.brief_transition(${JSON.stringify({ stage: briefStage, handoff })});` }),
-        status: "completed"
-      } : {
-        id: "msg_fixture",
-        type: "message",
-        role: "assistant",
-        status: "completed",
-        content: [part]
-      }
+      const handoff =
+        briefStage === "plan"
+          ? "BRIEF_NATIVE_HANDOFF. Design the module; resolve nodata. Implementation authorized."
+          : "BRIEF_NATIVE_HANDOFF. Plan: .opencode/plans/native.md. Answers: neutral nodata. Implementation authorized."
+      const item =
+        transition || completeTask
+          ? {
+              id: `fc_brief_${callStage}`,
+              type: "function_call",
+              call_id: `call_brief_${callStage}`,
+              name: "execute",
+              arguments: JSON.stringify({
+                code: completeTask
+                  ? 'return await tools.task_context({action:"complete"});'
+                  : `${briefStage === "plan" ? 'await tools.task_context({action:"save",checkpoint:"NATIVE_TASK_CHECKPOINT: next edit source.mjs"});' : 'await tools.task_context({action:"restore"});'} return await tools.brief_transition(${JSON.stringify({ stage: briefStage, handoff })});`
+              }),
+              status: "completed"
+            }
+          : {
+              id: "msg_fixture",
+              type: "message",
+              role: "assistant",
+              status: "completed",
+              content: [part]
+            }
       const result = {
         id: "resp_fixture",
         object: "response",
@@ -366,53 +492,68 @@ export default { id: "harness", setup: async context => {
       if (input.stream) {
         response.writeHead(200, { "content-type": "text/event-stream" })
         response.end(
-          (transition || completeTask ? [
-            { type: "response.created", response: { ...result, status: "in_progress", output: [] } },
-            { type: "response.output_item.added", output_index: 0, item: { ...item, status: "in_progress", arguments: "" } },
-            { type: "response.function_call_arguments.delta", output_index: 0, item_id: item.id, delta: item.arguments },
-            { type: "response.output_item.done", output_index: 0, item },
-            { type: "response.completed", response: result }
-          ] : [
-            {
-              type: "response.created",
-              response: { ...result, status: "in_progress", output: [] }
-            },
-            {
-              type: "response.output_item.added",
-              output_index: 0,
-              item: { ...item, status: "in_progress", content: [] }
-            },
-            {
-              type: "response.content_part.added",
-              output_index: 0,
-              item_id: item.id,
-              content_index: 0,
-              part: { ...part, text: "" }
-            },
-            {
-              type: "response.output_text.delta",
-              output_index: 0,
-              item_id: item.id,
-              content_index: 0,
-              delta: text
-            },
-            {
-              type: "response.output_text.done",
-              output_index: 0,
-              item_id: item.id,
-              content_index: 0,
-              text
-            },
-            {
-              type: "response.content_part.done",
-              output_index: 0,
-              item_id: item.id,
-              content_index: 0,
-              part
-            },
-            { type: "response.output_item.done", output_index: 0, item },
-            { type: "response.completed", response: result }
-          ])
+          (transition || completeTask
+            ? [
+                {
+                  type: "response.created",
+                  response: { ...result, status: "in_progress", output: [] }
+                },
+                {
+                  type: "response.output_item.added",
+                  output_index: 0,
+                  item: { ...item, status: "in_progress", arguments: "" }
+                },
+                {
+                  type: "response.function_call_arguments.delta",
+                  output_index: 0,
+                  item_id: item.id,
+                  delta: item.arguments
+                },
+                { type: "response.output_item.done", output_index: 0, item },
+                { type: "response.completed", response: result }
+              ]
+            : [
+                {
+                  type: "response.created",
+                  response: { ...result, status: "in_progress", output: [] }
+                },
+                {
+                  type: "response.output_item.added",
+                  output_index: 0,
+                  item: { ...item, status: "in_progress", content: [] }
+                },
+                {
+                  type: "response.content_part.added",
+                  output_index: 0,
+                  item_id: item.id,
+                  content_index: 0,
+                  part: { ...part, text: "" }
+                },
+                {
+                  type: "response.output_text.delta",
+                  output_index: 0,
+                  item_id: item.id,
+                  content_index: 0,
+                  delta: text
+                },
+                {
+                  type: "response.output_text.done",
+                  output_index: 0,
+                  item_id: item.id,
+                  content_index: 0,
+                  text
+                },
+                {
+                  type: "response.content_part.done",
+                  output_index: 0,
+                  item_id: item.id,
+                  content_index: 0,
+                  part
+                },
+                { type: "response.output_item.done", output_index: 0, item },
+                { type: "response.completed", response: result }
+              ]
+          )
             .map(
               (value, sequence_number) =>
                 `event: ${value.type}\ndata: ${JSON.stringify({ ...value, sequence_number })}\n\n`
@@ -446,7 +587,8 @@ export default { id: "harness", setup: async context => {
       commands: routing.commands,
       compaction: {
         auto: true,
-        buffer: contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens,
+        buffer:
+          contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens,
         keep: { tokens: 0 }
       },
       providers: {
@@ -515,14 +657,21 @@ export default { id: "harness", setup: async context => {
   }
   await wait(() => /server password \S+/.test(log))
   const authorization = `Basic ${Buffer.from(`opencode:${log.match(/server password (\S+)/)[1]}`).toString("base64")}`
-  const api = async (url, body, method = body === undefined ? "GET" : "POST") => {
+  const api = async (
+    url,
+    body,
+    method = body === undefined ? "GET" : "POST"
+  ) => {
     const response = await fetch(`http://127.0.0.1:${port}/api${url}`, {
       method,
       headers: { authorization, "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000)
     })
-    assert.ok(response.ok, response.ok ? url : `${url}: ${response.status}: ${await response.text()}`)
+    assert.ok(
+      response.ok,
+      response.ok ? url : `${url}: ${response.status}: ${await response.text()}`
+    )
     return response.status === 204 ? undefined : response.json()
   }
   for (const agent of ["ask", "build", "plan"]) {
@@ -547,13 +696,33 @@ export default { id: "harness", setup: async context => {
       false,
       agent
     )
-    assert.equal(system.split("# Working rules").length - 1, primary.length, agent)
-    assert.equal(system.split("# OpenCode harness").length - 1, primary.length, agent)
-    assert.match(system, /Never add or rewrite code\/documentation comments/, agent)
+    assert.equal(
+      system.split("# Working rules").length - 1,
+      primary.length,
+      agent
+    )
+    assert.equal(
+      system.split("# OpenCode harness").length - 1,
+      primary.length,
+      agent
+    )
+    assert.match(
+      system,
+      /Never add or rewrite code\/documentation comments/,
+      agent
+    )
     assert.match(system, /Read applicable SKILL.md/, agent)
     assert.match(system, /Never load the same skill twice in a session/, agent)
-    assert.equal(system.includes("load both review checks before every commit"), false, agent)
-    assert.match(system, /exact, case-sensitive `id` from the current available-skills catalog/, agent)
+    assert.equal(
+      system.includes("load both review checks before every commit"),
+      false,
+      agent
+    )
+    assert.match(
+      system,
+      /exact, case-sensitive `id` from the current available-skills catalog/,
+      agent
+    )
     assert.match(system, /load it with `\{"id":"opencode"\}`/, agent)
     assert.match(system, /never repeat an unchanged invalid ID/, agent)
     assert.match(system, /tokensave_search/, agent)
@@ -579,11 +748,27 @@ export default { id: "harness", setup: async context => {
           JSON.stringify(value).includes("Harness automatic Handoff.")
         )
     )
-    const compaction = requests.slice(summaryStart).find(value => JSON.stringify(value).includes("Harness automatic Handoff."))
+    const compaction = requests
+      .slice(summaryStart)
+      .find((value) =>
+        JSON.stringify(value).includes("Harness automatic Handoff.")
+      )
     assert.match(JSON.stringify(compaction), /Saved task context:/, agent)
     assert.match(JSON.stringify(compaction), /Reply OK without tools\./, agent)
-    const cached = fs.readdirSync(path.join(directory, ".opencode/task-context")).map(file => JSON.parse(fs.readFileSync(path.join(directory, ".opencode/task-context", file), "utf8")))
-    assert.ok(cached.some(value => value.checkpoint === "Reply OK without tools."), agent)
+    const cached = fs
+      .readdirSync(path.join(directory, ".opencode/task-context"))
+      .map((file) =>
+        JSON.parse(
+          fs.readFileSync(
+            path.join(directory, ".opencode/task-context", file),
+            "utf8"
+          )
+        )
+      )
+    assert.ok(
+      cached.some((value) => value.checkpoint === "Reply OK without tools."),
+      agent
+    )
   }
   successful = true
   const session = await api("/session", {
@@ -609,7 +794,9 @@ export default { id: "harness", setup: async context => {
   } while (Date.now() < deadline)
   assert.ok(
     first.data.some(
-      (value) => value.type === "assistant" && value.tokens?.input === contextPolicy.opencode.startTokens
+      (value) =>
+        value.type === "assistant" &&
+        value.tokens?.input === contextPolicy.opencode.startTokens
     ),
     JSON.stringify({
       context: first,
@@ -632,7 +819,11 @@ export default { id: "harness", setup: async context => {
   const observation = JSON.parse(fs.readFileSync(observationFile, "utf8"))
   assert.equal(observation.sessionID, session.data.id)
   assert.equal(observation.delegation.childrenComplete, true)
-  assert.ok(observation.sequence.some((step) => step.tokens?.input === contextPolicy.opencode.startTokens))
+  assert.ok(
+    observation.sequence.some(
+      (step) => step.tokens?.input === contextPolicy.opencode.startTokens
+    )
+  )
   assert.equal(observation.money.validatedUSD, null)
   const summaryStart = requests.length
   await api(`/session/${session.data.id}/prompt`, {
@@ -724,7 +915,14 @@ export default { id: "harness", setup: async context => {
     repeated.data.filter((value) => value.title === target.title).length,
     1
   )
-  assert.equal(requests.slice(manualStart).filter(value => JSON.stringify(value).includes("Harness automatic Handoff.")).length, 1)
+  assert.equal(
+    requests
+      .slice(manualStart)
+      .filter((value) =>
+        JSON.stringify(value).includes("Harness automatic Handoff.")
+      ).length,
+    1
+  )
   eventsAbort.abort()
   await eventTask
   await wait(() =>
@@ -753,7 +951,10 @@ export default { id: "harness", setup: async context => {
   const continuedSystem = instructionText(continued)
   assert.equal(continuedSystem.split("# Working rules").length - 1, 1)
   assert.equal(continuedSystem.split("# OpenCode harness").length - 1, 1)
-  assert.doesNotMatch(JSON.stringify(continued.input), /Harness resume after compaction/)
+  assert.doesNotMatch(
+    JSON.stringify(continued.input),
+    /Harness resume after compaction/
+  )
   assert.doesNotMatch(continuedSystem, /Harness progress guard/)
   assert.ok(
     (JSON.stringify(continued.input).match(/Saved task context:/g) ?? [])
@@ -771,23 +972,61 @@ export default { id: "harness", setup: async context => {
     )
   )
   await api(`/session/${target.id}`, undefined, "DELETE")
-  await api(`/session/${session.data.id}/command`, { name: "handoff", text: "" })
-  const recreated = await api(`/session?directory=${encodeURIComponent(directory)}`)
-  const replacement = recreated.data.find(value => value.title === target.title)
+  await api(`/session/${session.data.id}/command`, {
+    name: "handoff",
+    text: ""
+  })
+  const recreated = await api(
+    `/session?directory=${encodeURIComponent(directory)}`
+  )
+  const replacement = recreated.data.find(
+    (value) => value.title === target.title
+  )
   assert.ok(replacement)
   assert.notEqual(replacement.id, target.id)
-  assert.equal(requests.slice(manualStart).filter(value => JSON.stringify(value).includes("Harness automatic Handoff.")).length, 2)
+  assert.equal(
+    requests
+      .slice(manualStart)
+      .filter((value) =>
+        JSON.stringify(value).includes("Harness automatic Handoff.")
+      ).length,
+    2
+  )
   await api(`/experimental/session/${replacement.id}/wait`, {})
-  const projectionSession = await api("/session", { agent: "build", location: { directory }, model: { providerID: "fixture", id: "model" } })
+  const projectionSession = await api("/session", {
+    agent: "build",
+    location: { directory },
+    model: { providerID: "fixture", id: "model" }
+  })
   const projectionStart = requests.length
-  await api(`/session/${projectionSession.data.id}/prompt`, { text: "CACHE_PROJECTION_FIXTURE: reply OK." })
+  await api(`/session/${projectionSession.data.id}/prompt`, {
+    text: "CACHE_PROJECTION_FIXTURE: reply OK."
+  })
   await api(`/experimental/session/${projectionSession.data.id}/wait`, {})
-  const projection = requests.slice(projectionStart).find(value => value.tools?.length && JSON.stringify(value).includes("CACHE_PROJECTION_FIXTURE"))
+  const projection = requests
+    .slice(projectionStart)
+    .find(
+      (value) =>
+        value.tools?.length &&
+        JSON.stringify(value).includes("CACHE_PROJECTION_FIXTURE")
+    )
   assert.ok(projection)
-  assert.equal(JSON.stringify(projection).split("CACHE_EVIDENCE_BODY").length - 1, 60)
-  assert.match(JSON.stringify(projection), /identical read result retained in tool call read-first/)
-  assert.doesNotMatch(JSON.stringify(projection), /STALE_INSTRUCTION_FIXTURE|STALE_ROUTING_FIXTURE/)
-  assert.equal(JSON.stringify(projection).split("# Working rules").length - 1, 1)
+  assert.equal(
+    JSON.stringify(projection).split("CACHE_EVIDENCE_BODY").length - 1,
+    60
+  )
+  assert.match(
+    JSON.stringify(projection),
+    /identical read result retained in tool call read-first/
+  )
+  assert.doesNotMatch(
+    JSON.stringify(projection),
+    /STALE_INSTRUCTION_FIXTURE|STALE_ROUTING_FIXTURE/
+  )
+  assert.equal(
+    JSON.stringify(projection).split("# Working rules").length - 1,
+    1
+  )
   const deepseekSession = await api("/session", {
     agent: "build",
     title: "DeepSeek routing fixture",
@@ -805,8 +1044,14 @@ export default { id: "harness", setup: async context => {
       JSON.stringify(value.input).includes("PRIVATE_PARENT_HISTORY")
   )
   assert.ok(flashRequest)
-  assert.doesNotMatch(JSON.stringify(flashRequest), /DeepSeek model routing|use one fresh harness-review|transfers this completed turn to Pro/)
-  assert.equal(requests.some(value => value.model === "deepseek-v4-pro"), false)
+  assert.doesNotMatch(
+    JSON.stringify(flashRequest),
+    /DeepSeek model routing|use one fresh harness-review|transfers this completed turn to Pro/
+  )
+  assert.equal(
+    requests.some((value) => value.model === "deepseek-v4-pro"),
+    false
+  )
   const handoffStart = requests.length
   await api(`/session/${deepseekID}/command`, { name: "handoff", text: "" })
   const flashHandoff = requests
@@ -841,24 +1086,59 @@ export default { id: "harness", setup: async context => {
     text: "Investigate the unresolved fixture."
   })
   await api(`/experimental/session/${stalledID}/wait`, {})
-  const stalledFile = path.join(observationDirectory(directory, path.join(directory, "state")), "sessions", `${stalledID}.json`)
+  const stalledFile = path.join(
+    observationDirectory(directory, path.join(directory, "state")),
+    "sessions",
+    `${stalledID}.json`
+  )
   await wait(() => fs.existsSync(stalledFile))
   const list = await api(`/session?directory=${encodeURIComponent(directory)}`)
-  assert.equal(list.data.some(value => value.title === "Handoff: Stalled investigation"), false)
-  assert.equal(requests.slice(escalationStart).some(value => value.model === "deepseek-v4-pro"), false)
-  assert.equal((await api(`/session/${stalledID}`)).data.model.id, "deepseek-flash")
-  const nativeTools = JSON.parse(fs.readFileSync(path.join(directory, "native-tools.json"), "utf8"))
-  assert.ok(nativeTools.some(tool => tool.name === "question"))
-  assert.ok(nativeTools.some(tool => tool.name === "brief_transition"))
-  assert.ok(nativeTools.some(tool => tool.name === "task_context"))
+  assert.equal(
+    list.data.some((value) => value.title === "Handoff: Stalled investigation"),
+    false
+  )
+  assert.equal(
+    requests
+      .slice(escalationStart)
+      .some((value) => value.model === "deepseek-v4-pro"),
+    false
+  )
+  assert.equal(
+    (await api(`/session/${stalledID}`)).data.model.id,
+    "deepseek-flash"
+  )
+  const nativeTools = JSON.parse(
+    fs.readFileSync(path.join(directory, "native-tools.json"), "utf8")
+  )
+  assert.ok(nativeTools.some((tool) => tool.name === "question"))
+  assert.ok(nativeTools.some((tool) => tool.name === "brief_transition"))
+  assert.ok(nativeTools.some((tool) => tool.name === "task_context"))
   for (const name of ["read", "grep", "glob", "shell"]) {
-    assert.match(nativeTools.find(tool => tool.name === name)?.description ?? "", /^For indexed project files, search\/read through TokenSave/)
-    assert.match(nativeTools.find(tool => tool.name === name)?.description ?? "", /Without an index, do not load tokensave-routing or call MCP/)
+    assert.match(
+      nativeTools.find((tool) => tool.name === name)?.description ?? "",
+      /^For indexed project files, search\/read through TokenSave/
+    )
+    assert.match(
+      nativeTools.find((tool) => tool.name === name)?.description ?? "",
+      /Without an index, do not load tokensave-routing or call MCP/
+    )
   }
-  assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /Load only a skill whose described scope this task actually touches/)
-  assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /Load tokensave-routing only when the project root has an index/)
-  assert.match(nativeTools.find(tool => tool.name === "skill")?.description ?? "", /returned Base directory/)
-  assert.match(nativeTools.find(tool => tool.name === "subagent")?.description ?? "", /^Use only when the user explicitly requests delegation/)
+  assert.match(
+    nativeTools.find((tool) => tool.name === "skill")?.description ?? "",
+    /Load only a skill whose described scope this task actually touches/
+  )
+  assert.match(
+    nativeTools.find((tool) => tool.name === "skill")?.description ?? "",
+    /Load tokensave-routing only when the project root has an index/
+  )
+  assert.match(
+    nativeTools.find((tool) => tool.name === "skill")?.description ?? "",
+    /returned Base directory/
+  )
+  assert.match(
+    nativeTools.find((tool) => tool.name === "subagent")?.description ?? "",
+    /^Use only when the user explicitly requests delegation/
+  )
   const briefStart = requests.length
   const briefSource = await api("/session", {
     agent: "build",
@@ -866,50 +1146,133 @@ export default { id: "harness", setup: async context => {
     model: { providerID: "deepseek", id: "deepseek-flash" },
     permissions: [{ action: "edit", resource: "private/**", effect: "deny" }]
   })
-  await api(`/session/${briefSource.data.id}/prompt`, { text: "BRIEF_NATIVE_START" })
-  const continuations = async () => (await api(`/session?directory=${encodeURIComponent(directory)}`)).data
-  const existingSessions = new Set((await continuations()).map(value => value.id))
+  await api(`/session/${briefSource.data.id}/prompt`, {
+    text: "BRIEF_NATIVE_START"
+  })
+  const continuations = async () =>
+    (await api(`/session?directory=${encodeURIComponent(directory)}`)).data
+  const existingSessions = new Set(
+    (await continuations()).map((value) => value.id)
+  )
   let planner
   const briefDeadline = Date.now() + 15000
   while (!planner && Date.now() < briefDeadline) {
-    planner = (await continuations()).find(value => !existingSessions.has(value.id) && value.model?.id === "deepseek-flash")
+    planner = (await continuations()).find(
+      (value) =>
+        !existingSessions.has(value.id) && value.model?.id === "deepseek-flash"
+    )
     if (!planner) await setTimeout(25)
   }
-  assert.ok(planner, "Native execution must deliver the queued brief to a fresh session")
+  assert.ok(
+    planner,
+    "Native execution must deliver the queued brief to a fresh session"
+  )
   assert.deepEqual(planner.model, briefSource.data.model)
-  await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Planning phase")))
-  const plannerRequest = requests.slice(briefStart).find(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Planning phase"))
+  await wait(() =>
+    requests
+      .slice(briefStart)
+      .some(
+        (value) =>
+          value.model === "deepseek-flash" &&
+          JSON.stringify(value).includes("Planning phase")
+      )
+  )
+  const plannerRequest = requests
+    .slice(briefStart)
+    .find(
+      (value) =>
+        value.model === "deepseek-flash" &&
+        JSON.stringify(value).includes("Planning phase")
+    )
   assert.equal(
     (JSON.stringify(plannerRequest).match(/Planning phase\./g) ?? []).length,
     1,
     "The restored planning session must carry the planning instructions once"
   )
   await api(`/experimental/session/${planner.id}/wait`, {})
-  assert.ok(requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")))
+  assert.ok(
+    requests
+      .slice(briefStart)
+      .some(
+        (value) =>
+          value.model === "deepseek-flash" &&
+          JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")
+      )
+  )
   assert.notEqual(planner.id, briefSource.data.id)
-  assert.deepEqual(planner.permissions, (await api(`/session/${briefSource.data.id}`)).data.permissions)
-  assert.equal((await continuations()).filter(value => !existingSessions.has(value.id)).length, 1)
-  await api(`/session/${planner.id}/prompt`, { text: "BRIEF_NATIVE_ANSWERS: neutral nodata; implementation authorized" })
+  assert.deepEqual(
+    planner.permissions,
+    (await api(`/session/${briefSource.data.id}`)).data.permissions
+  )
+  assert.equal(
+    (await continuations()).filter((value) => !existingSessions.has(value.id))
+      .length,
+    1
+  )
+  await api(`/session/${planner.id}/prompt`, {
+    text: "BRIEF_NATIVE_ANSWERS: neutral nodata; implementation authorized"
+  })
   let implementation
   const implementationDeadline = Date.now() + 15000
   while (!implementation && Date.now() < implementationDeadline) {
-    implementation = (await continuations()).find(value => value.id !== briefSource.data.id && value.title === `Handoff: ${planner.title}`)
+    implementation = (await continuations()).find(
+      (value) =>
+        value.id !== briefSource.data.id &&
+        value.title === `Handoff: ${planner.title}`
+    )
     if (!implementation) await setTimeout(25)
   }
-  assert.ok(implementation, "Answers must be carried into a fresh implementation session")
-  await wait(() => requests.slice(briefStart).some(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Restore the Handoff and executable plan")))
+  assert.ok(
+    implementation,
+    "Answers must be carried into a fresh implementation session"
+  )
+  await wait(() =>
+    requests
+      .slice(briefStart)
+      .some(
+        (value) =>
+          value.model === "deepseek-flash" &&
+          JSON.stringify(value).includes(
+            "Restore the Handoff and executable plan"
+          )
+      )
+  )
   await api(`/experimental/session/${implementation.id}/wait`, {})
   assert.equal(implementation.model.id, "deepseek-flash")
   assert.deepEqual(implementation.permissions, planner.permissions)
-  const implementationRequest = requests.slice(briefStart).find(value => value.model === "deepseek-flash" && JSON.stringify(value).includes("Restore the Handoff and executable plan"))
+  const implementationRequest = requests
+    .slice(briefStart)
+    .find(
+      (value) =>
+        value.model === "deepseek-flash" &&
+        JSON.stringify(value).includes(
+          "Restore the Handoff and executable plan"
+        )
+    )
   assert.ok(implementationRequest)
   assert.match(JSON.stringify(implementationRequest), /Answers: neutral nodata/)
-  assert.match(JSON.stringify(implementationRequest), /\.opencode\/plans\/native.md/)
-  assert.doesNotMatch(JSON.stringify(implementationRequest), /BRIEF_NATIVE_START|BRIEF_NATIVE_ANSWERS/)
+  assert.match(
+    JSON.stringify(implementationRequest),
+    /\.opencode\/plans\/native.md/
+  )
+  assert.doesNotMatch(
+    JSON.stringify(implementationRequest),
+    /BRIEF_NATIVE_START|BRIEF_NATIVE_ANSWERS/
+  )
   const completionStart = requests.length
-  await api(`/session/${implementation.id}/prompt`, { text: "TASK_NATIVE_COMPLETE" })
+  await api(`/session/${implementation.id}/prompt`, {
+    text: "TASK_NATIVE_COMPLETE"
+  })
   await api(`/experimental/session/${implementation.id}/wait`, {})
-  assert.ok(requests.slice(completionStart).some(value => JSON.stringify(value).includes("Task cache cleared. Other tasks and plan files were preserved.")))
+  assert.ok(
+    requests
+      .slice(completionStart)
+      .some((value) =>
+        JSON.stringify(value).includes(
+          "Task cache cleared. Other tasks and plan files were preserved."
+        )
+      )
+  )
 })
 
 test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
@@ -1030,7 +1393,11 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
         ...args
       ],
       {
-        env: { ...process.env, OPENCODE_CONFIG_DIR: directory, PLAYWRIGHT_MCP_EXTENSION_TOKEN: "test-token" },
+        env: {
+          ...process.env,
+          OPENCODE_CONFIG_DIR: directory,
+          PLAYWRIGHT_MCP_EXTENSION_TOKEN: "test-token"
+        },
         encoding: "utf8"
       }
     )
@@ -1045,11 +1412,13 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
   ])
   assert.match(fs.readFileSync(settings, "utf8"), /keep nested/)
   const synced = loadConfig(directory).current.mcp.servers
-  assert.equal(synced.playwright.environment.PLAYWRIGHT_MCP_EXTENSION_TOKEN, "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}")
+  assert.equal(
+    synced.playwright.environment.PLAYWRIGHT_MCP_EXTENSION_TOKEN,
+    "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
+  )
   assert.ok(!synced.playwright.command.includes("--manual-extension"))
-  assert.ok(synced.playwright.command.includes("--existing-tabs-only"))
   assert.ok(
-    Object.values(synced.playwright.environment).every(value =>
+    Object.values(synced.playwright.environment).every((value) =>
       /^\{env:[A-Z0-9_]+\}$/.test(value)
     )
   )
@@ -1064,7 +1433,10 @@ test("OpenCode MCP sync references the Playwright extension token in a clean con
   const run = (token) =>
     spawnSync(
       process.execPath,
-      [path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"), "--opencode"],
+      [
+        path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"),
+        "--opencode"
+      ],
       {
         env: {
           ...process.env,
@@ -1183,6 +1555,7 @@ function executionSandbox(t) {
     "brief.mjs",
     "task-context.mjs",
     "loop-guard.mjs",
+    "question-guard.mjs",
     "output-bounds.mjs",
     "handoff.mjs",
     "handoff-rpc.mjs",
@@ -1420,7 +1793,9 @@ test("OpenCode handles one execution event once across plugin instances", async 
   )
   assert.equal(result.status, 0, result.stderr + result.stdout)
   const { startup, total } = JSON.parse(result.stdout)
-  assert.ok(startup >= 4, `both instances synced their project first, saw ${startup}`)
+  assert.ok(
+    startup >= 4,
+    `both instances synced their project first, saw ${startup}`
+  )
   assert.equal(total, 2)
 })
-

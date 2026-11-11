@@ -1031,28 +1031,6 @@
     "when": "listFocus && !inputFocus && !treestickyScrollFocused"
   },
   {
-    "key": "ctrl+l",
-    "command": "runCommands",
-    "args": {
-      "commands": [
-        "workbench.action.terminal.new",
-        {
-          "command": "workbench.action.terminal.sendSequence",
-          "args": {
-            "text": "codex\n"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "key": "ctrl+shift+l",
-    "command": "workbench.action.terminal.sendSequence",
-    "args": {
-      "text": "codex\n"
-    }
-  },
-  {
     "key": "ctrl+k",
     "command": "runCommands",
     "args": {
@@ -1073,5 +1051,10 @@
     "args": {
       "text": "opencode\n"
     }
+  },
+  {
+    "key": "ctrl+k ctrl+l",
+    "command": "-editor.toggleFold",
+    "when": "editorTextFocus && foldingEnabled"
   }
 ]

@@ -14,13 +14,16 @@ test("retrieval guidance reaches native tools without changing execution or sche
     assert.match(tools.get(name).description, /Without an index, do not load tokensave-routing or call MCP/)
   }
   assert.match(tools.get("shell").description, /never search \/ or the home tree/)
-  assert.match(tools.get("shell").description, /do not create placeholder\/background shells/)
+  assert.match(tools.get("shell").description, /never create placeholder\/background shells/)
   assert.match(tools.get("skill").description, /Load only a skill whose described scope this task actually touches/)
   assert.match(tools.get("skill").description, /Load tokensave-routing only when the project root has an index/)
   assert.equal(tools.get("skill").description.includes("before project exploration"), false)
   assert.match(tools.get("skill").description, /returned Base directory/)
   assert.match(tools.get("subagent").description, /^Use only when the user explicitly requests delegation/)
-  assert.match(tools.get("execute").description, /scoped tokensave_context with task/)
+  assert.match(tools.get("execute").description, /tokensave_context \(include_code=false\)/)
+  assert.match(tools.get("execute").description, /Pass exactly one input object per call/)
+  assert.match(tools.get("execute").description, /`lines` is `"A-B"`/)
+  assert.match(tools.get("execute").description, /`tokensave_body` requires `symbol` or `node_id`/)
   assert.match(tools.get("execute").description, /Without an index, do not use it for project retrieval/)
   assert.equal(tools.get("edit").description, "Original edit")
   for (const tool of tools.values()) {

@@ -26,10 +26,13 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<enco
   `!<iid>` → its source branch through that row.
 - Option label `!<iid> <title, ≤40 chars>`, description
   `<source> → <target>, <author>`, plus `черновик` when `draft`.
-- None left → `Открытых MR коллег нет`, stop. Otherwise show a numbered list
-  and use the requested MR or queue; ask for a selection only if it cannot
-  be inferred. Use an available question tool
-  only when its schema fits; do not require multiple-selection controls.
+- None left → `Открытых MR коллег нет`, stop. Otherwise use the requested MR
+  or queue; ask for a selection only if it cannot be inferred. Ask through the
+  client's interactive question tool whenever it offers one — one question,
+  `!<iid>` labels, `multiple` only when a queue is allowed; OpenCode calls it
+  `question`. A numbered list in chat alone is not a question: it is the
+  fallback only without such a tool, and then say so and accept bare numbers.
+  Do not require multiple-selection controls.
 
 ## Scope of one MR
 

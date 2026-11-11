@@ -7,10 +7,11 @@ import { registerHandoff } from "./handoff.mjs"
 import { registerBrief } from "./brief.mjs"
 import { registerTaskContext } from "./task-context.mjs"
 import { registerLoopGuard } from "./loop-guard.mjs"
+import { registerQuestionGuard } from "./question-guard.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
 import { refreshCostReport, localDate, defaultCostConfig } from "./cost-report.mjs"
 import { registerRetrievalRouting } from "./retrieval-routing.mjs"
-import { deepseekModels, offPeakModelID } from "./model-routing.mjs"
+import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
 
 const claimed = (globalThis[Symbol.for("harness.events.claimed")] ??= new Set())
@@ -127,6 +128,7 @@ export default {
     const loopGuard = await registerLoopGuard(context, taskContext)
     const handoff = await registerHandoff(context, observe, taskContext)
     const brief = await registerBrief(context, handoff)
+    const questionGuard = await registerQuestionGuard(context)
     readInstructions()
     const harnessInstructions = () => ({
       role: "user",
@@ -162,9 +164,8 @@ export default {
           const sessionID = event.data.sessionID
           if (model?.providerID !== deepseekModels.flash.providerID) continue
           const peak = isPeakAt(new Date())
-          const offpeak = offPeakModelID(modelId)
           const peakNote = peak
-            ? `; сейчас пиковое окно DeepSeek, тарифы вдвое выше${offpeak !== modelId ? `; непиковый алиас ${offpeak} вдвое дешевле` : ""}`
+            ? "; сейчас пиковое окно DeepSeek, реальный тариф вдвое выше учтённого"
             : ""
           if (modelId === deepseekModels.pro.id) {
             const flash = deepseekTokenRates[deepseekModels.flash.id].offPeak
@@ -188,7 +189,7 @@ export default {
           } else if (peak) {
             notify(
               "DeepSeek пик",
-              `Сейчас пиковое окно DeepSeek: тарифы вдвое выше${offpeak !== modelId ? `. Непиковый алиас: ${offpeak}` : ""}.`
+              "Сейчас пиковое окно DeepSeek: реальный тариф вдвое выше учтённого в конфиге. Отложите пакетную задачу через bin/opencode-offpeak.mjs."
             )
           }
           continue
@@ -196,12 +197,19 @@ export default {
         if (event.type.startsWith("session.execution.")) {
           const sessionID = event.data.sessionID
           loopGuard.finishTurn(sessionID)
-          const owner = await context.session.get({ sessionID }).then(source => source.location.directory).catch(() => undefined)
+          const source = await context.session.get({ sessionID }).catch(() => undefined)
+          const owner = source?.location.directory
           sync()
           const warnings = await observe(sessionID, owner ?? directory)
           for (const warning of warnings)
             if (warning.code === "long-session" && warning.sessionID === sessionID)
               handoffHints.add(sessionID)
+          if (event.type === "session.execution.succeeded")
+            try {
+              await questionGuard.check(sessionID, source)
+            } catch (error) {
+              process.stderr.write(`Harness question guard failed: ${error.message}\n`)
+            }
           try {
             await brief.settle(sessionID, event.type === "session.execution.succeeded")
           } catch (error) {

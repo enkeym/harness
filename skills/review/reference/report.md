@@ -122,8 +122,9 @@ An unread file on the coverage line → never `approved`.
 
 ## Menu
 
-Ask once after the summary, recommended option first. Use a question tool
-available in the current mode within its schema, otherwise a numbered chat list.
+Ask once after the summary, recommended option first. Use the client's
+interactive question tool whenever it offers one, within its schema; a numbered
+chat list alone is not a question and is the fallback only without such a tool.
 
 The user's branch:
 
@@ -149,7 +150,8 @@ A colleague's:
   *Current branch with an open MR*; no MR fits → the MR comments in chat,
   one line why.
 - Не исправлять → one line, no recap.
-- Fix selected → ask for finding numbers or severity groups in text; do not
+- Fix selected → question tool offering the findings by number and by severity
+  group, `multiple` allowed; typed numbers only without such a tool. Do not
   require a multiple-selection control.
 - Chosen fixes: exactly the fix shown, nothing more; never `git add` — in the
   soft-reset flow the colleague's change stays staged and the fix unstaged,

@@ -23,20 +23,6 @@
           },
           "settings": { "api": "chat", "reasoningEffort": "low" },
           "cost": {
-            "input": 1.32,
-            "output": 3.96,
-            "cache": { "read": 0.044, "write": 0 }
-          }
-        },
-        "deepseek-v4-pro-offpeak": {
-          "name": "deepseek-v4-pro (low-cost)",
-          "modelID": "deepseek-v4-pro",
-          "limit": { "input": 150000, "output": 8192 },
-          "capabilities": {
-            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
-          },
-          "settings": { "api": "chat", "reasoningEffort": "low" },
-          "cost": {
             "input": 0.66,
             "output": 1.98,
             "cache": { "read": 0.022, "write": 0 }
@@ -51,34 +37,26 @@
           },
           "settings": { "api": "chat", "reasoningEffort": "low" },
           "cost": {
-            "input": 0.3,
-            "output": 1.2,
-            "cache": { "read": 0.006, "write": 0 }
-          }
-        },
-        "deepseek-flash-offpeak": {
-          "name": "deepseek-flash (low-cost)",
-          "modelID": "deepseek-flash",
-          "limit": { "input": 150000, "output": 8192 },
-          "capabilities": {
-            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
-          },
-          "settings": { "api": "chat", "reasoningEffort": "low" },
-          "cost": {
             "input": 0.15,
             "output": 0.6,
             "cache": { "read": 0.003, "write": 0 }
           }
         }
       }
+    },
+    "kimi-for-coding-oauth": {
+      "settings": { "reasoningEffort": "low" }
+    },
+    "openai": {
+      "settings": { "reasoningEffort": "low" }
     }
   },
-  "model": "deepseek/deepseek-flash-offpeak",
+  "model": "deepseek/deepseek-flash",
   "instructions": [],
   "commands": {},
   "agents": {
     "compaction": {
-      "model": "deepseek/deepseek-flash-offpeak#low"
+      "model": "deepseek/deepseek-flash#low"
     }
   },
   "compaction": {
@@ -127,7 +105,6 @@
           "--catalog",
           "/home/korolev/.config/harness/repo/mcp/playwright-tools.json",
           "--playwright-compat",
-          "--existing-tabs-only",
           "--",
           "npx",
           "-y",

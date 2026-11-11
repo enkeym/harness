@@ -39,7 +39,6 @@ if (
 }
 const compact = options.includes("--compact")
 const playwrightCompat = options.includes("--playwright-compat")
-const existingTabsOnly = options.includes("--existing-tabs-only")
 const backendArgs = args.slice(split + 2)
 const extensionTokenRequired =
   playwrightCompat && backendArgs.includes("--extension")
@@ -54,20 +53,14 @@ const symbolAliases = new Map([
   ["tokensave_signature", ["node_id"]],
   ["tokensave_derives", ["node_id"]]
 ])
-if ((playwrightCompat || existingTabsOnly) && !catalog)
-  throw new Error("--playwright-compat and --existing-tabs-only require --catalog")
-if (existingTabsOnly && !playwrightCompat)
-  throw new Error("--existing-tabs-only requires --playwright-compat")
+if (playwrightCompat && !catalog)
+  throw new Error("--playwright-compat requires --catalog")
 if (playwrightCompat) {
   for (const tool of catalog.tools) {
     const schema = tool.inputSchema
     if (tool.name === "browser_tabs") {
       schema.required = (schema.required || []).filter((key) => key !== "action")
       schema.properties.action.default = "list"
-      if (existingTabsOnly) {
-        schema.properties.action.enum = schema.properties.action.enum.filter((action) => action !== "new")
-        schema.properties.action.description = "List or select an attached tab; opening new tabs is disabled."
-      }
     } else if (tool.name === "browser_click") {
       schema.properties.ref = { type: "string", description: "Alias for target" }
       schema.required = (schema.required || []).filter((key) => key !== "target")
@@ -266,10 +259,6 @@ function prepareCall(message) {
     }
     if (params.name === "browser_tabs" && input.action === undefined)
       input.action = "list"
-    if (existingTabsOnly && params.name === "browser_tabs" && input.action === "new") {
-      send({ jsonrpc: "2.0", id: message.id, error: { code: -32602, message: "New tabs are disabled. Attach the existing page to this Playwright client and select it." } })
-      return false
-    }
     else if (params.name === "browser_click" && input.target === undefined && input.ref !== undefined)
       input.target = input.ref
     else if (params.name === "browser_evaluate" && input.function === undefined && input.expression !== undefined)
@@ -291,12 +280,31 @@ function prepareCall(message) {
     delete input.id
     params.arguments = input
   }
+  if (params.name === "tokensave_body") {
+    const input = params.arguments || {}
+    const named = (value) => typeof value === "string" && value.trim() !== ""
+    if (!named(input.symbol) && !named(input.node_id)) {
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: {
+          code: -32602,
+          message:
+            "tokensave_body requires a non-empty symbol or node_id; pass exactly one of them."
+        }
+      })
+      return false
+    }
+  }
   if (params.name === "tokensave_read") {
     const input = params.arguments || {}
     if (typeof input.lines === "string") {
-      const range = /^(\d+)\s*(?:[,;]\s*|\s+)(\d+)$/.exec(input.lines.trim())
+      const value = input.lines.trim().replace(/[\u2013\u2014]/g, "-")
+      const range = /^(\d+)\s*(?:[,;-]\s*|\s+)(\d+)$/.exec(value)
       if (range) {
-        input.lines = `${range[1]}-${range[2]}`
+        const start = Number(range[1])
+        const end = Number(range[2])
+        input.lines = `${Math.min(start, end)}-${Math.max(start, end)}`
         params.arguments = input
       }
     }
