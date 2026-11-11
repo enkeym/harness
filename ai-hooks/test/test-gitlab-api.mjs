@@ -11,6 +11,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitlab-api-test-'));
 const fakeBin = path.join(tmp, 'bin');
 fs.mkdirSync(fakeBin);
 fs.writeFileSync(path.join(fakeBin, 'glab'), `#!/bin/sh
+printf '%s\\n' "$@" > "$FAKE_GL_ARGS"
 printf '%s' "$FAKE_GL_BODY"
 printf '%s' "$FAKE_GL_ERROR" >&2
 exit "$FAKE_GL_EXIT"
@@ -23,6 +24,7 @@ exit 0
 `, { mode: 0o755 });
 const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`,
   FAKE_GL_BODY: '{"iid":42}', FAKE_GL_ERROR: '', FAKE_GL_EXIT: '0',
+  FAKE_GL_ARGS: path.join(tmp, 'glab-args'),
   FAKE_CURL_BODY: '{"iid":43}\n201', FAKE_CURL_ARGS: path.join(tmp, 'args'),
   FAKE_CURL_HEADERS: path.join(tmp, 'headers') };
 for (const key of ['GITLAB_TOKEN', 'GLAB_TOKEN', 'GITLAB_ACCESS_TOKEN']) delete env[key];
@@ -36,6 +38,19 @@ try {
   assert.equal(result.status, 0, JSON.stringify({ error: result.error?.message, stderr: result.stderr, stdout: result.stdout }));
   assert.equal(JSON.parse(result.stdout).iid, 42, 'existing glab session needs no token');
   assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false);
+  assert.ok(!fs.readFileSync(env.FAKE_GL_ARGS, 'utf8').includes('Content-Type:'));
+
+  const input = path.join(tmp, 'mr.json');
+  fs.writeFileSync(input, JSON.stringify({ title: 'Test merge request' }));
+  for (const method of ['POST', 'PUT', 'PATCH']) {
+    result = run({}, ['--method', method, '--input', input]);
+    assert.equal(result.status, 0, result.stderr);
+    const glabArgs = fs.readFileSync(env.FAKE_GL_ARGS, 'utf8').trimEnd().split('\n');
+    assert.deepEqual(glabArgs, ['api', '--hostname', 'gitlab.example.test', '--method', method,
+      '--input', input, '--header', 'Content-Type: application/json',
+      'projects/example%2Frepo/merge_requests']);
+    assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false);
+  }
 
   const configFailure = { FAKE_GL_EXIT: '1', FAKE_GL_ERROR: 'failed to read configuration: read-only file system', FAKE_GL_BODY: '' };
   result = run({ ...configFailure, GITLAB_TOKEN: 'synthetic-audit-token' });

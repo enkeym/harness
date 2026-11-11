@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 const TIMEOUT_MS = 90_000;
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+const JSON_CONTENT_TYPE_HEADER = 'Content-Type: application/json';
 const args = process.argv.slice(2);
 let host, input;
 let method = 'GET';
@@ -35,7 +36,7 @@ const token = process.env.GITLAB_TOKEN || process.env.GLAB_TOKEN || process.env.
 if (token && /[\r\n]/.test(token)) fail('некорректный формат токена окружения');
 const options = { encoding: 'utf8', timeout: TIMEOUT_MS, maxBuffer: MAX_RESPONSE_BYTES };
 const glab = spawnSync('glab', ['api', '--hostname', host, '--method', method,
-  ...(input ? ['--input', input] : []), endpoints[0]], options);
+  ...(input ? ['--input', input, '--header', JSON_CONTENT_TYPE_HEADER] : []), endpoints[0]], options);
 
 function output(body) {
   try { console.log(JSON.stringify(body.trim() ? JSON.parse(body) : null)); }
@@ -64,7 +65,7 @@ if (!localFailure || !token) {
 const url = `https://${host}/api/v4/${endpoints[0]}`;
 const curl = spawnSync('curl', ['--silent', '--show-error', '--connect-timeout', '10',
   '--max-time', '60', '--header', '@-', '--request', method,
-  ...(input ? ['--header', 'Content-Type: application/json', '--data-binary', `@${input}`] : []),
+  ...(input ? ['--header', JSON_CONTENT_TYPE_HEADER, '--data-binary', `@${input}`] : []),
   '--write-out', '\n%{http_code}', url], { ...options, input: `PRIVATE-TOKEN: ${token}\n` });
 if (curl.error || curl.status !== 0) fail('ошибка сети или таймаут curl; запись автоматически не повторяется');
 const split = curl.stdout.lastIndexOf('\n');
