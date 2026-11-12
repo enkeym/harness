@@ -125,7 +125,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   fs.writeFileSync(alternative, '{"model":"user/model"}')
   fs.writeFileSync(
     settings,
-    '{ // user config\n "instructions": ["custom.md"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n}'
+    '{ // user config\n "instructions": ["custom.md"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n "agents": {"plan": {"disable": true}},\n}'
   )
   const before = fs.readFileSync(settings, "utf8")
   const run = (...args) =>
@@ -193,6 +193,13 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.deepEqual(loadConfig(directory).current.compaction.keep, {
     tokens: contextPolicy.opencode.keepTokens
   })
+  assert.equal(contextPolicy.opencode.keepTokens, 10000)
+  assert.equal(contextPolicy.opencode.startTokens, 135000)
+  assert.equal(loadConfig(directory).current.compaction.keep.tokens, 10000)
+  assert.equal(loadConfig(directory).current.agents.plan.disabled, true)
+  assert.equal(loadConfig(directory).current.agents.plan.disable, undefined)
+  assert.notEqual(loadConfig(directory).current.agents.ask?.disabled, true)
+  assert.notEqual(loadConfig(directory).current.agents.build?.disabled, true)
   assert.equal(
     fs.realpathSync(path.join(directory, "agents/ask.md")),
     path.resolve(import.meta.dirname, "../../opencode/agent/ask.md")
@@ -468,8 +475,8 @@ export default { id: "harness", setup: async context => {
               name: "execute",
               arguments: JSON.stringify({
                 code: completeTask
-                  ? 'return await tools.task_context({action:"complete"});'
-                  : `${briefStage === "plan" ? 'await tools.task_context({action:"save",checkpoint:"NATIVE_TASK_CHECKPOINT: next edit source.mjs"});' : 'await tools.task_context({action:"restore"});'} return await tools.brief_transition(${JSON.stringify({ stage: briefStage, handoff })});`
+                  ? 'return await tools.context_cache({action:"complete"});'
+                  : `${briefStage === "plan" ? "" : 'await tools.context_cache({action:"restore"}); '}return await tools.brief_transition(${JSON.stringify({ stage: briefStage, handoff })});`
               }),
               status: "completed"
             }
@@ -753,20 +760,20 @@ export default { id: "harness", setup: async context => {
       .find((value) =>
         JSON.stringify(value).includes("Harness automatic Handoff.")
       )
-    assert.match(JSON.stringify(compaction), /Saved task context:/, agent)
+    assert.match(JSON.stringify(compaction), /Cached context:/, agent)
     assert.match(JSON.stringify(compaction), /Reply OK without tools\./, agent)
     const cached = fs
-      .readdirSync(path.join(directory, ".opencode/task-context"))
+      .readdirSync(path.join(directory, ".opencode/context-cache"))
       .map((file) =>
         JSON.parse(
           fs.readFileSync(
-            path.join(directory, ".opencode/task-context", file),
+            path.join(directory, ".opencode/context-cache", file),
             "utf8"
           )
         )
       )
     assert.ok(
-      cached.some((value) => value.checkpoint === "Reply OK without tools."),
+      cached.some((value) => value.version === 2 && !("checkpoint" in value)),
       agent
     )
   }
@@ -885,64 +892,58 @@ export default { id: "harness", setup: async context => {
     name: "handoff",
     text: ""
   })
-  const sessions = await api(
-    `/session?directory=${encodeURIComponent(directory)}`
-  )
-  const target = sessions.data.find(
-    (value) => value.title === "Handoff: Automatic Handoff fixture"
-  )
-  assert.ok(target)
-  assert.notEqual(target.id, session.data.id)
-  assert.equal(target.parentID, undefined)
-  assert.deepEqual(target.model, session.data.model)
-  assert.equal(target.agent, session.data.agent)
-  await wait(
-    () =>
-      JSON.parse(fs.readFileSync(observationFile, "utf8")).handoff?.targetID ===
-      target.id
+  await wait(() =>
+    requests
+      .slice(manualStart)
+      .some((value) => JSON.stringify(value).includes("Cached context:"))
   )
   await wait(() => events.includes('"status":"ready"'))
   assert.match(events, /"status":"preparing"/)
-  assert.ok(events.includes(target.id))
-  await api(`/session/${session.data.id}/command`, {
-    name: "handoff",
-    text: ""
-  })
-  const repeated = await api(
+  assert.doesNotMatch(events, /"targetID"/)
+  const sessions = await api(
     `/session?directory=${encodeURIComponent(directory)}`
   )
   assert.equal(
-    repeated.data.filter((value) => value.title === target.title).length,
-    1
+    sessions.data.some(
+      (value) => value.title === "Handoff: Automatic Handoff fixture"
+    ),
+    false
   )
   assert.equal(
     requests
       .slice(manualStart)
-      .filter((value) =>
-        JSON.stringify(value).includes("Harness automatic Handoff.")
+      .filter(
+        (value) =>
+          JSON.stringify(value).includes("Harness automatic Handoff.") &&
+          !JSON.stringify(value).includes("Cached context:")
       ).length,
     1
   )
+  const compaction = requests
+    .slice(manualStart)
+    .find((value) => JSON.stringify(value).includes("Cached context:"))
+  assert.match(JSON.stringify(compaction.input), /Cached context:/)
+  assert.match(JSON.stringify(compaction.input), /Task plan: \.opencode\/plans\//)
   eventsAbort.abort()
   await eventTask
   await wait(() =>
     requests
       .slice(manualStart)
-      .some((value) =>
-        JSON.stringify(value.input).includes(
-          "continue the first unfinished step"
-        )
+      .some(
+        (value) =>
+          value.tools?.length &&
+          !JSON.stringify(value).includes("Harness automatic Handoff.") &&
+          JSON.stringify(value.input).includes("Handoff fixture")
       )
   )
   const continued = requests
     .slice(manualStart)
-    .find((value) =>
-      JSON.stringify(value.input).includes("continue the first unfinished step")
+    .find(
+      (value) =>
+        value.tools?.length &&
+        !JSON.stringify(value).includes("Harness automatic Handoff.") &&
+        JSON.stringify(value.input).includes("Handoff fixture")
     )
-  assert.match(
-    JSON.stringify(continued.input),
-    /continue the first unfinished step/
-  )
   assert.match(JSON.stringify(continued.input), /Handoff fixture/)
   assert.doesNotMatch(
     JSON.stringify(continued.input),
@@ -951,7 +952,7 @@ export default { id: "harness", setup: async context => {
   const continuedSystem = instructionText(continued)
   assert.equal(continuedSystem.split("# Working rules").length - 1, 1)
   assert.equal(continuedSystem.split("# OpenCode harness").length - 1, 1)
-  assert.doesNotMatch(
+  assert.match(
     JSON.stringify(continued.input),
     /Harness resume after compaction/
   )
@@ -960,39 +961,30 @@ export default { id: "harness", setup: async context => {
     (JSON.stringify(continued.input).match(/Saved task context:/g) ?? [])
       .length <= 1
   )
+  const handoffPlans = fs.readdirSync(path.join(directory, ".opencode", "plans"))
+  assert.equal(handoffPlans.length, 1)
   assert.match(
-    fs.readFileSync(path.join(directory, ".opencode", "HANDOFF.md"), "utf8"),
+    fs.readFileSync(path.join(directory, ".opencode", "plans", handoffPlans[0]), "utf8"),
     /Handoff fixture/
   )
-  await api(`/experimental/session/${target.id}/wait`, {})
-  const targetContext = await api(`/session/${target.id}/context`)
-  assert.ok(
-    targetContext.data.some(
-      (value) => value.type === "assistant" && value.time.completed
-    )
-  )
-  await api(`/session/${target.id}`, undefined, "DELETE")
   await api(`/session/${session.data.id}/command`, {
     name: "handoff",
     text: ""
   })
-  const recreated = await api(
-    `/session?directory=${encodeURIComponent(directory)}`
+  assert.equal(
+    fs.readdirSync(path.join(directory, ".opencode", "plans")).length,
+    1
   )
-  const replacement = recreated.data.find(
-    (value) => value.title === target.title
-  )
-  assert.ok(replacement)
-  assert.notEqual(replacement.id, target.id)
   assert.equal(
     requests
       .slice(manualStart)
-      .filter((value) =>
-        JSON.stringify(value).includes("Harness automatic Handoff.")
+      .filter(
+        (value) =>
+          JSON.stringify(value).includes("Harness automatic Handoff.") &&
+          !JSON.stringify(value).includes("Cached context:")
       ).length,
-    2
+    1
   )
-  await api(`/experimental/session/${replacement.id}/wait`, {})
   const projectionSession = await api("/session", {
     agent: "build",
     location: { directory },
@@ -1063,13 +1055,7 @@ export default { id: "harness", setup: async context => {
   await wait(() =>
     requests
       .slice(handoffStart)
-      .some(
-        (value) =>
-          value.model === "deepseek-flash" &&
-          JSON.stringify(value.input).includes(
-            "continue the first unfinished step"
-          )
-      )
+      .some((value) => JSON.stringify(value).includes("Cached context:"))
   )
   const sourceAfter = await api(`/session/${deepseekID}`)
   assert.equal(sourceAfter.data.model.id, "deepseek-flash")
@@ -1112,7 +1098,7 @@ export default { id: "harness", setup: async context => {
   )
   assert.ok(nativeTools.some((tool) => tool.name === "question"))
   assert.ok(nativeTools.some((tool) => tool.name === "brief_transition"))
-  assert.ok(nativeTools.some((tool) => tool.name === "task_context"))
+  assert.ok(nativeTools.some((tool) => tool.name === "context_cache"))
   for (const name of ["read", "grep", "glob", "shell"]) {
     assert.match(
       nativeTools.find((tool) => tool.name === name)?.description ?? "",
@@ -1154,20 +1140,6 @@ export default { id: "harness", setup: async context => {
   const existingSessions = new Set(
     (await continuations()).map((value) => value.id)
   )
-  let planner
-  const briefDeadline = Date.now() + 15000
-  while (!planner && Date.now() < briefDeadline) {
-    planner = (await continuations()).find(
-      (value) =>
-        !existingSessions.has(value.id) && value.model?.id === "deepseek-flash"
-    )
-    if (!planner) await setTimeout(25)
-  }
-  assert.ok(
-    planner,
-    "Native execution must deliver the queued brief to a fresh session"
-  )
-  assert.deepEqual(planner.model, briefSource.data.model)
   await wait(() =>
     requests
       .slice(briefStart)
@@ -1187,89 +1159,73 @@ export default { id: "harness", setup: async context => {
   assert.equal(
     (JSON.stringify(plannerRequest).match(/Planning phase\./g) ?? []).length,
     1,
-    "The restored planning session must carry the planning instructions once"
+    "The compacted session must carry the planning instructions once"
   )
-  await api(`/experimental/session/${planner.id}/wait`, {})
-  assert.ok(
-    requests
-      .slice(briefStart)
-      .some(
-        (value) =>
-          value.model === "deepseek-flash" &&
-          JSON.stringify(value).includes("NATIVE_TASK_CHECKPOINT")
-      )
+  assert.match(
+    JSON.stringify(plannerRequest),
+    /Task plan: \.opencode\/plans\//
   )
-  assert.notEqual(planner.id, briefSource.data.id)
+  await api(`/experimental/session/${briefSource.data.id}/wait`, {})
   assert.deepEqual(
-    planner.permissions,
-    (await api(`/session/${briefSource.data.id}`)).data.permissions
+    (await api(`/session/${briefSource.data.id}`)).data.permissions,
+    briefSource.data.permissions
   )
   assert.equal(
     (await continuations()).filter((value) => !existingSessions.has(value.id))
       .length,
-    1
+    0
   )
-  await api(`/session/${planner.id}/prompt`, {
+  await api(`/session/${briefSource.data.id}/prompt`, {
     text: "BRIEF_NATIVE_ANSWERS: neutral nodata; implementation authorized"
   })
-  let implementation
-  const implementationDeadline = Date.now() + 15000
-  while (!implementation && Date.now() < implementationDeadline) {
-    implementation = (await continuations()).find(
-      (value) =>
-        value.id !== briefSource.data.id &&
-        value.title === `Handoff: ${planner.title}`
-    )
-    if (!implementation) await setTimeout(25)
-  }
-  assert.ok(
-    implementation,
-    "Answers must be carried into a fresh implementation session"
-  )
   await wait(() =>
     requests
       .slice(briefStart)
       .some(
         (value) =>
           value.model === "deepseek-flash" &&
-          JSON.stringify(value).includes(
-            "Restore the Handoff and executable plan"
-          )
+          value.tools?.length &&
+          JSON.stringify(value).includes("Harness resume after compaction") &&
+          !JSON.stringify(value).includes("Harness automatic Handoff.")
       )
   )
-  await api(`/experimental/session/${implementation.id}/wait`, {})
-  assert.equal(implementation.model.id, "deepseek-flash")
-  assert.deepEqual(implementation.permissions, planner.permissions)
+  await api(`/experimental/session/${briefSource.data.id}/wait`, {})
   const implementationRequest = requests
     .slice(briefStart)
     .find(
       (value) =>
         value.model === "deepseek-flash" &&
-        JSON.stringify(value).includes(
-          "Restore the Handoff and executable plan"
-        )
+        value.tools?.length &&
+        JSON.stringify(value).includes("Harness resume after compaction") &&
+        !JSON.stringify(value).includes("Harness automatic Handoff.")
     )
   assert.ok(implementationRequest)
-  assert.match(JSON.stringify(implementationRequest), /Answers: neutral nodata/)
+  const implementationPlan = /Task plan: (\.opencode\/plans\/[a-z0-9-]+\.md)/.exec(
+    JSON.stringify(implementationRequest)
+  )?.[1]
+  assert.ok(implementationPlan)
   assert.match(
-    JSON.stringify(implementationRequest),
-    /\.opencode\/plans\/native.md/
+    fs.readFileSync(path.join(directory, implementationPlan), "utf8"),
+    /Answers: neutral nodata/
   )
   assert.doesNotMatch(
     JSON.stringify(implementationRequest),
-    /BRIEF_NATIVE_START|BRIEF_NATIVE_ANSWERS/
+    /BRIEF_NATIVE_START|BRIEF_NATIVE_ANSWERS|Answers: neutral nodata/
   )
+  const briefSourceAfter = await api(`/session/${briefSource.data.id}`)
+  assert.equal(briefSourceAfter.data.model.id, "deepseek-flash")
+  assert.deepEqual(briefSourceAfter.data.permissions, briefSource.data.permissions)
   const completionStart = requests.length
-  await api(`/session/${implementation.id}/prompt`, {
+  await api(`/session/${briefSource.data.id}/prompt`, {
     text: "TASK_NATIVE_COMPLETE"
   })
-  await api(`/experimental/session/${implementation.id}/wait`, {})
+  await api(`/experimental/session/${briefSource.data.id}/wait`, {})
   assert.ok(
     requests
       .slice(completionStart)
       .some((value) =>
         JSON.stringify(value).includes(
-          "Task cache cleared. Other tasks and plan files were preserved."
+          "Context cache cleared. Other tasks and plan files were preserved."
         )
       )
   )
@@ -1553,12 +1509,14 @@ function executionSandbox(t) {
   for (const file of [
     "harness.js",
     "brief.mjs",
-    "task-context.mjs",
+    "evidence-cache.mjs",
     "loop-guard.mjs",
     "question-guard.mjs",
     "output-bounds.mjs",
     "handoff.mjs",
     "handoff-rpc.mjs",
+    "plan-store.mjs",
+    "session-compaction.mjs",
     "model-routing.mjs",
     "observations.mjs",
     "cost-policy.mjs",

@@ -57,12 +57,15 @@
   "agents": {
     "compaction": {
       "model": "deepseek/deepseek-flash#low"
+    },
+    "plan": {
+      "disabled": true
     }
   },
   "compaction": {
     "auto": true,
     "keep": {
-      "tokens": 20000
+      "tokens": 10000
     },
     "buffer": 30000
   },

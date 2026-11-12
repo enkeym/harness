@@ -4,8 +4,9 @@ import { contextPolicy, readHandoffPrompt } from "../ai-hooks/bin/context-policy
 import { readInstructions } from "./instructions.mjs"
 import { deduplicateContext } from "./context-cache.mjs"
 import { registerHandoff } from "./handoff.mjs"
+import { finishCompaction } from "./session-compaction.mjs"
 import { registerBrief } from "./brief.mjs"
-import { registerTaskContext } from "./task-context.mjs"
+import { registerContextCache } from "./evidence-cache.mjs"
 import { registerLoopGuard } from "./loop-guard.mjs"
 import { registerQuestionGuard } from "./question-guard.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
@@ -124,9 +125,9 @@ export default {
       observationQueue = result
       return result
     }
-    const taskContext = await registerTaskContext(context)
-    const loopGuard = await registerLoopGuard(context, taskContext)
-    const handoff = await registerHandoff(context, observe, taskContext)
+    const contextCache = await registerContextCache(context)
+    const loopGuard = await registerLoopGuard(context, contextCache)
+    const handoff = await registerHandoff(context, observe, contextCache)
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
     readInstructions()
@@ -152,7 +153,9 @@ export default {
         "session.execution.succeeded",
         "session.execution.failed",
         "session.execution.interrupted",
-        "session.model.selected"
+        "session.model.selected",
+        "session.compaction.ended",
+        "session.compaction.failed"
       ]
     })
     const consume = async () => {
@@ -194,6 +197,13 @@ export default {
           }
           continue
         }
+        if (
+          event.type === "session.compaction.ended" ||
+          event.type === "session.compaction.failed"
+        ) {
+          finishCompaction(event.data.sessionID)
+          continue
+        }
         if (event.type.startsWith("session.execution.")) {
           const sessionID = event.data.sessionID
           loopGuard.finishTurn(sessionID)
@@ -216,9 +226,9 @@ export default {
             process.stderr.write(`Harness brief transfer failed: ${error.message}\n`)
           }
           try {
-            await taskContext.prune()
+            await contextCache.prune()
           } catch (error) {
-            process.stderr.write(`Harness task context cleanup failed: ${error.message}\n`)
+            process.stderr.write(`Harness context cache cleanup failed: ${error.message}\n`)
           }
         }
       }

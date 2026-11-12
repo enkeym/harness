@@ -58,13 +58,3 @@ export function configureModelRouting(config) {
     if (id === "deepseek/deepseek-flash" || id === "deepseek/deepseek-v4-pro") delete agent.model
   }
 }
-
-export function stripHandoffRoute(text) {
-  return text.replace(/^[ \t]*HARNESS-ROUTE:.*$/gm, "").trim()
-}
-
-export function resolveHandoffModel(sourceModel, override) {
-  if (sourceModel.providerID === "deepseek" && override === "pro") return deepseekModels.pro
-  if (sourceModel.providerID === "deepseek" && override === "flash") return deepseekModels.flash
-  return sourceModel
-}

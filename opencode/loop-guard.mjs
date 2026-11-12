@@ -69,7 +69,7 @@ export function injectDigests(code, digests) {
 
 export async function registerLoopGuard(
   context,
-  taskContext,
+  contextCache,
   { outputDir = undefined } = {}
 ) {
   const sessions = new Map()
@@ -102,13 +102,13 @@ export async function registerLoopGuard(
     const s = state(sessionOf(event))
     if (s.resume) {
       s.resume = false
-      const reference = await taskContext.reference(sessionOf(event), false)
+      const reference = await contextCache.reference(sessionOf(event))
       event.messages.push({
         role: "user",
         content: [{ type: "text", text: [
           "Harness resume after compaction:",
           reference ||
-            "No cached task ranges. Do not rebuild the plan; use the compaction summary.",
+            "No cached ranges. Do not rebuild the plan; use the compaction summary and the plan file.",
           s.skills.size
             ? `Active skills before compaction: ${[...s.skills].join(", ")}. Do not reload them unless the step changes stack.`
             : "",

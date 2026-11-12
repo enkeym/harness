@@ -51,6 +51,8 @@ desired.plugins = (current.plugins ?? []).filter(
   (plugin) =>
     plugin !== new URL("../opencode/harness.mjs", import.meta.url).href
 )
+for (const agent of Object.values(desired.agents ?? {}))
+  if (agent && typeof agent === "object") delete agent.disable
 let drift = 0
 const legacyPlugin = path.join(directory, "plugins/harness.js")
 try {

@@ -11,6 +11,22 @@ export async function readJSON(file, fallback) {
   }
 }
 
+export const inside = (root, file) =>
+  file !== root &&
+  !path.relative(root, file).startsWith(`..${path.sep}`) &&
+  path.relative(root, file) !== ".." &&
+  !path.isAbsolute(path.relative(root, file))
+
+export async function sessionExists(context, sessionID) {
+  try {
+    await context.session.get({ sessionID })
+    return true
+  } catch (error) {
+    if (error?.status === 404 || error?.code === "ENOENT") return false
+    throw error
+  }
+}
+
 export async function writePrivateText(file, text) {
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
   await fs.chmod(path.dirname(file), 0o700)

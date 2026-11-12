@@ -5,7 +5,10 @@ import { deepseekPricing, deepseekPricingWindowAt } from "./cost-policy.mjs"
 import { numeric } from "../ai-hooks/bin/cache-metrics.mjs"
 import { hash } from "../ai-hooks/bin/context-state.mjs"
 import { readJSON, writePrivateJSON } from "./local-state.mjs"
-import { taskContextKey } from "./task-context.mjs"
+import {
+  contextCacheKey,
+  legacyContextCacheKey
+} from "./evidence-cache.mjs"
 
 const counterKeys = ["input", "output", "reasoning", "cacheRead", "cacheWrite"]
 
@@ -277,7 +280,9 @@ export function observationAPI(context) {
     messageCoverage: "active-context",
     prices: () => context.model.list(),
     task: async (sessionID) => {
-      const id = await context.storage.get(taskContextKey(sessionID))
+      const id =
+        (await context.storage.get(contextCacheKey(sessionID))) ??
+        (await context.storage.get(legacyContextCacheKey(sessionID)))
       return typeof id === "string" ? id : null
     },
     handoff: async (sessionID) => {

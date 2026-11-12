@@ -137,7 +137,7 @@ export default {
         message: data.message,
         variant: data.status === "error" ? "error" : data.status === "ready" ? "success" : "info"
       })
-      if (data.status === "ready") {
+      if (data.status === "ready" && data.targetID) {
         context.ui.router.navigate({ type: "session", sessionID: data.targetID })
       }
     })

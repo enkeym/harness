@@ -11,7 +11,7 @@ const otherDigest = "b".repeat(64)
 async function fixture(
   t,
   referenceText = [
-    "Saved task context: .opencode/task-context/aa.json",
+    "Cached context: .opencode/context-cache/aa.json",
     "Cached ranges: source.mjs:2-3",
     "Resume the next unfinished step. Do not rebuild the plan."
   ].join("\n"),
@@ -27,15 +27,15 @@ async function fixture(
     session: { hook: async (name, hook) => sessionHooks.set(name, hook) },
     tool: { hook: async (name, hook) => toolHooks.set(name, hook) }
   }
-  const taskContext = {
-    reference: async (sessionID, includeCheckpoint) => {
-      references.push({ sessionID, includeCheckpoint })
+  const contextCache = {
+    reference: async (sessionID) => {
+      references.push({ sessionID })
       return referenceText
     }
   }
   const guard = await registerLoopGuard(
     context,
-    taskContext,
+    contextCache,
     outputDir === undefined ? {} : { outputDir }
   )
   let callCount = 0
@@ -412,7 +412,7 @@ test("compaction resumes once with cached ranges, skills and the edit budget", a
   const first = await f.contextHook()
   const resume = first.messages.at(-1).content[0].text
   assert.match(resume, /Harness resume after compaction:/)
-  assert.match(resume, /Saved task context/)
+  assert.match(resume, /Cached context/)
   assert.match(resume, /Cached ranges: source\.mjs:2-3/)
   assert.match(resume, /Active skills before compaction: react-frontend/)
   assert.match(
@@ -421,7 +421,6 @@ test("compaction resumes once with cached ranges, skills and the edit budget", a
   )
   assert.equal((resume.match(/Do not rebuild the plan/g) ?? []).length, 1)
   assert.equal(f.references.length, 1)
-  assert.equal(f.references[0].includeCheckpoint, false)
 
   const second = await f.contextHook()
   assert.equal(second.system.length, 0)
@@ -434,7 +433,7 @@ test("compaction without cached ranges states the resume protocol once", async t
 
   const event = await f.contextHook()
   const resume = event.messages[0].content[0].text
-  assert.match(resume, /No cached task ranges\. Do not rebuild the plan/)
+  assert.match(resume, /No cached ranges\. Do not rebuild the plan/)
   assert.match(
     resume,
     /Resume protocol: make the first source edit within 12 tool calls/
