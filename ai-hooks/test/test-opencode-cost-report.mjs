@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport, readCostEvidence } from "../../opencode/cost-report.mjs"
+import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport, readCostEvidence, checkDeepSeekBalance, costStateRoot } from "../../opencode/cost-report.mjs"
 import { observationDirectory } from "../../opencode/observations.mjs"
 
 const stamp = Date.parse("2026-11-02T12:00:00Z")
@@ -12,6 +12,63 @@ const tokens = { input: 10, output: 2, reasoning: 1, cacheRead: 5, cacheWrite: 0
 const step = (id, extra = {}) => ({ id, type: "assistant", time: { created: stamp }, tokens, nativeReportedUSD: 0.1, model: { providerID: "deepseek", id: "flash", variant: "high" }, tools: [], ...extra })
 const record = (id, sequence, extra = {}) => ({ schemaVersion: 1, client: "opencode", clientVersion: "2.2.5", project: "/project", sessionID: id, messageCoverage: "complete-pages", sequence, accounting: { native: { cost: 9, tokens } }, delegation: { childIDs: [], childrenComplete: true }, assessment: {}, ...extra })
 const report = (records, extra = {}) => buildCostReport(records, { date: "2026-11-02", config: defaultCostConfig, ...extra })
+
+test("balance verification stores only valid currency snapshots and never exposes the key", async (t) => {
+  const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-balance-"))
+  t.after(() => fs.rm(state, { recursive: true, force: true }))
+  const keyFile = path.join(state, "key")
+  await fs.writeFile(keyFile, "secret-for-test\n")
+  const balance = (currency, total) => ({
+    currency, total_balance: total, granted_balance: "0.00", topped_up_balance: total
+  })
+  const fetcher = async (url, options) => {
+    assert.equal(url, "https://api.deepseek.com/user/balance")
+    assert.equal(options.headers.Authorization, "Bearer secret-for-test")
+    return { ok: true, json: async () => ({
+      is_available: true,
+      balance_infos: [
+        { ...balance("CNY", "-12.34"), topped_up_balance: "-12.34" },
+        balance("USD", "2.00")
+      ]
+    }) }
+  }
+  const result = await checkDeepSeekBalance({ stateDirectory: state, keyFile, fetcher })
+  const snapshot = JSON.parse(await fs.readFile(path.join(costStateRoot(state), "balance", "latest.json"), "utf8"))
+  const refreshed = await refreshCostReport({ stateDirectory: state, config: defaultCostConfig })
+
+  assert.equal(result.status, "verified")
+  assert.deepEqual(snapshot.balances.map((item) => item.currency), ["CNY", "USD"])
+  assert.equal(refreshed.report.balanceVerification.balances[0].totalBalance, "-12.34")
+  assert.doesNotMatch(JSON.stringify(refreshed.report), /secret-for-test/)
+  assert.equal((await fs.stat(path.join(costStateRoot(state), "balance", "latest.json"))).mode & 0o777, 0o600)
+})
+
+test("balance verification never overwrites a previous snapshot after missing keys or invalid replies", async (t) => {
+  const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-balance-"))
+  t.after(() => fs.rm(state, { recursive: true, force: true }))
+  const keyFile = path.join(state, "key")
+  await fs.writeFile(keyFile, "secret-for-test")
+  const opts = { stateDirectory: state, keyFile }
+  const fetcher = async () => ({ ok: true, json: async () => ({
+    is_available: false, balance_infos: [{ currency: "CNY", total_balance: "1.00", granted_balance: "0", topped_up_balance: "1.00" }]
+  }) })
+  await checkDeepSeekBalance({ ...opts, fetcher })
+  const snapshotPath = path.join(costStateRoot(state), "balance", "latest.json")
+  const before = await fs.readFile(snapshotPath, "utf8")
+
+  assert.equal((await checkDeepSeekBalance({ ...opts, keyFile: path.join(state, "missing") })).status, "key-unavailable")
+  assert.deepEqual(await checkDeepSeekBalance({ ...opts, fetcher: async () => ({ ok: false, status: 401 }) }), { status: "http-error", httpStatus: 401 })
+  for (const body of [
+    { is_available: true, balance_infos: [] },
+    { is_available: true, balance_infos: [{ currency: "CNY", total_balance: "1", granted_balance: "0" }] },
+    { is_available: true, balance_infos: [{ currency: "CNY", total_balance: "1", granted_balance: "0", topped_up_balance: "1" }, { currency: "CNY", total_balance: "2", granted_balance: "0", topped_up_balance: "2" }] }
+  ]) {
+    const result = await checkDeepSeekBalance({ ...opts, fetcher: async () => ({ ok: true, json: async () => body }) })
+    assert.equal(result.status, "invalid-response")
+  }
+  assert.equal((await checkDeepSeekBalance({ ...opts, fetcher: async () => { throw new Error("secret-for-test") } })).status, "request-failed")
+  assert.equal(await fs.readFile(snapshotPath, "utf8"), before)
+})
 
 test("daily report attributes messages by timezone and never sums native parent totals", () => {
   const data = report([
@@ -27,6 +84,18 @@ test("daily report attributes messages by timezone and never sums native parent 
   assert.equal(data.families[0].nativeFamilyTotalUSD, null)
   assert.deepEqual(data.families[0].missingSessionIDs, ["ses_missing"])
   assert.equal(data.families[0].complete, false)
+})
+
+test("report keeps known token totals separate from missing usage", () => {
+  const data = report([record("ses_partial", [
+    step("known"),
+    step("failed", { tokens: null, nativeReportedUSD: null, finish: "error" })
+  ])])
+
+  assert.equal(data.usage.tokens.input, 10)
+  assert.equal(data.usage.unknownTokenMessages, 1)
+  assert.equal(data.usage.nativeRequestReportedUSD, null)
+  assert.equal(data.coverage.completeHistory, false)
 })
 
 test("recomputed cost follows message time and separates input, cache and output", () => {
@@ -66,10 +135,11 @@ test("flags Pro in build and cabinet request discrepancy", () => {
   assert.match(formatCostReport(data), /pro-in-build/)
 })
 
-test("missing usage stays unknown and snapshots are not treated as complete history", () => {
+test("missing usage has a zero known subtotal but remains incomplete", () => {
   const data = report([record("ses_partial", [step("unknown", { tokens: null, nativeReportedUSD: null })], { messageCoverage: "active-context" })])
 
-  assert.equal(data.usage.tokens, null)
+  assert.equal(data.usage.tokens.input, 0)
+  assert.equal(data.usage.unknownTokenMessages, 1)
   assert.equal(data.usage.nativeRequestReportedUSD, null)
   assert.equal(data.coverage.completeHistory, false)
   assert.equal(data.usage.unknownMessages, 1)

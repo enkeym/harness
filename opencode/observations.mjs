@@ -112,14 +112,16 @@ export async function requestObservation(run, operation, params) {
 function sumUsage(steps) {
   const result = {
     cost: 0,
-    tokens: Object.fromEntries(counterKeys.map((key) => [key, 0]))
+    tokens: Object.fromEntries(counterKeys.map((key) => [key, 0])),
+    missingTokens: [],
+    missingCost: []
   }
   for (const step of steps) {
-    if (step.tokens == null) result.tokens = null
-    else if (result.tokens)
+    if (step.tokens == null) result.missingTokens.push(step.id)
+    else
       for (const key of counterKeys) result.tokens[key] += step.tokens[key]
-    if (step.nativeReportedUSD == null) result.cost = null
-    else if (result.cost !== null) result.cost += step.nativeReportedUSD
+    if (step.nativeReportedUSD == null) result.missingCost.push(step.id)
+    else result.cost += step.nativeReportedUSD
   }
   return result
 }
@@ -127,10 +129,10 @@ function sumUsage(steps) {
 function usageDifference(native, observed) {
   return {
     cost:
-      native.cost !== null && observed.cost !== null
+      native.cost !== null && observed.missingCost.length === 0
         ? native.cost - observed.cost
         : null,
-    tokens: observed.tokens
+    tokens: observed.missingTokens.length === 0
       ? Object.fromEntries(
           counterKeys.map((key) => [
             key,
@@ -296,13 +298,13 @@ export function summarizeSession(
   const observedSum = sumUsage([...assistants, ...auxiliary])
   if (messageCoverage !== "complete-pages")
     gaps.add("context-snapshots-need-full-history-check")
-  if (messageSum.tokens === null) {
+  if (messageSum.missingTokens.length) {
     gaps.add("message-usage-missing")
   }
-  if (messageSum.cost === null) {
+  if (messageSum.missingCost.length) {
     gaps.add("message-cost-missing")
   }
-  if (auxiliarySum.tokens === null || auxiliarySum.cost === null)
+  if (auxiliarySum.missingTokens.length || auxiliarySum.missingCost.length)
     gaps.add("auxiliary-usage-missing")
   const delta = usageDifference(native, messageSum)
   const residual = usageDifference(native, observedSum)
@@ -443,8 +445,16 @@ export async function collectObservations(
       ),
       null
     )
+    const coverage = api.messageCoverage ?? "complete-pages"
     const previousSequence =
-      api.messageCoverage === "active-context" ? (previous?.sequence ?? []) : []
+      coverage === "active-context" ? (previous?.sequence ?? []) : []
+    const previousIDs = new Set(previousSequence.map((step) => step.id))
+    const messageCoverage =
+      coverage === "active-context" &&
+      previous?.messageCoverage === "complete-pages" &&
+      messages.every((message) => previousIDs.has(message.id))
+        ? "complete-pages"
+        : coverage
     let taskId = null
     try {
       taskId = api.task ? await api.task(id) : null
@@ -456,7 +466,7 @@ export async function collectObservations(
         info,
         messages,
         previousSequence,
-        messageCoverage: api.messageCoverage,
+        messageCoverage,
         taskId
       },
       api.version

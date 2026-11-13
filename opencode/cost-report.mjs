@@ -33,6 +33,67 @@ export const costConfigFile = () =>
     "harness/opencode-costs.json"
   )
 
+export async function checkDeepSeekBalance({ stateDirectory, keyFile, fetcher = fetch } = {}) {
+  const configured = keyFile
+    ? `{file:${keyFile}}`
+    : (await import("./config.mjs")).loadConfig().current.providers?.deepseek?.settings?.apiKey
+  const match = typeof configured === "string" && /^\{file:(.+)\}$/.exec(configured)
+  if (!match) return { status: "key-not-configured" }
+  const file = match[1].startsWith("~/")
+    ? path.join(os.homedir(), match[1].slice(2))
+    : match[1]
+  let key
+  try {
+    key = (await fs.readFile(file, "utf8")).trim()
+  } catch {
+    return { status: "key-unavailable" }
+  }
+  if (!key) return { status: "key-unavailable" }
+  let response
+  try {
+    response = await fetcher("https://api.deepseek.com/user/balance", {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10000)
+    })
+  } catch {
+    return { status: "request-failed" }
+  }
+  if (!response.ok) return { status: "http-error", httpStatus: response.status }
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    return { status: "invalid-response" }
+  }
+  const balances = data?.balance_infos
+  const decimal = (value) => typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value)
+  if (
+    typeof data?.is_available !== "boolean" ||
+    !Array.isArray(balances) ||
+    !balances.length ||
+    balances.some((item) =>
+      !/^[A-Z]{3}$/.test(item?.currency ?? "") ||
+      !["total_balance", "granted_balance", "topped_up_balance"].every((field) => decimal(item[field]))
+    ) ||
+    new Set(balances.map((item) => item.currency)).size !== balances.length
+  )
+    return { status: "invalid-response" }
+  const snapshot = {
+    status: "verified",
+    checkedAt: new Date().toISOString(),
+    source: "deepseek-user-balance",
+    isAvailable: data.is_available,
+    balances: balances.map(({ currency, total_balance, granted_balance, topped_up_balance }) => ({
+      currency,
+      totalBalance: total_balance,
+      grantedBalance: granted_balance,
+      toppedUpBalance: topped_up_balance
+    }))
+  }
+  await writePrivateJSON(path.join(costStateRoot(stateDirectory), "balance", "latest.json"), snapshot)
+  return snapshot
+}
+
 export function validateCostConfig(config) {
   if (!config || typeof config !== "object" || Array.isArray(config))
     throw new Error("Invalid cost config")
@@ -171,6 +232,7 @@ function usage(steps, conflicts = 0) {
     recomputedComplete: false,
     validatedUSD: null,
     unknownMessages: 0,
+    unknownTokenMessages: 0,
     zeroCostWithUsage: 0
   }
   for (const step of steps) {
@@ -181,8 +243,7 @@ function usage(steps, conflicts = 0) {
     if (!knownTokens || !numeric(step.nativeReportedUSD))
       totals.unknownMessages++
     if (!knownTokens) {
-      totals.tokens = null
-      totals.cacheMissTokens = null
+      totals.unknownTokenMessages++
     } else {
       if (totals.tokens) {
         for (const key of counterKeys) totals.tokens[key] += step.tokens[key]
@@ -381,6 +442,7 @@ function sessionFamilies(records, date, timeZone) {
         !missingSessionIDs.length &&
         !all.conflictingMessages &&
         !all.undatedMessages &&
+        !all.steps.some((step) => !step.tokens) &&
         members.every(
           (member) =>
             member.messageCoverage === "complete-pages" &&
@@ -673,6 +735,7 @@ export function buildCostReport(
         sessions.every(
           (session) => session.messageCoverage === "complete-pages"
         ) &&
+        !totals.unknownTokenMessages &&
         !unique.conflictingMessages &&
         !unique.undatedMessages,
       conflictingMessages: unique.conflictingMessages,
@@ -772,6 +835,8 @@ export async function refreshCostReport(options = {}) {
     config,
     billing: evidence.billing
   })
+  report.balanceVerification = options.balanceVerification ??
+    await readJSON(path.join(costStateRoot(options.stateDirectory), "balance", "latest.json"), { status: "not-checked" })
   report.coverage.readErrors = evidence.errors
   if (evidence.errors.length) report.coverage.completeHistory = false
   const root = costStateRoot(options.stateDirectory)
@@ -874,7 +939,7 @@ export function formatCostReport(report) {
     `Пересчёт по тарифу на момент сообщения: ${value(report.usage.recomputedUSD)} USD; без тарифа: ${report.usage.unpricedMessages}; расхождение с нативной оценкой: ${value(report.usage.recomputedDeltaUSD)} USD.`,
     `Пересчёт по компонентам: input ${value(report.usage.recomputedInputUSD)}, cacheRead ${value(report.usage.recomputedCacheReadUSD)}, output ${value(report.usage.recomputedOutputUSD)} USD.`,
     `История: ${report.coverage.completeHistory ? "полные страницы наблюдаемых сессий" : "неполное покрытие"}; покрытие аккаунта провайдера не проверено.`,
-    `Токены: ${report.usage.tokens ? counterKeys.map((key) => `${key}=${report.usage.tokens[key]}`).join(", ") : "есть неизвестные счётчики"}.`,
+    `Токены (известная часть${report.usage.unknownTokenMessages ? `; без usage: ${report.usage.unknownTokenMessages}` : ""}): ${report.usage.tokens ? counterKeys.map((key) => `${key}=${report.usage.tokens[key]}`).join(", ") : "неизвестно"}.`,
     `Кеш-промахи (input): ${value(report.usage.cacheMissTokens)}; вызовов инструментов: ${report.usage.toolCalls ?? 0}; суммарная длительность запросов: ${report.usage.durationMs ?? 0} мс.`,
     `Кэш: наблюдаемое попадание ${percent(report.usage.cacheHitRate)} по ${report.usage.cacheHitSteps ?? 0}/${report.usage.messages} запросам; покрытие ${percent(report.usage.cacheCoverage)}${report.usage.cacheComplete ? " (полное)" : " (неполное)"}; input от компактаций: ${percent(report.usage.compactionInputShare)} (${value(report.usage.compactionInputTokens ?? null)}); вывод инструментов: ${value(report.usage.toolOutputBytes ?? 0)} байт, из них >${largeToolOutputBytes / 1024} KB: ${value(report.usage.largeToolOutputBytes ?? 0)} байт в ${report.usage.largeToolOutputs ?? 0} вызовах.`,
     `Кэш по типам: ${Object.entries(report.usage.cacheByRequestType ?? {}).map(([type, cache]) => `${type}=${percent(cache.hitRate)} (${percent(cache.coverage)} покрытия)`).join(", ") || "нет данных"}.`,
@@ -882,6 +947,10 @@ export function formatCostReport(report) {
     `Семейства задач: ${report.families.length}; неполных: ${report.families.filter((family) => !family.complete).length}.`,
     ""
   ]
+  if (report.balanceVerification?.status === "verified")
+    lines.push(
+      `Остаток DeepSeek: ${report.balanceVerification.balances.map((item) => `${item.totalBalance} ${item.currency} (гранты ${item.grantedBalance}, пополнение ${item.toppedUpBalance})`).join(", ")}; проверено: ${report.balanceVerification.checkedAt}. Это состояние аккаунта, не расходы сессии.`
+    )
   for (const point of report.providerBilling)
     lines.push(
       `Провайдер (введено вручную): ${point.cost} ${point.currency}; запросов: ${value(point.apiRequests)}; токенов: ${value(point.tokens)}; область: ${point.accountScope ?? "неизвестна"}.`

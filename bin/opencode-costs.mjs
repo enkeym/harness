@@ -1,12 +1,12 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { createHash } from "node:crypto"
-import { defaultCostConfig, costConfigFile, costStateRoot, refreshCostReport, updateAssessment, validateBilling, validateCostConfig, formatCostReport } from "../opencode/cost-report.mjs"
+import { defaultCostConfig, costConfigFile, costStateRoot, refreshCostReport, updateAssessment, validateBilling, validateCostConfig, formatCostReport, checkDeepSeekBalance } from "../opencode/cost-report.mjs"
 import { readJSON, writePrivateJSON } from "../opencode/local-state.mjs"
 
 const [command = "report", ...args] = process.argv.slice(2)
 const options = {}
-const allowed = { report: ["--date", "--json"], init: [], assess: ["--file"], billing: ["--file"] }
+const allowed = { report: ["--date", "--json"], balance: ["--date", "--json"], init: [], assess: ["--file"], billing: ["--file"] }
 try {
   if (!(command in allowed)) throw new Error("Unknown command")
   let sessionID
@@ -34,11 +34,14 @@ try {
         await writePrivateJSON(path.join(costStateRoot(), "billing", `${point.date}-${key}.json`), point)
       }
     }
-    const result = await refreshCostReport({ date: options["--date"] })
+    const balanceVerification = command === "balance"
+      ? await checkDeepSeekBalance()
+      : undefined
+    const result = await refreshCostReport({ date: options["--date"], balanceVerification })
     process.stdout.write(options["--json"] ? `${JSON.stringify(result.report, null, 2)}\n` : formatCostReport(result.report))
     process.stderr.write(`Report: ${result.file}\n`)
   }
 } catch (error) {
-  process.stderr.write(`OpenCode costs: ${error.code ?? error.name}. Usage: report [--date YYYY-MM-DD] [--json] | init | assess ses_ID --file assessment.json | billing --file billing.json\n`)
+  process.stderr.write(`OpenCode costs: ${error.code ?? error.name}. Usage: report [--date YYYY-MM-DD] [--json] | balance [--date YYYY-MM-DD] [--json] | init | assess ses_ID --file assessment.json | billing --file billing.json\n`)
   process.exitCode = 1
 }

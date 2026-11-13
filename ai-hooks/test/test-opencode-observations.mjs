@@ -47,6 +47,62 @@ test("observations allocate compaction usage and leave unexplained native usage 
   assert.doesNotMatch(JSON.stringify(record), /private summary|secret output/)
 })
 
+test("observations retain known usage when failed answers have no counters", () => {
+  const failed = [1, 2, 3].map((n) => ({
+    ...message(`msg_failed_${n}`),
+    tokens: undefined,
+    cost: undefined,
+    finish: "error",
+    error: { name: "ProviderError" }
+  }))
+  const record = summarizeSession({
+    info: info(),
+    messages: [message(), ...failed]
+  }, "2.3.0")
+
+  assert.equal(record.accounting.messageSum.tokens.input, 10)
+  assert.equal(record.accounting.messageSum.cost, 0)
+  assert.deepEqual(record.accounting.messageSum.missingTokens, failed.map((step) => step.id))
+  assert.deepEqual(record.accounting.messageSum.missingCost, failed.map((step) => step.id))
+  assert.equal(record.accounting.delta.tokens, null)
+  assert.equal(record.accounting.delta.cost, null)
+  assert.ok(record.gaps.includes("message-usage-missing"))
+  assert.ok(!record.gaps.includes("session-message-usage-mismatch"))
+})
+
+test("collector preserves verified pages until an unseen message requires another full pass", async (t) => {
+  const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-observations-"))
+  t.after(() => fs.rm(state, { recursive: true, force: true }))
+  const recordPath = path.join(observationDirectory("/project", state), "sessions", "ses_root.json")
+  let visible = [message("msg_1"), message("msg_2")]
+  const api = {
+    version: "2.3.0",
+    messageCoverage: "complete-pages",
+    get: async () => info(),
+    messages: async () => ({ data: visible, cursor: {} }),
+    children: async () => ({ data: [], cursor: {} })
+  }
+  const readRecord = async () => JSON.parse(await fs.readFile(recordPath, "utf8"))
+
+  await collectObservations(api, "ses_root", { stateDirectory: state })
+  visible = [message("msg_2")]
+  api.messageCoverage = "active-context"
+  await collectObservations(api, "ses_root", { stateDirectory: state })
+  assert.equal((await readRecord()).messageCoverage, "complete-pages")
+  assert.deepEqual((await readRecord()).sequence.map((step) => step.id), ["msg_1", "msg_2"])
+
+  visible = [message("msg_3")]
+  await collectObservations(api, "ses_root", { stateDirectory: state })
+  assert.equal((await readRecord()).messageCoverage, "active-context")
+  assert.deepEqual((await readRecord()).sequence.map((step) => step.id), ["msg_1", "msg_2", "msg_3"])
+
+  visible = [message("msg_2"), message("msg_3")]
+  api.messageCoverage = "complete-pages"
+  await collectObservations(api, "ses_root", { stateDirectory: state })
+  assert.equal((await readRecord()).messageCoverage, "complete-pages")
+  assert.deepEqual((await readRecord()).sequence.map((step) => step.id), ["msg_2", "msg_3"])
+})
+
 test("native observation requests shrink malformed pages without swallowing command errors", async () => {
   const run = async (command, args) => {
     const limit = args.find(value => value.startsWith("limit="))
@@ -78,6 +134,7 @@ test("collector paginates children and messages, upserts private records and pre
   assert.equal(paths.length, 2)
   const rootPath = path.join(observationDirectory("/project", state), "sessions", "ses_root.json")
   const record = JSON.parse(await fs.readFile(rootPath, "utf8"))
+  assert.equal(record.messageCoverage, "complete-pages")
   assert.deepEqual(record.delegation.childIDs, ["ses_child"])
   assert.equal(record.delegation.childrenComplete, true)
   assert.equal(record.sequence.length, 2)
@@ -267,4 +324,3 @@ test("compaction steps expose an explicit compaction event", () => {
   assert.equal(request.compactionEvent, true)
   assert.equal(request.toolCalls, 0)
 })
-
