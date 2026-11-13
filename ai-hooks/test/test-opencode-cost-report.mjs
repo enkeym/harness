@@ -120,15 +120,15 @@ test("repeat candidates match identical inputs even when the output differs", ()
 })
 
 test("large tool outputs are measured separately", () => {
-  const small = { name: "read", outputBytes: 16 * 1024 - 1 }
-  const large = { name: "read", outputBytes: 16 * 1024 }
+  const small = { name: "read", outputBytes: 8 * 1024 - 1 }
+  const large = { name: "read", outputBytes: 8 * 1024 }
   const data = report([record("ses_large", [step("a", { tools: [small, large] })])])
 
-  assert.equal(data.usage.toolOutputBytes, 32767)
+  assert.equal(data.usage.toolOutputBytes, 16383)
   assert.equal(data.usage.largeToolOutputs, 1)
-  assert.equal(data.usage.largeToolOutputBytes, 16384)
-  assert.ok(Math.abs(data.usage.largeToolOutputShare - 16384 / 32767) < 1e-12)
-  assert.match(formatCostReport(data), />16 KB: 16384 байт в 1 вызовах/)
+  assert.equal(data.usage.largeToolOutputBytes, 8192)
+  assert.ok(Math.abs(data.usage.largeToolOutputShare - 8192 / 16383) < 1e-12)
+  assert.match(formatCostReport(data), />8 KB: 8192 байт в 1 вызовах/)
 })
 
 test("cache, compaction and tool-output controls warn only from complete measurements", () => {
