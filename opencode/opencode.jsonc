@@ -19,7 +19,7 @@
           "modelID": "deepseek-v4-pro",
           "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
-            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
+            "reasoning": { "supported": true, "effort": ["low", "high"] }
           },
           "settings": { "api": "chat", "reasoningEffort": "low" },
           "cost": {
@@ -33,7 +33,7 @@
           "modelID": "deepseek-flash",
           "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
-            "reasoning": { "supported": true, "effort": ["low", "high", "max"] }
+            "reasoning": { "supported": true, "effort": ["low", "high"] }
           },
           "settings": { "api": "chat", "reasoningEffort": "low" },
           "cost": {
