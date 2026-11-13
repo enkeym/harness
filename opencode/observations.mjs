@@ -15,7 +15,7 @@ export function supportedObservationVersion(version) {
   )
   if (!match) return false
   const [major, minor, patch] = match.slice(1).map(Number)
-  return major === 2 && minor === 2 && patch >= 5
+  return major === 2 && ((minor === 2 && patch >= 5) || minor === 3)
 }
 
 export function requestTypeOf(step) {

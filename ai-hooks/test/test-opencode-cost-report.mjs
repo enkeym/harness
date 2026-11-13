@@ -201,7 +201,7 @@ test("pricing aggregates expose required usage fields per window and request typ
   assert.match(formatCostReport(data), /вывод инструментов: 300 байт/)
 })
 
-test("evidence accepts schema 2 records from 2.2 patch releases and rejects other versions", async t => {
+test("evidence accepts schema 2 records from validated 2.2 and 2.3 releases and rejects other versions", async t => {
   const stateDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cost-report-version-"))
   t.after(() => fs.rm(stateDirectory, { recursive: true, force: true }))
   const base = observationDirectory("/project", stateDirectory)
@@ -215,8 +215,8 @@ test("evidence accepts schema 2 records from 2.2 patch releases and rejects othe
 
   const { records, errors } = await readCostEvidence({ stateDirectory })
 
-  assert.deepEqual(records.map((entry) => entry.sessionID), ["ses_v2"])
-  assert.deepEqual(errors.map((entry) => entry.file).sort(), ["ses_future.json", "ses_v3.json"])
+  assert.deepEqual(records.map((entry) => entry.sessionID), ["ses_v2", "ses_v3"])
+  assert.deepEqual(errors.map((entry) => entry.file).sort(), ["ses_future.json"])
 })
 
 test("reports and assessments persist privately, reject invalid edits and deduplicate notifications", async t => {

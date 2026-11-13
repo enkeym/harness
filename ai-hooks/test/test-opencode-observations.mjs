@@ -169,12 +169,14 @@ test("context snapshots preserve earlier steps across compaction and full pages 
   assert.equal(record.messageCoverage, "complete-pages")
 })
 
-test("supported observation versions cover 2.2 patch releases only", () => {
+test("supported observation versions cover validated 2.2 and 2.3 releases", () => {
   assert.equal(supportedObservationVersion("2.2.5"), true)
   assert.equal(supportedObservationVersion("2.2.6"), true)
   assert.equal(supportedObservationVersion("2.2.10"), true)
+  assert.equal(supportedObservationVersion("2.3.0"), true)
+  assert.equal(supportedObservationVersion("2.3.4"), true)
   assert.equal(supportedObservationVersion("2.1.9"), false)
-  assert.equal(supportedObservationVersion("2.3.0"), false)
+  assert.equal(supportedObservationVersion("2.4.0"), false)
   assert.equal(supportedObservationVersion("3.0.0"), false)
   assert.equal(supportedObservationVersion("2.2"), false)
   assert.equal(supportedObservationVersion(undefined), false)
