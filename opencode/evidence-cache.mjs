@@ -225,6 +225,30 @@ export async function registerContextCache(context) {
     for (const keys of bindings.values())
       for (const key of keys) await context.storage.remove(key)
   }
+  const pruneBriefs = async () => {
+    const base = path.join(root, ".opencode", "handoffs")
+    const real = await fs.realpath(base).catch((error) => {
+      if (error.code === "ENOENT") return null
+      throw error
+    })
+    if (real !== base) return
+    const entries = await fs.readdir(base).catch((error) => {
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") return []
+      throw error
+    })
+    for (const entry of entries) {
+      if (!/^brief-[0-9a-f]+\.md$/.test(entry)) continue
+      const file = path.join(base, entry)
+      try {
+        const stat = await fs.lstat(file)
+        if (!stat.isFile()) continue
+        if (Date.now() - stat.mtimeMs < cachePolicy.taskContextMs) continue
+        await fs.unlink(file)
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error
+      }
+    }
+  }
   let lastPrune = 0
   const prune = async (force = false) => {
     if (!context.storage.scan) return
@@ -234,6 +258,7 @@ export async function registerContextCache(context) {
     await pruneBase(directory, "context-cache:")
     await pruneBase(legacyDirectory, "task-context:")
     await prunePlans(context, root)
+    await pruneBriefs()
   }
   const reference = async (sessionID) => {
     const saved = await load(sessionID)

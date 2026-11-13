@@ -5,7 +5,7 @@ import path from "node:path"
 import { execFileSync } from "node:child_process"
 import { test } from "node:test"
 import { contextCacheKey, registerContextCache } from "../../opencode/evidence-cache.mjs"
-import { createPlan, planIndexKey, planKey } from "../../opencode/plan-store.mjs"
+import { adoptPlan, createPlan, planIndexKey, planKey } from "../../opencode/plan-store.mjs"
 import { observationAPI } from "../../opencode/observations.mjs"
 import { cachePolicy } from "../../opencode/cache-policy.mjs"
 
@@ -405,6 +405,7 @@ test("live session binding keeps an expired cache and managed plan while a user 
   const userPlan = path.join(f.directory, ".opencode/plans", "user-owned.md")
   fs.writeFileSync(userPlan, "## Objective\n\nUser plan\n")
   fs.utimesSync(userPlan, old, old)
+  await adoptPlan(f.context, { sessionID: "source", directory: f.directory, file: userPlan })
   f.context.storage.scan = f.scan
 
   await registerContextCache(f.context)
@@ -416,6 +417,92 @@ test("live session binding keeps an expired cache and managed plan while a user 
   assert.equal(fs.existsSync(userPlan), true)
   assert.equal(f.stored.has(planKey("source")), true)
   assert.equal(f.stored.has(planIndexKey(plan.id)), true)
+})
+
+test("expired plans tracked by git stay while untracked plans expire", async t => {
+  const f = await fixture(t)
+  execFileSync("git", ["init", "--quiet", f.directory])
+  const plans = path.join(f.directory, ".opencode/plans")
+  fs.mkdirSync(plans, { recursive: true })
+  const tracked = path.join(plans, "committed.md")
+  const untracked = path.join(plans, "brief-b8f4541be93801a5.md")
+  fs.writeFileSync(tracked, "## Objective\n\nCommitted plan\n")
+  fs.writeFileSync(untracked, "Implementation only\n")
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  for (const file of [tracked, untracked]) fs.utimesSync(file, old, old)
+  execFileSync("git", ["-C", f.directory, "add", ".opencode/plans/committed.md"])
+  execFileSync("git", [
+    "-C",
+    f.directory,
+    "-c",
+    "user.email=harness@example.invalid",
+    "-c",
+    "user.name=Harness",
+    "commit",
+    "--quiet",
+    "-m",
+    "add plan"
+  ])
+  f.context.storage.scan = f.scan
+
+  await registerContextCache(f.context)
+
+  assert.equal(fs.existsSync(tracked), true)
+  assert.equal(fs.existsSync(untracked), false)
+})
+
+test("expired plans without a live binding are removed while user-owned plans stay", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const plans = path.join(f.directory, ".opencode/plans")
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  const closed = await createPlan(f.context, {
+    sessionID: "closed",
+    directory: f.directory,
+    objective: "Drop the closed plan",
+    stage: "implementation"
+  })
+  const orphan = path.join(plans, "brief-b8f4541be93801a5.md")
+  fs.writeFileSync(orphan, "Implementation only\n")
+  const userPlan = path.join(plans, "user-owned.md")
+  fs.writeFileSync(userPlan, "## Objective\n\nUser plan\n")
+  for (const file of [closed.file, orphan, userPlan]) fs.utimesSync(file, old, old)
+  await adoptPlan(f.context, { sessionID: "closed", directory: f.directory, file: userPlan })
+  f.context.session.get = async ({ sessionID }) => {
+    if (sessionID === "closed")
+      throw Object.assign(new Error("Session not found"), { status: 404 })
+    return { id: sessionID }
+  }
+  f.context.storage.scan = f.scan
+
+  await registerContextCache(f.context)
+
+  assert.equal(fs.existsSync(closed.file), false)
+  assert.equal(fs.existsSync(orphan), false)
+  assert.equal(fs.existsSync(userPlan), true)
+  assert.equal(f.stored.get(planKey("closed"))?.file, userPlan)
+  assert.equal(f.stored.has(planIndexKey(closed.id)), false)
+})
+
+test("expired legacy handoff briefs are removed while fresh briefs and HANDOFF.md stay", async t => {
+  const f = await fixture(t)
+  await f.save()
+  const directory = path.join(f.directory, ".opencode/handoffs")
+  fs.mkdirSync(directory, { recursive: true })
+  const old = new Date(Date.now() - cachePolicy.taskContextMs - 1000)
+  const stale = path.join(directory, "brief-8ff3ee70ec5bd92a.md")
+  const fresh = path.join(directory, "brief-ffffffffffffffff.md")
+  const note = path.join(f.directory, ".opencode/HANDOFF.md")
+  for (const file of [stale, fresh, note]) fs.writeFileSync(file, "handoff\n")
+  fs.utimesSync(stale, old, old)
+  fs.utimesSync(note, old, old)
+  f.context.storage.scan = f.scan
+
+  await registerContextCache(f.context)
+
+  assert.equal(fs.existsSync(stale), false)
+  assert.equal(fs.existsSync(fresh), true)
+  assert.equal(fs.existsSync(note), true)
 })
 
 test("expired managed plans and caches of a closed session are removed", async t => {

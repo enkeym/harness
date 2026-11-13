@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { cachePolicy } from "./cache-policy.mjs"
 import {
@@ -66,7 +67,12 @@ export function replaceSection(text, heading, content) {
     }
   }
   const tail = lines.slice(end)
-  return [...lines.slice(0, start), ...block, ...(tail.length ? [""] : []), ...tail]
+  return [
+    ...lines.slice(0, start),
+    ...block,
+    ...(tail.length ? [""] : []),
+    ...tail
+  ]
     .join("\n")
     .replace(/\n+$/, "\n")
 }
@@ -131,7 +137,9 @@ export async function createPlan(
 }
 
 export async function ensurePlan(context, options) {
-  return (await readPlan(context, options.sessionID)) ?? createPlan(context, options)
+  return (
+    (await readPlan(context, options.sessionID)) ?? createPlan(context, options)
+  )
 }
 
 export async function adoptPlan(
@@ -174,7 +182,8 @@ export async function updatePlan(
   const plan = await readPlan(context, sessionID)
   if (!plan) return null
   let text = await fs.readFile(plan.file, "utf8")
-  if (remaining?.trim()) text = replaceSection(text, remainingHeading, remaining)
+  if (remaining?.trim())
+    text = replaceSection(text, remainingHeading, remaining)
   text = replaceSection(
     text,
     checkpointHeading,
@@ -187,6 +196,40 @@ export async function updatePlan(
   return updated
 }
 
+const scanAll = async (context, prefix) => {
+  const entries = []
+  let after
+  do {
+    const page = await context.storage.scan({
+      prefix,
+      limit: cachePolicy.scanEntries,
+      ...(after ? { after } : {})
+    })
+    for (const entry of page.entries) entries.push(entry)
+    after = page.next
+  } while (after)
+  return entries
+}
+
+const trackedPlans = (root, plans) =>
+  new Promise((resolve) => {
+    execFile(
+      "git",
+      ["-C", root, "ls-files", "-z", "--", path.relative(root, plans)],
+      (error, stdout) => {
+        if (error) return resolve(new Set())
+        resolve(
+          new Set(
+            stdout
+              .split("\0")
+              .filter(Boolean)
+              .map((file) => path.resolve(root, file))
+          )
+        )
+      }
+    )
+  })
+
 export async function prunePlans(context, root) {
   if (!context.storage.scan) return
   const plans = path.join(root, ".opencode", "plans")
@@ -195,56 +238,88 @@ export async function prunePlans(context, root) {
     throw error
   })
   if (real !== plans) return
-  const entries = []
-  let after
-  do {
-    const page = await context.storage.scan({
-      prefix: "plan-index:",
-      limit: cachePolicy.scanEntries,
-      ...(after ? { after } : {})
-    })
-    for (const entry of page.entries) entries.push(entry)
-    after = page.next
-  } while (after)
-  for (const { key, value } of entries) {
+  const planFile = (file) =>
+    typeof file === "string" &&
+    path.dirname(file) === plans &&
+    inside(root, file)
+  const bindings = new Map()
+  const bind = (file, binding) => {
+    const list = bindings.get(file) ?? []
+    list.push(binding)
+    bindings.set(file, list)
+  }
+  for (const { key, value } of await scanAll(context, "plan:")) {
+    const sessionID = key.slice("plan:".length)
+    if (typeof value?.file === "string" && !planFile(value.file)) continue
+    const valid =
+      value &&
+      typeof value === "object" &&
+      value.version === 1 &&
+      (value.ownership === "managed" || value.ownership === "user") &&
+      value.sessionID === sessionID &&
+      planFile(value.file)
+    if (!valid) {
+      await context.storage.remove(key)
+      continue
+    }
+    bind(value.file, { key, value, sessionID, ownership: value.ownership })
+  }
+  for (const { key, value } of await scanAll(context, "plan-index:")) {
+    if (typeof value?.file === "string" && !planFile(value.file)) continue
     const valid =
       value &&
       typeof value === "object" &&
       value.version === 1 &&
       typeof value.id === "string" &&
-      typeof value.file === "string" &&
-      typeof value.root === "string" &&
       typeof value.sessionID === "string" &&
-      value.root === root &&
-      path.dirname(value.file) === plans &&
-      inside(root, value.file) &&
+      planFile(value.file) &&
       key === planIndexKey(value.id)
     if (!valid) {
       await context.storage.remove(key)
       continue
     }
-    const stat = await fs.lstat(value.file).catch((error) => {
+    bind(value.file, {
+      key,
+      value,
+      sessionID: value.sessionID,
+      ownership: "managed"
+    })
+  }
+  const drop = async (file) => {
+    for (const { key } of bindings.get(file) ?? [])
+      await context.storage.remove(key)
+    bindings.delete(file)
+  }
+  const entries = await fs.readdir(plans).catch((error) => {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return []
+    throw error
+  })
+  const tracked = await trackedPlans(root, plans)
+  const seen = new Set()
+  for (const entry of entries) {
+    const file = path.join(plans, entry)
+    const stat = await fs.lstat(file).catch((error) => {
       if (error.code === "ENOENT") return null
       throw error
     })
-    if (!stat) {
-      await context.storage.remove(key)
-      const bound = await context.storage.get(planKey(value.sessionID))
-      if (bound?.file === value.file)
-        await context.storage.remove(planKey(value.sessionID))
-      continue
-    }
-    if (!stat.isFile()) continue
+    if (!stat?.isFile()) continue
+    seen.add(file)
+    if (tracked.has(file)) continue
+    const list = bindings.get(file) ?? []
+    if (list.some(({ ownership }) => ownership === "user")) continue
     if (Date.now() - stat.mtimeMs < cachePolicy.taskContextMs) continue
-    if (await sessionExists(context, value.sessionID)) {
-      await fs.utimes(value.file, new Date(), new Date())
-      await context.storage.set(key, { ...value, updatedAt: Date.now() })
+    const live = []
+    for (const binding of list)
+      if (await sessionExists(context, binding.sessionID)) live.push(binding)
+    if (live.length) {
+      await fs.utimes(file, new Date(), new Date())
+      for (const { key, value } of live)
+        await context.storage.set(key, { ...value, updatedAt: Date.now() })
+      bindings.delete(file)
       continue
     }
-    await fs.unlink(value.file)
-    await context.storage.remove(key)
-    const bound = await context.storage.get(planKey(value.sessionID))
-    if (bound?.file === value.file)
-      await context.storage.remove(planKey(value.sessionID))
+    await fs.unlink(file)
+    await drop(file)
   }
+  for (const file of [...bindings.keys()]) if (!seen.has(file)) await drop(file)
 }
