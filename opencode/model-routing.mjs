@@ -5,6 +5,21 @@ export const deepseekModels = {
   pro: { providerID: "deepseek", id: "deepseek-v4-pro" }
 }
 
+const supportedEffort = (model) => model?.capabilities?.reasoning?.effort
+
+const trimEffort = (model, source) => {
+  const supported = supportedEffort(source)
+  if (!Array.isArray(supported)) return
+  const reasoning = model.capabilities?.reasoning
+  if (Array.isArray(reasoning?.effort)) {
+    const kept = reasoning.effort.filter((value) => supported.includes(value))
+    reasoning.effort = kept.length ? kept : [...supported]
+  }
+  const effort = model.settings?.reasoningEffort
+  if (typeof effort === "string" && !supported.includes(effort))
+    model.settings.reasoningEffort = supported.at(-1)
+}
+
 export function migrateBundledModels(config, defaults) {
   const bundled = defaults?.providers?.deepseek?.models
   if (!bundled) return
@@ -19,6 +34,7 @@ export function migrateBundledModels(config, defaults) {
     for (const [id, source] of Object.entries(bundled)) {
       if (!models[id] || !source.cost) continue
       models[id] = { ...models[id], cost: structuredClone(source.cost) }
+      trimEffort(models[id], source)
     }
   }
   const retarget = (value) => {

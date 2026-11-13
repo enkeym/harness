@@ -321,6 +321,60 @@ test("stale DeepSeek aliases migrate to bundled model ids and pricing", () => {
   assert.equal(withoutBundled.model, "deepseek/deepseek-flash-offpeak")
 })
 
+test("installer trims reasoning effort unsupported by a bundled model", () => {
+  const defaults = readConfig(
+    path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
+  )
+  const config = {
+    providers: {
+      deepseek: {
+        models: {
+          "deepseek-flash": {
+            capabilities: {
+              reasoning: { supported: true, effort: ["low", "high", "max"] },
+              vision: true
+            },
+            settings: { api: "chat", reasoningEffort: "max" }
+          },
+          "deepseek-v4-pro": {
+            capabilities: {
+              reasoning: { supported: true, effort: ["max"] }
+            },
+            settings: { reasoningEffort: "high" }
+          },
+          "custom-model": {
+            capabilities: {
+              reasoning: { supported: true, effort: ["low", "max"] }
+            },
+            settings: { reasoningEffort: "max" }
+          }
+        }
+      }
+    }
+  }
+  migrateBundledModels(config, defaults)
+  const models = config.providers.deepseek.models
+  assert.deepEqual(models["deepseek-flash"].capabilities.reasoning.effort, [
+    "low",
+    "high"
+  ])
+  assert.equal(models["deepseek-flash"].capabilities.vision, true)
+  assert.equal(models["deepseek-flash"].settings.reasoningEffort, "high")
+  assert.deepEqual(models["deepseek-v4-pro"].capabilities.reasoning.effort, [
+    "low",
+    "high"
+  ])
+  assert.equal(models["deepseek-v4-pro"].settings.reasoningEffort, "high")
+  assert.deepEqual(models["custom-model"].capabilities.reasoning.effort, [
+    "low",
+    "max"
+  ])
+  assert.equal(models["custom-model"].settings.reasoningEffort, "max")
+  const repeated = structuredClone(config)
+  migrateBundledModels(repeated, defaults)
+  assert.deepEqual(repeated, config)
+})
+
 test("every bundled DeepSeek model carries the working input limit", () => {
   const config = readConfig(
     path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
@@ -336,6 +390,11 @@ test("every bundled DeepSeek model carries the working input limit", () => {
       model.limit?.output,
       contextPolicy.maxOutputTokens,
       `${name} must declare the working output limit`
+    )
+    assert.deepEqual(
+      model.capabilities?.reasoning?.effort,
+      ["low", "high"],
+      `${name} must expose only the supported reasoning efforts`
     )
   }
 })
