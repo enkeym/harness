@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
-import { contextPolicy, readHandoffPrompt } from "../ai-hooks/bin/context-policy.mjs"
+import {
+  contextPolicy,
+  readHandoffPrompt
+} from "../ai-hooks/bin/context-policy.mjs"
 import { readInstructions } from "./instructions.mjs"
 import { deduplicateContext } from "./context-cache.mjs"
 import { registerHandoff } from "./handoff.mjs"
@@ -10,7 +13,11 @@ import { registerContextCache } from "./evidence-cache.mjs"
 import { registerLoopGuard } from "./loop-guard.mjs"
 import { registerQuestionGuard } from "./question-guard.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
-import { refreshCostReport, localDate, defaultCostConfig } from "./cost-report.mjs"
+import {
+  refreshCostReport,
+  localDate,
+  defaultCostConfig
+} from "./cost-report.mjs"
 import { registerRetrievalRouting } from "./retrieval-routing.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
@@ -34,7 +41,9 @@ export default {
         const child = spawn(
           "bash",
           [
-            fileURLToPath(new URL(`../ai-hooks/bin/${script}`, import.meta.url)),
+            fileURLToPath(
+              new URL(`../ai-hooks/bin/${script}`, import.meta.url)
+            ),
             ...(warm && script === "ragsave-sync.sh" ? ["--warm"] : []),
             directory
           ],
@@ -46,8 +55,6 @@ export default {
     }
     sync(true)
     let budgetDate = null
-    const handoffHints = new Set()
-    const handoffHintedAt = new Map()
     const budgetReached = () =>
       budgetDate !== null && budgetDate === localDate(Date.now())
     const notify = (title, message) => {
@@ -84,7 +91,9 @@ export default {
       try {
         await context.model.reload()
       } catch (error) {
-        process.stderr.write(`Harness model budget reload failed: ${error.message}\n`)
+        process.stderr.write(
+          `Harness model budget reload failed: ${error.message}\n`
+        )
       }
     }
     const enforceBudget = async (sessionID, date) => {
@@ -97,13 +106,20 @@ export default {
       try {
         await context.model.reload()
       } catch (error) {
-        process.stderr.write(`Harness model budget reload failed: ${error.message}\n`)
+        process.stderr.write(
+          `Harness model budget reload failed: ${error.message}\n`
+        )
       }
       if (sessionID)
         try {
-          await context.session.switchModel({ sessionID, model: deepseekModels.flash })
+          await context.session.switchModel({
+            sessionID,
+            model: deepseekModels.flash
+          })
         } catch (error) {
-          process.stderr.write(`Harness model downgrade failed: ${error.message}\n`)
+          process.stderr.write(
+            `Harness model downgrade failed: ${error.message}\n`
+          )
         }
     }
     let observationQueue = Promise.resolve()
@@ -111,14 +127,27 @@ export default {
       const result = observationQueue.then(async () => {
         try {
           await refreshBudgetDay()
-          await collectObservations(observationAPI(context), sessionID, { directory: target })
+          await collectObservations(observationAPI(context), sessionID, {
+            directory: target
+          })
           const { report, newWarnings } = await refreshCostReport()
-          for (const warning of newWarnings) process.stderr.write(`Harness cost warning: ${warning.code}; ${warning.sessionID ?? "daily"}; observed=${warning.observed}; limit=${warning.limit}.\n`)
-          if (report.warnings.some((warning) => warning.code === "native-estimate-budget" || warning.code === "provider-budget"))
+          for (const warning of newWarnings)
+            process.stderr.write(
+              `Harness cost warning: ${warning.code}; ${warning.sessionID ?? "daily"}; observed=${warning.observed}; limit=${warning.limit}.\n`
+            )
+          if (
+            report.warnings.some(
+              (warning) =>
+                warning.code === "native-estimate-budget" ||
+                warning.code === "provider-budget"
+            )
+          )
             await enforceBudget(sessionID, report.date)
           return newWarnings
         } catch (error) {
-          process.stderr.write(`Harness observation failed (${error.name}); session evidence remains incomplete.\n`)
+          process.stderr.write(
+            `Harness observation failed (${error.name}); session evidence remains incomplete.\n`
+          )
           return []
         }
       })
@@ -141,10 +170,14 @@ export default {
       message.content[0].text?.startsWith("Harness skill instructions:\n")
     await context.session.hook("compaction", async (event) => {
       await observe(event.sessionID)
-      handoffHints.add(event.sessionID)
-      event.messages = (event.messages ?? []).filter((message) => !isHarnessInstructions(message))
+      event.messages = (event.messages ?? []).filter(
+        (message) => !isHarnessInstructions(message)
+      )
       event.messages.unshift(harnessInstructions())
-      event.messages.push({ role: "user", content: [{ type: "text", text: readHandoffPrompt() }] })
+      event.messages.push({
+        role: "user",
+        content: [{ type: "text", text: readHandoffPrompt() }]
+      })
     })
     const abort = new AbortController()
     const events = await context.event.subscribe({
@@ -173,7 +206,14 @@ export default {
           if (modelId === deepseekModels.pro.id) {
             const flash = deepseekTokenRates[deepseekModels.flash.id].offPeak
             const pro = deepseekTokenRates[deepseekModels.pro.id].offPeak
-            const agent = event.data.agent ?? (sessionID ? await context.session.get({ sessionID }).then(source => source.agent).catch(() => undefined) : undefined)
+            const agent =
+              event.data.agent ??
+              (sessionID
+                ? await context.session
+                    .get({ sessionID })
+                    .then((source) => source.agent)
+                    .catch(() => undefined)
+                : undefined)
             notify(
               "DeepSeek Pro",
               `Pro дороже Flash: вход ×${Math.round(pro.input / flash.input)}, выход ×${Math.round(pro.output / flash.output)}, чтение кеша ×${Math.round(pro.cacheRead / flash.cacheRead)}${peakNote}. Автоматические маршруты harness используют Flash, Pro — ручной выбор.`
@@ -184,9 +224,14 @@ export default {
                 "build на Pro стоит ×4.5 за токен; harness переключает эту сессию на Flash."
               )
               try {
-                await context.session.switchModel({ sessionID, model: deepseekModels.flash })
+                await context.session.switchModel({
+                  sessionID,
+                  model: deepseekModels.flash
+                })
               } catch (error) {
-                process.stderr.write(`Harness build downgrade failed: ${error.message}\n`)
+                process.stderr.write(
+                  `Harness build downgrade failed: ${error.message}\n`
+                )
               }
             }
           } else if (peak) {
@@ -207,61 +252,76 @@ export default {
         if (event.type.startsWith("session.execution.")) {
           const sessionID = event.data.sessionID
           loopGuard.finishTurn(sessionID)
-          const source = await context.session.get({ sessionID }).catch(() => undefined)
+          const source = await context.session
+            .get({ sessionID })
+            .catch(() => undefined)
           const owner = source?.location.directory
           sync()
           const warnings = await observe(sessionID, owner ?? directory)
-          for (const warning of warnings)
-            if (warning.code === "long-session" && warning.sessionID === sessionID)
-              handoffHints.add(sessionID)
+          if (
+            warnings.some(
+              (warning) =>
+                warning.code === "long-session" &&
+                warning.sessionID === sessionID
+            )
+          )
+            notify(
+              "Длинная сессия",
+              "Контекст сессии растёт; запустите /handoff вручную, когда закончите текущий шаг."
+            )
           if (event.type === "session.execution.succeeded")
             try {
               await questionGuard.check(sessionID, source)
             } catch (error) {
-              process.stderr.write(`Harness question guard failed: ${error.message}\n`)
+              process.stderr.write(
+                `Harness question guard failed: ${error.message}\n`
+              )
             }
           try {
-            await brief.settle(sessionID, event.type === "session.execution.succeeded")
+            await brief.settle(
+              sessionID,
+              event.type === "session.execution.succeeded"
+            )
           } catch (error) {
-            process.stderr.write(`Harness brief transfer failed: ${error.message}\n`)
+            process.stderr.write(
+              `Harness brief transfer failed: ${error.message}\n`
+            )
           }
           try {
             await contextCache.prune()
           } catch (error) {
-            process.stderr.write(`Harness context cache cleanup failed: ${error.message}\n`)
+            process.stderr.write(
+              `Harness context cache cleanup failed: ${error.message}\n`
+            )
           }
         }
       }
     }
     consume().catch((error) => {
-      if (!abort.signal.aborted) process.stderr.write(`Harness autosync event stream failed: ${error.message}\n`)
+      if (!abort.signal.aborted)
+        process.stderr.write(
+          `Harness autosync event stream failed: ${error.message}\n`
+        )
     })
     await context.session.hook("context", (event) => {
       event.messages = deduplicateContext(event.messages)
       for (let i = event.system.length - 1; i >= 0; i--) {
-        if (event.system[i].text?.startsWith("Harness skill instructions:\n") || event.system[i].text?.startsWith("DeepSeek model routing:")) event.system.splice(i, 1)
+        if (
+          event.system[i].text?.startsWith("Harness skill instructions:\n") ||
+          event.system[i].text?.startsWith("DeepSeek model routing:")
+        )
+          event.system.splice(i, 1)
       }
-      event.messages = event.messages.filter((message) => !isHarnessInstructions(message))
+      event.messages = event.messages.filter(
+        (message) => !isHarnessInstructions(message)
+      )
       event.messages.unshift(harnessInstructions())
-      const assistantMessages = event.messages.filter(
-        (message) => message.role === "assistant"
-      ).length
-      const hintedAt = handoffHintedAt.get(event.sessionID)
-      if (
-        handoffHints.delete(event.sessionID) ||
-        (hintedAt !== undefined &&
-          assistantMessages - hintedAt >=
-            contextPolicy.opencode.handoffRepeatMessages)
-      ) {
-        handoffHintedAt.set(event.sessionID, assistantMessages)
-        event.messages.push({
-          role: "user",
-          content: [{ type: "text", text: "Harness session is long. Finish the current step and continue with /handoff so the next turn uses compact state instead of the full transcript." }]
-        })
-      }
       if (budgetReached()) {
         event.options ??= {}
-        event.options.maxTokens = Math.min(event.options.maxTokens ?? contextPolicy.maxOutputTokens, 2048)
+        event.options.maxTokens = Math.min(
+          event.options.maxTokens ?? contextPolicy.maxOutputTokens,
+          2048
+        )
       }
     })
     return async () => {

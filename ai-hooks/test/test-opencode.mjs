@@ -1635,7 +1635,7 @@ for (const type of [
   })
 }
 
-test("OpenCode repeats the handoff hint after compaction and every 40 messages", async (t) => {
+test("OpenCode never injects a handoff instruction into model messages", async (t) => {
   const { directory, harnessRoot, project, env } = executionSandbox(t)
   const runner = `
     import assert from 'node:assert/strict';
@@ -1663,7 +1663,7 @@ test("OpenCode repeats the handoff hint after compaction and every 40 messages",
       session
     });
     const sessionID = "ses_hint";
-    const hint = event => event.messages.filter(message => message.role === "user" && message.content?.[0]?.text?.startsWith("Harness session is long.")).length;
+    const injected = event => event.messages.filter(message => message.content?.some(part => typeof part.text === "string" && (part.text.startsWith("Harness session is long.") || part.text.includes("continue with /handoff")))).length;
     const run = async (assistants) => {
       const event = {
         sessionID,
@@ -1671,15 +1671,15 @@ test("OpenCode repeats the handoff hint after compaction and every 40 messages",
         system: []
       };
       for (const handler of handlers.context) await handler(event);
-      return hint(event);
+      return injected(event);
     };
     assert.equal(await run(80), 0);
     const compaction = { sessionID, messages: [], system: [] };
     for (const handler of handlers.compaction) await handler(compaction);
-    assert.equal(await run(5), 1);
+    assert.equal(await run(5), 0);
     assert.equal(await run(44), 0);
-    assert.equal(await run(45), 1);
-    assert.equal(await run(46), 0);
+    assert.equal(await run(45), 0);
+    assert.equal(await run(80), 0);
   `
   const result = spawnSync(
     process.execPath,
