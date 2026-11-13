@@ -28,8 +28,11 @@ const firstLine = (text) =>
     ?.replace(/^#{1,6}\s*/, "")
     .replace(/^[-*]\s*/, "") ?? ""
 
-const checkpointFor = (text) =>
-  `- Текущий шаг: 1 — ${firstLine(text).slice(0, 200) || "continue"}`
+const checkpointFor = (text) => {
+  const line = firstLine(text)
+  const summary = line.slice(0, 200) || "continue"
+  return `- Текущий шаг: 1 — ${line.length > 200 ? `${summary}…` : summary}`
+}
 
 const slug = (text) =>
   firstLine(text)

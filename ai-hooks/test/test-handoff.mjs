@@ -143,6 +143,28 @@ test("the plan reference carries the path without the plan body", () => {
   assert.doesNotMatch(reference, /##/)
 })
 
+test("the generated checkpoint marks a truncated objective line", async (t) => {
+  const f = fixture(t)
+  const long = await createPlan(f.context, {
+    sessionID: "long",
+    directory: f.directory,
+    objective: "A".repeat(400),
+    stage: "implementation"
+  })
+  const short = await createPlan(f.context, {
+    sessionID: "short",
+    directory: f.directory,
+    objective: "Short objective",
+    stage: "implementation"
+  })
+
+  const longCheckpoint = fs.readFileSync(long.file, "utf8").split("\n")[2]
+  const shortCheckpoint = fs.readFileSync(short.file, "utf8").split("\n")[2]
+
+  assert.equal(longCheckpoint, `- Текущий шаг: 1 — ${"A".repeat(200)}…`)
+  assert.equal(shortCheckpoint, "- Текущий шаг: 1 — Short objective")
+})
+
 test("Handoff adopts an explicit user plan path and keeps it unmanaged", async (t) => {
   const f = fixture(t)
   fs.mkdirSync(path.join(f.directory, ".opencode/plans"), { recursive: true })
