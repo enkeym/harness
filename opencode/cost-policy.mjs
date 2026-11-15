@@ -79,17 +79,21 @@ export function deepseekCostBreakdownAt(modelId, tokens, createdAt) {
 
 export function deepseekPricingWindowAt(modelId, tokens, costUSD, createdAt) {
   const priced = pricedTokens(modelId, tokens, createdAt)
-  if (!priced || !numeric(costUSD)) return null
+  if (!priced) return null
+  const clockPeak = isPeakAt(priced.time)
+  const window = clockPeak ? "peak" : "offPeak"
+  if (!numeric(costUSD)) return { window, source: "clock", agreesWithClock: null }
   const near = (value) =>
     Math.abs(value - costUSD) <= Math.max(1e-9, Math.abs(costUSD) * 0.005)
   const peak = breakdownAtRates(tokens, priced.model.peak).total
   const offPeak = breakdownAtRates(tokens, priced.model.offPeak).total
-  const clockPeak = isPeakAt(priced.time)
-  if (near(peak) && !near(offPeak))
-    return { window: "peak", source: "native-cost", agreesWithClock: clockPeak }
-  if (near(offPeak) && !near(peak))
-    return { window: "offPeak", source: "native-cost", agreesWithClock: !clockPeak }
-  return { window: clockPeak ? "peak" : "offPeak", source: "clock", agreesWithClock: true }
+  const expected = clockPeak ? peak : offPeak
+  const other = clockPeak ? offPeak : peak
+  if (near(expected) && !near(other))
+    return { window, source: "native-cost", agreesWithClock: true }
+  if (near(other) && !near(expected))
+    return { window, source: "native-cost", agreesWithClock: false }
+  return { window, source: "clock", agreesWithClock: null }
 }
 
 export function deepseekCostAt(modelId, tokens, createdAt) {

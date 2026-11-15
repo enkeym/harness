@@ -297,7 +297,7 @@ test("request records carry every required usage field without leaking content",
   assert.doesNotMatch(JSON.stringify(record), /private reasoning|secret output|private.txt/)
 })
 
-test("pricing window follows the native cost and reports a clock mismatch", () => {
+test("pricing window follows the billing clock and flags a native estimate that disagrees", () => {
   const saturday = Date.parse("2026-11-07T12:00:00Z")
   const messageWithMismatch = {
     ...message(),
@@ -309,10 +309,44 @@ test("pricing window follows the native cost and reports a clock mismatch", () =
   const record = summarizeSession({ info: info(), messages: [messageWithMismatch] }, "2.2.6")
   const request = record.sequence[0].request
 
+  assert.equal(request.pricingWindow, "offPeak")
+  assert.equal(request.pricingWindowSource, "native-cost")
+  assert.equal(request.pricingWindowClockAgrees, false)
+  assert.ok(!record.gaps.includes("pricing-window-mismatch"))
+})
+
+test("peak clock wins over a native estimate priced from the off-peak column", () => {
+  const peakHour = Date.parse("2026-11-10T02:00:00Z")
+  const messageWithOffPeakEstimate = {
+    ...message(),
+    time: { created: peakHour, completed: peakHour + 3 },
+    model: { providerID: "deepseek", id: "deepseek-flash" },
+    cost: 0.15,
+    tokens: { input: 1000000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+  }
+  const record = summarizeSession({ info: info(), messages: [messageWithOffPeakEstimate] }, "2.2.6")
+  const request = record.sequence[0].request
+
   assert.equal(request.pricingWindow, "peak")
   assert.equal(request.pricingWindowSource, "native-cost")
   assert.equal(request.pricingWindowClockAgrees, false)
-  assert.ok(record.gaps.includes("pricing-window-mismatch"))
+})
+
+test("an unclassifiable native estimate leaves the clock window without claiming agreement", () => {
+  const peakHour = Date.parse("2026-11-10T02:00:00Z")
+  const messageWithUnknownCost = {
+    ...message(),
+    time: { created: peakHour, completed: peakHour + 3 },
+    model: { providerID: "deepseek", id: "deepseek-flash" },
+    cost: 0.2,
+    tokens: { input: 1000000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+  }
+  const record = summarizeSession({ info: info(), messages: [messageWithUnknownCost] }, "2.2.6")
+  const request = record.sequence[0].request
+
+  assert.equal(request.pricingWindow, "peak")
+  assert.equal(request.pricingWindowSource, "clock")
+  assert.equal(request.pricingWindowClockAgrees, null)
 })
 
 test("compaction steps expose an explicit compaction event", () => {

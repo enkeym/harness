@@ -323,8 +323,6 @@ export function summarizeSession(
     Object.values(native.tokens).some((value) => value > 0)
   )
     gaps.add("zero-cost-with-usage")
-  if (sequence.some((step) => step.request?.pricingWindowClockAgrees === false))
-    gaps.add("pricing-window-mismatch")
   return {
     schemaVersion: 2,
     client: "opencode",
