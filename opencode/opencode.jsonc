@@ -72,7 +72,7 @@
   "experimental": {
     "background_compaction": false
   },
-  "plugins": [],
+  "plugins": ["./plugins/harness/qwen-oauth"],
   "mcp": {
     "servers": {
       "tokensave": {

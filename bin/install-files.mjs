@@ -37,6 +37,7 @@ export function harnessLinks(home) {
     [path.join(home, '.config/harness/repo'), '.'],
     [path.join(home, '.config/harness/bashrc'), 'shell/harness.bash'],
     [path.join(home, '.local/bin/ragsave'), 'bin/ragsave'],
+    [path.join(home, '.local/bin/qwen-auth'), 'bin/qwen-auth.mjs'],
   ];
 }
 
