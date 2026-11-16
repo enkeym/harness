@@ -199,7 +199,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
     tokens: contextPolicy.opencode.keepTokens
   })
   assert.equal(contextPolicy.opencode.keepTokens, 10000)
-  assert.equal(contextPolicy.opencode.startTokens, 105000)
+  assert.equal(contextPolicy.opencode.startTokens, 95000)
   assert.equal(loadConfig(directory).current.compaction.keep.tokens, 10000)
   assert.equal(loadConfig(directory).current.agents.plan.disabled, true)
   assert.equal(loadConfig(directory).current.agents.plan.disable, undefined)

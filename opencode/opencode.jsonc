@@ -67,7 +67,7 @@
     "keep": {
       "tokens": 10000
     },
-    "buffer": 15000
+    "buffer": 25000
   },
   "experimental": {
     "background_compaction": false
