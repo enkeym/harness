@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
 import { injectDigests, registerLoopGuard } from "../../opencode/loop-guard.mjs"
+import { contextPolicy } from "../bin/context-policy.mjs"
 
 const digest = "a".repeat(64)
 const otherDigest = "b".repeat(64)
@@ -368,6 +369,29 @@ test("large tool results keep a bounded prefix, an artifact and the guard notice
   const skillText = skillResult.content.map((part) => part.text).join("")
   assert.match(skillText, /full_result=.*harness_read_result/)
   assert.ok(Buffer.byteLength(skillText) <= 6 * 1024)
+})
+
+test("a long session gets one reminder and keeps its tools", async t => {
+  const f = await fixture(t)
+  const limit = contextPolicy.opencode.reminderMessages
+  const assistants = (count) =>
+    Array.from({ length: count }, (_, index) => ({
+      role: "assistant",
+      id: `assistant-${index}`
+    }))
+  const isReminder = (message) =>
+    message.role === "user" &&
+    message.content?.some((part) => part.text?.includes("Harness session guard"))
+
+  const shortEvent = await f.contextHook({ messages: assistants(limit - 1) })
+  assert.ok(!shortEvent.messages.some(isReminder))
+
+  const longEvent = await f.contextHook({ messages: assistants(limit) })
+  assert.equal(longEvent.messages.filter(isReminder).length, 1)
+  assert.ok(longEvent.tools.edit)
+
+  const nextEvent = await f.contextHook({ messages: assistants(limit + 10) })
+  assert.ok(!nextEvent.messages.some(isReminder))
 })
 
 test("a finished turn resets the read budget for the next user message", async t => {

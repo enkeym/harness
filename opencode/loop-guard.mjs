@@ -82,7 +82,8 @@ export async function registerLoopGuard(
         skills: new Set(),
         digests: new Map(),
         repeats: new Map(),
-        resume: false
+        resume: false,
+        sessionReminder: false
       })
     return sessions.get(sessionID)
   }
@@ -100,6 +101,23 @@ export async function registerLoopGuard(
   await context.session.hook("context", async (event) => {
     currentSession = event.sessionID ?? currentSession
     const s = state(sessionOf(event))
+    if (!s.sessionReminder && Array.isArray(event.messages)) {
+      let assistantMessages = 0
+      for (const message of event.messages)
+        if (message?.role === "assistant") assistantMessages++
+      if (assistantMessages >= policy.reminderMessages) {
+        s.sessionReminder = true
+        event.messages.push({
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Harness session guard: ${assistantMessages} assistant messages in this session. One task is one session: deliver the verified state now and start the next task in a new session.`
+            }
+          ]
+        })
+      }
+    }
     if (s.resume) {
       s.resume = false
       const reference = await contextCache.reference(sessionOf(event))
