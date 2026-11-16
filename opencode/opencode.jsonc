@@ -17,7 +17,7 @@
         "deepseek-v4-pro": {
           "name": "deepseek-v4-pro",
           "modelID": "deepseek-v4-pro",
-          "limit": { "input": 150000, "output": 8192 },
+          "limit": { "input": 120000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high"] }
           },
@@ -31,7 +31,7 @@
         "deepseek-flash": {
           "name": "deepseek-flash",
           "modelID": "deepseek-flash",
-          "limit": { "input": 150000, "output": 8192 },
+          "limit": { "input": 120000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high"] }
           },
@@ -78,7 +78,7 @@
       "tokensave": {
         "type": "local",
         "command": [
-          "/usr/bin/node",
+          "/home/korolev/.nvm/versions/node/v24.22.1/bin/node",
           "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
           "--compact",
           "--",
@@ -91,7 +91,7 @@
       "ragsave": {
         "type": "local",
         "command": [
-          "/usr/bin/node",
+          "/home/korolev/.nvm/versions/node/v24.22.1/bin/node",
           "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
           "--",
           "bash",
@@ -103,7 +103,7 @@
       "playwright": {
         "type": "local",
         "command": [
-          "/usr/bin/node",
+          "/home/korolev/.nvm/versions/node/v24.22.1/bin/node",
           "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
           "--catalog",
           "/home/korolev/.config/harness/repo/mcp/playwright-tools.json",

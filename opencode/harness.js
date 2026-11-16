@@ -159,7 +159,7 @@ export default {
     const handoff = await registerHandoff(context, observe, contextCache)
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
-    readInstructions()
+    const pluginAgentsInstructions = readInstructions().instructions
     const harnessInstructions = () => ({
       role: "user",
       content: [{ type: "text", text: readInstructions().text }]
@@ -203,17 +203,17 @@ export default {
           const peakNote = peak
             ? "; сейчас пиковое окно DeepSeek, реальный тариф вдвое выше учтённого"
             : ""
+          const agent =
+            event.data.agent ??
+            (sessionID
+              ? await context.session
+                  .get({ sessionID })
+                  .then((source) => source.agent)
+                  .catch(() => undefined)
+              : undefined)
           if (modelId === deepseekModels.pro.id) {
             const flash = deepseekTokenRates[deepseekModels.flash.id].offPeak
             const pro = deepseekTokenRates[deepseekModels.pro.id].offPeak
-            const agent =
-              event.data.agent ??
-              (sessionID
-                ? await context.session
-                    .get({ sessionID })
-                    .then((source) => source.agent)
-                    .catch(() => undefined)
-                : undefined)
             notify(
               "DeepSeek Pro",
               `Pro дороже Flash: вход ×${Math.round(pro.input / flash.input)}, выход ×${Math.round(pro.output / flash.output)}, чтение кеша ×${Math.round(pro.cacheRead / flash.cacheRead)}${peakNote}. Автоматические маршруты harness используют Flash, Pro — ручной выбор.`
@@ -234,11 +234,21 @@ export default {
                 )
               }
             }
-          } else if (peak) {
-            notify(
-              "DeepSeek пик",
-              "Сейчас пиковое окно DeepSeek: реальный тариф вдвое выше учтённого в конфиге. Отложите пакетную задачу через bin/opencode-offpeak.mjs."
+          } else {
+            if (
+              modelId === deepseekModels.flash.id &&
+              model?.variant === "high" &&
+              agent === "build"
             )
+              notify(
+                "Flash #high в build",
+                "#high включает reasoning-токены: они тарифицируются как output и заметно удорожают ответы. Для обычных шагов build достаточно #low."
+              )
+            if (peak)
+              notify(
+                "DeepSeek пик",
+                "Сейчас пиковое окно DeepSeek: реальный тариф вдвое выше учтённого в конфиге. Отложите пакетную задачу через bin/opencode-offpeak.mjs."
+              )
           }
           continue
         }
@@ -306,9 +316,12 @@ export default {
     await context.session.hook("context", (event) => {
       event.messages = deduplicateContext(event.messages)
       for (let i = event.system.length - 1; i >= 0; i--) {
+        const text = event.system[i].text
         if (
-          event.system[i].text?.startsWith("Harness skill instructions:\n") ||
-          event.system[i].text?.startsWith("DeepSeek model routing:")
+          text?.startsWith("Harness skill instructions:\n") ||
+          text?.startsWith("DeepSeek model routing:") ||
+          (text?.startsWith("Instructions from: ") &&
+            text.includes(pluginAgentsInstructions))
         )
           event.system.splice(i, 1)
       }

@@ -190,15 +190,15 @@ test("repeat candidates match identical inputs even when the output differs", ()
 })
 
 test("large tool outputs are measured separately", () => {
-  const small = { name: "read", outputBytes: 8 * 1024 - 1 }
-  const large = { name: "read", outputBytes: 8 * 1024 }
+  const small = { name: "read", outputBytes: 6 * 1024 - 1 }
+  const large = { name: "read", outputBytes: 6 * 1024 }
   const data = report([record("ses_large", [step("a", { tools: [small, large] })])])
 
-  assert.equal(data.usage.toolOutputBytes, 16383)
+  assert.equal(data.usage.toolOutputBytes, 12287)
   assert.equal(data.usage.largeToolOutputs, 1)
-  assert.equal(data.usage.largeToolOutputBytes, 8192)
-  assert.ok(Math.abs(data.usage.largeToolOutputShare - 8192 / 16383) < 1e-12)
-  assert.match(formatCostReport(data), />8 KB: 8192 байт в 1 вызовах/)
+  assert.equal(data.usage.largeToolOutputBytes, 6144)
+  assert.ok(Math.abs(data.usage.largeToolOutputShare - 6144 / 12287) < 1e-12)
+  assert.match(formatCostReport(data), />6 KB: 6144 байт в 1 вызовах/)
 })
 
 test("cache, compaction and tool-output controls warn only from complete measurements", () => {
@@ -295,8 +295,8 @@ test("reports and assessments persist privately, reject invalid edits and dedupl
   const base = observationDirectory("/project", stateDirectory)
   await fs.mkdir(path.join(base, "sessions"), { recursive: true })
   const file = path.join(base, "sessions/ses_long.json")
-  await fs.writeFile(file, JSON.stringify(record("ses_long", Array.from({ length: 100 }, (_, i) => step(`msg_${i}`)))))
-  const options = { stateDirectory, date: "2026-11-02", config: { ...defaultCostConfig, sessionCompactions: null, minimumAssistantCacheHitRate: null, maximumCompactionInputShare: null, maximumLargeToolOutputShare: null } }
+  await fs.writeFile(file, JSON.stringify(record("ses_long", Array.from({ length: 100 }, (_, i) => step(`msg_${i}`, { model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" } })))))
+  const options = { stateDirectory, date: "2026-11-02", config: { ...defaultCostConfig, dailyNativeUSD: 0.0001, sessionCompactions: null, minimumAssistantCacheHitRate: null, maximumCompactionInputShare: null, maximumLargeToolOutputShare: null } }
 
   const first = await refreshCostReport(options)
   assert.equal(first.newWarnings.length, 2)

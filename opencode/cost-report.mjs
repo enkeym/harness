@@ -11,7 +11,7 @@ import { cacheMetrics, numeric } from "../ai-hooks/bin/cache-metrics.mjs"
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
   dailyProviderCNY: 25,
-  dailyNativeUSD: 5,
+  dailyNativeUSD: 2.5,
   billingDiscrepancyPercent: 5,
   sessionAssistantMessages: 80,
   sessionCompactions: 2,
@@ -664,13 +664,12 @@ export function buildCostReport(
       )
   if (
     config.dailyNativeUSD &&
-    totals.nativeRequestReportedUSD !== null &&
-    totals.nativeRequestReportedUSD >= config.dailyNativeUSD
+    totals.recomputedUSD >= config.dailyNativeUSD
   )
     warn(
       "native-estimate-budget",
       null,
-      totals.nativeRequestReportedUSD,
+      totals.recomputedUSD,
       config.dailyNativeUSD
     )
   const billedRequests = providerBilling.reduce(

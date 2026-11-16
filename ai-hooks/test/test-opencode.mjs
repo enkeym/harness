@@ -199,7 +199,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
     tokens: contextPolicy.opencode.keepTokens
   })
   assert.equal(contextPolicy.opencode.keepTokens, 10000)
-  assert.equal(contextPolicy.opencode.startTokens, 135000)
+  assert.equal(contextPolicy.opencode.startTokens, 105000)
   assert.equal(loadConfig(directory).current.compaction.keep.tokens, 10000)
   assert.equal(loadConfig(directory).current.agents.plan.disabled, true)
   assert.equal(loadConfig(directory).current.agents.plan.disable, undefined)
@@ -455,11 +455,12 @@ test("OpenCode sends skill and search routing to custom and built-in agents", as
     path.join(fixturePlugin, "server.mjs"),
     `
 import harness from ${JSON.stringify(pathToFileURL(path.resolve(import.meta.dirname, "../../opencode/harness.js")).href)}
+import { readInstructions } from ${JSON.stringify(pathToFileURL(path.resolve(import.meta.dirname, "../../opencode/instructions.mjs")).href)}
 import fs from "node:fs"
 export default { id: "harness", setup: async context => {
   await context.session.hook("context", event => {
     if (!JSON.stringify(event.messages).includes("CACHE_PROJECTION_FIXTURE")) return
-    event.system.push({ type: "text", text: "Harness skill instructions:\\nSTALE_INSTRUCTION_FIXTURE" }, { type: "text", text: "DeepSeek model routing: STALE_ROUTING_FIXTURE" })
+    event.system.push({ type: "text", text: "Harness skill instructions:\\nSTALE_INSTRUCTION_FIXTURE" }, { type: "text", text: "DeepSeek model routing: STALE_ROUTING_FIXTURE" }, { type: "text", text: "Instructions from: /fixture/opencode/AGENTS.md\\n" + readInstructions().instructions }, { type: "text", text: "Instructions from: /fixture/AGENTS.md\\nNATIVE_AGENTS_KEEP_FIXTURE" })
     const text = ${JSON.stringify(duplicateRead)}
     event.messages.unshift(...["read-first", "read-second"].flatMap(id => [
       { role: "assistant", content: [{ type: "tool-call", id, name: "execute", input: {} }] },
@@ -1082,6 +1083,14 @@ export default { id: "harness", setup: async context => {
   assert.equal(
     JSON.stringify(projection).split("# Working rules").length - 1,
     1
+  )
+  assert.equal(
+    JSON.stringify(projection).split("# OpenCode harness").length - 1,
+    1
+  )
+  assert.match(
+    JSON.stringify(projection),
+    /NATIVE_AGENTS_KEEP_FIXTURE/
   )
   const deepseekSession = await api("/session", {
     agent: "build",
