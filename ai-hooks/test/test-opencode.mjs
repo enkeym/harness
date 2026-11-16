@@ -1767,6 +1767,57 @@ test("OpenCode never injects a handoff instruction into model messages", async (
   assert.equal(result.status, 0, result.stderr + result.stdout)
 })
 
+test("OpenCode warns about #high in build for any provider", async (t) => {
+  const { directory, harnessRoot, project, env } = executionSandbox(t)
+  const runner = `
+    import assert from 'node:assert/strict';
+    import { setTimeout } from 'node:timers/promises';
+    import plugin from ${JSON.stringify(pathToFileURL(path.join(harnessRoot, "opencode/harness.js")).href)};
+    const toasts = [];
+    const switched = [];
+    const events = [
+      { type: "session.model.selected", data: { sessionID: "ses_kimi", agent: "build", model: { providerID: "kimi", id: "kimi-k2.5", variant: "high" } } },
+      { type: "session.model.selected", data: { sessionID: "ses_openai", agent: "plan", model: { providerID: "openai", id: "gpt-5.2", variant: "high" } } },
+      { type: "session.model.selected", data: { sessionID: "ses_flash", agent: "build", model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" } } },
+      { type: "session.model.selected", data: { sessionID: "ses_low", agent: "build", model: { providerID: "deepseek", id: "deepseek-flash", variant: "low" } } },
+      { type: "session.model.selected", data: { sessionID: "ses_pro", agent: "build", model: { providerID: "deepseek", id: "deepseek-v4-pro", variant: "high" } } }
+    ];
+    await plugin.setup({
+      location: { directory: process.env.TEST_PROJECT },
+      app: { version: "2.2.5" },
+      command: { transform: async () => {} },
+      tool: { transform: async () => {}, hook: async () => {} },
+      rpc: { register: async () => ({}) },
+      storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
+      model: { transform: async callback => callback({ list: () => [] }) },
+      event: { subscribe: async () => (async function* () { for (const event of events) { yield event; await setTimeout(50); } })() },
+      client: { tui: { showToast: async ({ body }) => toasts.push(body) } },
+      session: {
+        hook: async () => {},
+        get: async () => ({ location: { directory: process.env.TEST_PROJECT }, agent: "build" }),
+        switchModel: async ({ model }) => switched.push(model)
+      }
+    });
+    await setTimeout(400);
+    const highToasts = toasts.filter(toast => toast.title === "#high в build");
+    assert.equal(highToasts.length, 2, JSON.stringify(toasts));
+    assert.ok(highToasts.every(toast => toast.message.includes("#low")));
+    assert.ok(toasts.some(toast => toast.title === "DeepSeek Pro"));
+    assert.deepEqual(switched, [{ providerID: "deepseek", id: "deepseek-flash" }]);
+  `
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", runner],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      timeout: 10000,
+      env: { ...process.env, ...env, TEST_PROJECT: project }
+    }
+  )
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+})
+
 test("OpenCode handles one execution event once across plugin instances", async (t) => {
   const { directory, harnessRoot, project, env } = executionSandbox(t)
   const runner = `

@@ -18,6 +18,7 @@
 - Before handoff, fix duplicated logic, hardcoded values, added comments and unused scaffolding in the diff. Briefly report reuse evidence (searched scope → reused symbol, or why new code was needed); run focused checks, full suites/coverage only when project rules or impact require them.
 - A finished task is not a handoff: no note file, no report of work that was not done, and no handoff or checkpoint for it. Handoff exists only to transfer unfinished work that continues after compaction.
 - One task is one session: deliver the result or hand off unfinished work before starting another task; do not accumulate unrelated tasks in one long context.
+- Keep build on the default #low variant; #high adds reasoning tokens billed as output, so use it only for explicitly requested deep analysis.
 
 ## Browser and internet
 - Use web search and page retrieval for internet research and public documentation. Use Playwright MCP for browser interaction, authenticated account/dashboard inspection (including Cloudflare DNS), UI reproduction and browser checks, or when explicitly requested. Follow an explicitly requested source/tool. Discover browser tools directly, not through plugins or project indexes.

@@ -198,11 +198,6 @@ export default {
           const model = event.data.model
           const modelId = model?.id ?? model?.modelID
           const sessionID = event.data.sessionID
-          if (model?.providerID !== deepseekModels.flash.providerID) continue
-          const peak = isPeakAt(new Date())
-          const peakNote = peak
-            ? "; сейчас пиковое окно DeepSeek, реальный тариф вдвое выше учтённого"
-            : ""
           const agent =
             event.data.agent ??
             (sessionID
@@ -211,6 +206,20 @@ export default {
                   .then((source) => source.agent)
                   .catch(() => undefined)
               : undefined)
+          if (
+            agent === "build" &&
+            model?.variant === "high" &&
+            modelId !== deepseekModels.pro.id
+          )
+            notify(
+              "#high в build",
+              "#high включает reasoning-токены: они тарифицируются как output и заметно удорожают ответы. Для обычных шагов build достаточно #low."
+            )
+          if (model?.providerID !== deepseekModels.flash.providerID) continue
+          const peak = isPeakAt(new Date())
+          const peakNote = peak
+            ? "; сейчас пиковое окно DeepSeek, реальный тариф вдвое выше учтённого"
+            : ""
           if (modelId === deepseekModels.pro.id) {
             const flash = deepseekTokenRates[deepseekModels.flash.id].offPeak
             const pro = deepseekTokenRates[deepseekModels.pro.id].offPeak
@@ -235,15 +244,6 @@ export default {
               }
             }
           } else {
-            if (
-              modelId === deepseekModels.flash.id &&
-              model?.variant === "high" &&
-              agent === "build"
-            )
-              notify(
-                "Flash #high в build",
-                "#high включает reasoning-токены: они тарифицируются как output и заметно удорожают ответы. Для обычных шагов build достаточно #low."
-              )
             if (peak)
               notify(
                 "DeepSeek пик",
