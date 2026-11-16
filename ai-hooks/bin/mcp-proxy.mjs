@@ -98,7 +98,7 @@ let generation
 const artifactTool = {
   name: "harness_read_result",
   description:
-    "Read a full_result artifact from this proxy. offset and bytes select a UTF-8 byte range; full=true returns the complete original MCP result without truncation.",
+    "Read a full_result artifact from this proxy. offset and bytes select a UTF-8 byte range; an offset inside a character moves forward to the next one and the reply carries the effective offset. full=true returns the complete original MCP result without truncation.",
   inputSchema: {
     type: "object",
     properties: {
@@ -153,25 +153,22 @@ function artifactCall(message) {
         result.content.map((block) => block.text).join("")
       )
       const offset = input.offset ?? 0
-      if (
-        offset > data.length ||
-        (offset < data.length && (data[offset] & 0xc0) === 0x80)
-      )
-        throw new Error(
-          "offset must be on a UTF-8 boundary within the artifact"
-        )
+      if (offset > data.length)
+        throw new Error("offset must be within the artifact")
+      let start = offset
+      while (start < data.length && (data[start] & 0xc0) === 0x80) start++
       const text = utf8Prefix(
-        data.subarray(offset).toString("utf8"),
+        data.subarray(start).toString("utf8"),
         input.bytes ?? policy.resultBytes
       )
-      if (!text && offset < data.length)
+      if (!text && start < data.length)
         throw new Error("bytes must fit at least one UTF-8 character")
       reply(message, {
         content: [{ type: "text", text }],
         structuredContent: {
           text,
-          offset,
-          nextOffset: offset + Buffer.byteLength(text),
+          offset: start,
+          nextOffset: start + Buffer.byteLength(text),
           totalBytes: data.length
         }
       })

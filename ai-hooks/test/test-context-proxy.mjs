@@ -109,11 +109,13 @@ test('ordinary sessions bound text and retrieve exact artifacts or UTF-8 ranges 
   const range = (await c.call('harness_read_result', { path: file, offset: 2, bytes: 9 })).result;
   assert.equal(range.content[0].text, 'я'.repeat(4));
   assert.deepEqual(range.structuredContent, { text: 'я'.repeat(4), offset: 2, nextOffset: 10, totalBytes: 40000 });
+  const snapped = (await c.call('harness_read_result', { path: file, offset: 1, bytes: 9 })).result;
+  assert.deepEqual(snapped.structuredContent, { text: 'я'.repeat(4), offset: 2, nextOffset: 10, totalBytes: 40000 });
   const full = (await c.call('harness_read_result', { path: file, full: true })).result;
   assert.equal(full.content[0].text, 'я'.repeat(20000));
   assert.equal(full._meta, undefined);
   assert.equal(c.calls().length, 1);
-  assert.equal((await c.call('harness_read_result', { path: file, offset: 1 })).error.code, -32602);
+  assert.equal((await c.call('harness_read_result', { path: file, offset: 40001 })).error.code, -32602);
   assert.equal((await c.call('harness_read_result', { path: c.generation })).error.code, -32602);
 });
 
