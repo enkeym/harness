@@ -47,10 +47,18 @@ desired.compaction = {
   buffer: contextPolicy.opencode.maxTokens - contextPolicy.opencode.startTokens
 }
 desired.experimental = { ...current.experimental, background_compaction: false }
-desired.plugins = (current.plugins ?? []).filter(
-  (plugin) =>
-    plugin !== new URL("../opencode/harness.mjs", import.meta.url).href
-)
+const legacyHarnessPlugin = new URL(
+  "../opencode/harness.mjs",
+  import.meta.url
+).href
+desired.plugins = [
+  ...new Set([
+    ...(defaults.plugins ?? []),
+    ...(current.plugins ?? []).filter(
+      (plugin) => plugin !== legacyHarnessPlugin
+    )
+  ])
+]
 for (const agent of Object.values(desired.agents ?? {}))
   if (agent && typeof agent === "object") delete agent.disable
 let drift = 0

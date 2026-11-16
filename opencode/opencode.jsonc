@@ -72,7 +72,7 @@
   "experimental": {
     "background_compaction": false
   },
-  "plugins": ["./plugins/harness/qwen-oauth"],
+  "plugins": ["./plugins/harness/qwen-oauth", "opencode-kimi-v2"],
   "mcp": {
     "servers": {
       "tokensave": {

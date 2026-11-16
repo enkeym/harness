@@ -125,7 +125,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   fs.writeFileSync(alternative, '{"model":"user/model"}')
   fs.writeFileSync(
     settings,
-    '{ // user config\n "instructions": ["custom.md"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n "agents": {"plan": {"disable": true}},\n}'
+    '{ // user config\n "instructions": ["custom.md"],\n "plugins": ["custom-plugin"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n "agents": {"plan": {"disable": true}},\n}'
   )
   const before = fs.readFileSync(settings, "utf8")
   const run = (...args) =>
@@ -166,6 +166,11 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.equal(loadConfig(directory).current.model, "user/model")
   assert.ok(loadConfig(directory).current.providers.deepseek)
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
+  assert.deepEqual(loadConfig(directory).current.plugins, [
+    "./plugins/harness/qwen-oauth",
+    "opencode-kimi-v2",
+    "custom-plugin"
+  ])
   assert.ok(
     !loadConfig(directory).current.instructions.some((value) =>
       /(?:rules\/core|opencode\/AGENTS)\.md$/.test(value)
