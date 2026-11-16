@@ -7,7 +7,8 @@ const boundedTools = new Set([
   "glob",
   "shell",
   "webfetch",
-  "execute"
+  "execute",
+  "skill"
 ])
 
 const textBlocks = (content) => {

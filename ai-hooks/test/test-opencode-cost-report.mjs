@@ -189,16 +189,39 @@ test("repeat candidates match identical inputs even when the output differs", ()
   assert.equal(data.repeats[0].occurrences, 2)
 })
 
-test("large tool outputs are measured separately", () => {
-  const small = { name: "read", outputBytes: 6 * 1024 - 1 }
-  const large = { name: "read", outputBytes: 6 * 1024 }
-  const data = report([record("ses_large", [step("a", { tools: [small, large] })])])
+test("large tool outputs are measured separately on the trimmed text basis", () => {
+  const small = { name: "read", outputTextBytes: 6 * 1024 - 1 }
+  const bounded = { name: "read", outputTextBytes: 6 * 1024 }
+  const leaked = { name: "read", outputTextBytes: 8 * 1024 }
+  const legacy = { name: "read", outputBytes: 9 * 1024 }
+  const data = report([record("ses_large", [step("a", { tools: [small, bounded, leaked, legacy] })])])
 
-  assert.equal(data.usage.toolOutputBytes, 12287)
-  assert.equal(data.usage.largeToolOutputs, 1)
-  assert.equal(data.usage.largeToolOutputBytes, 6144)
-  assert.ok(Math.abs(data.usage.largeToolOutputShare - 6144 / 12287) < 1e-12)
-  assert.match(formatCostReport(data), />6 KB: 6144 байт в 1 вызовах/)
+  assert.equal(data.usage.toolOutputBytes, 29695)
+  assert.equal(data.usage.largeToolOutputs, 2)
+  assert.equal(data.usage.largeToolOutputBytes, 17408)
+  assert.ok(Math.abs(data.usage.largeToolOutputShare - 17408 / 29695) < 1e-12)
+  assert.match(formatCostReport(data), />6 KB: 17408 байт в 2 вызовах/)
+})
+
+test("per-tool output bytes aggregate into a histogram sorted by bytes", () => {
+  const readSmall = { name: "read", outputBytes: 1024 }
+  const readLarge = { name: "read", outputBytes: 8 * 1024 }
+  const shellLarge = { name: "shell", outputBytes: 20 * 1024 }
+  const anonymous = { outputBytes: 2 * 1024 }
+  const data = report([
+    record("ses_histogram", [step("a", { tools: [readSmall, readLarge, shellLarge, anonymous] })])
+  ])
+
+  assert.deepEqual(data.usage.toolOutputByTool.read, { calls: 2, bytes: 9216, largeCalls: 1, largeBytes: 8192 })
+  assert.deepEqual(data.usage.toolOutputByTool.shell, { calls: 1, bytes: 20480, largeCalls: 1, largeBytes: 20480 })
+  assert.equal(data.usage.toolOutputByTool.unknown.calls, 1)
+
+  const md = formatCostReport(data)
+  const shellRow = md.indexOf("shell | 1 | 20480 | 1 | 20480")
+  const readRow = md.indexOf("read | 2 | 9216 | 1 | 8192")
+  assert.ok(shellRow >= 0)
+  assert.ok(readRow > shellRow)
+  assert.match(md, /Инструмент \| вызовов \| байт/)
 })
 
 test("cache, compaction and tool-output controls warn only from complete measurements", () => {

@@ -216,6 +216,7 @@ function usage(steps, conflicts = 0) {
     largeToolOutputs: 0,
     largeToolOutputBytes: 0,
     largeToolOutputShare: null,
+    toolOutputByTool: {},
     toolCalls: 0,
     durationMs: 0,
     requestTypes: {},
@@ -251,14 +252,33 @@ function usage(steps, conflicts = 0) {
       }
       if (step.type === "compaction") totals.compactionInputTokens += step.tokens.input
     }
-    for (const tool of step.tools ?? [])
-      if (numeric(tool.outputBytes)) {
-        totals.toolOutputBytes += tool.outputBytes
-        if (tool.outputBytes >= largeToolOutputBytes) {
-          totals.largeToolOutputs++
-          totals.largeToolOutputBytes += tool.outputBytes
-        }
+    for (const tool of step.tools ?? []) {
+      const toolBytes = numeric(tool.outputTextBytes)
+        ? tool.outputTextBytes
+        : numeric(tool.outputBytes)
+          ? tool.outputBytes
+          : null
+      if (toolBytes === null) continue
+      totals.toolOutputBytes += toolBytes
+      const isLarge = toolBytes > largeToolOutputBytes
+      if (isLarge) {
+        totals.largeToolOutputs++
+        totals.largeToolOutputBytes += toolBytes
       }
+      const toolName = typeof tool.name === "string" ? tool.name : "unknown"
+      const byTool = (totals.toolOutputByTool[toolName] ??= {
+        calls: 0,
+        bytes: 0,
+        largeCalls: 0,
+        largeBytes: 0
+      })
+      byTool.calls++
+      byTool.bytes += toolBytes
+      if (isLarge) {
+        byTool.largeCalls++
+        byTool.largeBytes += toolBytes
+      }
+    }
     if (Array.isArray(step.tools)) totals.toolCalls += step.tools.length
     if (numeric(step.time?.completed) && numeric(step.time?.created))
       totals.durationMs += step.time.completed - step.time.created
@@ -946,6 +966,20 @@ export function formatCostReport(report) {
     `Семейства задач: ${report.families.length}; неполных: ${report.families.filter((family) => !family.complete).length}.`,
     ""
   ]
+  const toolRows = Object.entries(report.usage.toolOutputByTool ?? {}).sort(
+    (a, b) => b[1].bytes - a[1].bytes
+  )
+  if (toolRows.length) {
+    lines.push(
+      `Инструмент | вызовов | байт | вызовов >${largeToolOutputBytes / 1024}KB | байт >${largeToolOutputBytes / 1024}KB`,
+      "--- | ---: | ---: | ---: | ---:"
+    )
+    for (const [name, stats] of toolRows.slice(0, 10))
+      lines.push(
+        `${name} | ${stats.calls} | ${stats.bytes} | ${stats.largeCalls} | ${stats.largeBytes}`
+      )
+    lines.push("")
+  }
   if (report.balanceVerification?.status === "verified")
     lines.push(
       `Остаток DeepSeek: ${report.balanceVerification.balances.map((item) => `${item.totalBalance} ${item.currency} (гранты ${item.grantedBalance}, пополнение ${item.toppedUpBalance})`).join(", ")}; проверено: ${report.balanceVerification.checkedAt}. Это состояние аккаунта, не расходы сессии.`

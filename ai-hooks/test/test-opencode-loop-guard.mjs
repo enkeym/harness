@@ -362,6 +362,12 @@ test("large tool results keep a bounded prefix, an artifact and the guard notice
   const json = { content: [{ type: "text", text: JSON.stringify({ rows: "a".repeat(30000) }) }] }
   await f.after("execute", { code: "return rows" }, json)
   assert.match(f.notice(json), /full_result=.*harness_read_result/)
+
+  const skillResult = { content: [{ type: "text", text: "skill doc\n".repeat(900) }] }
+  await f.after("skill", { id: "optimize" }, skillResult)
+  const skillText = skillResult.content.map((part) => part.text).join("")
+  assert.match(skillText, /full_result=.*harness_read_result/)
+  assert.ok(Buffer.byteLength(skillText) <= 6 * 1024)
 })
 
 test("a finished turn resets the read budget for the next user message", async t => {
