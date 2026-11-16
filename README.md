@@ -35,7 +35,8 @@ node bin/mcp-sync.mjs --check
 ```
 
 Подробности: [OpenCode](docs/opencode.md), [результаты аудита](docs/harness-audit.md).
-Практики экономии: [управление контекстом](docs/context-automation.md).
+Практики экономии: [управление контекстом](docs/context-automation.md),
+[итоги и показатели проверки](docs/context-optimization-validation.md).
 
 Чтение кода: scoped search → tokensave_read с mode="lines" вокруг нужного
 попадания. Правки выполняются доступным инструментом редактирования;
