@@ -110,13 +110,18 @@
           "--playwright-compat",
           "--",
           "npx",
+          "--no-global",
+          "--prefer-offline",
           "-y",
           "@playwright/mcp@0.0.83",
           "--extension",
-          "--browser=chrome"
+          "--browser=chrome",
+          "--timeout-action",
+          "15000"
         ],
         "environment": {
-          "PLAYWRIGHT_MCP_EXECUTABLE_PATH": "{env:PLAYWRIGHT_MCP_EXECUTABLE_PATH}"
+          "PLAYWRIGHT_MCP_EXECUTABLE_PATH": "{env:PLAYWRIGHT_MCP_EXECUTABLE_PATH}",
+          "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
         }
       }
     }
