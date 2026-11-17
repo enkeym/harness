@@ -12,6 +12,7 @@ import {
   refreshTokens,
   startDeviceAuth
 } from "./oauth.mjs"
+import { sanitizeChatStream } from "./sse.mjs"
 
 const PROVIDER_ID = "qwen"
 const PROVIDER_NAME = "Qwen"
@@ -183,6 +184,23 @@ export default Plugin.define({
       }
       editor.add({ info, models, ...(sourceConnection ? { sourceConnection } : {}) })
     })
+
+    await ctx.session.hook(
+      "http.response",
+      (event) => {
+        const contentType = event.response.headers.get("content-type") ?? ""
+        if (!contentType.includes("text/event-stream") || !event.response.body) return
+        const headers = new Headers(event.response.headers)
+        headers.delete("content-encoding")
+        headers.delete("content-length")
+        event.response = new Response(sanitizeChatStream(event.response.body), {
+          status: event.response.status,
+          statusText: event.response.statusText,
+          headers
+        })
+      },
+      { providerID: PROVIDER_ID }
+    )
 
     void syncQuietly()
 
