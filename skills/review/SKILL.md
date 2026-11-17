@@ -130,6 +130,9 @@ Colleagues' MRs only. List, pick, scope and drafts through the GitLab API:
    owns the pass; the coordinator reuses its evidence without repeating it.
    A task marked `review_worker: true` reviews only its pinned MR and returns
    evidence to the coordinator; it never selects a queue or delegates again.
+   One MR per pass and per message: pin it, review it, report it, and start the
+   next only after the user asks. Never read the diffs of several MRs in one
+   pass, whatever the earlier selection mentioned.
 
 ## 2. Pass
 
@@ -145,19 +148,43 @@ The pass is bounded: one scope decision, one inventory, one pass over it. It
 ends when every inventory file is covered; the not-checked line names the rest.
 Do not re-read a file, diff, search result or successful check whose content is
 already in this session, and do not run a second impact or regression pass.
+The inventory is read in batches, never file by file: the read budget counts
+tool calls, and every tool result is capped at 6 KB with a `full_result=`
+marker, so a batch is packed by bytes, not by file count — add paths to one
+`git diff <range> -- <path1> <path2> …` while its output stays under the cap.
+A batch over the cap costs the preview plus a read of every artifact range, so
+it saves no calls and pays for the diff twice. A single diff over the cap is
+read from its artifact by byte range, never re-run. Order the groups by
+subsystem, contract or layer.
+Tokens are the scarce resource: the call counter resets on the next message,
+while compaction folds away findings. So the pass covers what one message
+holds, reports, and continues in the next — never trade context for call count.
+A large MR is therefore covered inside one message, and the pass pauses on the
+MR boundary — the end of the report — not in the middle of its inventory.
+A harness progress-guard notice about the read budget is not a finding, not a
+blocker and not a reason to stop reviewing: report what is already read with its
+findings and coverage, name the files left for the next batch, and stop that
+message. Such a partial pass ends with the verdict `частично — батч <k> из <n>`,
+never `не досмотрено`, which stays for the last batch with files left unread by
+a concrete obstacle; do not ask for a new session while files of the inventory
+remain — a new message resets the allowance, so «продолжи» continues from the
+named batch. Context compaction, not the read budget, is what really splits a
+very large MR: report the findings of the covered groups before it happens.
 
 - Inventory first: `git diff --stat <range>` minus review-pass step 5 files,
   `*.scss`, `*.css`, `*.svg`. Each tracked file is read in its diff before the
   report, its whole text only for a concrete suspicion a hunk leaves open; an
   unread one goes to the coverage line. Review large changes in bounded
-  groups and continue in this session; use native compaction, not a line-count gate.
+  groups and continue from the next group in the following message; use native
+  compaction, not a line-count gate.
 - A colleague's branch or MR with an open MR: its comments before the pass —
   *Existing comments* of [reference/gitlab.md](reference/gitlab.md).
 - Review within the current session; report evidence and actionable findings.
 
 No edits of any kind — not even a certain one-line fix or an impact-map line —
-and no files written, `/tmp` included: a large diff is
-read as `--stat`, then `git diff <range> -- <path>` per file. Target `HEAD`: the project's typecheck and linter — a
+and no files written, `/tmp` included: a large diff is read as `--stat`, then as
+`git diff <range> -- <paths…>` in byte-sized batches under the output cap, one
+file alone only when a finding needs its isolated context. Target `HEAD`: the project's typecheck and linter — a
 script that writes (`--fix`, `--write`) runs as its bare tool without the
 flag — then only the test files the scope adds or changes. Another ref: list
 them in the not-checked line.
@@ -169,6 +196,9 @@ Important → Minor, merged across both skills (one finding per defect, not per
 skill), each with problem, manual check steps, current code and fix; then the
 summary and the closing menu. Shapes, MR comments and menu:
 [reference/report.md](reference/report.md); read it before the first finding.
+A batch report keeps that shape for the files read so far: the summary's
+coverage line names the rest, plus one line with the next group instead of the
+closing menu. The menu comes only with the last batch; MR mode (1.2) has none.
 
 The branch is the user's when every reviewed commit is authored by
 `git config user.email`. Uncommitted scope: the commits of

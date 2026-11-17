@@ -33,6 +33,8 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<enco
   `question`. A numbered list in chat alone is not a question: it is the
   fallback only without such a tool, and then say so and accept bare numbers.
   Do not require multiple-selection controls.
+- A selected queue is walked in the picked order, one MR at a time; the pass
+  and reporting rules are in `SKILL.md` 1.2 and 2.
 
 ## Scope of one MR
 
