@@ -9,8 +9,8 @@ const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
 const LOCAL_ENV = path.join(HARNESS, '.env.local');
 const CHECK = process.argv.includes('--check');
 const args = process.argv.slice(2);
-if (args.some(arg => !['--check', '--opencode'].includes(arg))) {
-  console.error('Использование: node bin/mcp-sync.mjs [--opencode] [--check]');
+if (args.some(arg => arg !== '--check')) {
+  console.error('Использование: node bin/mcp-sync.mjs [--check]');
   process.exit(2);
 }
 

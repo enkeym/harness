@@ -5,7 +5,6 @@ HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ "${1:-}" = "--venv" ]; then
   exec bash "$HARNESS/bin/ragsave-venv.sh"
 fi
-[ "${1:-}" != "--opencode" ] || shift
 if [ ! -d "$HARNESS/opencode/node_modules/jsonc-parser" ]; then
   for arg in "$@"; do
     if [ "$arg" = "--check" ]; then

@@ -137,7 +137,7 @@ workflow-скилл плюс скиллы затронутого стека. О�
 `optimize` и проверяющие тесты.
 
 Проверка: `test-retrieval-routing.mjs`, `test-skill-context.mjs`, полный набор
-`ai-hooks/test`, `./install.sh --opencode --check`.
+`ai-hooks/test`, `./install.sh --check`.
 
 ## Дублирующие триггеры остальных скиллов — 2026-11-08
 

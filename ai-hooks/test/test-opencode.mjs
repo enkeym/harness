@@ -81,7 +81,6 @@ test("OpenCode preserves settings and detects drift without writing", (t) => {
       process.execPath,
       [
         path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"),
-        "--opencode",
         ...args
       ],
       {
@@ -133,7 +132,6 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
       "bash",
       [
         path.resolve(import.meta.dirname, "../../install.sh"),
-        "--opencode",
         ...args
       ],
       {
@@ -1418,7 +1416,6 @@ test("OpenCode MCP sync supports both configs and comments without writing in ch
       process.execPath,
       [
         path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"),
-        "--opencode",
         ...args
       ],
       {
@@ -1463,8 +1460,7 @@ test("OpenCode MCP sync references the Playwright extension token in a clean con
     spawnSync(
       process.execPath,
       [
-        path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"),
-        "--opencode"
+        path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs")
       ],
       {
         env: {
@@ -1531,7 +1527,6 @@ for (const extension of ["json", "jsonc"]) {
         process.execPath,
         [
           path.resolve(import.meta.dirname, "../../bin/mcp-sync.mjs"),
-          "--opencode",
           ...args
         ],
         {

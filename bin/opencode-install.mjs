@@ -19,8 +19,8 @@ const root = path.resolve(import.meta.dirname, "..")
 const home = os.homedir()
 const directory = configDirectory()
 const args = process.argv.slice(2)
-if (args.some((arg) => !["--check", "--yes"].includes(arg))) {
-  console.error("Использование: ./install.sh --opencode [--check] [--yes]")
+if (args.some((arg) => arg !== "--check")) {
+  console.error("Использование: ./install.sh [--check]")
   process.exit(2)
 }
 const check = args.includes("--check")
@@ -106,7 +106,6 @@ try {
     process.execPath,
     [
       path.join(root, "bin/mcp-sync.mjs"),
-      "--opencode",
       ...(check ? ["--check"] : [])
     ],
     { stdio: "inherit" }

@@ -1,8 +1,7 @@
 # Устройство
 
-install.sh запускает bin/opencode-install.mjs (--opencode принимается как явный
-синоним). Установщик подключает инструкции, общие skills, MCP и фоновые hooks
-в конфигурации OpenCode.
+install.sh запускает bin/opencode-install.mjs. Установщик подключает инструкции,
+общие skills, MCP и фоновые hooks в конфигурации OpenCode.
 Поиск через MCP задаётся инструкциями. SessionStart прогревает модель RAG
 и обновляет существующие индексы, Stop запускает фоновое обновление.
 SessionStart и UserPromptSubmit передают агенту общие правила загрузки skills из core.md.
