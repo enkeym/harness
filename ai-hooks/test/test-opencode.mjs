@@ -166,8 +166,8 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
   assert.deepEqual(loadConfig(directory).current.plugins, [
     "./plugins/harness/qwen-oauth",
-    "./plugins/harness/kimi-tuning",
     "opencode-kimi-v2",
+    "./plugins/harness/kimi-tuning",
     "custom-plugin"
   ])
   assert.ok(

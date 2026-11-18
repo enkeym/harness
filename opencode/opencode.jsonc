@@ -71,8 +71,8 @@
   },
   "plugins": [
     "./plugins/harness/qwen-oauth",
-    "./plugins/harness/kimi-tuning",
-    "opencode-kimi-v2"
+    "opencode-kimi-v2",
+    "./plugins/harness/kimi-tuning"
   ],
   "mcp": {
     "servers": {
