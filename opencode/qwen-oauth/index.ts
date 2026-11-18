@@ -36,13 +36,26 @@ type State = {
   connection: ConnectionInfo | undefined
 }
 
+function isModelDetail(value: unknown): value is ModelDetail {
+  if (!value || typeof value !== "object") return false
+  const detail = value as ModelDetail
+  return (
+    typeof detail.id === "string" &&
+    (detail.modalities === undefined ||
+      (typeof detail.modalities === "object" && detail.modalities !== null)) &&
+    (detail.contextWindowSize === undefined || typeof detail.contextWindowSize === "number")
+  )
+}
+
 function isCatalog(value: unknown): value is Catalog {
   if (!value || typeof value !== "object") return false
   const catalog = value as Partial<Catalog>
   return (
+    catalog.version === 1 &&
     Array.isArray(catalog.models) &&
     catalog.models.every((id) => typeof id === "string") &&
-    Array.isArray(catalog.metadata)
+    Array.isArray(catalog.metadata) &&
+    catalog.metadata.every(isModelDetail)
   )
 }
 
@@ -89,7 +102,7 @@ export default Plugin.define({
   id: "qwen.oauth",
   async setup(ctx) {
     const state: State = { catalog: { version: 1, models: [], metadata: [] }, connection: undefined }
-    let refreshInFlight: Promise<Credential.OAuth> | undefined
+    const refreshes = new Map<string, Promise<Credential.OAuth>>()
 
     try {
       const cached = await ctx.storage.get(STORAGE_CATALOG_KEY)
@@ -103,17 +116,20 @@ export default Plugin.define({
       } catch {}
     }
 
-    const refresh = async (credential: Credential.OAuth): Promise<Credential.OAuth> => {
-      if (refreshInFlight) return refreshInFlight
-      refreshInFlight = (async () => {
+    const refresh = (credential: Credential.OAuth): Promise<Credential.OAuth> => {
+      const key = credential.refresh
+      const pending = refreshes.get(key)
+      if (pending) return pending
+      const promise = (async () => {
         try {
           const tokens = await refreshTokens(credential.refresh)
           return credentialFromTokens(credential.methodID, tokens)
         } finally {
-          refreshInFlight = undefined
+          refreshes.delete(key)
         }
       })()
-      return refreshInFlight
+      refreshes.set(key, promise)
+      return promise
     }
 
     const sync = async () => {

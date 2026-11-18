@@ -5,7 +5,7 @@ import { sanitizeChatStream } from "../../opencode/qwen-oauth/sse.mjs"
 const sse = payload => `data: ${JSON.stringify(payload)}\n\n`
 const delta = choices => ({ choices })
 
-const stream = async (parts, log = () => {}) => {
+const streamText = async (parts, log = () => {}) => {
   const body = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder()
@@ -13,7 +13,11 @@ const stream = async (parts, log = () => {}) => {
       controller.close()
     }
   })
-  const text = await new Response(sanitizeChatStream(body, log)).text()
+  return new Response(sanitizeChatStream(body, log)).text()
+}
+
+const stream = async (parts, log = () => {}) => {
+  const text = await streamText(parts, log)
   return text
     .split("\n")
     .filter(line => line.startsWith("data: ") && line !== "data: [DONE]")
@@ -81,4 +85,66 @@ test("text deltas pass through untouched and survive chunk boundaries", async ()
   const chunks = await stream([payload.slice(0, 9), payload.slice(9, 31), payload.slice(31)])
 
   assert.deepEqual(chunks.map(chunk => chunk.choices[0].delta.content), ["hello", " world"])
+})
+
+test("a dropped tool call does not swallow finish_reason or usage", async () => {
+  const chunks = await stream([
+    sse(delta([{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":' } }] } }])),
+    sse(delta([{ delta: {}, finish_reason: "stop" }])),
+    sse({ choices: [], usage: { total_tokens: 7 } }),
+    "data: [DONE]\n\n"
+  ])
+
+  assert.equal(chunks.length, 2)
+  assert.equal(chunks[0].choices[0].finish_reason, "stop")
+  assert.equal(chunks[1].usage.total_tokens, 7)
+})
+
+test("the [DONE] sentinel is forwarded", async () => {
+  const text = await streamText([sse(delta([{ delta: { content: "x" } }])), "data: [DONE]\n\n"])
+
+  assert.ok(text.endsWith("data: [DONE]\n\n"))
+})
+
+test("non-data lines are forwarded and keep their place", async () => {
+  const text = await streamText([
+    sse(delta([{ delta: { tool_calls: [{ index: 0, function: { arguments: "{}" } }] } }])),
+    ": ping\n\n",
+    sse(delta([{ delta: {}, finish_reason: "stop" }]))
+  ])
+
+  assert.ok(text.startsWith(": ping\n"))
+  assert.ok(text.indexOf(": ping") < text.indexOf("finish_reason"))
+  assert.ok(!text.includes('"arguments":"{}"'))
+})
+
+test("a malformed payload is logged and skipped", async () => {
+  const logged = []
+  const chunks = await stream(
+    ["data: {not json\n\n", sse(delta([{ delta: { content: "ok" } }]))],
+    message => logged.push(message)
+  )
+
+  assert.equal(chunks.length, 1)
+  assert.equal(chunks[0].choices[0].delta.content, "ok")
+  assert.match(logged[0], /malformed stream payload/)
+})
+
+test("tool calls in one chunk get distinct ids", async () => {
+  const chunks = await stream([
+    sse(delta([{
+      delta: {
+        tool_calls: [
+          { index: 0, function: { name: "read", arguments: "" } },
+          { index: 1, function: { name: "grep", arguments: "" } }
+        ]
+      }
+    }])),
+    "data: [DONE]\n\n"
+  ])
+
+  assert.deepEqual(
+    chunks[0].choices[0].delta.tool_calls.map(call => call.id),
+    ["call_qwen_0", "call_qwen_1"]
+  )
 })

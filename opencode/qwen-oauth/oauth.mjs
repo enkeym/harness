@@ -7,6 +7,8 @@ const CLIENT_ID = "qwen-code-cli"
 const SCOPE = "model:invoke profile:read"
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 const REQUEST_TIMEOUT_MS = 120_000
+const DEFAULT_EXPIRES_IN_SEC = 900
+const POLL_INTERVAL_SEC = 5
 
 export const OAUTH_METHOD_ID = "oauth"
 
@@ -50,8 +52,12 @@ export async function startDeviceAuth() {
   return body
 }
 
+function positiveSeconds(value, fallback) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
 function tokensFromResponse(body, scope) {
-  const expiresIn = typeof body?.expires_in === "number" ? body.expires_in : 900
+  const expiresIn = positiveSeconds(body?.expires_in, DEFAULT_EXPIRES_IN_SEC)
   return {
     access_token: body.access_token,
     refresh_token: typeof body?.refresh_token === "string" ? body.refresh_token : undefined,
@@ -63,8 +69,8 @@ function tokensFromResponse(body, scope) {
 }
 
 export async function pollDeviceToken(device) {
-  let interval = Math.max(device.interval ?? 5, 5) * 1000
-  const deadline = Date.now() + device.expires_in * 1000
+  let interval = Math.max(positiveSeconds(device.interval, POLL_INTERVAL_SEC), POLL_INTERVAL_SEC) * 1000
+  const deadline = Date.now() + positiveSeconds(device.expires_in, DEFAULT_EXPIRES_IN_SEC) * 1000
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, interval))
     const { status, body } = await postForm(OAUTH_TOKEN_URL, {

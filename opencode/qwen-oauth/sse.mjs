@@ -2,15 +2,26 @@ const LOG = "[qwen.oauth]"
 const DATA_PREFIX = "data:"
 const DONE = "[DONE]"
 
-function parsePayload(line) {
-  const text = line.slice(DATA_PREFIX.length).trim()
-  if (!text || text === DONE) return undefined
+function payloadText(line) {
+  return line.slice(DATA_PREFIX.length).trim()
+}
+
+function parsePayload(text, log) {
   try {
     const value = JSON.parse(text)
-    return value && typeof value === "object" ? value : undefined
-  } catch {
-    return undefined
-  }
+    if (value && typeof value === "object") return value
+  } catch {}
+  log(`malformed stream payload: ${text.slice(0, 200)}`)
+  return undefined
+}
+
+function contributes(chunk) {
+  if (chunk.usage !== undefined || chunk.error !== undefined) return true
+  return (chunk.choices ?? []).some(
+    (choice) =>
+      Boolean(choice?.finish_reason) ||
+      Boolean(choice?.delta && Object.keys(choice.delta).length > 0)
+  )
 }
 
 function toolCallsOf(chunk) {
@@ -39,7 +50,10 @@ function syntheticID(index) {
   return `call_qwen_${index}`
 }
 
-export function sanitizeChatStream(body, log = (message) => console.warn(`${LOG} ${message}`)) {
+export function sanitizeChatStream(
+  body,
+  log = (message) => console.warn(`${LOG} ${message}`)
+) {
   const known = new Map()
   const queue = []
   const encoder = new TextEncoder()
@@ -61,24 +75,50 @@ export function sanitizeChatStream(body, log = (message) => console.warn(`${LOG}
         call.function = { ...(call.function ?? {}), name: entry.name }
       }
     }
-    return toolCallsOf(chunk).every((call) => Boolean(call.id) && Boolean(functionName(call)))
+    return toolCallsOf(chunk).every(
+      (call) => Boolean(call.id) && Boolean(functionName(call))
+    )
   }
 
   const encode = (chunk) => encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
 
+  const pushRaw = (text, controller) => {
+    if (queue.length) {
+      queue.push(text)
+      drain(controller)
+      return
+    }
+    controller.enqueue(encoder.encode(text))
+  }
+
   function drain(controller) {
     while (queue.length) {
-      const chunk = queue[0]
-      const first = toolCallsOf(chunk)[0]
-      if (!resolve(chunk, first ? indexOf(first) : 0)) break
+      const item = queue[0]
+      if (typeof item === "string") {
+        queue.shift()
+        controller.enqueue(encoder.encode(item))
+        continue
+      }
+      const first = toolCallsOf(item)[0]
+      if (!resolve(item, first ? indexOf(first) : 0)) break
       queue.shift()
-      controller.enqueue(encode(chunk))
+      controller.enqueue(encode(item))
     }
   }
 
   function handle(line, controller) {
-    if (!line.startsWith(DATA_PREFIX)) return
-    const payload = parsePayload(line)
+    if (!line.trim()) return
+    if (!line.startsWith(DATA_PREFIX)) {
+      pushRaw(`${line}\n`, controller)
+      return
+    }
+    const text = payloadText(line)
+    if (text === DONE) {
+      pushRaw(`data: ${DONE}\n\n`, controller)
+      return
+    }
+    if (!text) return
+    const payload = parsePayload(text, log)
     if (!payload) return
     if (!toolCallsOf(payload).length) {
       if (queue.length) {
@@ -98,9 +138,13 @@ export function sanitizeChatStream(body, log = (message) => console.warn(`${LOG}
   }
 
   function finalize(controller) {
-    for (const chunk of queue) {
+    for (const item of queue) {
+      if (typeof item === "string") {
+        controller.enqueue(encoder.encode(item))
+        continue
+      }
       const broken = []
-      for (const choice of chunk.choices ?? []) {
+      for (const choice of item.choices ?? []) {
         const list = choice?.delta?.tool_calls
         if (!Array.isArray(list)) continue
         const kept = list.filter((call) => {
@@ -116,14 +160,14 @@ export function sanitizeChatStream(body, log = (message) => console.warn(`${LOG}
           index: call.index,
           hasID: Boolean(call.id),
           hasName: Boolean(functionName(call)),
-          argumentChars: typeof call.function?.arguments === "string" ? call.function.arguments.length : 0
+          argumentChars:
+            typeof call.function?.arguments === "string"
+              ? call.function.arguments.length
+              : 0
         }))
         log(`dropped tool call without id/name: ${JSON.stringify(shape)}`)
       }
-      const hasDelta = (chunk.choices ?? []).some(
-        (choice) => choice?.delta && Object.keys(choice.delta).length > 0
-      )
-      if (hasDelta) controller.enqueue(encode(chunk))
+      if (contributes(item)) controller.enqueue(encode(item))
     }
     queue.length = 0
   }
