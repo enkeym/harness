@@ -45,7 +45,71 @@
       }
     },
     "openai": {
-      "settings": { "reasoningEffort": "low" }
+      "settings": { "reasoningEffort": "low" },
+      "models": {
+        "gpt-6-sol": {
+          "name": "gpt-6-sol",
+          "modelID": "gpt-6-sol",
+          "limit": { "input": 250000, "output": 8192 },
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high"] }
+          },
+          "settings": {
+            "reasoningEffort": "low",
+            "body": {
+              "reasoning": { "effort": "low", "summary": "auto" },
+              "max_tokens": 8192
+            }
+          },
+          "variants": [
+            {
+              "id": "low",
+              "body": {
+                "reasoning": { "effort": "low", "summary": "auto" },
+                "max_tokens": 8192
+              }
+            },
+            {
+              "id": "high",
+              "body": {
+                "reasoning": { "effort": "high", "summary": "auto" },
+                "max_tokens": 8192
+              }
+            }
+          ]
+        },
+        "gpt-6.1-sol": {
+          "name": "gpt-6.1-sol",
+          "modelID": "gpt-6.1-sol",
+          "limit": { "input": 250000, "output": 8192 },
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high"] }
+          },
+          "settings": {
+            "reasoningEffort": "low",
+            "body": {
+              "reasoning": { "effort": "low", "summary": "auto" },
+              "max_tokens": 8192
+            }
+          },
+          "variants": [
+            {
+              "id": "low",
+              "body": {
+                "reasoning": { "effort": "low", "summary": "auto" },
+                "max_tokens": 8192
+              }
+            },
+            {
+              "id": "high",
+              "body": {
+                "reasoning": { "effort": "high", "summary": "auto" },
+                "max_tokens": 8192
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "model": "deepseek/deepseek-flash",
