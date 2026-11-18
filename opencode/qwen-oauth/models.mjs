@@ -27,6 +27,7 @@ export function modelTuning(detail) {
     input,
     context,
     outputLimit,
+    outputCap: cap,
     body,
     variants,
     compatibility: thinking ? { reasoningField: REASONING_FIELD } : undefined

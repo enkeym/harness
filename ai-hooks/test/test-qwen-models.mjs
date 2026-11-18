@@ -14,6 +14,7 @@ test("default tuning mirrors the economical low profile", () => {
   assert.deepEqual(tuning.input, ["text", "image", "video"])
   assert.equal(tuning.context, 1_000_000)
   assert.equal(tuning.outputLimit, 32768)
+  assert.equal(tuning.outputCap, 8192)
   assert.equal(tuning.body.max_tokens, 8192)
   assert.equal(tuning.body.enable_thinking, true)
   assert.equal(tuning.body.reasoning_effort, "low")
@@ -30,10 +31,12 @@ test("default tuning mirrors the economical low profile", () => {
 test("the output cap never exceeds the server output limit", () => {
   const small = modelTuning({ ...fullDetail, outputWindowSize: 4096 })
   assert.equal(small.outputLimit, 4096)
+  assert.equal(small.outputCap, 4096)
   assert.equal(small.body.max_tokens, 4096)
 
   const medium = modelTuning({ ...fullDetail, outputWindowSize: 20000 })
   assert.equal(medium.outputLimit, 20000)
+  assert.equal(medium.outputCap, 8192)
   assert.equal(medium.body.max_tokens, 8192)
 })
 
@@ -53,6 +56,7 @@ test("fallbacks apply when the catalog has no metadata", () => {
   assert.deepEqual(tuning.input, ["text"])
   assert.equal(tuning.context, 1_000_000)
   assert.equal(tuning.outputLimit, 32768)
+  assert.equal(tuning.outputCap, 8192)
   assert.equal(tuning.body.max_tokens, 8192)
 })
 

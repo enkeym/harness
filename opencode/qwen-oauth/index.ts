@@ -91,7 +91,7 @@ function buildModels(catalog: Catalog) {
     const model = Model.Info.default(Provider.ID.make(PROVIDER_ID), Model.ID.make(id))
     model.name = id
     model.capabilities = { tools: true, input: tuning.input, output: ["text"] }
-    model.limit = { context: tuning.context, output: tuning.outputLimit }
+    model.limit = { context: tuning.context, output: tuning.outputCap }
     model.cost = []
     model.time = { released: Date.now() }
     model.settings = { ...model.settings, body: tuning.body }
