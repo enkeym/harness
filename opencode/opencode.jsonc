@@ -69,7 +69,11 @@
   "experimental": {
     "background_compaction": false
   },
-  "plugins": ["./plugins/harness/qwen-oauth", "./plugins/harness/kimi-tuning"],
+  "plugins": [
+    "./plugins/harness/qwen-oauth",
+    "./plugins/harness/kimi-tuning",
+    "opencode-kimi-v2"
+  ],
   "mcp": {
     "servers": {
       "tokensave": {
