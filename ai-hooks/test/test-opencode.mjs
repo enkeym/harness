@@ -124,7 +124,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   fs.writeFileSync(alternative, '{"model":"user/model"}')
   fs.writeFileSync(
     settings,
-    '{ // user config\n "instructions": ["custom.md"],\n "plugins": ["custom-plugin"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n "agents": {"plan": {"disable": true}},\n}'
+    '{ // user config\n "instructions": ["custom.md"],\n "plugins": ["custom-plugin", "opencode-kimi-v2"],\n "commands": {"handoff": {"template": "Personal handoff"}},\n "agents": {"plan": {"disable": true}},\n}'
   )
   const before = fs.readFileSync(settings, "utf8")
   const run = (...args) =>
@@ -166,8 +166,9 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.ok(loadConfig(directory).current.instructions.includes("custom.md"))
   assert.deepEqual(loadConfig(directory).current.plugins, [
     "./plugins/harness/qwen-oauth",
-    "opencode-kimi-v2",
-    "custom-plugin"
+    "./plugins/harness/kimi-tuning",
+    "custom-plugin",
+    "opencode-kimi-v2"
   ])
   assert.ok(
     !loadConfig(directory).current.instructions.some((value) =>
@@ -406,7 +407,7 @@ test("subscription providers preset low reasoning without inventing token costs"
   const config = readConfig(
     path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
   )
-  for (const id of ["kimi-for-coding-oauth", "openai"]) {
+  for (const id of ["openai"]) {
     const provider = config.providers[id]
     assert.ok(provider, `${id} preset is missing`)
     assert.equal(provider.settings?.reasoningEffort, "low", `${id} must default to low effort`)

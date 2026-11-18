@@ -148,3 +148,43 @@ test("tool calls in one chunk get distinct ids", async () => {
     ["call_qwen_0", "call_qwen_1"]
   )
 })
+
+test("reasoning deltas pass through untouched", async () => {
+  const chunks = await stream([
+    sse(delta([{ delta: { reasoning_content: "think" } }])),
+    sse(delta([{ delta: { content: "answer" } }])),
+    sse(delta([{ delta: {}, finish_reason: "stop" }])),
+    "data: [DONE]\n\n"
+  ])
+
+  assert.equal(chunks[0].choices[0].delta.reasoning_content, "think")
+  assert.equal(chunks[1].choices[0].delta.content, "answer")
+})
+
+test("final usage with cached token details passes through untouched", async () => {
+  const usage = {
+    prompt_tokens: 1200,
+    completion_tokens: 30,
+    total_tokens: 1230,
+    prompt_tokens_details: { cached_tokens: 1100, text_tokens: 1200 },
+    completion_tokens_details: { reasoning_tokens: 12 }
+  }
+  const chunks = await stream([
+    sse(delta([{ delta: { content: "x" } }])),
+    sse({ choices: [], usage }),
+    "data: [DONE]\n\n"
+  ])
+
+  assert.equal(chunks.length, 2)
+  assert.deepEqual(chunks[1].usage, usage)
+})
+
+test("a length finish reason is preserved", async () => {
+  const chunks = await stream([
+    sse(delta([{ delta: { content: "partial" } }])),
+    sse(delta([{ delta: {}, finish_reason: "length" }])),
+    "data: [DONE]\n\n"
+  ])
+
+  assert.equal(chunks[1].choices[0].finish_reason, "length")
+})

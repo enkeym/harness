@@ -123,7 +123,24 @@ export async function fetchModels(accessToken) {
       }
     }
     if (typeof entry.context_window_tokens === "number") detail.contextWindowSize = entry.context_window_tokens
-    if (detail.modalities || detail.contextWindowSize) metadata.push(detail)
+    if (
+      typeof entry.output_window_tokens === "number" &&
+      Number.isFinite(entry.output_window_tokens) &&
+      entry.output_window_tokens > 0
+    ) {
+      detail.outputWindowSize = entry.output_window_tokens
+    }
+    if (Array.isArray(entry.supported_parameters)) {
+      detail.thinking = entry.supported_parameters.includes("enable_thinking")
+    }
+    if (
+      detail.modalities ||
+      detail.contextWindowSize ||
+      detail.outputWindowSize !== undefined ||
+      detail.thinking !== undefined
+    ) {
+      metadata.push(detail)
+    }
   }
   return { models, metadata }
 }

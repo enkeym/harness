@@ -2,9 +2,7 @@ import { Model, Plugin, Provider, type Credential } from "@opencode/plugin"
 import type { ConnectionInfo } from "@opencode/client"
 import {
   API_BASE_URL,
-  FALLBACK_CONTEXT,
   FALLBACK_MODELS,
-  FALLBACK_OUTPUT,
   OAUTH_METHOD_ID,
   authorizationUrl,
   fetchModels,
@@ -13,6 +11,7 @@ import {
   startDeviceAuth
 } from "./oauth.mjs"
 import { sanitizeChatStream } from "./sse.mjs"
+import { modelTuning } from "./models.mjs"
 
 const PROVIDER_ID = "qwen"
 const PROVIDER_NAME = "Qwen"
@@ -23,6 +22,8 @@ type ModelDetail = {
   id: string
   modalities?: Record<string, boolean>
   contextWindowSize?: number
+  outputWindowSize?: number
+  thinking?: boolean
 }
 
 type Catalog = {
@@ -43,7 +44,9 @@ function isModelDetail(value: unknown): value is ModelDetail {
     typeof detail.id === "string" &&
     (detail.modalities === undefined ||
       (typeof detail.modalities === "object" && detail.modalities !== null)) &&
-    (detail.contextWindowSize === undefined || typeof detail.contextWindowSize === "number")
+    (detail.contextWindowSize === undefined || typeof detail.contextWindowSize === "number") &&
+    (detail.outputWindowSize === undefined || typeof detail.outputWindowSize === "number") &&
+    (detail.thinking === undefined || typeof detail.thinking === "boolean")
   )
 }
 
@@ -84,16 +87,19 @@ function buildModels(catalog: Catalog) {
   const metadata = new Map(catalog.metadata.map((entry) => [entry.id, entry]))
   const ids = catalog.models.length ? catalog.models : FALLBACK_MODELS
   return ids.map((id) => {
-    const extra = metadata.get(id)
+    const tuning = modelTuning(metadata.get(id))
     const model = Model.Info.default(Provider.ID.make(PROVIDER_ID), Model.ID.make(id))
-    const input = ["text"]
-    if (extra?.modalities?.image) input.push("image")
-    if (extra?.modalities?.video) input.push("video")
     model.name = id
-    model.capabilities = { tools: true, input, output: ["text"] }
-    model.limit = { context: extra?.contextWindowSize ?? FALLBACK_CONTEXT, output: FALLBACK_OUTPUT }
+    model.capabilities = { tools: true, input: tuning.input, output: ["text"] }
+    model.limit = { context: tuning.context, output: tuning.outputLimit }
     model.cost = []
     model.time = { released: Date.now() }
+    model.settings = { ...model.settings, body: tuning.body }
+    if (tuning.compatibility) model.compatibility = tuning.compatibility
+    model.variants = tuning.variants.map((variant) => ({
+      ...variant,
+      id: variant.id as Model.Info["variants"][number]["id"]
+    }))
     return model
   })
 }

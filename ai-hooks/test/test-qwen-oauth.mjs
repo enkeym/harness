@@ -50,6 +50,98 @@ test("fetchModels keeps unique ids and known metadata", async () => {
   ])
 })
 
+test("fetchModels keeps the server output limit and thinking support", async () => {
+  const result = await withFetch(
+    async () =>
+      json({
+        data: [
+          {
+            id: "qwen4-max",
+            input_modalities: ["text", "image", "video"],
+            context_window_tokens: 1000000,
+            output_window_tokens: 65536,
+            supported_parameters: ["enable_thinking", "reasoning_effort"],
+            created: 1793004741
+          },
+          { id: "qwen-lite", context_window_tokens: "1000000" }
+        ]
+      }),
+    () => fetchModels("token")
+  )
+
+  assert.deepEqual(result.models, ["qwen4-max", "qwen-lite"])
+  assert.deepEqual(result.metadata, [
+    {
+      id: "qwen4-max",
+      modalities: { image: true, video: true },
+      contextWindowSize: 1000000,
+      outputWindowSize: 65536,
+      thinking: true
+    }
+  ])
+})
+
+test("fetchModels marks models without enable_thinking as non-thinking", async () => {
+  const result = await withFetch(
+    async () =>
+      json({
+        data: [
+          { id: "qwen-lite", supported_parameters: [] },
+          { id: "qwen-legacy", supported_parameters: "enable_thinking" }
+        ]
+      }),
+    () => fetchModels("token")
+  )
+
+  assert.deepEqual(result.models, ["qwen-lite", "qwen-legacy"])
+  assert.deepEqual(result.metadata, [{ id: "qwen-lite", thinking: false }])
+})
+
+test("fetchModels rejects invalid output_window_tokens values", async () => {
+  const result = await withFetch(
+    async () =>
+      json({
+        data: [
+          { id: "qwen-zero", output_window_tokens: 0 },
+          { id: "qwen-negative", output_window_tokens: -1 },
+          { id: "qwen-text", output_window_tokens: "8192" },
+          { id: "qwen-infinite", output_window_tokens: Number.POSITIVE_INFINITY },
+          { id: "qwen-nan", output_window_tokens: Number.NaN }
+        ]
+      }),
+    () => fetchModels("token")
+  )
+
+  assert.deepEqual(result.models, [
+    "qwen-zero",
+    "qwen-negative",
+    "qwen-text",
+    "qwen-infinite",
+    "qwen-nan"
+  ])
+  assert.deepEqual(result.metadata, [])
+})
+
+test("fetchModels keeps the catalog order with duplicate ids collapsed", async () => {
+  const result = await withFetch(
+    async () =>
+      json({
+        data: [
+          { id: "qwen3.8-flash", context_window_tokens: 1000000 },
+          { id: "qwen3.8-max", context_window_tokens: 1000000 },
+          { id: "qwen3.8-flash", context_window_tokens: 999 }
+        ]
+      }),
+    () => fetchModels("token")
+  )
+
+  assert.deepEqual(result.models, ["qwen3.8-flash", "qwen3.8-max"])
+  assert.deepEqual(result.metadata, [
+    { id: "qwen3.8-flash", contextWindowSize: 1000000 },
+    { id: "qwen3.8-max", contextWindowSize: 1000000 }
+  ])
+})
+
 test("fetchModels surfaces an http failure", async () => {
   await withFetch(
     async () => json({}, 401),

@@ -44,9 +44,6 @@
         }
       }
     },
-    "kimi-for-coding-oauth": {
-      "settings": { "reasoningEffort": "low" }
-    },
     "openai": {
       "settings": { "reasoningEffort": "low" }
     }
@@ -72,7 +69,7 @@
   "experimental": {
     "background_compaction": false
   },
-  "plugins": ["./plugins/harness/qwen-oauth", "opencode-kimi-v2"],
+  "plugins": ["./plugins/harness/qwen-oauth", "./plugins/harness/kimi-tuning"],
   "mcp": {
     "servers": {
       "tokensave": {
