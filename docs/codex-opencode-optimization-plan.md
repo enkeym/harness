@@ -151,7 +151,7 @@ live-конфига нет записей gpt-6-sol/gpt-6.1-sol — конфли
    (если `capabilities` не применился — зафиксировать и оставить лестницу,
    F4 опционален).
 4. Контрольные запросы `#low` и `#high`: в теле запроса
-   `max_completion_tokens = 8192` (лог `~/.local/share/opencode/log/opencode.log`),
+   `max_output_tokens = 8192` (лог `~/.local/share/opencode/log/opencode.log`),
    `output + reasoning ≤ 8192`; при принудительно длинной генерации
    `finish = length` ровно на 8192.
 5. Повторный префикс → `cacheRead > 0`, `cacheWrite = 0`; значение
@@ -209,11 +209,11 @@ export function tuneOpenaiModel(model, caps) {
 }
 ```
 
-Нюансы: (1) OpenAI reasoning-модели принимают `max_completion_tokens`, а не
-`max_tokens`; если тело с `max_tokens` отклоняется, расширить
-`withMaxTokens(body, maxTokens, field = "max_tokens")` в общем модуле
-(совместимо с kimi/qwen) и передавать `"max_completion_tokens"` — проверить
-контрольным запросом. (2) Плагин применяется ко всем моделям провайдера
+Нюансы: (1) этот провайдер ходит в Responses API, который принимает
+`max_output_tokens`, а `max_tokens` и `max_completion_tokens` отклоняет
+(`Unsupported parameter: max_tokens`); поэтому `withMaxTokens` нужно вызывать
+с полем `max_output_tokens` — проверить контрольным запросом.
+(2) Плагин применяется ко всем моделям провайдера
 openai; если нужен только sol-набор — фильтровать по `modelID` внутри
 трансформации (решение пользователя, по умолчанию весь провайдер, как у
 kimi). (3) Добавить `"./plugins/harness/openai-tuning"` в список `plugins`
@@ -254,7 +254,7 @@ kimi). (3) Добавить `"./plugins/harness/openai-tuning"` в список 
    openai-моделей.
 2. Список моделей отдаёт `limit.output = 8192`, `limit.input = 250000` для
    `gpt-6-sol` и `gpt-6.1-sol`.
-3. Контрольные запросы `#low`/`#high`: `max_completion_tokens = 8192` в теле;
+3. Контрольные запросы `#low`/`#high`: `max_output_tokens = 8192` в теле;
    `output + reasoning ≤ 8192`; принудительно длинная генерация завершается
    `finish = length` ровно на 8192.
 4. Повторный префикс: `cacheRead > 0`, `cacheWrite = 0`.

@@ -325,6 +325,24 @@ test("stale DeepSeek aliases migrate to bundled model ids and pricing", () => {
   assert.equal(withoutBundled.model, "deepseek/deepseek-flash-offpeak")
 })
 
+test("base openai models cap output with the Responses API field", () => {
+  const defaults = readConfig(
+    path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
+  )
+  for (const id of ["gpt-6-sol", "gpt-6.1-sol"]) {
+    const model = defaults.providers.openai.models[id]
+    const bodies = [
+      model.settings.body,
+      ...model.variants.map((variant) => variant.body)
+    ]
+
+    for (const body of bodies) {
+      assert.equal(body.max_output_tokens, 8192)
+      assert.equal(body.max_tokens, undefined)
+    }
+  }
+})
+
 test("installer trims reasoning effort unsupported by a bundled model", () => {
   const defaults = readConfig(
     path.resolve(import.meta.dirname, "../../opencode/opencode.jsonc")
