@@ -148,3 +148,49 @@ test("fetchModels surfaces an http failure", async () => {
     () => assert.rejects(fetchModels("token"), /не удалось получить список моделей/)
   )
 })
+
+const networkError = (code) => Object.assign(new TypeError(`fetch failed: ${code}`), { code })
+
+test("refreshTokens retries a transient dns failure", async () => {
+  let calls = 0
+  const tokens = await withFetch(
+    async () => {
+      calls += 1
+      if (calls === 1) throw networkError("EAI_AGAIN")
+      return json({ access_token: "access", refresh_token: "next", expires_in: 60 })
+    },
+    () => refreshTokens("refresh")
+  )
+
+  assert.equal(calls, 2)
+  assert.equal(tokens.access_token, "access")
+  assert.equal(tokens.refresh_token, "next")
+})
+
+test("refreshTokens does not retry a permanent network failure", async () => {
+  let calls = 0
+  await withFetch(
+    async () => {
+      calls += 1
+      throw networkError("ENOTFOUND")
+    },
+    () => assert.rejects(refreshTokens("refresh"), /ENOTFOUND/)
+  )
+
+  assert.equal(calls, 1)
+})
+
+test("fetchModels retries a transient connection reset", async () => {
+  let calls = 0
+  const result = await withFetch(
+    async () => {
+      calls += 1
+      if (calls === 1) throw networkError("ECONNRESET")
+      return json({ data: [{ id: "qwen3.8-max" }] })
+    },
+    () => fetchModels("token")
+  )
+
+  assert.equal(calls, 2)
+  assert.deepEqual(result.models, ["qwen3.8-max"])
+})

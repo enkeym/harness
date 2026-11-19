@@ -9,6 +9,9 @@ const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 const REQUEST_TIMEOUT_MS = 120_000
 const DEFAULT_EXPIRES_IN_SEC = 900
 const POLL_INTERVAL_SEC = 5
+const RETRY_ATTEMPTS = 4
+const RETRY_DELAY_MS = 500
+const TRANSIENT_NETWORK_CODES = new Set(["EAI_AGAIN", "ECONNRESET", "ECONNREFUSED"])
 
 export const OAUTH_METHOD_ID = "oauth"
 
@@ -25,13 +28,31 @@ function oauthError(status, body, fallback) {
   return error
 }
 
+function isTransientNetworkError(error) {
+  const code = typeof error?.code === "string" ? error.code : error?.cause?.code
+  return typeof code === "string" && TRANSIENT_NETWORK_CODES.has(code)
+}
+
+async function withNetworkRetry(operation) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (attempt >= RETRY_ATTEMPTS || !isTransientNetworkError(error)) throw error
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * 2 ** (attempt - 1)))
+    }
+  }
+}
+
 async function postForm(url, form) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(form).toString(),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  })
+  const response = await withNetworkRetry(() =>
+    fetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(form).toString(),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  )
   return { status: response.status, body: await response.json().catch(() => ({})) }
 }
 
@@ -102,10 +123,12 @@ export async function refreshTokens(refreshToken) {
 }
 
 export async function fetchModels(accessToken) {
-  const response = await fetch(`${API_BASE_URL}/models`, {
-    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  })
+  const response = await withNetworkRetry(() =>
+    fetch(`${API_BASE_URL}/models`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  )
   if (!response.ok) throw oauthError(response.status, {}, "не удалось получить список моделей")
   const body = await response.json()
   const data = Array.isArray(body?.data) ? body.data : []
