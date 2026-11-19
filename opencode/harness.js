@@ -19,6 +19,7 @@ import {
   defaultCostConfig
 } from "./cost-report.mjs"
 import { registerRetrievalRouting } from "./retrieval-routing.mjs"
+import { sanitizeDsmlStream } from "./dsml.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
 
@@ -159,6 +160,24 @@ export default {
     const handoff = await registerHandoff(context, observe, contextCache)
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
+    await context.session.hook(
+      "http.response",
+      (event) => {
+        if (event.kind && event.kind !== "primary") return
+        const contentType = event.response.headers.get("content-type") ?? ""
+        if (!contentType.includes("text/event-stream")) return
+        if (!event.response.body) return
+        const headers = new Headers(event.response.headers)
+        headers.delete("content-encoding")
+        headers.delete("content-length")
+        event.response = new Response(sanitizeDsmlStream(event.response.body), {
+          status: event.response.status,
+          statusText: event.response.statusText,
+          headers
+        })
+      },
+      { providerID: deepseekModels.flash.providerID }
+    )
     const pluginAgentsInstructions = readInstructions().instructions
     const harnessInstructions = () => ({
       role: "user",

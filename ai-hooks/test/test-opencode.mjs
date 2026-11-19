@@ -1613,6 +1613,7 @@ function executionSandbox(t) {
     "cache-policy.mjs",
     "context-cache.mjs",
     "retrieval-routing.mjs",
+    "dsml.mjs",
     "read-results.mjs",
     "AGENTS.md",
     "package.json"
