@@ -12,6 +12,7 @@ import { registerBrief } from "./brief.mjs"
 import { registerContextCache } from "./evidence-cache.mjs"
 import { registerLoopGuard } from "./loop-guard.mjs"
 import { registerQuestionGuard } from "./question-guard.mjs"
+import { registerEmptyResponseGuard } from "./empty-response.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
 import {
   refreshCostReport,
@@ -164,6 +165,7 @@ export default {
     const handoff = await registerHandoff(context, observe, contextCache)
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
+    const emptyResponseGuard = await registerEmptyResponseGuard(context)
     const sanitizeHttpResponse = (event) => {
       if (event.kind && event.kind !== "primary") return
       if (!event.response.body) return
@@ -313,6 +315,14 @@ export default {
             } catch (error) {
               process.stderr.write(
                 `Harness question guard failed: ${error.message}\n`
+              )
+            }
+          if (event.type === "session.execution.succeeded")
+            try {
+              await emptyResponseGuard.check(sessionID, source)
+            } catch (error) {
+              process.stderr.write(
+                `Harness empty response guard failed: ${error.message}\n`
               )
             }
           try {
