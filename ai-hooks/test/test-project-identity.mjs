@@ -33,6 +33,8 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   fs.mkdirSync(root, { recursive: true });
   check('git init', spawnSync('git', ['init', '-q', root]).status, 0);
   for (const kind of indexes) index(root, kind);
+  check('git commit', spawnSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init']).status, 0);
+  const headCt = Number(spawnSync('git', ['-C', root, 'log', '-1', '--format=%ct'], { encoding: 'utf8' }).stdout.trim());
 
   const bin = path.join(home, 'bin');
   fs.mkdirSync(bin, { recursive: true });
@@ -40,8 +42,10 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const rg = path.join(bin, 'ragsave');
   fs.writeFileSync(ts, [
     '#!/usr/bin/env bash',
-    'echo "tokensave $1" >> "$FAKE_CALLS"',
-    'if [ "$1" = status ]; then cat "$FAKE_TS_STATUS"; else echo "No tokensave servers running."; fi'
+    'echo "tokensave $*" >> "$FAKE_CALLS"',
+    'if [ "$1" = status ] && [ "${2:-}" = -j ]; then cat "$FAKE_TS_JSON";',
+    'elif [ "$1" = status ]; then cat "$FAKE_TS_STATUS";',
+    'else echo "No tokensave servers running."; fi'
   ].join('\n'));
   fs.writeFileSync(rg, [
     '#!/usr/bin/env bash',
@@ -53,8 +57,15 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
 
   const calls = path.join(home, 'calls.log');
   const tsStatus = path.join(home, 'ts-status.txt');
+  const tsJson = path.join(home, 'ts-status.json');
   const rgStatus = path.join(home, 'rg-status.json');
   fs.writeFileSync(tsStatus, `│ Project: ${root} │\n│ Branch: [single-db] │\n`);
+  const setTsJson = (fields) => fs.writeFileSync(tsJson, `${JSON.stringify({
+    last_sync_at: headCt + 300,
+    last_updated: headCt + 300,
+    ...fields
+  })}\n`);
+  setTsJson({});
   fs.writeFileSync(rgStatus, `${JSON.stringify({
     project: root,
     db: path.join(root, '.ragsave', 'rag.db'),
@@ -71,6 +82,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
     AI_HOOKS_RAGSAVE_CMD: rg,
     FAKE_CALLS: calls,
     FAKE_TS_STATUS: tsStatus,
+    FAKE_TS_JSON: tsJson,
     FAKE_RG_STATUS: rgStatus,
     PLAYWRIGHT_MCP_EXTENSION_TOKEN: 'test-token'
   };
@@ -78,7 +90,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
     const res = spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf8', env, timeout: 30000 });
     return { status: res.status, out: res.stdout + res.stderr, calls: lines(calls) };
   };
-  return { home, root, run, tsStatus };
+  return { home, root, headCt, run, tsStatus, setTsJson };
 }
 
 {
@@ -89,8 +101,9 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   checkOk('показан Git worktree и ветка', res.out.includes('Git worktree') && /ветка: \S+/.test(res.out));
   checkOk('показаны оба маркера', res.out.includes('.tokensave/tokensave.db') && res.out.includes('.ragsave/rag.db'));
   checkOk('показан фактический путь backend', res.out.includes('фактический реальный путь backend'));
+  checkOk('свежий индекс отмечен ✓', res.out.includes('индекс свежий'));
   checkOk('Playwright проверен отдельно', res.out.includes('Playwright') && res.out.includes('PLAYWRIGHT_MCP_EXTENSION_TOKEN задан'));
-  check('backend вызван только для статуса', res.calls, ['tokensave status', 'tokensave servers', 'ragsave status']);
+  check('backend вызван только для статуса', res.calls, ['tokensave status', 'tokensave status -j', 'tokensave servers', 'ragsave status']);
 }
 
 {
@@ -99,6 +112,23 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const res = sb.run(sb.root);
   check('чужой проект backend: код 1', res.status, 1);
   checkOk('несовпадение помечено ✗', res.out.includes('✗') && res.out.includes('другой проект'));
+}
+
+{
+  const sb = sandbox();
+  sb.setTsJson({ last_sync_at: sb.headCt - 100, last_updated: sb.headCt - 100 });
+  const res = sb.run(sb.root);
+  check('отставание по содержимому: код 0', res.status, 0);
+  checkOk('отставание помечено ! с советом sync', res.out.includes('отставание по содержимому') && res.out.includes('tokensave sync'));
+}
+
+{
+  const sb = sandbox();
+  sb.setTsJson({ last_sync_at: sb.headCt + 100, last_updated: sb.headCt - 100 });
+  const res = sb.run(sb.root);
+  check('подозрение по commit timestamp: код 0', res.status, 0);
+  checkOk('подозрение помечено ! без цикла sync', res.out.includes('подозрение по commit timestamp') && res.out.includes('не повторяйте sync циклом'));
+  check('диагностика не запускает sync', res.calls.filter((c) => c === 'tokensave sync').length, 0);
 }
 
 {
@@ -127,7 +157,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const res = sb.run(sb.root);
   check('только один маркер: код 0', res.status, 0);
   checkOk('отсутствующий маркер виден, корни не обязаны совпадать', res.out.includes('.ragsave/rag.db не найден'));
-  check('ragsave не вызывался', res.calls, ['tokensave status', 'tokensave servers']);
+  check('ragsave не вызывался', res.calls, ['tokensave status', 'tokensave status -j', 'tokensave servers']);
 }
 
 process.exitCode = failed ? 1 : 0;

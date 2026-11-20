@@ -121,6 +121,54 @@ if (!found.tokensave) {
   if (branch && branch !== 'single-db' && current && branch !== current && !current.startsWith('detached')) {
     warn(`ветка backend ${branch} ≠ ветка worktree ${current}`);
   }
+  const headCt = found.worktree ? Number(git('-C', found.worktree, 'log', '-1', '--format=%ct')) : 0;
+  let sj = null;
+  try { sj = JSON.parse(run(bin, ['status', '-j'], found.tokensave, { NO_COLOR: '1' })); } catch {}
+  let controlMtime = 0;
+  try { controlMtime = Math.floor(fs.statSync(path.join(found.tokensave, '.tokensave', 'sync.log')).mtimeMs / 1000); } catch {}
+  if (headCt && (!sj || typeof sj.last_sync_at !== 'number')) {
+    warn('свежесть: статус backend (status -j) недоступен или нераспознан');
+  } else if (headCt && sj.last_sync_at < headCt) {
+    warn(`отставание по содержимому: last_sync_at ${sj.last_sync_at} раньше HEAD ${headCt} — запустите tokensave sync (контрольный sync.log: ${controlMtime})`);
+  } else if (headCt && typeof sj.last_updated === 'number' && sj.last_updated < headCt) {
+    warn(`подозрение по commit timestamp: sync после HEAD (last_sync_at ${sj.last_sync_at} ≥ ${headCt}) не обновил last_updated (${sj.last_updated}); живой статус может сохранять stale_commits — не повторяйте sync циклом (маркер успеха sync в 7.16.0 берёт last_updated)`);
+  } else if (headCt) {
+    good(`индекс свежий: last_sync_at ${sj.last_sync_at} ≥ HEAD ${headCt} (контрольный sync.log: ${controlMtime})`);
+  }
+  let DatabaseSync = null;
+  try {
+    const warningListeners = process.rawListeners('warning');
+    process.removeAllListeners('warning');
+    try { ({ DatabaseSync } = await import('node:sqlite')); } finally {
+      for (const listener of warningListeners) process.on('warning', listener);
+    }
+  } catch {}
+  if (DatabaseSync && found.worktree) {
+    try {
+      const prefix = path.relative(found.tokensave, found.worktree);
+      if (!prefix.startsWith('..') && !path.isAbsolute(prefix)) {
+        const db = new DatabaseSync(path.join(found.tokensave, '.tokensave', 'tokensave.db'), { readOnly: true });
+        const indexed = new Set(db.prepare('select path from files').all().map((r) => r.path));
+        db.close();
+        const base = prefix ? `${prefix.split(path.sep).join('/')}/` : '';
+        const coverageClasses = git('-C', found.worktree, 'ls-files')
+          .split('\n')
+          .filter(Boolean)
+          .filter((p) => p.startsWith(base))
+          .map((p) => p.slice(base.length))
+          .filter((rel) => rel.endsWith('.jsonc')
+            || (!path.basename(rel).includes('.')
+              && fs.existsSync(path.join(found.tokensave, rel))
+              && (fs.statSync(path.join(found.tokensave, rel)).mode & 0o111) !== 0));
+        const uncovered = coverageClasses.filter((rel) => !indexed.has(rel));
+        if (uncovered.length) {
+          warn(`нет покрытия: ${uncovered.length} отслеживаемых файлов вне индекса: ${uncovered.slice(0, 3).join(', ')} — дополните artifact_extensions/project.json в .tokensave/ (node bin/harness-index-config.mjs)`);
+        } else if (coverageClasses.length) {
+          good(`покрытие: .jsonc и исполняемые extensionless-файлы есть в индексе (${coverageClasses.length})`);
+        }
+      }
+    } catch {}
+  }
   const servers = run(bin, ['servers'], found.tokensave, { NO_COLOR: '1' }).trim();
   if (servers) good(`запущенные серверы: ${servers.split('\n')[0]}`);
 }
