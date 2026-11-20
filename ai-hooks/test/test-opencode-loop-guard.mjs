@@ -219,7 +219,7 @@ test("read budget warns at 20 reads and again at 40 without changing the tool li
   for (let i = 0; i < 19; i++) await f.after("read", { file: `a${i}.mjs` })
   const soft = {}
   await f.after("read", { file: "a19.mjs" }, soft)
-  assert.match(f.notice(soft), /20 read calls since the last file change/)
+  assert.match(f.notice(soft), /20 read calls without a file change/)
 
   const warning = await f.contextHook()
   assert.equal(warning.system.length, 0)
@@ -272,33 +272,71 @@ test("hard read budget keeps the Code Mode execute gateway in the request", asyn
   )
 })
 
-test("shell commands consume the read budget and reach the stop level", async t => {
+test("verification, planning and discovery calls do not consume the read budget", async t => {
   const f = await fixture(t)
-  for (let i = 0; i < 19; i++) await f.after("shell", { command: `echo ${i}` })
-  const quiet = await f.contextHook()
-  assert.equal(quiet.system.length, 0)
-  assert.ok(quiet.tools.shell)
-  assert.ok(quiet.tools.read)
+  const bigLog = { output: "ok\n".repeat(4000) }
+  await f.after("shell", { command: "node --test --test-concurrency=1 ai-hooks/test/test-a.mjs" }, bigLog)
+  await f.after("shell", { command: "npm test" })
+  await f.after("shell", { command: "bash install.sh --check" })
+  await f.after("execute", { code: "await tools.brief_transition({ stage: \"plan\", handoff: \"h\" })" })
+  await f.after("execute", { code: "const r = await search({ query: \"playwright browser\" }); return r" })
+  for (let i = 0; i < 16; i++) await f.after("read", { file: `a${i}.mjs` })
+  const quiet = {}
+  await f.after("read", { file: "a16.mjs" }, quiet)
+  assert.equal(f.notice(quiet), "", "17 real reads after 5 verification calls stay below the soft level")
 
+  const repeatedTest = {}
+  await f.after("shell", { command: "npm test" }, repeatedTest, "session", "completed", "call-x")
+  assert.match(
+    f.notice(repeatedTest),
+    /already ran as tool call call-\d+/,
+    "an identical repeated verification run is still a proven repeat"
+  )
+
+  const gatheringExecute = {}
+  await f.after(
+    "execute",
+    { code: 'return await tools.tokensave.tokensave_read({ file: "a.mjs", mode: "full" })' },
+    gatheringExecute
+  )
+  await f.after("read", { file: "a17.mjs" })
   const soft = {}
-  await f.after("shell", { command: "npm test" }, soft)
-  assert.match(f.notice(soft), /20 read calls since the last file change/)
-
-  for (let i = 20; i < 60; i++) await f.after("shell", { command: `npm run ${i}` })
-  const stop = await f.contextHook()
-  assert.deepEqual(stop.tools, {})
-
-  await f.after("execute", {
-    code: 'await tools.tokensave.tokensave_multi_str_replace({ path: "a.mjs", replacements: [] })'
-  })
-  const reset = await f.contextHook()
-  assert.equal(reset.system.length, 0)
-  assert.ok(reset.tools.execute)
-  assert.ok(reset.tools.shell)
+  await f.after("read", { file: "a18.mjs" }, soft)
+  assert.match(
+    f.notice(soft),
+    /20 read calls without a file change/,
+    "an execute that reads sources counts toward the budget"
+  )
 })
 
-test("stop level withdraws every tool after 60 reads without an edit", async t => {
+test("read-only audit in build gets advisory notices and keeps every tool", async t => {
   const f = await fixture(t)
+  const soft = {}
+  for (let i = 0; i < 19; i++) await f.after("read", { file: `a${i}.mjs` })
+  await f.after("read", { file: "a19.mjs" }, soft)
+  assert.match(f.notice(soft), /20 read calls without a file change/)
+  assert.doesNotMatch(f.notice(soft), /Make the first edit/)
+
+  const hard = {}
+  for (let i = 20; i < 39; i++) await f.after("read", { file: `a${i}.mjs` })
+  await f.after("read", { file: "a39.mjs" }, hard)
+  assert.match(f.notice(hard), /read budget is exhausted/)
+  assert.doesNotMatch(f.notice(hard), /Make the edit named in the plan/)
+
+  const stop = {}
+  for (let i = 40; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
+  await f.after("read", { file: "a59.mjs" }, stop)
+  assert.match(f.notice(stop), /exceeded the read budget without a file change/)
+  assert.match(f.notice(stop), /Verification tools stay available/)
+
+  const event = await f.contextHook()
+  for (const name of ["read", "grep", "glob", "skill", "shell", "execute", "edit"])
+    assert.ok(event.tools[name], `${name} must stay available in an unknown phase`)
+})
+
+test("stop level withdraws every tool only in a proven implementation", async t => {
+  const f = await fixture(t)
+  await f.after("edit", { file: "a.mjs" })
   for (let i = 0; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
   const stop = {}
   await f.after("read", { file: "a59.mjs" }, stop)
@@ -308,10 +346,56 @@ test("stop level withdraws every tool after 60 reads without an edit", async t =
   assert.deepEqual(event.tools, {})
   assert.equal(event.system.length, 0)
 
-  await f.after("edit", { file: "a.mjs" })
+  await f.after("execute", {
+    code: 'await tools.tokensave.tokensave_multi_str_replace({ path: "a.mjs", replacements: [] })'
+  })
   const resumed = await f.contextHook()
   assert.ok(resumed.tools.read)
   assert.ok(resumed.tools.execute)
+})
+
+test("a failed edit neither resets the budget nor authorizes withdrawal", async t => {
+  const f = await fixture(t)
+  for (let i = 0; i < 19; i++) await f.after("read", { file: `a${i}.mjs` })
+  await f.after("edit", { file: "a.mjs" }, { message: "oldString not found" }, "session", "error")
+  const twentieth = {}
+  await f.after("read", { file: "a19.mjs" }, twentieth)
+  assert.match(
+    f.notice(twentieth),
+    /20 read calls without a file change/,
+    "the failed edit did not reset the counter"
+  )
+  assert.doesNotMatch(f.notice(twentieth), /Make the first edit/)
+
+  for (let i = 20; i < 60; i++) await f.after("read", { file: `a${i}.mjs` })
+  const event = await f.contextHook()
+  assert.ok(event.tools.read, "unknown phase keeps verification tools after a failed edit")
+  assert.ok(event.tools.execute)
+})
+
+test("different ranges, corrected arguments and read batches are not repeats", async t => {
+  const f = await fixture(t)
+  const rangeA = {}
+  await f.after("execute", { code: 'tokensave_read({ file: "a.mjs", mode: "lines", lines: "1-2" })' }, rangeA)
+  assert.equal(f.notice(rangeA), "")
+  const rangeB = {}
+  await f.after("execute", { code: 'tokensave_read({ file: "a.mjs", mode: "lines", lines: "3-4" })' }, rangeB)
+  assert.equal(f.notice(rangeB), "", "another range of the same file is new material")
+
+  await f.after("execute", { code: "tokensave_read({ file: \"a.mjs\", lines: \"bad\" })" }, {}, "session", "error", "call-bad")
+  const corrected = {}
+  await f.after("execute", { code: 'tokensave_read({ file: "a.mjs", lines: "5-6" })' }, corrected, "session", "completed", "call-fixed")
+  assert.equal(f.notice(corrected), "", "a corrected argument after a failure is not a repeat")
+
+  const batch = {
+    code: 'await Promise.all([tokensave_read({ file: "x.mjs", mode: "lines", lines: "1-2" }), tokensave_read({ file: "y.mjs", mode: "lines", lines: "1-2" })])'
+  }
+  const batchFirst = {}
+  await f.after("execute", batch, batchFirst, "session", "completed", "call-batch-1")
+  assert.equal(f.notice(batchFirst), "", "a batch of independent reads is one budget step and no repeat")
+  const batchSecond = {}
+  await f.after("execute", batch, batchSecond, "session", "completed", "call-batch-2")
+  assert.match(f.notice(batchSecond), /already ran as tool call call-batch-1/, "the identical batch repeated is a proven repeat")
 })
 
 test("a repeated identical call points at the earlier tool call", async t => {
@@ -332,10 +416,10 @@ test("large tool results keep a bounded prefix, an artifact and the guard notice
 
   const text = "output line\n".repeat(4000)
   const result = { output: text }
-  await f.after("shell", { command: "npm test" }, result)
+  await f.after("shell", { command: "cat big.log" }, result)
   const kept = result.content.map((part) => part.text).join("")
   assert.ok(Buffer.byteLength(kept) <= 20 * 1024 + 1024)
-  assert.match(kept, /20 read calls since the last file change/)
+  assert.match(kept, /20 read calls without a file change/)
   const marker = /full_result=([^;]+); bytes=(\d+);/.exec(kept)
   assert.ok(marker, "the bounded result must name its artifact")
   assert.equal(Number(marker[2]), Buffer.byteLength(text))
@@ -400,6 +484,7 @@ test("an explicit full artifact read passes the execute bound up to the hard cei
 
 test("a finished turn resets the read budget for the next user message", async t => {
   const f = await fixture(t)
+  await f.after("edit", { file: "a.mjs" })
   for (let i = 0; i < 19; i++) await f.after("read", { file: `a${i}.mjs` })
   const soft = {}
   await f.after("read", { file: "a19.mjs" }, soft)
@@ -441,6 +526,7 @@ test("plan mode and sessions without edit tools are never blocked", async t => {
 test("compaction resumes once with cached ranges, skills and the edit budget", async t => {
   const f = await fixture(t)
   await f.after("skill", { id: "react-frontend" })
+  await f.after("edit", { file: "a.mjs" })
   await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
 
   const first = await f.contextHook()
@@ -470,7 +556,11 @@ test("compaction without cached ranges states the resume protocol once", async t
   assert.match(resume, /No cached ranges\. Do not rebuild the plan/)
   assert.match(
     resume,
-    /Resume protocol: make the first source edit within 12 tool calls/
+    /Resume protocol: continue the next unfinished step of the plan within 12 tool calls/
+  )
+  assert.match(
+    resume,
+    /for analysis-only work that is the next research or verification step, not an edit the plan does not authorize/
   )
   assert.equal((resume.match(/Do not rebuild the plan/g) ?? []).length, 1)
 })

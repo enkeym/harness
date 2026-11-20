@@ -18,12 +18,46 @@ const repeatTools = new Set([
 ])
 const digestHeader = /^file: (.+)\nmode: full\ndigest: ([a-f0-9]{64})\n/
 
-const softNotice = (reads) =>
-  `Harness progress guard: ${reads} read calls since the last file change. Stop gathering. Make the first edit named in the plan, or report a concrete blocker.`
-const hardNotice =
-  "Harness progress guard: the read budget is exhausted. Do not start another read or shell command. Make the edit named in the plan now, or answer with the verified result or the exact blocker. Any read after this point is a repeated operation the user pays for."
-const stopNotice =
-  "Harness progress guard: the session exceeded the read budget without a file change and all tools are withdrawn for this turn. Answer now with the verified result, or name the exact blocker and the next step."
+const softNotice = (reads, implementation) =>
+  implementation
+    ? `Harness progress guard: ${reads} read calls since the last file change. Stop gathering. Make the first edit named in the plan, or report a concrete blocker.`
+    : `Harness progress guard: ${reads} read calls without a file change in this session. Stop gathering and reuse confirmed results. For an analysis-only task answer with the verified result or a concrete blocker; move to an edit only when the plan authorizes implementation.`
+const hardNotice = (implementation) =>
+  implementation
+    ? "Harness progress guard: the read budget is exhausted. Do not start another read or shell command. Make the edit named in the plan now, or answer with the verified result or the exact blocker. Any read after this point is a repeated operation the user pays for."
+    : "Harness progress guard: the read budget is exhausted without a file change in this session. Do not start another read or shell command for new material; reuse confirmed results and answer with the verified result or the exact blocker. Any further read is a repeated operation the user pays for."
+const stopNotice = (implementation) =>
+  implementation
+    ? "Harness progress guard: the session exceeded the read budget without a file change and all tools are withdrawn for this turn. Answer now with the verified result, or name the exact blocker and the next step."
+    : "Harness progress guard: the session exceeded the read budget without a file change. Verification tools stay available, but do not gather new material: answer now with the verified result, or name the exact blocker and the next step."
+
+const verificationRun =
+  /(?:^|[\s;&|(`])(?:npm (?:run )?(?:test|check)|pnpm (?:run )?(?:test|check)|yarn (?:test|check)|node --test|pytest|cargo test|go test|make (?:test|check)|install\.sh --check)\b/
+const gathersSources =
+  /tokensave_read|tokensave_search|rag_search|harness_read_result|\bread\s*\(|\bgrep\s*\(|\bglob\s*\(/
+const planningCall = /\btools\.brief_transition\b/
+const discoveryCall = /\bsearch\s*\(\s*\{/
+
+const editSucceeded = (event, code) =>
+  event.status === "completed" &&
+  !event.error &&
+  (editTools.has(event.tool) ||
+    (event.tool === "execute" && code.includes("tokensave_multi_str_replace")))
+
+const verificationCall = (tool, input) => {
+  const text =
+    tool === "shell"
+      ? typeof input?.command === "string"
+        ? input.command
+        : ""
+      : tool === "execute" && typeof input?.code === "string"
+        ? input.code
+        : ""
+  if (!text) return false
+  if (planningCall.test(text)) return true
+  if (gathersSources.test(text)) return false
+  return verificationRun.test(text) || discoveryCall.test(text)
+}
 
 const stableKey = (value) => {
   if (Array.isArray(value)) return `[${value.map(stableKey).join(",")}]`
@@ -80,6 +114,7 @@ export async function registerLoopGuard(
       sessions.set(sessionID, {
         reads: 0,
         level: 0,
+        edited: false,
         skills: new Set(),
         digests: new Map(),
         repeats: new Map(),
@@ -134,15 +169,16 @@ export async function registerLoopGuard(
           s.skills.size
             ? `Active skills before compaction: ${[...s.skills].join(", ")}. Do not reload them unless the step changes stack.`
             : "",
-          `Resume protocol: make the first source edit within ${policy.resumeEditBudget} tool calls. Do not call tokensave_read with mode="full". Read only named ranges you still need.`
+          s.edited
+            ? `Resume protocol: make the first source edit within ${policy.resumeEditBudget} tool calls. Do not call tokensave_read with mode="full". Read only named ranges you still need.`
+            : `Resume protocol: continue the next unfinished step of the plan within ${policy.resumeEditBudget} tool calls; for analysis-only work that is the next research or verification step, not an edit the plan does not authorize. Do not call tokensave_read with mode="full". Read only named ranges you still need.`
         ]
           .filter(Boolean)
           .join("\n")
         }]
       })
     }
-    if (event.agent === "plan" || !(event.tools?.edit || event.tools?.write))
-      return
+    if (event.agent === "plan" || !s.edited) return
     if (s.level >= 3) {
       event.tools = {}
       return
@@ -156,9 +192,6 @@ export async function registerLoopGuard(
     const code = typeof event.input?.code === "string" ? event.input.code : ""
     if (event.tool === "skill" && typeof event.input?.id === "string")
       s.skills.add(event.input.id)
-    const edited =
-      editTools.has(event.tool) ||
-      (event.tool === "execute" && code.includes("tokensave_multi_str_replace"))
     if (
       event.status === "completed" &&
       repeatTools.has(event.tool) &&
@@ -174,11 +207,16 @@ export async function registerLoopGuard(
         )
       else if (!previous) s.repeats.set(key, event.id ?? key)
     }
-    if (edited) {
+    if (editSucceeded(event, code)) {
+      s.edited = true
       s.reads = 0
       s.level = 0
       s.repeats.clear()
-    } else if (readTools.has(event.tool)) s.reads++
+    } else if (
+      readTools.has(event.tool) &&
+      !verificationCall(event.tool, event.input)
+    )
+      s.reads++
     const level =
       s.reads >= policy.stopReads
         ? 3
@@ -191,7 +229,11 @@ export async function registerLoopGuard(
       s.level = level
       appendNotice(
         event,
-        level === 3 ? stopNotice : level === 2 ? hardNotice : softNotice(s.reads)
+        level === 3
+          ? stopNotice(s.edited)
+          : level === 2
+            ? hardNotice(s.edited)
+            : softNotice(s.reads, s.edited)
       )
     }
     if (event.status !== "completed") return
