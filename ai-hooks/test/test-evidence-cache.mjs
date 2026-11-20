@@ -14,7 +14,7 @@ async function fixture(t) {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const source = "first\nsecond\nthird\n"
   fs.writeFileSync(path.join(directory, "source.mjs"), source)
-  const text = `file: source.mjs\nmode: full\ndigest: ${"a".repeat(64)}\n\n     1\tfirst\n     2\tsecond\n     3\tthird\n`
+  const text = `file: source.mjs\nmode: full\ndigest: ${"a".repeat(64)}\n\n     1\tfirst\n     2\tsecond\n     3\tthird\n\ntokensave_metrics: before=10 after=10 result=10 saved=0`
   const stored = new Map()
   const hooks = new Map()
   let execute
@@ -266,7 +266,7 @@ test("automatic preparation bounds recent evidence and refreshes automatic range
     const file = `source-${index}.mjs`
     const lines = Array.from({ length: cachePolicy.taskSourceLines + 5 }, (_, line) => `value ${line}`)
     fs.writeFileSync(path.join(f.directory, file), lines.join("\n"))
-    const text = `file: ${file}\nmode: full\ndigest: ${"b".repeat(64)}\n\n` + lines.map((text, line) => `${line + 1}\t${text}`).join("\n")
+    const text = `file: ${file}\nmode: full\ndigest: ${"b".repeat(64)}\n\n` + lines.map((text, line) => `${line + 1}\t${text}`).join("\n") + "\n\ntokensave_metrics: before=10 after=10 result=10 saved=0"
     messages.push({ content: [{ type: "tool", name: "execute", state: { status: "completed", content: text } }] })
   }
 

@@ -48,6 +48,7 @@ export function boundToolResult(
     return false
   const result = event.result
   const provided = textBlocks(result.content)
+  if (Array.isArray(result.content) && !provided) return false
   const content =
     provided ??
     (typeof result.output === "string"

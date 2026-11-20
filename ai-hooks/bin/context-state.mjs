@@ -192,10 +192,29 @@ export function plainTextResult(result, { anyText = false } = {}) {
     });
 }
 
-export function boundTextResult(result, budget, dir, policy = mcpPolicy, options) {
-  if (!plainTextResult(result, options)) return result;
-  const bytes = result.content.reduce((n, b) => n + Buffer.byteLength(b.text), 0);
-  if (bytes <= budget) return result;
+const artifactMarker = /\[full_result=([^;\s\]]+); bytes=(\d+);/;
+
+function reusableArtifact(result, dir) {
+  const root = path.resolve(dir);
+  const candidates = [];
+  if (typeof result._meta?.harnessFullResult === 'string')
+    candidates.push([result._meta.harnessFullResult, Number(result._meta.originalTextBytes)]);
+  for (const block of result.content) {
+    const match = artifactMarker.exec(block.text);
+    if (match) candidates.push([match[1], Number(match[2])]);
+  }
+  for (const [candidate, bytes] of candidates) {
+    if (!Number.isFinite(bytes) || bytes < 0) continue;
+    if (path.dirname(candidate) !== root) continue;
+    if (!/^[a-f0-9-]{36}\.json$/.test(path.basename(candidate))) continue;
+    try { if (!fs.statSync(candidate).isFile()) continue; }
+    catch { continue; }
+    return { file: candidate, bytes };
+  }
+  return null;
+}
+
+function writeArtifact(result, dir, policy) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if ((fs.statSync(dir).mode & 0o077) !== 0) throw new Error('Artifact directory must be private');
   const file = path.join(dir, `${crypto.randomUUID()}.json`);
@@ -223,7 +242,17 @@ export function boundTextResult(result, budget, dir, policy = mcpPolicy, options
     fs.unlinkSync(file);
     throw new Error('Artifact capacity occupied by recent results');
   }
-  const marker = `\n[full_result=${file}; bytes=${bytes}; read with harness_read_result(path, offset, bytes) or full=true]`;
+  return file;
+}
+
+export function boundTextResult(result, budget, dir, policy = mcpPolicy, options) {
+  if (!plainTextResult(result, options)) return result;
+  const bytes = result.content.reduce((n, b) => n + Buffer.byteLength(b.text), 0);
+  if (bytes <= budget) return result;
+  const reused = reusableArtifact(result, dir);
+  const file = reused ? reused.file : writeArtifact(result, dir, policy);
+  const fullBytes = reused ? reused.bytes : bytes;
+  const marker = `\n[full_result=${file}; bytes=${fullBytes}; read with harness_read_result(path, offset, bytes) or full=true]`;
   const content = [];
   let remaining = Math.max(0, budget - Buffer.byteLength(marker));
   for (const block of result.content) {
@@ -232,7 +261,7 @@ export function boundTextResult(result, budget, dir, policy = mcpPolicy, options
     if (text) content.push({ ...block, text });
   }
   content.push({ type: 'text', text: marker });
-  return { ...result, content, _meta: { ...result._meta, harnessFullResult: file, originalTextBytes: bytes } };
+  return { ...result, content, _meta: { ...result._meta, harnessFullResult: file, originalTextBytes: fullBytes } };
 }
 
 // One append-only reservation ledger per runner turn. appendFileSync is atomic

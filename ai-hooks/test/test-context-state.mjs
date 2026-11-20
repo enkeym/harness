@@ -136,6 +136,22 @@ test('artifact retention protects fresh concurrent results and evicts old files'
   assert.ok(fs.existsSync(latest)); assert.equal(fs.existsSync(first), false);
 });
 
+test('re-bounding a truncated result reuses the original artifact without a cascade', t => {
+  const dir = temporary(t);
+  const original = { content: [{ type: 'text', text: 'a'.repeat(4000) }] };
+  const bounded = boundTextResult(original, 2000, dir);
+  const file = bounded._meta.harnessFullResult;
+  const transported = { content: [{ type: 'text', text: bounded.content.map(b => b.text).join('') }] };
+  const rebounded = boundTextResult(transported, 500, dir);
+  assert.equal(rebounded._meta.harnessFullResult, file);
+  assert.equal(rebounded._meta.originalTextBytes, 4000);
+  const marker = rebounded.content[rebounded.content.length - 1].text;
+  assert.ok(marker.includes(`[full_result=${file}; bytes=4000;`));
+  assert.ok(rebounded.content.reduce((n, b) => n + Buffer.byteLength(b.text), 0) <= 500);
+  assert.deepEqual(fs.readdirSync(dir), [path.basename(file)]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file)), original);
+});
+
 test('MCP policy merges diagnostic switches and rejects unknown or invalid settings', t => {
   const file = path.join(temporary(t), 'policy.json');
   fs.writeFileSync(file, JSON.stringify({ outputEnabled: false, retries: 0 }));

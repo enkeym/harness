@@ -4,8 +4,14 @@ export function readTexts(value, depth = 0) {
     if (
       /^file: .+\nmode: (?:full|lines|map|signatures)\ndigest: [a-f0-9]{64}\n/.test(value) &&
       (value.match(/^file: /gm)?.length ?? 0) === 1
-    )
+    ) {
+      if (
+        /^file: .+\nmode: full\n/.test(value) &&
+        !/\n\ntokensave_metrics: [^\n]*\n?$/.test(value)
+      )
+        return []
       return [value]
+    }
     if (/^\s*[{[]/.test(value)) {
       try {
         return readTexts(JSON.parse(value.replace(/\n\ntokensave_metrics: [^\n]*\n?$/, "")), depth + 1)

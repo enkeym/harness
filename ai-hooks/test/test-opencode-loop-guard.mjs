@@ -174,7 +174,7 @@ test("digest injection only rewrites literal full reads with a known digest", ()
 
 test("after hook collects full-read digests from text and JSON results only", async t => {
   const f = await fixture(t)
-  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n`
+  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n\ntokensave_metrics: before=10 after=10 result=10 saved=0`
   await f.after(
     "execute",
     { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' },
@@ -215,6 +215,18 @@ test("after hook collects full-read digests from text and JSON results only", as
       ]
     }
   )
+  await f.after(
+    "execute",
+    { code: 'tokensave_read({ file: "external.mjs", mode: "full" })' },
+    {
+      content: [
+        {
+          type: "text",
+          text: `file: external.mjs\nmode: full\ndigest: ${"e".repeat(64)}\n\n     1\tfirst\n`
+        }
+      ]
+    }
+  )
   await f.after("shell", { command: "ls" }, { content: "plain output" })
 
   const injected = { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' }
@@ -223,7 +235,7 @@ test("after hook collects full-read digests from text and JSON results only", as
   const fromJSON = { code: 'tokensave_read({ file: "second.mjs", mode: "full" })' }
   await f.before("execute", fromJSON)
   assert.match(fromJSON.code, new RegExp(`if_digest: "${otherDigest}"`))
-  for (const file of ["stub.mjs", "artifact.mjs"]) {
+  for (const file of ["stub.mjs", "artifact.mjs", "external.mjs"]) {
     const input = { code: `tokensave_read({ file: "${file}", mode: "full" })` }
     await f.before("execute", input)
     assert.doesNotMatch(input.code, /if_digest/)
@@ -240,7 +252,7 @@ test("after hook collects full-read digests from text and JSON results only", as
 
 test("compaction drops collected digests so stale bodies are not reused", async t => {
   const f = await fixture(t)
-  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n`
+  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n\ntokensave_metrics: before=10 after=10 result=10 saved=0`
   await f.after(
     "execute",
     { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' },
@@ -528,6 +540,23 @@ test("an explicit full artifact read passes the execute bound up to the hard cei
   const plainKept = plain.content.map((part) => part.text).join("")
   assert.ok(Buffer.byteLength(plainKept) <= 6 * 1024 + 1024)
   assert.match(plainKept, /full_result=.*harness_read_result/)
+})
+
+test("mixed non-text execute results are never bounded or rewritten", async t => {
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-output-bounds-"))
+  t.after(() => fs.rmSync(outputDir, { recursive: true, force: true }))
+  const f = await fixture(t, undefined, { outputDir })
+
+  const mixed = {
+    content: [
+      { type: "text", text: "row\n".repeat(4000) },
+      { type: "image", data: "abc", mimeType: "image/png" }
+    ]
+  }
+  const before = JSON.parse(JSON.stringify(mixed))
+  await f.after("execute", { code: "return mixed" }, mixed)
+  assert.deepEqual(mixed.content, before.content)
+  assert.deepEqual(fs.readdirSync(outputDir), [])
 })
 
 test("a finished turn resets the read budget for the next user message", async t => {
