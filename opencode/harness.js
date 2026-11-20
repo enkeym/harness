@@ -2,8 +2,10 @@ import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import {
   contextPolicy,
-  readHandoffPrompt
+  readHandoffPrompt,
+  observationWaitMs
 } from "../ai-hooks/bin/context-policy.mjs"
+import { recordLifecycle, awaitBounded } from "./lifecycle-metrics.mjs"
 import { readInstructions } from "./instructions.mjs"
 import { deduplicateContext } from "./context-cache.mjs"
 import { registerHandoff } from "./handoff.mjs"
@@ -131,10 +133,14 @@ export default {
     let observationQueue = Promise.resolve()
     const observe = (sessionID, target = directory) => {
       const result = observationQueue.then(async () => {
+        const started = Date.now()
+        void recordLifecycle({ sessionID, stage: "observe-start" }, { directory: target })
         try {
           await refreshBudgetDay()
-          await collectObservations(observationAPI(context), sessionID, {
-            directory: target
+          const stats = {}
+          const files = await collectObservations(observationAPI(context), sessionID, {
+            directory: target,
+            stats
           })
           const { report, newWarnings } = await refreshCostReport()
           for (const warning of newWarnings)
@@ -149,8 +155,29 @@ export default {
             )
           )
             await enforceBudget(sessionID, report.date)
+          void recordLifecycle(
+            {
+              sessionID,
+              stage: "observe-end",
+              durationMs: Date.now() - started,
+              files: files.length,
+              pages: stats.pages ?? 0,
+              warnings: newWarnings.length
+            },
+            { directory: target }
+          )
           return newWarnings
         } catch (error) {
+          void recordLifecycle(
+            {
+              sessionID,
+              stage: "observe-end",
+              durationMs: Date.now() - started,
+              ok: false,
+              error: error.name
+            },
+            { directory: target }
+          )
           process.stderr.write(
             `Harness observation failed (${error.name}); session evidence remains incomplete.\n`
           )
@@ -189,21 +216,40 @@ export default {
       providerID: deepseekModels.flash.providerID
     })
     const pluginAgentsInstructions = readInstructions().instructions
-    const harnessInstructions = () => ({
-      role: "user",
-      content: [{ type: "text", text: readInstructions().text }]
-    })
+    const harnessInstructions = (sessionID) => {
+      const layers = readInstructions()
+      void recordLifecycle(
+        {
+          sessionID,
+          stage: "instructions",
+          coreBytes: Buffer.byteLength(layers.core),
+          agentsBytes: Buffer.byteLength(layers.instructions),
+          textBytes: Buffer.byteLength(layers.text)
+        },
+        { directory }
+      )
+      return { role: "user", content: [{ type: "text", text: layers.text }] }
+    }
     const isHarnessInstructions = (message) =>
       message.role === "user" &&
       message.content?.[0]?.type === "text" &&
       message.content[0].text?.startsWith("Harness skill instructions:\n")
     await context.session.hook("compaction", async (event) => {
+      const observeStarted = Date.now()
       await observe(event.sessionID)
+      void recordLifecycle(
+        {
+          sessionID: event.sessionID,
+          stage: "compaction-observe",
+          durationMs: Date.now() - observeStarted
+        },
+        { directory }
+      )
       event.messages = (event.messages ?? []).filter(
         (message) => !isHarnessInstructions(message)
       )
       sanitizeMessageTexts(event.messages)
-      event.messages.unshift(harnessInstructions())
+      event.messages.unshift(harnessInstructions(event.sessionID))
       event.messages.push({
         role: "user",
         content: [{ type: "text", text: readHandoffPrompt() }]
@@ -287,17 +333,41 @@ export default {
           event.type === "session.compaction.failed"
         ) {
           finishCompaction(event.data.sessionID)
+          void recordLifecycle(
+            {
+              sessionID: event.data.sessionID,
+              stage: "compaction-ended",
+              type: event.type
+            },
+            { directory }
+          )
           continue
         }
         if (event.type.startsWith("session.execution.")) {
           const sessionID = event.data.sessionID
+          void recordLifecycle(
+            { sessionID, stage: "turn-finished", type: event.type },
+            { directory }
+          )
           loopGuard.finishTurn(sessionID)
           const source = await context.session
             .get({ sessionID })
             .catch(() => undefined)
           const owner = source?.location.directory
           sync(false, owner ?? directory)
-          const warnings = await observe(sessionID, owner ?? directory)
+          const waitMs = observationWaitMs()
+          const observed = await awaitBounded(
+            observe(sessionID, owner ?? directory),
+            waitMs,
+            () => {
+              void recordLifecycle(
+                { sessionID, stage: "observe-deferred", waitedMs: waitMs },
+                { directory: owner ?? directory }
+              )
+              return null
+            }
+          )
+          const warnings = observed ?? []
           if (
             warnings.some(
               (warning) =>
@@ -325,12 +395,31 @@ export default {
                 `Harness empty response guard failed: ${error.message}\n`
               )
             }
+          const settleStarted = Date.now()
           try {
             await brief.settle(
               sessionID,
               event.type === "session.execution.succeeded"
             )
+            void recordLifecycle(
+              {
+                sessionID,
+                stage: "settle",
+                durationMs: Date.now() - settleStarted
+              },
+              { directory }
+            )
           } catch (error) {
+            void recordLifecycle(
+              {
+                sessionID,
+                stage: "settle",
+                durationMs: Date.now() - settleStarted,
+                ok: false,
+                error: error.name
+              },
+              { directory }
+            )
             process.stderr.write(
               `Harness brief transfer failed: ${error.message}\n`
             )

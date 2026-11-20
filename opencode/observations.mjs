@@ -379,12 +379,13 @@ export function observationDirectory(
   )
 }
 
-async function pages(read) {
+async function pages(read, stats) {
   const data = []
   const seen = new Set()
   let cursor
   do {
     const page = await read(cursor)
+    if (stats) stats.pages = (stats.pages ?? 0) + 1
     if (
       !Array.isArray(page?.data) ||
       !page.cursor ||
@@ -420,7 +421,7 @@ async function save(record, stateDirectory) {
 export async function collectObservations(
   api,
   sessionID,
-  { stateDirectory, directory } = {}
+  { stateDirectory, directory, stats } = {}
 ) {
   const visited = new Set()
   const files = []
@@ -434,7 +435,7 @@ export async function collectObservations(
       path.resolve(info.location.directory) !== path.resolve(directory)
     )
       return
-    const messages = await pages((cursor) => api.messages(id, cursor))
+    const messages = await pages((cursor) => api.messages(id, cursor), stats)
     const previous = await readJSON(
       path.join(
         observationDirectory(info.location.directory, stateDirectory),
@@ -517,7 +518,7 @@ export async function collectObservations(
     }
     let children = []
     try {
-      children = await pages((cursor) => api.children(id, cursor))
+      children = await pages((cursor) => api.children(id, cursor), stats)
       if (children.some((child) => child.parentID !== id))
         throw new Error("Invalid child filter")
       record.delegation.childIDs = [

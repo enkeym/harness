@@ -1608,6 +1608,7 @@ function executionSandbox(t) {
     "session-compaction.mjs",
     "model-routing.mjs",
     "observations.mjs",
+    "lifecycle-metrics.mjs",
     "cost-policy.mjs",
     "cost-report.mjs",
     "local-state.mjs",

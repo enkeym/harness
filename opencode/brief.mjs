@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { readBriefPolicy, planningInstructions } from "../ai-hooks/bin/brief-policy.mjs"
 import { createPlan, planPath, planReference, readPlan, updatePlan } from "./plan-store.mjs"
 import { hasRawConfiguration } from "./handoff.mjs"
+import { recordLifecycle } from "./lifecycle-metrics.mjs"
 
 const registry = (name) =>
   (globalThis[Symbol.for(`harness.brief.${name}`)] ??= new Set())
@@ -93,23 +94,34 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
           return
         }
         const isCurrent = async () => (await context.storage.get(`brief:${sessionID}`))?.pending?.id === state.pending.id
+        const handoffStarted = Date.now()
         const delivered = await handoff({
           sessionID,
           transfer: state.pending,
           isCurrent,
           continueAfterCompaction: false
         })
+        void recordLifecycle(
+          { sessionID, stage: "settle-handoff", durationMs: Date.now() - handoffStarted, delivered: Boolean(delivered) },
+          { directory: context.location?.directory }
+        )
         if (!delivered || !await isCurrent()) return
         const { pending, submitted, ...rest } = state
         await context.storage.set(`brief:${sessionID}`, { ...rest, ...pending.brief })
         try {
           const plan = await readPlan(context, sessionID)
-          if (plan)
+          if (plan) {
+            const promptStarted = Date.now()
             await context.session.prompt({
               sessionID,
               text: planReference(plan),
               delivery: "steer"
             })
+            void recordLifecycle(
+              { sessionID, stage: "resumed-prompt", durationMs: Date.now() - promptStarted },
+              { directory: context.location?.directory }
+            )
+          }
         } catch (error) {
           await context.storage.set(`brief:${sessionID}`, state)
           throw error
