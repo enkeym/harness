@@ -22,6 +22,17 @@ const textBlocks = (content) => {
   return null
 }
 
+const artifactFullRequest = (content) => {
+  const text = content.map((part) => part.text).join("")
+  if (!text.startsWith("{")) return false
+  try {
+    const value = JSON.parse(text)
+    return value?.harnessArtifact === true && value?.full === true
+  } catch {
+    return false
+  }
+}
+
 export function boundToolResult(
   event,
   {
@@ -44,7 +55,10 @@ export function boundToolResult(
       : null)
   if (!content?.length) return false
   const bytes = content.reduce((sum, part) => sum + Buffer.byteLength(part.text), 0)
-  if (bytes <= budget) return false
+  const limit = artifactFullRequest(content)
+    ? Math.max(budget, contextPolicy.opencode.artifactFullOutputBytes)
+    : budget
+  if (bytes <= limit) return false
   let bounded
   try {
     bounded = boundTextResult({ ...result, content }, budget, dir, undefined, {

@@ -137,58 +137,5 @@
     "./plugins/harness/qwen-oauth",
     "opencode-kimi-v2",
     "./plugins/harness/kimi-tuning"
-  ],
-  "mcp": {
-    "servers": {
-      "tokensave": {
-        "type": "local",
-        "command": [
-          "/home/korolev/.nvm/versions/node/v24.22.1/bin/node",
-          "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
-          "--compact",
-          "--",
-          "bash",
-          "/home/korolev/.ai-hooks/bin/mcp-serve.sh",
-          "tokensave"
-        ],
-        "environment": {}
-      },
-      "ragsave": {
-        "type": "local",
-        "command": [
-          "/home/korolev/.nvm/versions/node/v24.22.1/bin/node",
-          "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
-          "--",
-          "bash",
-          "/home/korolev/.ai-hooks/bin/mcp-serve.sh",
-          "ragsave"
-        ],
-        "environment": {}
-      },
-      "playwright": {
-        "type": "local",
-        "command": [
-          "/home/korolev/.nvm/versions/node/v24.22.1/bin/node",
-          "/home/korolev/.ai-hooks/bin/mcp-proxy.mjs",
-          "--catalog",
-          "/home/korolev/.config/harness/repo/mcp/playwright-tools.json",
-          "--playwright-compat",
-          "--",
-          "npx",
-          "--no-global",
-          "--prefer-offline",
-          "-y",
-          "@playwright/mcp@0.0.83",
-          "--extension",
-          "--browser=chrome",
-          "--timeout-action",
-          "15000"
-        ],
-        "environment": {
-          "PLAYWRIGHT_MCP_EXECUTABLE_PATH": "{env:PLAYWRIGHT_MCP_EXECUTABLE_PATH}",
-          "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "{env:PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
-        }
-      }
-    }
-  }
+  ]
 }

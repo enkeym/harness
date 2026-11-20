@@ -95,10 +95,11 @@ function dropPending(id) {
 const generationFile = process.env.HARNESS_CONTEXT_GENERATION_FILE
 const artifactDir = contextOutputDir()
 let generation
+let generationStamp
 const artifactTool = {
   name: "harness_read_result",
   description:
-    "Read a full_result artifact from this proxy. offset and bytes select a UTF-8 byte range; an offset inside a character moves forward to the next one and the reply carries the effective offset. full=true returns the complete original MCP result without truncation.",
+    "Read a full_result artifact from this proxy. offset and bytes select a UTF-8 byte range; an offset inside a character moves forward to the next one and the reply carries the effective offset. full=true returns the complete original text as structuredContent {harnessArtifact, full, text}; returned unchanged from execute it passes the client output bound up to a hard ceiling, and larger replies are bounded like other results.",
   inputSchema: {
     type: "object",
     properties: {
@@ -147,7 +148,15 @@ function artifactCall(message) {
     } finally {
       fs.closeSync(fd)
     }
-    if (input.full) reply(message, result)
+    if (input.full)
+      reply(message, {
+        ...result,
+        structuredContent: {
+          harnessArtifact: true,
+          full: true,
+          text: result.content.map((block) => block.text).join("")
+        }
+      })
     else {
       const data = Buffer.from(
         result.content.map((block) => block.text).join("")
@@ -183,6 +192,12 @@ function artifactCall(message) {
   return true
 }
 function currentGeneration() {
+  let stamp = null
+  try {
+    const stat = fs.statSync(generationFile)
+    stamp = `${stat.mtimeMs}:${stat.size}`
+  } catch {}
+  if (stamp === generationStamp) return generation
   let next
   try {
     const state = JSON.parse(fs.readFileSync(generationFile, "utf8"))
@@ -197,27 +212,44 @@ function currentGeneration() {
   } catch {
     next = null
   }
+  generationStamp = stamp
   if (next !== generation) {
     reads.clear()
     generation = next
   }
   return next
 }
+function gitHeadIdentity(project) {
+  try {
+    let root = path.resolve(project)
+    let gitDir = path.join(root, ".git")
+    while (!fs.existsSync(gitDir)) {
+      const parent = path.dirname(root)
+      if (parent === root) return ""
+      root = parent
+      gitDir = path.join(root, ".git")
+    }
+    if (fs.statSync(gitDir).isFile()) {
+      const pointer = fs
+        .readFileSync(gitDir, "utf8")
+        .match(/^gitdir:[ \t]*(.+)$/m)
+      if (!pointer) return ""
+      gitDir = path.resolve(root, pointer[1].trim())
+    }
+    const head = fs.readFileSync(path.join(gitDir, "HEAD"), "utf8").trim()
+    const ref = head.match(/^ref:[ \t]*(.+)$/)
+    if (ref) return ref[1].trim()
+    return /^[0-9a-f]{40,64}$/i.test(head) ? head : ""
+  } catch {
+    return ""
+  }
+}
 function readKey(params) {
   const project =
     typeof params.graph_root === "string"
       ? params.graph_root
       : process.cwd()
-  let branch
-  try {
-    branch = execFileSync(
-      "git",
-      ["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"],
-      { cwd: project, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
-    )
-  } catch {
-    branch = ""
-  }
+  const branch = gitHeadIdentity(project)
   const identity = { ...params }
   delete identity.if_digest
   delete identity.force

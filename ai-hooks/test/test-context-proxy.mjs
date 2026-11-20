@@ -7,9 +7,10 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { boundToolResult } from '../../opencode/output-bounds.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-function client(t, automation = true, policy = {}) {
+function client(t, automation = true, policy = {}, env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-proxy-'));
   const generation = path.join(dir, 'generation.json'); fs.writeFileSync(generation, JSON.stringify({ v: 1, task: 'one', generation: 1 }));
   const budget = path.join(dir, 'budget.log'); fs.writeFileSync(budget, '');
@@ -18,7 +19,7 @@ function client(t, automation = true, policy = {}) {
   const clock = path.join(dir, 'clock'); fs.writeFileSync(clock, '100000');
   const child = spawn(process.execPath, ['--import', path.join(here, 'fixtures/proxy-clock.mjs'), path.join(here, '../bin/mcp-proxy.mjs'), '--', process.execPath, path.join(here, 'fixtures/context-mcp.mjs')], {
     cwd: os.tmpdir(),
-    env: { ...process.env, XDG_STATE_HOME: dir, CONTEXT_CALL_LOG: log, HARNESS_MCP_POLICY_FILE: policyFile, PROXY_CLOCK: clock, HARNESS_CONTEXT_GENERATION_FILE: '', HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: '', ...(automation ? { HARNESS_CONTEXT_GENERATION_FILE: generation, HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: budget } : {}) },
+    env: { ...process.env, XDG_STATE_HOME: dir, CONTEXT_CALL_LOG: log, HARNESS_MCP_POLICY_FILE: policyFile, PROXY_CLOCK: clock, HARNESS_CONTEXT_GENERATION_FILE: '', HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: '', ...(automation ? { HARNESS_CONTEXT_GENERATION_FILE: generation, HARNESS_CONTEXT_OUTPUT_BUDGET_FILE: budget } : {}), ...env },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   child.stderr.resume(); let id = 0; const pending = new Map();
@@ -114,9 +115,22 @@ test('ordinary sessions bound text and retrieve exact artifacts or UTF-8 ranges 
   const full = (await c.call('harness_read_result', { path: file, full: true })).result;
   assert.equal(full.content[0].text, 'я'.repeat(20000));
   assert.equal(full._meta, undefined);
+  assert.deepEqual(full.structuredContent, { harnessArtifact: true, full: true, text: 'я'.repeat(20000) });
   assert.equal(c.calls().length, 1);
   assert.equal((await c.call('harness_read_result', { path: file, offset: 40001 })).error.code, -32602);
   assert.equal((await c.call('harness_read_result', { path: c.generation })).error.code, -32602);
+});
+
+test('a full proxy artifact within the ceiling passes the output bound', async t => {
+  const c = client(t, false);
+  const source = path.join(c.dir, 'source');
+  fs.writeFileSync(source, 'я'.repeat(10000));
+  const initial = (await c.call('tokensave_read', { file: source })).result;
+  const full = (await c.call('harness_read_result', { path: initial._meta.harnessFullResult, full: true })).result;
+  const event = { status: 'completed', tool: 'execute', result: { content: [{ type: 'text', text: JSON.stringify(full.structuredContent) }] } };
+  assert.equal(boundToolResult(event, { dir: c.dir }), false);
+  assert.equal(JSON.parse(event.result.content[0].text).text, full.content[0].text);
+  assert.ok(Buffer.byteLength(full.content[0].text) > 6 * 1024);
 });
 
 test('artifact write failure returns successful unabridged backend output', async t => {
@@ -180,6 +194,80 @@ test('changed file content is validated by the backend even when a held digest i
   assert.ok(c.calls()[1].arguments.if_digest);
   assert.equal((await c.call('tokensave_read', { file })).result.content[0].text, 'unchanged: true');
   assert.notEqual(c.calls()[1].arguments.if_digest, c.calls()[2].arguments.if_digest);
+});
+
+test('branch switches change digest keys without spawning git', async t => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-repo-'));
+  t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  const bin = path.join(repo, 'bin'); fs.mkdirSync(bin);
+  const marker = path.join(repo, 'git-spawned');
+  fs.writeFileSync(path.join(bin, 'git'), `#!/bin/sh\n: > ${marker}\nexit 1\n`);
+  fs.chmodSync(path.join(bin, 'git'), 0o755);
+  const c = client(t, true, {}, { PATH: bin });
+  fs.mkdirSync(path.join(repo, '.git'));
+  const head = path.join(repo, '.git', 'HEAD');
+  fs.writeFileSync(head, 'ref: refs/heads/main\n');
+  const args = { file: 'a', graph_root: repo };
+  await c.call('tokensave_read', args);
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[1].arguments.if_digest, 'a'.repeat(64));
+  assert.equal(fs.existsSync(marker), false, 'readKey must not spawn git');
+  fs.writeFileSync(head, 'ref: refs/heads/other\n');
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[2].arguments.if_digest, undefined, 'branch switch invalidates the held digest key');
+});
+
+test('detached HEAD uses the commit sha as the digest key identity', async t => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-repo-'));
+  t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  const c = client(t);
+  fs.mkdirSync(path.join(repo, '.git'));
+  const head = path.join(repo, '.git', 'HEAD');
+  fs.writeFileSync(head, `${'0'.repeat(40)}\n`);
+  const args = { file: 'a', graph_root: repo };
+  await c.call('tokensave_read', args);
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[1].arguments.if_digest, 'a'.repeat(64));
+  fs.writeFileSync(head, `${'1'.repeat(40)}\n`);
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[2].arguments.if_digest, undefined);
+});
+
+test('branch switches invalidate digest keys from a nested project directory', async t => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-repo-'));
+  t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  const nested = path.join(repo, 'packages', 'app');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.mkdirSync(path.join(repo, '.git'));
+  const head = path.join(repo, '.git', 'HEAD');
+  fs.writeFileSync(head, 'ref: refs/heads/main\n');
+  const c = client(t);
+  const args = { file: 'a', graph_root: nested };
+  await c.call('tokensave_read', args);
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[1].arguments.if_digest, 'a'.repeat(64));
+  fs.writeFileSync(head, 'ref: refs/heads/other\n');
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[2].arguments.if_digest, undefined);
+});
+
+test('a worktree .git pointer resolves HEAD for digest keys', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-worktree-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const c = client(t);
+  const gitdir = path.join(root, 'repo', '.git', 'worktrees', 'work');
+  fs.mkdirSync(gitdir, { recursive: true });
+  const work = path.join(root, 'work'); fs.mkdirSync(work);
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  const head = path.join(gitdir, 'HEAD');
+  fs.writeFileSync(head, 'ref: refs/heads/main\n');
+  const args = { file: 'a', graph_root: work };
+  await c.call('tokensave_read', args);
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[1].arguments.if_digest, 'a'.repeat(64));
+  fs.writeFileSync(head, 'ref: refs/heads/other\n');
+  await c.call('tokensave_read', args);
+  assert.equal(c.calls()[2].arguments.if_digest, undefined);
 });
 
 test('an observed index creation clears the missing-index circuit immediately', async t => {

@@ -371,6 +371,34 @@ test("large tool results keep a bounded prefix, an artifact and the guard notice
   assert.ok(Buffer.byteLength(skillText) <= 6 * 1024)
 })
 
+test("an explicit full artifact read passes the execute bound up to the hard ceiling", async t => {
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-output-bounds-"))
+  t.after(() => fs.rmSync(outputDir, { recursive: true, force: true }))
+  const f = await fixture(t, undefined, { outputDir })
+
+  const text = "я".repeat(10000)
+  const within = { content: [{ type: "text", text: JSON.stringify({ harnessArtifact: true, full: true, text }) }] }
+  await f.after("execute", { code: "return artifactWithin" }, within)
+  assert.equal(
+    within.content[0].text,
+    JSON.stringify({ harnessArtifact: true, full: true, text }),
+    "a full artifact reply within the ceiling is not re-bounded"
+  )
+
+  const huge = "y".repeat(25 * 1024)
+  const over = { content: [{ type: "text", text: JSON.stringify({ harnessArtifact: true, full: true, text: huge }) }] }
+  await f.after("execute", { code: "return artifactOver" }, over)
+  const kept = over.content.map((part) => part.text).join("")
+  assert.ok(Buffer.byteLength(kept) <= 6 * 1024 + 1024)
+  assert.match(kept, /full_result=.*harness_read_result/)
+
+  const plain = { content: [{ type: "text", text: JSON.stringify({ rows: "z".repeat(7 * 1024) }) }] }
+  await f.after("execute", { code: "return rows" }, plain)
+  const plainKept = plain.content.map((part) => part.text).join("")
+  assert.ok(Buffer.byteLength(plainKept) <= 6 * 1024 + 1024)
+  assert.match(plainKept, /full_result=.*harness_read_result/)
+})
+
 test("a long session gets one reminder and keeps its tools", async t => {
   const f = await fixture(t)
   const limit = contextPolicy.opencode.reminderMessages

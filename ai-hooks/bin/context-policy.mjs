@@ -13,6 +13,7 @@ export const contextPolicy = Object.freeze({
     hardReads: 40,
     stopReads: 60,
     toolOutputBytes: 6 * 1024,
+    artifactFullOutputBytes: 24 * 1024,
     reminderMessages: 60
   })
 })
