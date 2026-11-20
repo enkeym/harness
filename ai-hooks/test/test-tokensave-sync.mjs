@@ -122,3 +122,41 @@ test('старые остатки sync удаляются, свежие файл
   assert.equal(fs.existsSync(old), false);
   assert.equal(fs.readFileSync(recent, 'utf8'), 'active');
 });
+
+function counterFile(sb) {
+  const slug = sb.root.replace(/[^A-Za-z0-9]/g, '-').replace(/^-/, '');
+  return path.join(sb.home, 'logs', 'sync-counters', `${slug}.log`);
+}
+
+test('счётчики фонового sync: события и тайминги', async (t) => {
+  const sb = sandbox(t);
+  const file = counterFile(sb);
+  const events = () => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split('\n').filter(Boolean).map((l) => l.split(' ')[1]);
+  const count = (e) => events().filter((x) => x === e).length;
+
+  const sentinel = path.join(sb.root, 'sentinel.txt');
+  fs.writeFileSync(sentinel, '✔ sync done — 1 added, 0 modified, 0 removed in 5ms');
+  sb.run(sb.root, { FAKE_INDEXER_SENTINEL: 'sentinel.txt' });
+  await waitFor(() => count('changed') >= 1);
+  assert.ok(count('started') >= 1 && count('shell-ms') >= 1 && count('sync-ms') >= 1, 'started, shell-ms и sync-ms записаны');
+
+  fs.writeFileSync(sentinel, 'sync done — 0 added, 0 modified, 0 removed in 5ms');
+  sb.run(sb.root, { FAKE_INDEXER_SENTINEL: 'sentinel.txt' });
+  await waitFor(() => count('no-change') >= 1);
+
+  sb.run(sb.root, { FAKE_INDEXER_EXIT: '7' });
+  await waitFor(() => count('failure') >= 1);
+
+  const busy = path.join(sb.home, 'busy');
+  fs.writeFileSync(busy, '#!/usr/bin/env bash\necho "another sync is already in progress"\nexit 1\n', { mode: 0o755 });
+  sb.run(sb.root, { AI_HOOKS_TOKENSAVE_CMD: busy });
+  await waitFor(() => count('lock-busy') >= 1);
+});
+
+test('счётчики: skip-no-index синхронно, backend не вызывается', async (t) => {
+  const sb = sandbox(t, { db: false });
+  sb.run(sb.root);
+  const lines = fs.readFileSync(counterFile(sb), 'utf8').trim().split('\n').map((l) => l.split(' ')[1]);
+  assert.deepEqual(lines, ['skip-no-index']);
+  assert.equal(fs.existsSync(sb.calls), false);
+});

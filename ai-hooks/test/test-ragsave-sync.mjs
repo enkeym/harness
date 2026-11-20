@@ -284,6 +284,40 @@ function macRun(sb, { taskpolicy = false } = {}) {
     { got: () => [fs.existsSync(path.join(sb.dir, 'sync.log')), sb.errors()], want: [false, ''] });
 }
 
+// --- счётчики фонового sync: события и тайминги в logs/sync-counters ---
+{
+  const sb = sandbox();
+  const slug = sb.root.replace(/[^A-Za-z0-9]/g, '-').replace(/^-/, '');
+  const file = path.join(sb.home, 'logs', 'sync-counters', `${slug}.log`);
+  const events = () => read(file).split('\n').filter(Boolean).map((l) => l.split(' ')[1]);
+  const count = (e) => events().filter((x) => x === e).length;
+
+  fs.writeFileSync(path.join(sb.home, 'sentinel.json'), '{"added": 2, "updated": 0, "removed": 0}\n');
+  sb.run({ FAKE_INDEXER_SENTINEL: 'sentinel.json' });
+  check('счётчики: changed после непустого sync', waitFor(() => count('changed') >= 1), true);
+  check('счётчики: started, shell-ms и sync-ms записаны',
+    [count('started') >= 1, count('shell-ms') >= 1, count('sync-ms') >= 1], [true, true, true]);
+
+  fs.writeFileSync(path.join(sb.home, 'sentinel.json'), '{"added": 0, "updated": 0, "removed": 0}\n');
+  sb.run({ FAKE_INDEXER_SENTINEL: 'sentinel.json' }, ['--warm', sb.root]);
+  check('счётчики: no-change и warm-ms', waitFor(() => count('no-change') >= 1 && count('warm-ms') >= 1), true);
+
+  sb.run({ FAKE_INDEXER_EXIT: '3' });
+  check('счётчики: lock-busy при занятом замке', waitFor(() => count('lock-busy') >= 1), true);
+
+  sb.run({ FAKE_INDEXER_EXIT: '7' });
+  check('счётчики: failure при ошибке sync', waitFor(() => count('failure') >= 1), true);
+}
+
+{
+  const sb = sandbox({ db: false });
+  const slug = sb.root.replace(/[^A-Za-z0-9]/g, '-').replace(/^-/, '');
+  const file = path.join(sb.home, 'logs', 'sync-counters', `${slug}.log`);
+  sb.run();
+  check('счётчики: skip-no-index синхронно, backend не вызывается',
+    [read(file).trim().split('\n').map((l) => l.split(' ')[1]), sb.readCalls()], [['skip-no-index'], []]);
+}
+
 // --- сценарии без вызова: одна пауза на всех ---
 sleep(1000);
 for (const { name, got, want } of silent) check(name, got(), want);

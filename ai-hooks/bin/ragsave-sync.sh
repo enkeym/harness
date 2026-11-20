@@ -18,23 +18,28 @@ warm=0
 [ "${1:-}" = "--warm" ] && { warm=1; shift; }
 
 project_dir="${1:-$PWD}"
-[ "$project_dir" = "$HOME" ] && exit 0
 
-. "${BASH_SOURCE%/*}/index-root.sh"
+self_dir="${BASH_SOURCE%/*}"
+. "$self_dir/count-sync.sh"
+t_start="$(count_now_ms)"
+
+[ "$project_dir" = "$HOME" ] && { count_sync "$project_dir" skip-no-index; exit 0; }
+
+. "$self_dir/index-root.sh"
 
 repo_root="$(git_worktree_root "$project_dir")" || repo_root=""
 # Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория
 # (или рядом с индексом подкаталога, см. ниже).
-[ -n "$repo_root" ] && { [ "$repo_root" = "$HOME" ] || [ -f "$repo_root/.ragsave-disable" ]; } && exit 0
+[ -n "$repo_root" ] && { [ "$repo_root" = "$HOME" ] || [ -f "$repo_root/.ragsave-disable" ]; } && { count_sync "${repo_root:-$project_dir}" skip-no-index; exit 0; }
 
 rag_bin="${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}"  # переменная — подмена в тестах
-[ -x "$rag_bin" ] || exit 0
+[ -x "$rag_bin" ] || { count_sync "${repo_root:-$project_dir}" skip-no-index; exit 0; }
 
-root="$(find_index_root .ragsave/rag.db "$project_dir")" || exit 0
-[ -f "$root/.ragsave-disable" ] && exit 0
+root="$(find_index_root .ragsave/rag.db "$project_dir")" || { count_sync "${repo_root:-$project_dir}" skip-no-index; exit 0; }
+[ -f "$root/.ragsave-disable" ] && { count_sync "$root" skip-no-index; exit 0; }
 
 log="$root/.ragsave/sync.log"
-. "${BASH_SOURCE%/*}/background.sh"
+. "$self_dir/background.sh"
 
 # Сироты sync.log.<pid> прерванных синков: живой синк сутки не идёт.
 cleanup_sync_logs "$root/.ragsave"
@@ -48,19 +53,40 @@ cleanup_sync_logs "$root/.ragsave"
 # при переиндексации после смены ветки). RAGSAVE_THREADS из окружения главнее.
 # Лимит и nice — только синку: демон, поднятый warm, живёт дольше синка и
 # считает поиск всех сессий. setsid, ionice и их замены на macOS — background.sh.
+count_sync "$root" started
+count_sync "$root" shell-ms "$(( $(count_now_ms) - t_start ))"
 $detach bash -c '
-  root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; low_io="$6"; tmp="$log.$$"
+  root="$1"; bin="$2"; log="$3"; warm="$4"; threads="$5"; low_io="$6"; helper="$7"; tmp="$log.$$"
+  if [ -f "$helper" ]; then
+    . "$helper"
+  else
+    count_now_ms() { echo $(( $(date +%s) * 1000 )); }
+    count_sync() { :; }
+  fi
   if [ "$warm" = 1 ]; then
+    wt="$(count_now_ms)"
     "$bin" warm >"$tmp" 2>&1 || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave warm" "$root" "$tmp" "$?"
+    count_sync "$root" warm-ms "$(( $(count_now_ms) - wt ))"
   fi
   # low_io без кавычек: пусто — ничего, иначе команда со своими флагами.
+  t="$(count_now_ms)"
   RAGSAVE_THREADS="$threads" nice -n 19 $low_io "$bin" sync "$root" --quiet >"$tmp" 2>&1
   code=$?
-  [ "$code" = 3 ] && { rm -f "$tmp"; exit 0; }
-  [ "$code" = 0 ] || "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"
+  count_sync "$root" sync-ms "$(( $(count_now_ms) - t ))"
+  [ "$code" = 3 ] && { count_sync "$root" lock-busy; rm -f "$tmp"; exit 0; }
+  if [ "$code" = 0 ]; then
+    counts="$(tr -d "\n " < "$tmp" | sed -n "s/.*\"added\":\([0-9][0-9]*\),\"updated\":\([0-9][0-9]*\),\"removed\":\([0-9][0-9]*\).*/\1 \2 \3/p" | head -1)"
+    if [ -n "$counts" ]; then
+      set -- $counts
+      if [ "$(( $1 + $2 + $3 ))" -gt 0 ]; then count_sync "$root" changed; else count_sync "$root" no-change; fi
+    fi
+  else
+    count_sync "$root" failure
+    "$HOME/.ai-hooks/bin/log-error.sh" "ragsave sync" "$root" "$tmp" "$code"
+  fi
   # sync.log — единственный источник last_sync, и пустой файл rag_status читает
   # как «синк упал». Пустой успешный отчёт оставляем прошлый, неудачный — пишем.
   if [ "$code" = 0 ] && [ ! -s "$tmp" ]; then rm -f "$tmp"; else mv -f "$tmp" "$log"; fi
-' _ "$root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" "$low_io" </dev/null >/dev/null 2>&1 &
+' _ "$root" "$rag_bin" "$log" "$warm" "${RAGSAVE_THREADS:-6}" "$low_io" "$self_dir/count-sync.sh" </dev/null >/dev/null 2>&1 &
 
 exit 0
