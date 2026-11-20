@@ -149,6 +149,99 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   check('ragsave: нет rag.db — подсказка про ragsave init', res.stderr.includes('ragsave init <path>'), true);
 }
 
+// === выбор дерева: git-границы, симлинки, worktree ===
+
+const gitInit = (dir) => {
+  fs.mkdirSync(dir, { recursive: true });
+  spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+};
+const gitCommit = (dir) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'x'], { cwd: dir });
+
+{
+  const sb = sandbox();
+  const inner = path.join(sb.root, 'src');
+  spawnSync('git', ['init', '-q'], { cwd: inner });
+  const res = sb.run(['tokensave'], {}, path.join(inner, 'deep'));
+  check('tokensave: вложенный Git без индекса — отказ, не родитель', [res.status, res.calls], [1, []]);
+}
+
+{
+  const sb = sandbox();
+  const deep = path.join(sb.root, 'src', 'deep');
+  const alias = path.join(sb.home, 'alias');
+  fs.symlinkSync(deep, alias);
+  const direct = sb.run(['tokensave'], {}, deep);
+  const via = sb.run(['tokensave'], { PWD: alias }, alias);
+  check('tokensave: симлинк и прямой путь — одинаковое дерево',
+    [via.status, via.calls.slice(direct.calls.length), via.cwds.slice(direct.cwds.length)],
+    [direct.status, direct.calls, direct.cwds]);
+}
+
+{
+  const sb = sandbox({ indexes: [] });
+  const main = path.join(sb.home, 'main');
+  const linked = path.join(sb.home, 'linked');
+  gitInit(main);
+  gitCommit(main);
+  spawnSync('git', ['worktree', 'add', '-q', linked], { cwd: main });
+  index(main, 'tokensave');
+  fs.mkdirSync(path.join(linked, 'src'));
+  const noOwn = sb.run(['tokensave'], {}, path.join(linked, 'src'));
+  check('tokensave: linked worktree без своего индекса — отказ, не основное дерево', [noOwn.status, noOwn.calls], [1, []]);
+  index(linked, 'tokensave');
+  const own = sb.run(['tokensave'], {}, path.join(linked, 'src'));
+  check('tokensave: linked worktree со своим индексом — обслуживается', [own.calls, own.cwds], [[['serve', '-p', linked]], [linked]]);
+}
+
+{
+  const sb = sandbox({ indexes: [] });
+  const det = path.join(sb.home, 'detached');
+  gitInit(det);
+  gitCommit(det);
+  spawnSync('git', ['checkout', '-q', '--detach'], { cwd: det });
+  index(det, 'tokensave');
+  const res = sb.run(['tokensave'], {}, det);
+  check('tokensave: detached HEAD — обслуживается целевое дерево', res.calls, [['serve', '-p', det]]);
+}
+
+{
+  const sb = sandbox({ indexes: [] });
+  const mono = path.join(sb.home, 'mono');
+  gitInit(mono);
+  const ts = path.join(mono, 'svc-ts');
+  const rg = path.join(mono, 'svc-rg');
+  index(ts, 'tokensave');
+  index(rg, 'ragsave');
+  const tsRes = sb.run(['tokensave'], {}, ts);
+  check('tokensave: монорепо только со своим индексом — находится', tsRes.calls, [['serve', '-p', ts]]);
+  const rgRes = sb.run(['ragsave'], {}, rg);
+  check('ragsave: монорепо только со своим индексом — находится',
+    [rgRes.calls.slice(tsRes.calls.length), rgRes.cwds.slice(tsRes.cwds.length)], [[['serve']], [rg]]);
+}
+
+{
+  const sb = sandbox({ indexes: [] });
+  const a = path.join(sb.home, 'a');
+  const b = path.join(sb.home, 'b');
+  for (const [dir, text] of [[a, 'контроль-a'], [b, 'контроль-b']]) {
+    fs.mkdirSync(dir);
+    index(dir, 'tokensave');
+    fs.writeFileSync(path.join(dir, 'SENTINEL.txt'), text);
+  }
+  const resA = sb.run(['tokensave'], { FAKE_INDEXER_SENTINEL: 'SENTINEL.txt' }, a);
+  const resB = sb.run(['tokensave'], { FAKE_INDEXER_SENTINEL: 'SENTINEL.txt' }, b);
+  check('tokensave: контрольная строка обслуживаемого дерева — a', resA.stdout, `fake serve -p ${a}\nконтроль-a\n`);
+  check('tokensave: контрольная строка обслуживаемого дерева — b', resB.stdout, `fake serve -p ${b}\nконтроль-b\n`);
+}
+
+{
+  const sb = sandbox();
+  const inner = path.join(sb.root, 'src');
+  spawnSync('git', ['init', '-q'], { cwd: inner });
+  const res = sb.run(['ragsave'], {}, path.join(inner, 'deep'));
+  check('ragsave: вложенный Git без индекса — отказ, не родитель', [res.status, res.calls], [1, []]);
+}
+
 // === аргументы ===
 
 {

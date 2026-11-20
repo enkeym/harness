@@ -21,4 +21,6 @@ const list = process.env.FAKE_INDEXER_LIST;
 if (process.env.FAKE_INDEXER_SILENT !== '1') {
   process.stdout.write(list !== undefined && args.includes('list') ? list : `fake ${args.join(' ')}\n`);
 }
+const sentinel = process.env.FAKE_INDEXER_SENTINEL;
+if (sentinel) process.stdout.write(`${fs.readFileSync(`${process.cwd()}/${sentinel}`, 'utf8').trimEnd()}\n`);
 process.exit(Number(process.env.FAKE_INDEXER_EXIT || 0));

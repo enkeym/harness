@@ -72,6 +72,27 @@ for (const mode of ['no index', 'disabled', 'outside git']) {
   });
 }
 
+test('вложенный Git без индекса — отказ, не родитель', async (t) => {
+  const sb = sandbox(t);
+  const inner = path.join(sb.root, 'inner');
+  fs.mkdirSync(path.join(inner, 'deep'), { recursive: true });
+  assert.equal(spawnSync('git', ['init', '-q'], { cwd: inner }).status, 0);
+  sb.run(path.join(inner, 'deep'));
+  await setTimeout(150);
+  assert.equal(fs.existsSync(sb.calls), false);
+  assert.equal(fs.existsSync(sb.log), false);
+});
+
+test('не-Git проект: явный индекс обслуживается', async (t) => {
+  const sb = sandbox(t);
+  const plain = path.join(sb.home, 'plain');
+  fs.mkdirSync(path.join(plain, '.tokensave'), { recursive: true });
+  fs.writeFileSync(path.join(plain, '.tokensave/tokensave.db'), '');
+  sb.run(plain);
+  await waitFor(() => fs.existsSync(path.join(plain, '.tokensave/sync.log')));
+  assert.deepEqual(JSON.parse(fs.readFileSync(sb.calls, 'utf8')), ['sync', plain]);
+});
+
 test('ошибка sync сохраняется в отчёте и общем журнале', async (t) => {
   const sb = sandbox(t);
   sb.run(sb.root, { FAKE_INDEXER_EXIT: '7' });

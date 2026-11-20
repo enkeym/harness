@@ -264,7 +264,17 @@ function macRun(sb, { taskpolicy = false } = {}) {
   const plain = path.join(sb.home, 'plain');
   fs.mkdirSync(path.join(plain, '.ragsave'), { recursive: true });
   fs.writeFileSync(path.join(plain, '.ragsave', 'rag.db'), '');
-  expectSilent('не git-репозиторий', sb, sb.run({}, [plain]));
+  const res = sb.run({}, [plain]);
+  check('не git-репозиторий: явный индекс обслуживается',
+    [res.status, sb.waitCalls(1)], [0, [['sync', plain, '--quiet']]]);
+}
+
+{
+  const sb = sandbox();
+  const inner = path.join(sb.root, 'inner');
+  fs.mkdirSync(path.join(inner, 'deep'), { recursive: true });
+  git(inner, 'init', '-q');
+  expectSilent('вложенный Git без индекса — не родитель', sb, sb.run({}, [path.join(inner, 'deep')]));
 }
 
 {

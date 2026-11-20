@@ -20,31 +20,17 @@ warm=0
 project_dir="${1:-$PWD}"
 [ "$project_dir" = "$HOME" ] && exit 0
 
-repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || exit 0
-[ -z "$repo_root" ] || [ "$repo_root" = "$HOME" ] && exit 0
+. "${BASH_SOURCE%/*}/index-root.sh"
+
+repo_root="$(git_worktree_root "$project_dir")" || repo_root=""
+# Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория
+# (или рядом с индексом подкаталога, см. ниже).
+[ -n "$repo_root" ] && { [ "$repo_root" = "$HOME" ] || [ -f "$repo_root/.ragsave-disable" ]; } && exit 0
 
 rag_bin="${AI_HOOKS_RAGSAVE_CMD:-$HOME/.local/bin/ragsave}"  # переменная — подмена в тестах
 [ -x "$rag_bin" ] || exit 0
 
-# Явный отказ от индексации проекта: touch .ragsave-disable в корне репозитория
-# (или рядом с индексом подкаталога, см. ниже).
-[ -f "$repo_root/.ragsave-disable" ] && exit 0
-
-# Индекс — ближайший .ragsave/rag.db вверх от каталога сессии, не выше корня
-# репозитория: тот же, что обслуживает MCP (mcp-serve.sh:find_root), — у подкаталога
-# монорепо свой индекс. Нет ни одного — выходим. Первичный init хуком не
-# запускается: решение «индексировать этот репозиторий» принимает человек,
-# командой `ragsave init`. Каталог .ragsave здесь тоже не создаётся — пустой
-# каталог ничего не значит, а появлялся он в любом репозитории, где просто
-# открыли сессию.
-root=""
-dir="$(cd "$project_dir" 2>/dev/null && pwd -P)" || exit 0
-while :; do
-  [ -f "$dir/.ragsave/rag.db" ] && { root="$dir"; break; }
-  { [ "$dir" = "$repo_root" ] || [ "$dir" = / ]; } && break
-  dir="$(dirname "$dir")"
-done
-[ -n "$root" ] || exit 0
+root="$(find_index_root .ragsave/rag.db "$project_dir")" || exit 0
 [ -f "$root/.ragsave-disable" ] && exit 0
 
 log="$root/.ragsave/sync.log"

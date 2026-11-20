@@ -3,18 +3,13 @@ set -u
 
 project_dir="${1:-$PWD}"
 [ "$project_dir" = "$HOME" ] && exit 0
-repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" || exit 0
-[ "$repo_root" = "$HOME" ] && exit 0
-[ -f "$repo_root/.tokensave-disable" ] && exit 0
 
-root=""
-dir="$(cd "$project_dir" 2>/dev/null && pwd -P)" || exit 0
-while :; do
-  [ -f "$dir/.tokensave/tokensave.db" ] && { root="$dir"; break; }
-  { [ "$dir" = "$repo_root" ] || [ "$dir" = / ]; } && break
-  dir="$(dirname "$dir")"
-done
-[ -n "$root" ] || exit 0
+. "${BASH_SOURCE%/*}/index-root.sh"
+
+repo_root="$(git_worktree_root "$project_dir")" || repo_root=""
+[ -n "$repo_root" ] && { [ "$repo_root" = "$HOME" ] || [ -f "$repo_root/.tokensave-disable" ]; } && exit 0
+
+root="$(find_index_root .tokensave/tokensave.db "$project_dir")" || exit 0
 [ -f "$root/.tokensave-disable" ] && exit 0
 bin="${AI_HOOKS_TOKENSAVE_CMD:-$(command -v tokensave || { [ -x "$HOME/.local/bin/tokensave" ] && echo "$HOME/.local/bin/tokensave" || echo /usr/local/bin/tokensave; })}"
 [ -x "$bin" ] || exit 0

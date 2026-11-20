@@ -17,22 +17,11 @@ set -u
 kind="${1:?usage: mcp-serve.sh tokensave|ragsave}"
 start="$PWD"
 
-# Ближайший вверх по дереву каталог с индексом. $HOME проектом не считается:
-# ~/.tokensave — это глобальный конфиг CLI (global.db, pricing.json), а не граф
-# кода, и приняв его за проект, сервер обслуживал бы весь домашний каталог.
-find_root() {
-  local marker="$1" dir
-  dir="$(cd "$start" 2>/dev/null && pwd)" || return 1
-  while [ -n "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "$HOME" ]; do
-    [ -e "$dir/$marker" ] && { printf '%s\n' "$dir"; return 0; }
-    dir="$(dirname "$dir")"
-  done
-  return 1
-}
+. "${BASH_SOURCE%/*}/index-root.sh"
 
 case "$kind" in
   tokensave)
-    root="$(find_root .tokensave/tokensave.db)" || {
+    root="$(find_index_root .tokensave/tokensave.db "$start")" || {
       echo "tokensave: индекса нет ни в $start, ни выше — сервер не запущен." >&2
       echo "Индексация только ручная: tokensave init <path>." >&2
       exit 1
@@ -45,7 +34,7 @@ case "$kind" in
     exec "$bin" serve -p "$root"
     ;;
   ragsave)
-    root="$(find_root .ragsave/rag.db)" || {
+    root="$(find_index_root .ragsave/rag.db "$start")" || {
       echo "ragsave: индекса нет ни в $start, ни выше — сервер не запущен." >&2
       echo "Индексация только ручная: ragsave init <path>." >&2
       exit 1
