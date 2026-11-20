@@ -1,6 +1,7 @@
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 import { readTexts } from "./read-results.mjs"
 import { boundToolResult } from "./output-bounds.mjs"
+import { sanitizeMessageTexts } from "./dsml.mjs"
 
 const policy = contextPolicy.opencode
 const readTools = new Set(["read", "grep", "glob", "skill", "execute", "shell"])
@@ -83,7 +84,8 @@ export async function registerLoopGuard(
         digests: new Map(),
         repeats: new Map(),
         resume: false,
-        sessionReminder: false
+        sessionReminder: false,
+        dsmlLoopWarned: false
       })
     return sessions.get(sessionID)
   }
@@ -101,6 +103,26 @@ export async function registerLoopGuard(
   await context.session.hook("context", async (event) => {
     currentSession = event.sessionID ?? currentSession
     const s = state(sessionOf(event))
+    if (Array.isArray(event.messages)) {
+      const { changed, repeated } = sanitizeMessageTexts(event.messages)
+      if (changed) {
+        process.stderr.write(
+          `Harness DSML guard: stripped leaked DSML markup from ${changed} outgoing message part(s).\n`
+        )
+      }
+      if (repeated.length && !s.dsmlLoopWarned) {
+        s.dsmlLoopWarned = true
+        event.messages.push({
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Harness DSML guard: ${repeated.length} repeated assistant block(s) contained raw DSML tool-call markup instead of an executed tool call. Do not copy that markup. Emit the tool call through the tool interface, or answer in prose if the tool result is already available.`
+            }
+          ]
+        })
+      }
+    }
     if (!s.sessionReminder && Array.isArray(event.messages)) {
       let assistantMessages = 0
       for (const message of event.messages)

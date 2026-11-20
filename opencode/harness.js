@@ -19,7 +19,11 @@ import {
   defaultCostConfig
 } from "./cost-report.mjs"
 import { registerRetrievalRouting } from "./retrieval-routing.mjs"
-import { sanitizeDsmlStream } from "./dsml.mjs"
+import {
+  sanitizeDsmlJsonStream,
+  sanitizeDsmlStream,
+  sanitizeMessageTexts
+} from "./dsml.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
 
@@ -160,24 +164,28 @@ export default {
     const handoff = await registerHandoff(context, observe, contextCache)
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
-    await context.session.hook(
-      "http.response",
-      (event) => {
-        if (event.kind && event.kind !== "primary") return
-        const contentType = event.response.headers.get("content-type") ?? ""
-        if (!contentType.includes("text/event-stream")) return
-        if (!event.response.body) return
-        const headers = new Headers(event.response.headers)
-        headers.delete("content-encoding")
-        headers.delete("content-length")
-        event.response = new Response(sanitizeDsmlStream(event.response.body), {
-          status: event.response.status,
-          statusText: event.response.statusText,
-          headers
-        })
-      },
-      { providerID: deepseekModels.flash.providerID }
-    )
+    const sanitizeHttpResponse = (event) => {
+      if (event.kind && event.kind !== "primary") return
+      if (!event.response.body) return
+      const contentType = event.response.headers.get("content-type") ?? ""
+      const headers = new Headers(event.response.headers)
+      headers.delete("content-encoding")
+      headers.delete("content-length")
+      const body = contentType.includes("application/json")
+        ? sanitizeDsmlJsonStream(event.response.body)
+        : contentType.includes("text/event-stream")
+          ? sanitizeDsmlStream(event.response.body)
+          : undefined
+      if (!body) return
+      event.response = new Response(body, {
+        status: event.response.status,
+        statusText: event.response.statusText,
+        headers
+      })
+    }
+    await context.session.hook("http.response", sanitizeHttpResponse, {
+      providerID: deepseekModels.flash.providerID
+    })
     const pluginAgentsInstructions = readInstructions().instructions
     const harnessInstructions = () => ({
       role: "user",
@@ -192,6 +200,7 @@ export default {
       event.messages = (event.messages ?? []).filter(
         (message) => !isHarnessInstructions(message)
       )
+      sanitizeMessageTexts(event.messages)
       event.messages.unshift(harnessInstructions())
       event.messages.push({
         role: "user",

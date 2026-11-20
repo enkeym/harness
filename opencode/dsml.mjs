@@ -67,6 +67,150 @@ export function parseDsmlCalls(block) {
   return calls
 }
 
+const findDsmlStart = (text) => {
+  let index = text.indexOf(DSML_NEEDLE)
+  while (index >= 0) {
+    const open = text.lastIndexOf("<", index)
+    if (open >= 0 && index - open <= 24) return open
+    index = text.indexOf(DSML_NEEDLE, index + 1)
+  }
+  return -1
+}
+
+const findTagEnd = (text, from) => {
+  const end = text.indexOf(">", from)
+  return end < 0 ? -1 : end + 1
+}
+
+const callLabel = (calls) =>
+  `[unexecuted tool call: ${calls.map((call) => call.name ?? "unknown").join(", ")}]`
+
+export function stripDsmlText(text) {
+  if (typeof text !== "string" || !text.includes(DSML_NEEDLE)) return text
+  let result = ""
+  let cursor = 0
+  for (;;) {
+    const start = findDsmlStart(text.slice(cursor))
+    if (start < 0) break
+    const open = cursor + start
+    result += text.slice(cursor, open)
+    const end = findTagEnd(text, open)
+    if (end < 0) return result
+    const tag = text.slice(open, end)
+    if (tagKind(tag) !== "calls-open") {
+      cursor = end
+      continue
+    }
+    TAG.lastIndex = end
+    let closing
+    let match
+    while ((match = TAG.exec(text))) {
+      if (tagKind(match[0]) === "calls-close") {
+        closing = { start: match.index, end: TAG.lastIndex }
+        break
+      }
+    }
+    const blockEnd = closing ? closing.end : text.length
+    const calls = parseDsmlCalls(text.slice(open, blockEnd))
+    if (calls.length) result += callLabel(calls)
+    cursor = blockEnd
+  }
+  result += text.slice(cursor)
+  return result
+}
+
+export function sanitizeDsmlJson(payload) {
+  const choices = payload?.choices
+  if (!Array.isArray(choices)) return { changed: false }
+  let changed = false
+  for (const choice of choices) {
+    const message = choice?.message
+    if (!message || typeof message.content !== "string" || !message.content.includes(DSML_NEEDLE))
+      continue
+    const calls = parseDsmlCalls(message.content)
+    const content = stripDsmlText(message.content)
+    if (content !== message.content) {
+      message.content = content
+      changed = true
+    }
+    if (!calls.length) continue
+    message.tool_calls = calls.map((call, index) => ({
+      id: `call_dsml_json_${index}`,
+      type: "function",
+      function: { name: call.name, arguments: JSON.stringify(call.arguments) }
+    }))
+    choice.finish_reason = "tool_calls"
+    changed = true
+  }
+  return { changed }
+}
+
+export function sanitizeMessageTexts(messages) {
+  if (!Array.isArray(messages)) return { changed: 0, repeated: [] }
+  let changed = 0
+  const seen = new Set()
+  const repeated = new Set()
+  for (const message of messages) {
+    if (!message) continue
+    if (typeof message.content === "string") {
+      if (!message.content.includes(DSML_NEEDLE)) continue
+      const next = stripDsmlText(message.content)
+      if (next !== message.content) {
+        message.content = next
+        changed += 1
+      }
+      continue
+    }
+    if (!Array.isArray(message.content)) continue
+    for (const part of message.content) {
+      if (part?.type !== "text" || typeof part.text !== "string" || !part.text.includes(DSML_NEEDLE))
+        continue
+      const next = stripDsmlText(part.text)
+      const key = next.trim()
+      if (message.role === "assistant" && key) {
+        if (seen.has(key)) repeated.add(key)
+        else seen.add(key)
+      }
+      if (next !== part.text) {
+        part.text = next
+        changed += 1
+      }
+    }
+  }
+  return { changed, repeated: [...repeated] }
+}
+
+export function sanitizeDsmlJsonStream(
+  body,
+  log = (message) => console.warn(`${LOG} ${message}`)
+) {
+  const encoder = new TextEncoder()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  return body.pipeThrough(
+    new TransformStream({
+      transform(bytes) {
+        buffer += decoder.decode(bytes, { stream: true })
+      },
+      flush(controller) {
+        buffer += decoder.decode()
+        let text = buffer
+        try {
+          const payload = JSON.parse(buffer)
+          const { changed } = sanitizeDsmlJson(payload)
+          if (changed) {
+            text = JSON.stringify(payload)
+            log("converted DSML tool calls in a non-streaming response")
+          }
+        } catch {
+          log("non-streaming response body is not JSON; left unchanged")
+        }
+        controller.enqueue(encoder.encode(text))
+      }
+    })
+  )
+}
+
 const deltaOf = (payload) => {
   const choice = payload?.choices?.[0]
   if (!choice) return undefined
@@ -150,24 +294,9 @@ export function sanitizeDsmlStream(
     return lastOpen
   }
 
-  const findTagEnd = (text, from) => {
-    const end = text.indexOf(">", from)
-    return end < 0 ? -1 : end + 1
-  }
-
   const flushText = (text, controller) => {
     if (!text) return
     controller.enqueue(encode(chunk(text)))
-  }
-
-  const findDsmlStart = (text) => {
-    let index = text.indexOf(DSML_NEEDLE)
-    while (index >= 0) {
-      const open = text.lastIndexOf("<", index)
-      if (open >= 0 && index - open <= 24) return open
-      index = text.indexOf(DSML_NEEDLE, index + 1)
-    }
-    return -1
   }
 
   const consume = (controller) => {
@@ -215,6 +344,7 @@ export function sanitizeDsmlStream(
         continue
       }
       state.converted += 1
+      log(`converted ${calls.length} DSML call(s): ${calls.map((call) => call.name).join(", ")}`)
       controller.enqueue(encode(toolChunk(calls, state.converted)))
     }
   }
@@ -286,12 +416,31 @@ export function sanitizeDsmlStream(
   }
 
   const finalize = (controller) => {
-    if (state.hold) {
-      const text = state.hold
-      state.hold = ""
-      state.inDsml = false
-      flushText(text, controller)
+    if (!state.hold) return
+    const text = state.hold
+    state.hold = ""
+    const unterminated = state.inDsml
+    state.inDsml = false
+    if (unterminated) {
+      const calls = parseDsmlCalls(text)
+      if (calls.length) {
+        state.converted += 1
+        log(`converted unterminated DSML block (${calls.length} calls)`)
+        controller.enqueue(encode(toolChunk(calls, state.converted)))
+        controller.enqueue(
+          encode({
+            ...(template ?? { object: CHAT_CHUNK }),
+            choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }]
+          })
+        )
+        return
+      }
+      const stripped = stripDsmlText(text)
+      log(`stripped unterminated DSML block of ${text.length} chars`)
+      flushText(stripped, controller)
+      return
     }
+    flushText(stripDsmlText(text), controller)
   }
 
   return body.pipeThrough(
