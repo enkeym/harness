@@ -17,6 +17,7 @@
 - Secrets never enter Git: ignore their file or store values in ~/.config/harness/env and reference them by name.
 - Before handoff, fix duplicated logic, hardcoded values, added comments and unused scaffolding in the diff. Briefly report reuse evidence (searched scope → reused symbol, or why new code was needed); run focused checks, full suites/coverage only when project rules or impact require them.
 - A finished task is not a handoff: no note file, no report of work that was not done, and no handoff or checkpoint for it. Handoff exists only to transfer unfinished work that continues after compaction.
+- A completed sub-step, package or commit is not a reason to end the turn: continue until every requested step is done or a real blocker exists (failed tool, missing permission, decision only the user can make).
 - Keep build on the default #low variant; #high adds reasoning tokens billed as output, so use it only for explicitly requested deep analysis.
 
 ## Browser and internet
