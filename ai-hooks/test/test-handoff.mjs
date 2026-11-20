@@ -76,6 +76,31 @@ test("Handoff compacts the same session and reuses the managed plan", async (t) 
   assert.equal(f.events.at(-1).data.targetID, undefined)
 })
 
+test("Handoff reuses the managed plan after the session moved to another directory", async (t) => {
+  const f = fixture(t)
+  const plan = await createPlan(f.context, {
+    sessionID: "source",
+    directory: f.directory,
+    objective: "Managed plan: keep one source of state after a move",
+    stage: "implementation"
+  })
+  const moved = fs.mkdtempSync(path.join(os.tmpdir(), "harness-handoff-moved-"))
+  t.after(() => fs.rmSync(moved, { recursive: true, force: true }))
+  f.context.location.directory = moved
+  f.context.session.get = async () => ({ location: { directory: moved }, agent: "build", model: { id: "model", providerID: "fixture" }, title: "Source" })
+  f.context.session.generate = async () => { assert.fail("A managed plan must bypass summary generation") }
+  await registerHandoff(f.context)
+
+  await f.run()
+
+  assert.equal(f.compacted.length, 1)
+  assert.equal(f.prompts.length, 1)
+  assert.equal(f.prompts[0].delivery, "steer")
+  assert.match(f.prompts[0].text, /Task plan: \.opencode\/plans\//)
+  assert.equal(fs.existsSync(path.join(moved, ".opencode", "plans")), false)
+  assert.match(fs.readFileSync(plan.file, "utf8"), /keep one source of state/i)
+})
+
 test("Handoff rejects raw configuration and oversized generated summaries", async (t) => {
   for (const summary of ["PRIVATE_TOKEN=example-value", "A".repeat(cachePolicy.taskCheckpointChars + 1)]) {
     const f = fixture(t)

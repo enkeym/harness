@@ -199,7 +199,11 @@ export async function registerLoopGuard(
       boundToolResult(event, outputDir === undefined ? undefined : { dir: outputDir })
     const s = state(sessionOf(event))
     const code = typeof event.input?.code === "string" ? event.input.code : ""
-    if (event.tool === "skill" && typeof event.input?.id === "string")
+    if (
+      event.tool === "skill" &&
+      event.status === "completed" &&
+      typeof event.input?.id === "string"
+    )
       s.skills.add(event.input.id)
     if (
       event.status === "completed" &&

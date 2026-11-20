@@ -383,7 +383,7 @@ function repeatsFor(record, date, config) {
       )
         longestFailureStreak = Math.max(failures, longestFailureStreak)
       if (/^(edit|write|apply_patch)$/.test(tool.name)) {
-        epoch++
+        if (tool.status !== "error" && tool.status !== "failed") epoch++
         continue
       }
       if (

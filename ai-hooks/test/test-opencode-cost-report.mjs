@@ -189,6 +189,17 @@ test("repeat candidates match identical inputs even when the output differs", ()
   assert.equal(data.repeats[0].occurrences, 2)
 })
 
+test("a failed edit keeps the repeat epoch while a completed edit resets it", () => {
+  const read = { name: "read", status: "completed", inputFingerprint: "same", outputFingerprint: "same" }
+  const failed = report([record("ses_failed_edit", [step("a", { tools: [read, { name: "edit", status: "error" }] }), step("b", { tools: [read] })])])
+
+  assert.equal(failed.repeats.length, 1)
+  assert.equal(failed.repeats[0].occurrences, 2)
+
+  const completed = report([record("ses_completed_edit", [step("a", { tools: [read, { name: "edit", status: "completed" }] }), step("b", { tools: [read] })])])
+  assert.equal(completed.repeats.length, 0)
+})
+
 test("large tool outputs are measured separately on the trimmed text basis", () => {
   const small = { name: "read", outputTextBytes: 6 * 1024 - 1 }
   const bounded = { name: "read", outputTextBytes: 6 * 1024 }

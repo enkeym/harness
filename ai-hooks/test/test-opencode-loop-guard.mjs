@@ -624,6 +624,23 @@ test("compaction resumes once with cached ranges, skills and the edit budget", a
   assert.equal(f.references.length, 1)
 })
 
+test("a failed skill call is not counted as an active skill", async t => {
+  const f = await fixture(t)
+  await f.after(
+    "skill",
+    { id: "optimize" },
+    { message: "permission denied" },
+    "session",
+    "error"
+  )
+  await f.after("skill", { id: "react-frontend" })
+  await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
+
+  const resume = (await f.contextHook()).messages.at(-1).content[0].text
+  assert.match(resume, /Active skills before compaction: react-frontend/)
+  assert.doesNotMatch(resume, /optimize/)
+})
+
 test("compaction without cached ranges states the resume protocol once", async t => {
   const f = await fixture(t, "")
   await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
