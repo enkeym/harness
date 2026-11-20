@@ -83,12 +83,21 @@ const appendNotice = (event, text) => {
   else result.content = [{ type: "text", text }]
 }
 
-export function injectDigests(code, digests) {
+export function injectDigests(code, digests, root) {
   let changed = 0
   const next = code.replace(
     /tokensave_read\(\s*\{([\s\S]*?)\}\s*\)/g,
     (call, args) => {
       if (/\bif_digest\s*:/.test(args)) return call
+      if (/\bforce\s*:/.test(args)) return call
+      const graphRoot =
+        /\bgraph_root\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(args)
+      if (graphRoot) {
+        const canonical =
+          typeof root === "string" ? root.replace(/\/+$/, "") : null
+        if (!canonical || graphRoot[1].replace(/\/+$/, "") !== canonical)
+          return call
+      }
       const mode = /\bmode\s*:\s*["'`]([^"'`]+)["'`]/.exec(args)
       if (mode && mode[1] !== "full") return call
       const file = /\bfile\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(args)
@@ -248,7 +257,11 @@ export async function registerLoopGuard(
     if (event.tool !== "execute") return
     const code = event.input?.code
     if (typeof code !== "string" || !code.includes("tokensave_read")) return
-    const result = injectDigests(code, state(sessionOf(event)).digests)
+    const result = injectDigests(
+      code,
+      state(sessionOf(event)).digests,
+      context.location?.directory
+    )
     if (!result.changed) return
     event.input.code = result.code
     process.stderr.write(

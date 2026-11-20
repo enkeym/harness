@@ -146,6 +146,30 @@ test("digest injection only rewrites literal full reads with a known digest", ()
       .changed,
     0
   )
+  assert.equal(
+    injectDigests(
+      'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/other" })',
+      digests,
+      "/project"
+    ).changed,
+    0,
+    "a digest never follows the file name into another root"
+  )
+  const sameRoot = injectDigests(
+    'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/project/" })',
+    digests,
+    "/project"
+  )
+  assert.equal(sameRoot.changed, 1, "the canonical root may reuse the digest")
+  assert.match(sameRoot.code, new RegExp(`if_digest: "${digest}"`))
+  assert.equal(
+    injectDigests(
+      'tokensave_read({ file: "source.mjs", mode: "full", force: true })',
+      digests
+    ).changed,
+    0,
+    "an explicit force is not overridden"
+  )
 })
 
 test("after hook collects full-read digests from text and JSON results only", async t => {
@@ -212,6 +236,30 @@ test("after hook collects full-read digests from text and JSON results only", as
   }
   await f.before("execute", lines)
   assert.doesNotMatch(lines.code, /if_digest/)
+})
+
+test("compaction drops collected digests so stale bodies are not reused", async t => {
+  const f = await fixture(t)
+  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n`
+  await f.after(
+    "execute",
+    { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' },
+    { content: [{ type: "text", text: full }] }
+  )
+  const before = { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' }
+  await f.before("execute", before)
+  assert.match(before.code, new RegExp(`if_digest: "${digest}"`))
+
+  await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
+  const afterCompaction = {
+    code: 'tokensave_read({ file: "source.mjs", mode: "full" })'
+  }
+  await f.before("execute", afterCompaction)
+  assert.doesNotMatch(
+    afterCompaction.code,
+    /if_digest/,
+    "the model no longer sees the old body, so the digest must not be injected"
+  )
 })
 
 test("read budget warns at 20 reads and again at 40 without changing the tool list", async t => {
