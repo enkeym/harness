@@ -1666,6 +1666,16 @@ for (const type of [
 ]) {
   test(`OpenCode ${type} syncs indexes in the session project`, async (t) => {
     const { directory, harnessRoot, project, calls, env } = executionSandbox(t)
+    const moved = path.join(directory, "moved project")
+    fs.mkdirSync(moved)
+    assert.equal(spawnSync("git", ["init", "-q", moved]).status, 0)
+    for (const [folder, file] of [
+      [".tokensave", "tokensave.db"],
+      [".ragsave", "rag.db"]
+    ]) {
+      fs.mkdirSync(path.join(moved, folder))
+      fs.writeFileSync(path.join(moved, folder, file), "")
+    }
     const runner = `
       import fs from 'node:fs';
       import { setTimeout } from 'node:timers/promises';
@@ -1685,7 +1695,7 @@ for (const type of [
         storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
         model: { transform: async callback => callback({ list: () => [] }) },
         event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT, data: { sessionID: "ses_fixture" } }; })() },
-        session: { hook: async () => {}, get: async () => ({ location: { directory: "/different-project" } }) }
+        session: { hook: async () => {}, get: async () => ({ location: { directory: process.env.TEST_MOVED } }) }
       });
       await wait(5);
       await setTimeout(100);
@@ -1701,6 +1711,7 @@ for (const type of [
           ...process.env,
           ...env,
           TEST_PROJECT: project,
+          TEST_MOVED: moved,
           TEST_EVENT: type
         }
       }
@@ -1715,13 +1726,76 @@ for (const type of [
     assert.equal(
       commands.filter((args) => args[0] === "sync" && args[1] === project)
         .length,
-      4
+      2
+    )
+    assert.equal(
+      commands.filter((args) => args[0] === "sync" && args[1] === moved)
+        .length,
+      2
     )
     assert.ok(fs.existsSync(path.join(project, ".tokensave/sync.log")))
     assert.ok(fs.existsSync(path.join(project, ".ragsave/sync.log")))
+    assert.ok(fs.existsSync(path.join(moved, ".tokensave/sync.log")))
+    assert.ok(fs.existsSync(path.join(moved, ".ragsave/sync.log")))
     await setTimeout(25)
   })
 }
+
+test("OpenCode falls back to the setup directory when the session API fails", async (t) => {
+  const { directory, harnessRoot, project, calls, env } = executionSandbox(t)
+  const runner = `
+      import fs from 'node:fs';
+      import { setTimeout } from 'node:timers/promises';
+      import plugin from ${JSON.stringify(pathToFileURL(path.join(harnessRoot, "opencode/harness.js")).href)};
+      const calls = () => fs.existsSync(process.env.FAKE_INDEXER_CALLS) ? fs.readFileSync(process.env.FAKE_INDEXER_CALLS, 'utf8').trim().split('\\n') : [];
+      const wait = async (count) => {
+        const deadline = Date.now() + 5000;
+        while (calls().length < count && Date.now() < deadline) await setTimeout(25);
+        if (calls().length < count) throw new Error('Sync did not complete');
+      };
+      await plugin.setup({
+        location: { directory: process.env.TEST_PROJECT },
+        app: { version: "2.2.5" },
+        command: { transform: async () => {} },
+        tool: { transform: async () => {}, hook: async () => {} },
+        rpc: { register: async () => ({}) },
+        storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
+        model: { transform: async callback => callback({ list: () => [] }) },
+        event: { subscribe: async () => (async function* () { await wait(3); yield { type: process.env.TEST_EVENT, data: { sessionID: "ses_fixture" } }; })() },
+        session: { hook: async () => {}, get: async () => { throw new Error("session api unavailable") } }
+      });
+      await wait(5);
+      await setTimeout(100);
+    `
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", runner],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      timeout: 10000,
+      env: {
+        ...process.env,
+        ...env,
+        TEST_PROJECT: project,
+        TEST_EVENT: "session.execution.succeeded"
+      }
+    }
+  )
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+  const commands = fs
+    .readFileSync(calls, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+  assert.equal(commands.filter((args) => args[0] === "warm").length, 1)
+  assert.equal(
+    commands.filter((args) => args[0] === "sync" && args[1] === project)
+      .length,
+    4
+  )
+  await setTimeout(25)
+})
 
 test("OpenCode never injects a handoff instruction into model messages", async (t) => {
   const { directory, harnessRoot, project, env } = executionSandbox(t)

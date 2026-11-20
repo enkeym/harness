@@ -41,7 +41,7 @@ export default {
   setup: async (context) => {
     const directory = context.location.directory
     await registerRetrievalRouting(context)
-    const sync = (warm = false) => {
+    const sync = (warm = false, dir = directory) => {
       for (const script of ["tokensave-sync.sh", "ragsave-sync.sh"]) {
         const child = spawn(
           "bash",
@@ -50,7 +50,7 @@ export default {
               new URL(`../ai-hooks/bin/${script}`, import.meta.url)
             ),
             ...(warm && script === "ragsave-sync.sh" ? ["--warm"] : []),
-            directory
+            dir
           ],
           { detached: true, stdio: "ignore" }
         )
@@ -294,7 +294,7 @@ export default {
             .get({ sessionID })
             .catch(() => undefined)
           const owner = source?.location.directory
-          sync()
+          sync(false, owner ?? directory)
           const warnings = await observe(sessionID, owner ?? directory)
           if (
             warnings.some(
