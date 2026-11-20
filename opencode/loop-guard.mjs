@@ -19,11 +19,11 @@ const repeatTools = new Set([
 const digestHeader = /^file: (.+)\nmode: full\ndigest: ([a-f0-9]{64})\n/
 
 const softNotice = (reads) =>
-  `Harness progress guard: ${reads} read calls since the last file change. Check whether results you already have answer this, then continue the work instead of repeating retrieval.`
-const hardNotice = (reads) =>
-  `Harness progress guard: ${reads} read calls since the last file change. Prefer the work over new reads unless the next step genuinely needs a file you have not read yet.`
-const stopNotice = (reads) =>
-  `Harness progress guard: ${reads} read calls since the last file change. Reuse confirmed results and keep working until the requested steps are done; this counter never ends the turn.`
+  `Harness progress guard: ${reads} read calls since the last file change. Stop gathering. Make the first edit named in the plan, or report a concrete blocker.`
+const hardNotice =
+  "Harness progress guard: the read budget is exhausted. Do not start another read or shell command. Make the edit named in the plan now, or answer with the verified result or the exact blocker. Any read after this point is a repeated operation the user pays for."
+const stopNotice =
+  "Harness progress guard: the session exceeded the read budget without a file change and all tools are withdrawn for this turn. Answer now with the verified result, or name the exact blocker and the next step."
 
 const stableKey = (value) => {
   if (Array.isArray(value)) return `[${value.map(stableKey).join(",")}]`
@@ -141,6 +141,12 @@ export async function registerLoopGuard(
         }]
       })
     }
+    if (event.agent === "plan" || !(event.tools?.edit || event.tools?.write))
+      return
+    if (s.level >= 3) {
+      event.tools = {}
+      return
+    }
   })
 
   await context.tool.hook("execute.after", async (event) => {
@@ -185,7 +191,7 @@ export async function registerLoopGuard(
       s.level = level
       appendNotice(
         event,
-        level === 3 ? stopNotice(s.reads) : level === 2 ? hardNotice(s.reads) : softNotice(s.reads)
+        level === 3 ? stopNotice : level === 2 ? hardNotice : softNotice(s.reads)
       )
     }
     if (event.status !== "completed") return

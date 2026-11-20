@@ -234,7 +234,7 @@ test("read budget warns at 20 reads and again at 40 without changing the tool li
 
   const hard = {}
   await f.after("read", { file: "a39.mjs" }, hard)
-  assert.match(f.notice(hard), /Prefer the work over new reads/)
+  assert.match(f.notice(hard), /read budget is exhausted/)
   const forty = await f.contextHook()
   for (const name of ["read", "grep", "glob", "skill", "shell", "execute", "edit"])
     assert.ok(forty.tools[name], `${name} must stay listed to keep the cached prefix`)
@@ -259,7 +259,7 @@ test("hard read budget keeps the Code Mode execute gateway in the request", asyn
     event.tools.execute,
     "execute must stay available because Code Mode is the only MCP gateway"
   )
-  assert.match(f.notice(hard), /Prefer the work over new reads/)
+  assert.match(f.notice(hard), /Do not start another read or shell command/)
   assert.ok(event.tools.shell)
 
   await f.after("execute", {
@@ -272,7 +272,7 @@ test("hard read budget keeps the Code Mode execute gateway in the request", asyn
   )
 })
 
-test("shell commands consume the read budget and keep every tool", async t => {
+test("shell commands consume the read budget and reach the stop level", async t => {
   const f = await fixture(t)
   for (let i = 0; i < 19; i++) await f.after("shell", { command: `echo ${i}` })
   const quiet = await f.contextHook()
@@ -286,9 +286,7 @@ test("shell commands consume the read budget and keep every tool", async t => {
 
   for (let i = 20; i < 60; i++) await f.after("shell", { command: `npm run ${i}` })
   const stop = await f.contextHook()
-  assert.ok(stop.tools.read)
-  assert.ok(stop.tools.shell)
-  assert.ok(stop.tools.edit)
+  assert.deepEqual(stop.tools, {})
 
   await f.after("execute", {
     code: 'await tools.tokensave.tokensave_multi_str_replace({ path: "a.mjs", replacements: [] })'
@@ -299,16 +297,15 @@ test("shell commands consume the read budget and keep every tool", async t => {
   assert.ok(reset.tools.shell)
 })
 
-test("stop level keeps every tool after 60 reads without an edit", async t => {
+test("stop level withdraws every tool after 60 reads without an edit", async t => {
   const f = await fixture(t)
   for (let i = 0; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
   const stop = {}
   await f.after("read", { file: "a59.mjs" }, stop)
-  assert.match(f.notice(stop), /never ends the turn/)
+  assert.match(f.notice(stop), /all tools are withdrawn for this turn/)
 
   const event = await f.contextHook()
-  for (const name of ["read", "grep", "glob", "skill", "shell", "execute", "edit"])
-    assert.ok(event.tools[name], `${name} must stay available after the read counter stops`)
+  assert.deepEqual(event.tools, {})
   assert.equal(event.system.length, 0)
 
   await f.after("edit", { file: "a.mjs" })
@@ -410,8 +407,7 @@ test("a finished turn resets the read budget for the next user message", async t
 
   for (let i = 20; i < 60; i++) await f.after("read", { file: `a${i}.mjs` })
   const blocked = await f.contextHook()
-  assert.ok(blocked.tools.read)
-  assert.ok(blocked.tools.shell)
+  assert.deepEqual(blocked.tools, {})
 
   f.guard.finishTurn("session")
   const fresh = await f.contextHook()
