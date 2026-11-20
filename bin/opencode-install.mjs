@@ -114,4 +114,11 @@ try {
 } catch {
   drift++
 }
+if (check) {
+  try {
+    execFileSync(process.execPath, [path.join(root, "bin/project-identity.mjs")], {
+      stdio: "inherit"
+    })
+  } catch {}
+}
 process.exitCode = drift ? 1 : 0

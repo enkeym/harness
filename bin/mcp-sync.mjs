@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { playwrightEnv } from './playwright-env.mjs';
 import { expandHome } from './home-path.mjs';
+import { good, warn, bad } from './report.mjs';
+import { resolveCommand } from './command-path.mjs';
 
 const HARNESS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVERS = path.join(HARNESS, 'mcp', 'servers.json');
@@ -15,9 +17,6 @@ if (args.some(arg => arg !== '--check')) {
 }
 
 let drift = 0;
-const good = (s) => console.log(`  \x1b[32m✓\x1b[0m ${s}`);
-const warn = (s) => console.log(`  \x1b[33m!\x1b[0m ${s}`);
-const bad = (s) => console.log(`  \x1b[31m✗\x1b[0m ${s}`);
 
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -59,19 +58,6 @@ function serverEnv(name, configuredEnv = {}) {
   const prefix = `${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_MCP_`;
   const local = Object.fromEntries(Object.entries(localEnv).filter(([key]) => key.startsWith(prefix)));
   return { ...local, ...configuredEnv };
-}
-
-// Голое имя ищется по PATH; --check замечает смену пути, например после nvm.
-function resolveCommand(cmd) {
-  if (cmd.includes('/')) return expandHome(cmd);
-  for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
-    const file = path.join(dir, cmd);
-    try {
-      fs.accessSync(file, fs.constants.X_OK);
-      if (fs.statSync(file).isFile()) return file;
-    } catch { /* нет в этом каталоге */ }
-  }
-  return null;
 }
 
 const servers = {};
