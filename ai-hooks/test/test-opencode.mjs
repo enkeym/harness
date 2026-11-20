@@ -168,6 +168,7 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
     "./plugins/harness/qwen-oauth",
     "opencode-kimi-v2",
     "./plugins/harness/kimi-tuning",
+    "./plugins/harness/opencode-go-tuning",
     "custom-plugin"
   ])
   assert.ok(

@@ -136,6 +136,7 @@
   "plugins": [
     "./plugins/harness/qwen-oauth",
     "opencode-kimi-v2",
-    "./plugins/harness/kimi-tuning"
+    "./plugins/harness/kimi-tuning",
+    "./plugins/harness/opencode-go-tuning"
   ]
 }
