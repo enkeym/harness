@@ -84,7 +84,6 @@ export async function registerLoopGuard(
         digests: new Map(),
         repeats: new Map(),
         resume: false,
-        sessionReminder: false,
         dsmlLoopWarned: false
       })
     return sessions.get(sessionID)
@@ -118,23 +117,6 @@ export async function registerLoopGuard(
             {
               type: "text",
               text: `Harness DSML guard: ${repeated.length} repeated assistant block(s) contained raw DSML tool-call markup instead of an executed tool call. Do not copy that markup. Emit the tool call through the tool interface, or answer in prose if the tool result is already available.`
-            }
-          ]
-        })
-      }
-    }
-    if (!s.sessionReminder && Array.isArray(event.messages)) {
-      let assistantMessages = 0
-      for (const message of event.messages)
-        if (message?.role === "assistant") assistantMessages++
-      if (assistantMessages >= policy.reminderMessages) {
-        s.sessionReminder = true
-        event.messages.push({
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Harness session guard: ${assistantMessages} assistant messages in this session. One task is one session: deliver the verified state now and start the next task in a new session.`
             }
           ]
         })
