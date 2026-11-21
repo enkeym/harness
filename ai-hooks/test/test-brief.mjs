@@ -7,6 +7,7 @@ import path from "node:path"
 import { registerBrief } from "../../opencode/brief.mjs"
 import { registerHandoff } from "../../opencode/handoff.mjs"
 import { registerContextCache } from "../../opencode/evidence-cache.mjs"
+import { checkpointHeading, planKey, remainingHeading, replaceSection } from "../../opencode/plan-store.mjs"
 import { finishCompaction } from "../../opencode/session-compaction.mjs"
 import { readBriefPolicy } from "../bin/brief-policy.mjs"
 
@@ -87,6 +88,92 @@ test("brief compacts the source session and keeps the plan bound to it", async t
   assert.equal(f.stored.get("brief:source").pending, undefined)
   await brief.settle("source", true)
   assert.equal(f.compacted.length, 2)
+})
+
+test("implementation transition preserves the existing plan checkpoint and remaining steps", async t => {
+  const f = fixture(t)
+  const brief = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+  await f.call("source", "plan")
+  await brief.settle("source", true)
+  const planFile = path.join(f.directory, ".opencode/plans", fs.readdirSync(path.join(f.directory, ".opencode/plans"))[0])
+  const before = replaceSection(
+    replaceSection(fs.readFileSync(planFile, "utf8"), "## Checkpoint", "- Текущий шаг: 7 — edit module"),
+    "## Оставшиеся шаги",
+    "### 7. Edit module\n\nRed evidence: preserved by the plan file"
+  )
+  fs.writeFileSync(planFile, before)
+  f.finish()
+
+  await f.call("source", "implement", "Executable plan: a different handoff summary")
+  await brief.settle("source", true)
+
+  const after = fs.readFileSync(planFile, "utf8")
+  assert.equal(after, before)
+  assert.equal(f.prompts.at(-1).sessionID, "source")
+  assert.match(f.prompts.at(-1).text, /Task plan: \.opencode\/plans\//)
+  assert.doesNotMatch(f.prompts.at(-1).text, /Red evidence: preserved by the plan file/)
+  assert.doesNotMatch(f.prompts.at(-1).text, /a different handoff summary/)
+  assert.equal(f.stored.get("brief:source").stage, "implementation")
+})
+
+test("planning instructions keep handoff path only", async t => {
+  const f = fixture(t)
+  const brief = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+  await f.call("source", "plan")
+  await brief.settle("source", true)
+  const { file } = f.stored.get(planKey("source"))
+  fs.writeFileSync(file, replaceSection(fs.readFileSync(file, "utf8"), remainingHeading, "Run the failing test"))
+
+  const event = { sessionID: "source", tools: { brief_transition: {} }, system: [] }
+  await f.hooks.context(event)
+
+  const instructions = event.system.map(block => block.text).join("\n")
+  assert.ok(instructions.includes(path.relative(f.directory, file)))
+  assert.match(instructions, /only when implementation is authorized/)
+  assert.match(instructions, /pass only (?:a short readiness signal or )?the plan path (?:or a short readiness signal )?in the Handoff/i)
+  assert.match(instructions, /do not repeat (?:them|the objective, decisions, checkpoint and remaining steps) in the Handoff/i)
+  assert.doesNotMatch(instructions, /Run the failing test/)
+})
+
+test("fallback advances the generated checkpoint", async t => {
+  for (const objective of ["Goal: fix module", "## Fix module\n\nInvestigate the regression"]) {
+    await t.test(objective.split("\n")[0], async t => {
+      const f = fixture(t)
+      const brief = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+      await f.call("source", "plan", objective)
+      await brief.settle("source", true)
+      const { file } = f.stored.get(planKey("source"))
+      const original = fs.readFileSync(file, "utf8")
+      if (objective.startsWith("##"))
+        fs.writeFileSync(file, replaceSection(original, remainingHeading, ""))
+      f.finish()
+
+      const firstStep = "Run the failing checkpoint test"
+      await f.call("source", "implement", firstStep)
+      await brief.settle("source", true)
+
+      const lines = fs.readFileSync(file, "utf8").split("\n")
+      assert.equal(lines[lines.indexOf(checkpointHeading) + 2], `- Текущий шаг: 1 — ${firstStep}`)
+      assert.equal(lines[lines.indexOf(remainingHeading) + 2], firstStep)
+    })
+  }
+})
+
+test("fallback preserves an authored first checkpoint", async t => {
+  const f = fixture(t)
+  const brief = await registerBrief(f.context, await registerHandoff(f.context), f.policy)
+  await f.call("source", "plan")
+  await brief.settle("source", true)
+  const { file } = f.stored.get(planKey("source"))
+  const authored = replaceSection(fs.readFileSync(file, "utf8"), checkpointHeading, "- Текущий шаг: 1 — Inspect the fixture")
+  fs.writeFileSync(file, authored)
+  f.finish()
+
+  const remaining = "Run the failing checkpoint test"
+  await f.call("source", "implement", remaining)
+  await brief.settle("source", true)
+
+  assert.equal(fs.readFileSync(file, "utf8"), replaceSection(authored, remainingHeading, remaining))
 })
 
 test("brief preserves observed TokenSave evidence through planning and implementation without an agent save", async t => {

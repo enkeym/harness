@@ -471,6 +471,8 @@ test("compaction resumes once with cached ranges and skills without carrying the
   assert.match(resume, /Cached context/)
   assert.match(resume, /Cached ranges: source\.mjs:2-3/)
   assert.match(resume, /Active skills before compaction: react-frontend/)
+  assert.match(resume, /Reload only a skill whose text is missing from the current context or has changed/)
+  assert.doesNotMatch(resume, /Do not reload them unless the step changes stack/)
   assert.match(
     resume,
     /Resume protocol: continue the next unfinished step of the plan within 12 tool calls/

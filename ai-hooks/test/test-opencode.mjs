@@ -806,6 +806,28 @@ export default { id: "harness", setup: async context => {
     await wait(() => requests.slice(start).some((value) => value.tools?.length))
     const primary = requests.slice(start).filter((value) => value.tools?.length)
     const system = primary.map(instructionText).join("\n")
+    if (agent === "build") {
+      const request = primary[0]
+      const names = ["read", "grep", "glob", "shell", "skill", "execute"]
+      const descriptions = new Map(request.tools.map((tool) => {
+        const { name, description } = tool.function ?? tool
+        return [name, description]
+      }))
+      const bytes = Object.fromEntries(names.map((name) => {
+        const description = descriptions.get(name)
+        assert.ok(description, `missing ${name} description in the provider request`)
+        return [name, Buffer.byteLength(description)]
+      }))
+      t.diagnostic(`routing bytes (build): ${JSON.stringify({ instructions: Buffer.byteLength(instructionText(request)), ...bytes })}`)
+      for (const name of names) {
+        const description = descriptions.get(name)
+        assert.ok(!/call tokensave_status|demonstrated MCP\/coverage limitation/.test(description), `${name} repeats indexed retrieval policy`)
+        if (["read", "grep", "glob"].includes(name))
+          assert.match(description, /^For indexed project files, follow the TokenSave\/RAGSave route/)
+      }
+      assert.ok(!system.includes("A known path, file extension, handoff, continuation, simple task"), "adapter repeats indexed retrieval policy")
+    }
+    assert.ok(!system.includes("A test that was already green is compatibility coverage"), `${agent} includes the task-brief body`)
     assert.match(system, /Harness skill instructions:/, agent)
     assert.equal(
       primary.some((value) =>
@@ -843,20 +865,12 @@ export default { id: "harness", setup: async context => {
     )
     assert.match(system, /load it with `\{"id":"opencode"\}`/, agent)
     assert.match(system, /never repeat an unchanged invalid ID/, agent)
-    assert.match(system, /tokensave_search/, agent)
-    assert.match(system, /rag_search/, agent)
-    assert.match(system, /outside the index/, agent)
-    assert.match(
-      system,
-      /Before a fallback, state the specific failing MCP call/,
-      agent
-    )
-    assert.match(
-      system,
-      /A missing optional tool does not make the other MCP tools unavailable/,
-      agent
-    )
-    assert.match(system, /handoff, continuation, simple task/, agent)
+    assert.match(system, /discover MCP schemas with `search` inside `execute`/, agent)
+    assert.match(system, /without one use local tools and do not load that skill/, agent)
+    assert.match(system, /include MCP discovery and `tokensave_status`/, agent)
+    assert.match(system, /Use MCP for indexed project files, including known paths, documentation and continuation/, agent)
+    assert.match(system, /Before fallback, state the affected scope and the evidence/, agent)
+    assert.match(system, /try a direct indexed read for a known file/, agent)
     const summaryStart = requests.length
     await api(`/session/${session.data.id}/compact`, {})
     await wait(() =>
@@ -1221,20 +1235,12 @@ export default { id: "harness", setup: async context => {
   for (const name of ["read", "grep", "glob", "shell"]) {
     assert.match(
       nativeTools.find((tool) => tool.name === name)?.description ?? "",
-      /^For indexed project files, search\/read through TokenSave/
-    )
-    assert.match(
-      nativeTools.find((tool) => tool.name === name)?.description ?? "",
-      /Without an index, do not load tokensave-routing or call MCP/
+      /^For indexed project files, follow the TokenSave\/RAGSave route/
     )
   }
   assert.match(
     nativeTools.find((tool) => tool.name === "skill")?.description ?? "",
     /Load only a skill whose described scope this task actually touches/
-  )
-  assert.match(
-    nativeTools.find((tool) => tool.name === "skill")?.description ?? "",
-    /Load tokensave-routing only when the project root has an index/
   )
   assert.match(
     nativeTools.find((tool) => tool.name === "skill")?.description ?? "",

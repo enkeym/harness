@@ -14,6 +14,7 @@ export const planKey = (sessionID) => `plan:${sessionID}`
 export const planIndexKey = (id) => `plan-index:${id}`
 export const checkpointHeading = "## Checkpoint"
 export const remainingHeading = "## Оставшиеся шаги"
+const objectiveHeading = "## Objective"
 
 export const planPath = (plan) => path.relative(plan.root, plan.file)
 
@@ -47,7 +48,7 @@ const slug = (text) =>
     .slice(0, 32)
 
 const objectiveSection = (text) =>
-  /^##\s/m.test(text) ? text.trim() : `## Objective\n\n${text.trim()}`
+  /^##\s/m.test(text) ? text.trim() : `${objectiveHeading}\n\n${text.trim()}`
 
 const indexPlan = (context, plan) =>
   context.storage.set(planIndexKey(plan.id), {
@@ -59,24 +60,44 @@ const indexPlan = (context, plan) =>
     updatedAt: plan.updatedAt
   })
 
+const sectionRange = (lines, heading) => {
+  const start = lines.findIndex((line) => line.trimEnd() === heading)
+  if (start === -1) return null
+  const next = lines.findIndex(
+    (line, index) => index > start && /^##\s/.test(line)
+  )
+  return { start, end: next === -1 ? lines.length : next }
+}
+
+const sectionContent = (text, heading) => {
+  const lines = text.replace(/\r\n/g, "\n").split("\n")
+  const range = sectionRange(lines, heading)
+  return range
+    ? lines.slice(range.start + 1, range.end).join("\n").trim()
+    : ""
+}
+
+const initialCheckpoint = (text) => {
+  const lines = text.replace(/\r\n/g, "\n").split("\n")
+  const range = sectionRange(lines, checkpointHeading)
+  const heading = range?.start === 0 ? lines[range.end]?.trimEnd() : undefined
+  if (!heading || heading === remainingHeading || heading === checkpointHeading)
+    return null
+  const objective = heading === objectiveHeading ? sectionContent(text, heading) : heading
+  return objective ? checkpointFor(objective) : null
+}
+
 export function replaceSection(text, heading, content) {
   const lines = text.replace(/\r\n/g, "\n").split("\n")
-  const start = lines.findIndex((line) => line.trimEnd() === heading)
+  const range = sectionRange(lines, heading)
   const block = [heading, "", ...content.trim().split("\n")]
-  if (start === -1) {
+  if (!range) {
     const base = lines.join("\n").replace(/\n+$/, "")
     return `${base ? `${base}\n\n` : ""}${block.join("\n")}\n`
   }
-  let end = lines.length
-  for (let index = start + 1; index < lines.length; index++) {
-    if (/^##\s/.test(lines[index])) {
-      end = index
-      break
-    }
-  }
-  const tail = lines.slice(end)
+  const tail = lines.slice(range.end)
   return [
-    ...lines.slice(0, start),
+    ...lines.slice(0, range.start),
     ...block,
     ...(tail.length ? [""] : []),
     ...tail
@@ -189,15 +210,19 @@ export async function updatePlan(
 ) {
   const plan = await readPlan(context, sessionID)
   if (!plan) return null
-  let text = await fs.readFile(plan.file, "utf8")
-  if (remaining?.trim())
-    text = replaceSection(text, remainingHeading, remaining)
-  text = replaceSection(
-    text,
-    checkpointHeading,
-    checkpointFor(checkpoint ?? remaining ?? "")
-  )
-  await writePrivateText(plan.file, text)
+  if (remaining?.trim() || checkpoint?.trim()) {
+    const original = await fs.readFile(plan.file, "utf8")
+    const current = sectionContent(original, checkpointHeading)
+    const fillsRemaining = remaining?.trim() && !sectionContent(original, remainingHeading)
+    let text = original
+    if (fillsRemaining)
+      text = replaceSection(text, remainingHeading, remaining)
+    if (checkpoint?.trim())
+      text = replaceSection(text, checkpointHeading, checkpointFor(checkpoint))
+    else if (!current || (fillsRemaining && plan.ownership === "managed" && current === initialCheckpoint(original)))
+      text = replaceSection(text, checkpointHeading, checkpointFor(remaining ?? ""))
+    if (text !== original) await writePrivateText(plan.file, text)
+  }
   const updated = { ...plan, stage, updatedAt: Date.now() }
   await context.storage.set(planKey(sessionID), updated)
   await indexPlan(context, updated)

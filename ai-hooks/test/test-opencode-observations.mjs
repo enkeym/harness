@@ -26,6 +26,20 @@ test("observations keep unknown prices and usage differences without counting re
   assert.doesNotMatch(JSON.stringify(record), /private reasoning|secret output|private.txt/)
 })
 
+test("observations keep stop, length and missing finish distinct", () => {
+  const messages = [
+    { ...message("msg_length"), finish: "length" },
+    { ...message("msg_stop"), finish: "stop" },
+    message("msg_missing")
+  ]
+  const record = summarizeSession({ info: info(), messages }, "2.2.5")
+  const finish = new Map(record.sequence.map((step) => [step.id, step.finish]))
+
+  assert.equal(finish.get("msg_length"), "length")
+  assert.equal(finish.get("msg_stop"), "stop")
+  assert.equal(finish.get("msg_missing"), null)
+})
+
 test("observations reject unsupported schemas and duplicate messages instead of plausible totals", () => {
   assert.throws(() => summarizeSession({ info: info(), messages: [message(), message()] }, "2.2.5"), /Duplicate/)
   assert.throws(() => summarizeSession({ info: info(), messages: [message()] }, "1.0.0"), /Unsupported/)

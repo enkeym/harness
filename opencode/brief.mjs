@@ -47,9 +47,6 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
           id: randomUUID(),
           plan: { id: plan.id, path: planPath(plan) },
           model: originalModel,
-          instructions: stage === "plan"
-            ? `Write the executable plan to ${planPath(plan)} and keep its checkpoint and remaining steps current. When an authorized implementation plan is ready, call brief_transition with stage=implement and a compact Handoff containing only the remaining steps with their decisions and contracts, not the completed parts of the plan; the plan file keeps them. Then end your turn.`
-            : "Restore the plan reference. The plan file is authoritative for the objective, decisions, checkpoint and remaining steps; do not read or repeat completed parts. Start with the first unfinished step, read only the contracts or ranges it names, inspect the working tree, and continue. Do not reload already-loaded skills or repeat the brief for an adequate plan. No other worker.",
           brief: {
             stage: next,
             originalModel,
@@ -79,7 +76,7 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
       event.system.push({ type: "text", text: "A brief transfer is queued or delivered. End this turn immediately. Do not perform more work in this session." })
     } else if (state.stage === "planning") {
       const plan = await readPlan(context, event.sessionID)
-      event.system.push({ type: "text", text: `${planningInstructions}${plan ? ` Task plan: ${planPath(plan)}. Keep the objective, decisions, checkpoint and remaining steps there; do not repeat them in the Handoff.` : ""} Use brief_transition(stage=implement) only when implementation is authorized and the plan is ready. End analysis-only tasks here.` })
+      event.system.push({ type: "text", text: `${planningInstructions}${plan ? ` Task plan: ${planPath(plan)}. Keep the objective, decisions, checkpoint and remaining steps there; do not repeat them in the Handoff.` : ""} Use brief_transition(stage=implement) only when implementation is authorized and the plan is ready. Pass only the plan path in the Handoff for a saved plan; include the remaining steps only as a fallback if they could not be saved.` })
     }
   })
   return {

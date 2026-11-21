@@ -69,6 +69,13 @@ test("only a finished assistant reply counts", () => {
   )
 })
 
+test("a truncated length finish is not retried even without text", () => {
+  const partial = { ...say("a1", "Partial answer"), finish: "length" }
+  const empty = { ...reasoning("a2"), finish: "length" }
+  assert.equal(emptyCompletion([user("u1", "x"), partial]), null)
+  assert.equal(emptyCompletion([user("u1", "x"), empty]), null)
+})
+
 test("an empty reply gets one continuation notice", async () => {
   const f = fixture([user("u1", "x"), reasoning("a1")])
   const guard = await registerEmptyResponseGuard(f.context)

@@ -144,7 +144,7 @@ export async function registerLoopGuard(
           reference ||
             "No cached ranges. Do not rebuild the plan; use the compaction summary and the plan file.",
           s.skills.size
-            ? `Active skills before compaction: ${[...s.skills].join(", ")}. Do not reload them unless the step changes stack.`
+            ? `Active skills before compaction: ${[...s.skills].join(", ")}. Reload only a skill whose text is missing from the current context or has changed; a name alone does not prove its text is loaded.`
             : "",
           s.edited
             ? `Resume protocol: make the first source edit within ${policy.resumeEditBudget} tool calls. Do not call tokensave_read with mode="full". Read only named ranges you still need.`

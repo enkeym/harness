@@ -90,6 +90,19 @@ test("the last turn stops at the last user message", () => {
   assert.equal(tools, true)
 })
 
+test("a menu from the previous user turn does not resolve the current question", () => {
+  const turn = lastTurn([
+    user("first", "x"),
+    tool("question"),
+    user("second", "y"),
+    say("Какую схему сохранить?")
+  ])
+
+  assert.equal(turn.human, "second")
+  assert.equal(turn.menu, false)
+  assert.equal(turn.text, "Какую схему сохранить?")
+})
+
 test("a text question after the turn resumes the session once", async () => {
   const { context, notices } = fixture(turn("Починил.\n\nКоммитить сейчас?"))
   const guard = await registerQuestionGuard(context)
