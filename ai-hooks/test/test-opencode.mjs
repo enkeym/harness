@@ -1989,14 +1989,17 @@ test("OpenCode handles one execution event once across plugin instances", async 
     const stopSecond = await plugin.setup(context());
     const settle = async (min = 0) => {
       let last = -1;
-      const deadline = Date.now() + 5000;
-      while (Date.now() < deadline && (calls().length < min || last !== calls().length)) {
-        last = calls().length;
+      let stable = 0;
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline && (calls().length < min || stable < 3)) {
+        const count = calls().length;
+        stable = count === last ? stable + 1 : 0;
+        last = count;
         await setTimeout(150);
       }
       return calls().length;
     };
-    const startup = await settle();
+    const startup = await settle(4);
     fs.writeFileSync(process.env.FAKE_INDEXER_CALLS, "");
     release();
     await settle(2);
