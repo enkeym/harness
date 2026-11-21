@@ -7,6 +7,7 @@
     "variant.cycle": "alt+o,alt+щ",
     "open.menu": "alt+i,alt+ш",
     "command.palette.show": "ctrl+p,ctrl+з",
-    "model.list": "alt+p,alt+з,<leader>m"
+    "model.list": "alt+p,alt+з,<leader>m",
+    "usage.show": "alt+u,alt+г"
   }
 }

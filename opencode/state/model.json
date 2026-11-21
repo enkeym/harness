@@ -1,0 +1,28 @@
+{
+  "favorite": [],
+  "variant": {
+    "opencode/deepseek-v4.1-flash-free": "max",
+    "qwen-deepseek/deepseek-flash": "xhigh",
+    "qwen-deepseek/deepseek-v4-pro": "xhigh",
+    "qwen-apimira/qwen/qwen3.8-max": "xhigh",
+    "opencode/flint-40b-free": "max",
+    "deepseek/deepseek-flash": "default",
+    "apimira/qwen/qwen3.8-max": "xhigh",
+    "deepseek/deepseek-v4-pro": "high",
+    "openai/gpt-6-sol": "low",
+    "kimi-for-coding-oauth/kimi-for-coding": "low",
+    "kimi-for-coding-oauth/k3.1-pro": "high",
+    "kimi-for-coding-oauth/kimi-for-coding-highspeed": "medium",
+    "kimi-for-coding-oauth/k3.1-pro-highspeed": "high",
+    "openai/gpt-6-luna": "high",
+    "openai/gpt-6.1-sol": "high",
+    "openai/gpt-5.6-sol": "high",
+    "qwen/qwen3.8-flash": "low",
+    "qwen/qwen4-max": "high",
+    "qwen/qwen3.8-max": "high",
+    "openai/gpt-6.1-terra": "low",
+    "openai/gpt-6.2-sol": "high",
+    "opencode/deepseek-v4.1-flash": "low",
+    "opencode-go/deepseek-v4.1-flash": "high"
+  }
+}

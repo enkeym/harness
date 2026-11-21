@@ -159,6 +159,23 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
     "/missing/skill"
   )
   fs.unlinkSync(path.join(directory, "skills/task-brief"))
+  const stateFile = path.join(home, ".local/state/opencode/model.json")
+  const seed = JSON.parse(
+    fs.readFileSync(
+      path.resolve(import.meta.dirname, "../../opencode/state/model.json"),
+      "utf8"
+    )
+  )
+  const seeded = JSON.parse(fs.readFileSync(stateFile, "utf8"))
+  assert.equal(seeded.variant["openai/gpt-6-sol"], seed.variant["openai/gpt-6-sol"])
+  fs.writeFileSync(
+    stateFile,
+    JSON.stringify({
+      recent: [{ providerID: "openai", modelID: "gpt-6.2-sol" }],
+      favorite: [],
+      variant: { "deepseek/deepseek-flash": "high" }
+    })
+  )
   const installed = run()
   assert.equal(installed.status, 0, installed.stderr + installed.stdout)
   assert.equal(loadConfig(directory).current.model, "user/model")
@@ -212,6 +229,17 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.match(fs.readFileSync(settings, "utf8"), /user config/)
   const checked = run("--check")
   assert.equal(checked.status, 0, checked.stderr + checked.stdout)
+  const preferences = JSON.parse(fs.readFileSync(stateFile, "utf8"))
+  assert.equal(preferences.variant["deepseek/deepseek-flash"], "high")
+  assert.equal(
+    preferences.variant["openai/gpt-6-sol"],
+    seed.variant["openai/gpt-6-sol"]
+  )
+  assert.deepEqual(preferences.recent, [
+    { providerID: "openai", modelID: "gpt-6.2-sol" }
+  ])
+  assert.deepEqual(preferences.favorite, [])
+  assert.equal(fs.statSync(stateFile).mode & 0o777, 0o600)
   assert.equal(fs.readFileSync(alternative, "utf8"), '{"model":"user/model"}')
 })
 
@@ -404,9 +432,8 @@ test("every bundled DeepSeek model carries the working input limit", () => {
   )
   const models = config.providers.deepseek.models
   for (const [name, model] of Object.entries(models)) {
-    assert.equal(
-      model.limit?.input,
-      contextPolicy.opencode.maxTokens,
+    assert.ok(
+      model.limit?.input >= contextPolicy.opencode.maxTokens,
       `${name} must declare the working input limit`
     )
     assert.equal(

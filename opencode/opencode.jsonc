@@ -17,7 +17,7 @@
         "deepseek-v4-pro": {
           "name": "deepseek-v4-pro",
           "modelID": "deepseek-v4-pro",
-          "limit": { "input": 120000, "output": 8192 },
+          "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high"] }
           },
@@ -31,7 +31,7 @@
         "deepseek-flash": {
           "name": "deepseek-flash",
           "modelID": "deepseek-flash",
-          "limit": { "input": 120000, "output": 8192 },
+          "limit": { "input": 150000, "output": 8192 },
           "capabilities": {
             "reasoning": { "supported": true, "effort": ["low", "high"] }
           },
@@ -44,9 +44,46 @@
         }
       }
     },
+    "kimi-for-coding-oauth": {
+      "settings": { "reasoningEffort": "low" },
+      "models": {
+        "k3.1-pro-highspeed": { "disabled": true }
+      }
+    },
     "openai": {
       "settings": { "reasoningEffort": "low" },
       "models": {
+        "gpt-6-luna": {
+          "name": "gpt-6-luna",
+          "modelID": "gpt-6-luna",
+          "limit": { "input": 250000, "output": 8192 },
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high"] }
+          },
+          "settings": {
+            "reasoningEffort": "low",
+            "body": {
+              "reasoning": { "effort": "low", "summary": "auto" },
+              "max_output_tokens": 8192
+            }
+          },
+          "variants": [
+            {
+              "id": "low",
+              "body": {
+                "reasoning": { "effort": "low", "summary": "auto" },
+                "max_output_tokens": 8192
+              }
+            },
+            {
+              "id": "high",
+              "body": {
+                "reasoning": { "effort": "high", "summary": "auto" },
+                "max_output_tokens": 8192
+              }
+            }
+          ]
+        },
         "gpt-6-sol": {
           "name": "gpt-6-sol",
           "modelID": "gpt-6-sol",
@@ -108,7 +145,143 @@
               }
             }
           ]
-        }
+        },
+        "gpt-6.1-terra": {
+          "name": "gpt-6.1-terra",
+          "modelID": "gpt-6.1-terra",
+          "limit": { "input": 250000, "output": 8192 },
+          "capabilities": {
+            "reasoning": { "supported": true, "effort": ["low", "high"] }
+          },
+          "settings": {
+            "reasoningEffort": "low",
+            "body": {
+              "reasoning": { "effort": "low", "summary": "auto" },
+              "max_output_tokens": 8192
+            }
+          },
+          "variants": [
+            {
+              "id": "low",
+              "body": {
+                "reasoning": { "effort": "low", "summary": "auto" },
+                "max_output_tokens": 8192
+              }
+            },
+            {
+              "id": "high",
+              "body": {
+                "reasoning": { "effort": "high", "summary": "auto" },
+                "max_output_tokens": 8192
+              }
+            }
+          ]
+        },
+        "chat-latest": { "disabled": true },
+        "gpt-4.1": { "disabled": true },
+        "gpt-4.1-fast": { "disabled": true },
+        "gpt-4.1-mini": { "disabled": true },
+        "gpt-4.1-mini-fast": { "disabled": true },
+        "gpt-4o": { "disabled": true },
+        "gpt-4o-2024-08-06": { "disabled": true },
+        "gpt-4o-2024-11-20": { "disabled": true },
+        "gpt-4o-fast": { "disabled": true },
+        "gpt-4o-mini": { "disabled": true },
+        "gpt-4o-mini-fast": { "disabled": true },
+        "gpt-5": { "disabled": true },
+        "gpt-5-fast": { "disabled": true },
+        "gpt-5-flex": { "disabled": true },
+        "gpt-5-mini": { "disabled": true },
+        "gpt-5-mini-fast": { "disabled": true },
+        "gpt-5-mini-flex": { "disabled": true },
+        "gpt-5-nano": { "disabled": true },
+        "gpt-5-nano-flex": { "disabled": true },
+        "gpt-5-pro": { "disabled": true },
+        "gpt-5-search-api": { "disabled": true },
+        "gpt-5.1": { "disabled": true },
+        "gpt-5.1-fast": { "disabled": true },
+        "gpt-5.1-flex": { "disabled": true },
+        "gpt-5.2": { "disabled": true },
+        "gpt-5.2-fast": { "disabled": true },
+        "gpt-5.2-flex": { "disabled": true },
+        "gpt-5.2-pro": { "disabled": true },
+        "gpt-5.3-codex": { "disabled": true },
+        "gpt-5.3-codex-fast": { "disabled": true },
+        "gpt-5.3-codex-spark": { "disabled": true },
+        "gpt-5.4": { "disabled": true },
+        "gpt-5.4-fast": { "disabled": true },
+        "gpt-5.4-flex": { "disabled": true },
+        "gpt-5.4-mini": { "disabled": true },
+        "gpt-5.4-mini-fast": { "disabled": true },
+        "gpt-5.4-mini-flex": { "disabled": true },
+        "gpt-5.4-nano": { "disabled": true },
+        "gpt-5.4-nano-flex": { "disabled": true },
+        "gpt-5.4-pro": { "disabled": true },
+        "gpt-5.5-flex": { "disabled": true },
+        "gpt-5.5-pro": { "disabled": true },
+        "gpt-5.6": { "disabled": true },
+        "gpt-5.6-cyber": { "disabled": true },
+        "gpt-5.6-fast": { "disabled": true },
+        "gpt-5.6-luna-flex": { "disabled": true },
+        "gpt-5.6-luna-pro": { "disabled": true },
+        "gpt-5.6-pro": { "disabled": true },
+        "gpt-5.6-sol-flex": { "disabled": true },
+        "gpt-5.6-sol-pro": { "disabled": true },
+        "gpt-5.6-terra-flex": { "disabled": true },
+        "gpt-5.6-terra-pro": { "disabled": true },
+        "gpt-6-astra-flex": { "disabled": true },
+        "gpt-6-astra-pro": { "disabled": true },
+        "gpt-6-astra-ultrafast": { "disabled": true },
+        "gpt-6-cyber": { "disabled": true },
+        "gpt-6-luna-flex": { "disabled": true },
+        "gpt-6-luna-pro": { "disabled": true },
+        "gpt-6-sol-flex": { "disabled": true },
+        "gpt-6-sol-pro": { "disabled": true },
+        "gpt-6.1-sol-flex": { "disabled": true },
+        "gpt-6.1-sol-pro": { "disabled": true },
+        "gpt-6.1-sol-ultrafast": { "disabled": true },
+        "gpt-6.1-terra-flex": { "disabled": true },
+        "gpt-6.1-terra-pro": { "disabled": true },
+        "gpt-audio-1.5": { "disabled": true },
+        "gpt-daybreak-blue-latest": { "disabled": true },
+        "gpt-daybreak-red-latest": { "disabled": true },
+        "o3": { "disabled": true },
+        "o3-fast": { "disabled": true },
+        "o3-flex": { "disabled": true },
+        "o3-pro": { "disabled": true }
+      }
+    },
+    "opencode": {
+      "models": {
+        "claude-fable-5-2": { "disabled": true },
+        "claude-haiku-5-5": { "disabled": true },
+        "claude-opus-5-5": { "disabled": true },
+        "claude-sonnet-5-5": { "disabled": true },
+        "deepseek-v4-pro": { "disabled": true },
+        "deepseek-v4.1-flash": { "disabled": true },
+        "gemini-3.5-flash-lite": { "disabled": true },
+        "gemini-3.8-flash": { "disabled": true },
+        "gemini-4-neon": { "disabled": true },
+        "glm-5.3": { "disabled": true },
+        "glm-5.3-flash": { "disabled": true },
+        "gpt-5.3-codex": { "disabled": true },
+        "gpt-5.3-codex-spark": { "disabled": true },
+        "gpt-5.4-mini": { "disabled": true },
+        "gpt-5.4-nano": { "disabled": true },
+        "gpt-5.5": { "disabled": true },
+        "gpt-5.5-pro": { "disabled": true },
+        "gpt-5.6-terra": { "disabled": true },
+        "gpt-6-luna": { "disabled": true },
+        "gpt-6.2-astra": { "disabled": true },
+        "gpt-6.2-sol": { "disabled": true },
+        "grok-4.7": { "disabled": true },
+        "grok-build-0.1": { "disabled": true },
+        "kimi-k2.7-code": { "disabled": true },
+        "kimi-k3": { "disabled": true },
+        "minimax-m3": { "disabled": true },
+        "mistral-large-4": { "disabled": true },
+        "muse-ember-1.0": { "disabled": true },
+        "qwen3.8-flash": { "disabled": true }
       }
     }
   },

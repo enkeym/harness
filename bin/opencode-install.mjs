@@ -14,6 +14,7 @@ import {
 } from "../opencode/config.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 import { configureModelRouting, migrateBundledModels } from "../opencode/model-routing.mjs"
+import { writePrivateJSON } from "../opencode/local-state.mjs"
 
 const root = path.resolve(import.meta.dirname, "..")
 const home = os.homedir()
@@ -83,6 +84,30 @@ if (!isDeepStrictEqual(current, desired) || !fs.existsSync(settings)) {
     drift++
   } else {
     writeConfig(settings, desired)
+  }
+}
+const stateFile = path.join(
+  process.env.XDG_STATE_HOME || path.join(home, ".local/state"),
+  "opencode/model.json"
+)
+const seed = JSON.parse(fs.readFileSync(path.join(root, "opencode/state/model.json"), "utf8"))
+let state = {}
+try {
+  state = JSON.parse(fs.readFileSync(stateFile, "utf8"))
+} catch (error) {
+  if (error.code !== "ENOENT") throw error
+}
+const preferences = {
+  ...state,
+  variant: { ...seed.variant, ...state.variant },
+  favorite: state.favorite?.length ? state.favorite : seed.favorite
+}
+if (!isDeepStrictEqual(state, preferences)) {
+  if (check) {
+    console.error("✗ OpenCode model preferences")
+    drift++
+  } else {
+    await writePrivateJSON(stateFile, preferences)
   }
 }
 const links = [
