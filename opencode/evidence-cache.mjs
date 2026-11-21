@@ -11,7 +11,7 @@ import {
   sessionExists,
   writePrivateJSON
 } from "./local-state.mjs"
-import { ensurePlan, planPath, prunePlans, readPlan } from "./plan-store.mjs"
+import { ensurePlan, planTarget, prunePlans, readPlan } from "./plan-store.mjs"
 
 export const contextCacheKey = (sessionID) => `context-cache:${sessionID}`
 export const legacyContextCacheKey = (sessionID) => `task-context:${sessionID}`
@@ -98,7 +98,7 @@ export async function registerContextCache(context) {
     await writePrivateJSON(fileFor(id), {
       version: 2,
       root,
-      plan: plan ? planPath(plan) : null,
+      plan: plan ? planTarget(plan, root) : null,
       sources
     })
     await context.storage.set(contextCacheKey(sessionID), id)

@@ -61,6 +61,33 @@ test("context cache survives a transfer and restores only selected unchanged evi
   assert.equal(fs.statSync(directory).mode & 0o777, 0o700)
 })
 
+test("context cache written after a move references the plan by an absolute path", async t => {
+  const f = await fixture(t)
+  const plan = await createPlan(f.context, {
+    sessionID: "source",
+    directory: f.directory,
+    objective: "Managed plan stays the single source after a move",
+    stage: "implementation"
+  })
+  await f.save()
+  const original = path.join(f.directory, ".opencode/context-cache")
+  const before = JSON.parse(fs.readFileSync(path.join(original, fs.readdirSync(original)[0]), "utf8"))
+  assert.equal(before.plan, path.relative(f.directory, plan.file))
+
+  const moved = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "harness-evidence-moved-")))
+  t.after(() => fs.rmSync(moved, { recursive: true, force: true }))
+  fs.writeFileSync(path.join(moved, "source.mjs"), "first\nsecond\nthird\n")
+  f.context.location.directory = moved
+  await registerContextCache(f.context)
+
+  await f.save()
+
+  const directory = path.join(moved, ".opencode/context-cache")
+  const saved = JSON.parse(fs.readFileSync(path.join(directory, fs.readdirSync(directory)[0]), "utf8"))
+  assert.equal(saved.root, moved)
+  assert.equal(saved.plan, plan.file)
+})
+
 test("context cache explains oversized restore ranges and lists cached ranges without a checkpoint", async t => {
   const f = await fixture(t)
   await f.save()

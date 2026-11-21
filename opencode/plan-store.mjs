@@ -17,11 +17,13 @@ export const remainingHeading = "## Оставшиеся шаги"
 
 export const planPath = (plan) => path.relative(plan.root, plan.file)
 
-export const planReference = (plan, directory) => {
+export const planTarget = (plan, directory) => {
   const root = typeof directory === "string" ? path.resolve(directory) : null
-  const target = root === plan.root ? planPath(plan) : plan.file
-  return `Task plan: ${target}\nThe plan file is the single source of the objective, decisions, checkpoint and remaining steps. Read it and continue the first unfinished step there. Do not restate its content in this message.`
+  return root === plan.root ? planPath(plan) : plan.file
 }
+
+export const planReference = (plan, directory) =>
+  `Task plan: ${planTarget(plan, directory)}\nThe plan file is the single source of the objective, decisions, checkpoint and remaining steps. Read it and continue the first unfinished step there. Do not restate its content in this message.`
 
 const firstLine = (text) =>
   text
