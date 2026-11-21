@@ -1601,6 +1601,7 @@ function executionSandbox(t) {
     "loop-guard.mjs",
     "question-guard.mjs",
     "empty-response.mjs",
+    "first-response.mjs",
     "output-bounds.mjs",
     "handoff.mjs",
     "handoff-rpc.mjs",
