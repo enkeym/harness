@@ -20,6 +20,7 @@ import { registerContextCache } from "./evidence-cache.mjs"
 import { registerLoopGuard } from "./loop-guard.mjs"
 import { registerQuestionGuard } from "./question-guard.mjs"
 import { registerEmptyResponseGuard } from "./empty-response.mjs"
+import { registerFirstResponse } from "./first-response.mjs"
 import { collectObservations, observationAPI } from "./observations.mjs"
 import {
   refreshCostReport,
@@ -257,6 +258,7 @@ export default {
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
     const emptyResponseGuard = await registerEmptyResponseGuard(context)
+    await registerFirstResponse(context, directory)
     const sanitizeHttpResponse = (event) => {
       if (event.kind && event.kind !== "primary") return
       if (!event.response.body) return
