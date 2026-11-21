@@ -180,6 +180,11 @@ test("the plan reference carries the path without the plan body", () => {
     /Task plan: \.opencode\/plans\/user-plan\.md/,
     "a trailing slash is the same project root"
   )
+  assert.match(
+    planReference(plan, undefined),
+    /Task plan: \/project\/\.opencode\/plans\/user-plan\.md/,
+    "an unknown working directory cannot rely on a relative path"
+  )
 })
 
 test("the generated checkpoint marks a truncated objective line", async (t) => {
