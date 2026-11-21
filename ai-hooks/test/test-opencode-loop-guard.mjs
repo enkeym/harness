@@ -3,10 +3,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { digestKey, injectDigests, registerLoopGuard } from "../../opencode/loop-guard.mjs"
-
-const digest = "a".repeat(64)
-const otherDigest = "b".repeat(64)
+import { registerLoopGuard } from "../../opencode/loop-guard.mjs"
 
 async function fixture(
   t,
@@ -64,15 +61,6 @@ async function fixture(
           .map((part) => part.text)
           .join("\n")
       : ""
-  const before = (tool, input, sessionID = "session") =>
-    toolHooks.get("execute.before")({
-      tool,
-      sessionID,
-      agent: "build",
-      messageID: "message",
-      id: "call",
-      input
-    })
   const contextHook = async (options = {}) => {
     const event = {
       sessionID: "session",
@@ -97,252 +85,22 @@ async function fixture(
   }
   return {
     after,
-    before,
     contextHook,
     guard,
     notice,
     sessionHooks,
+    toolHooks,
     directory,
     references
   }
 }
 
-test("digest injection only rewrites literal full reads with a known digest", () => {
-  const digests = new Map([
-    [digestKey(undefined, "source.mjs"), digest],
-    [digestKey(undefined, "other.mjs"), otherDigest]
-  ])
-
-  assert.equal(
-    injectDigests('tokensave_read({ file: "source.mjs", mode: "full" })', digests)
-      .code,
-    `tokensave_read({ if_digest: "${digest}", file: "source.mjs", mode: "full" })`
-  )
-  assert.equal(
-    injectDigests('tokensave_read({ file: "source.mjs" })', digests).changed,
-    1
-  )
-  assert.equal(
-    injectDigests(
-      'tokensave_read({ file: "source.mjs", mode: "lines", lines: "2-3" })',
-      digests
-    ).changed,
-    0
-  )
-  assert.equal(
-    injectDigests(
-      `tokensave_read({ if_digest: "${digest}", file: "source.mjs" })`,
-      digests
-    ).changed,
-    0
-  )
-  assert.equal(
-    injectDigests('tokensave_read({ file: "missing.mjs", mode: "full" })', digests)
-      .changed,
-    0
-  )
-  assert.equal(
-    injectDigests('tokensave_read({ file: target, mode: "full" })', digests)
-      .changed,
-    0
-  )
-  const projectDigests = new Map([
-    [digestKey("/project", "source.mjs"), digest]
-  ])
-  assert.equal(
-    injectDigests(
-      'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/other" })',
-      projectDigests,
-      "/project"
-    ).changed,
-    0,
-    "a digest never follows the file name into another root"
-  )
-  const sameRoot = injectDigests(
-    'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/project/" })',
-    projectDigests,
-    "/project"
-  )
-  assert.equal(sameRoot.changed, 1, "the canonical root may reuse the digest")
-  assert.match(sameRoot.code, new RegExp(`if_digest: "${digest}"`))
-  assert.equal(
-    injectDigests(
-      'tokensave_read({ file: "source.mjs", mode: "full" })',
-      projectDigests,
-      "/moved"
-    ).changed,
-    0,
-    "a digest from the previous root is not reused after the session moves"
-  )
-  assert.equal(
-    injectDigests(
-      'tokensave_read({ file: "source.mjs", mode: "full", graph_root: root })',
-      digests,
-      "/project"
-    ).changed,
-    0,
-    "a computed graph_root cannot prove the project"
-  )
-  assert.equal(
-    injectDigests(
-      'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/project" + suffix })',
-      digests,
-      "/project"
-    ).changed,
-    0,
-    "a concatenated graph_root cannot prove the project"
-  )
-  assert.equal(
-    injectDigests(
-      'tokensave_read({ file: "source.mjs", mode: "full", force: true })',
-      digests
-    ).changed,
-    0,
-    "an explicit force is not overridden"
-  )
-})
-
-test("a digest read through another graph_root is not reused for this project", async t => {
+test("the guard leaves read-digest substitution to the MCP proxy", async t => {
   const f = await fixture(t)
-  const metrics = "\n\ntokensave_metrics: before=10 after=10 result=10 saved=0"
-  await f.after(
-    "execute",
-    {
-      code: 'tokensave_read({ graph_root: "/other", file: "source.mjs", mode: "full" })'
-    },
-    {
-      content: [
-        {
-          type: "text",
-          text: `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n${metrics}`
-        }
-      ]
-    }
-  )
-  const foreign = { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' }
-  await f.before("execute", foreign)
-  assert.doesNotMatch(foreign.code, /if_digest/)
-
-  await f.after(
-    "execute",
-    {
-      code: `tokensave_read({ graph_root: "${f.directory}", file: "canon.mjs", mode: "full" })`
-    },
-    {
-      content: [
-        {
-          type: "text",
-          text: `file: canon.mjs\nmode: full\ndigest: ${otherDigest}\n\n     1\tfirst\n${metrics}`
-        }
-      ]
-    }
-  )
-  const canonical = {
-    code: `tokensave_read({ graph_root: "${f.directory}", file: "canon.mjs", mode: "full" })`
-  }
-  await f.before("execute", canonical)
-  assert.match(canonical.code, new RegExp(`if_digest: "${otherDigest}"`))
-})
-
-test("after hook collects full-read digests from text and JSON results only", async t => {
-  const f = await fixture(t)
-  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n\ntokensave_metrics: before=10 after=10 result=10 saved=0`
-  await f.after(
-    "execute",
-    { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' },
-    { content: [{ type: "text", text: full }] }
-  )
-  const json = JSON.stringify({
-    file: "second.mjs",
-    mode: "full",
-    digest: otherDigest,
-    body: "     1\tsecond\n"
-  })
-  await f.after(
-    "execute",
-    { code: 'tokensave_read({ file: "second.mjs", mode: "full" })' },
-    { content: [{ type: "text", text: json }] }
-  )
-  await f.after(
-    "execute",
-    { code: 'tokensave_read({ file: "stub.mjs", mode: "full" })' },
-    {
-      content: [
-        {
-          type: "text",
-          text: `file: stub.mjs\nmode: full\ndigest: ${"c".repeat(64)}\n\n[unchanged: true]`
-        }
-      ]
-    }
-  )
-  await f.after(
-    "execute",
-    { code: 'tokensave_read({ file: "artifact.mjs", mode: "full" })' },
-    {
-      content: [
-        {
-          type: "text",
-          text: `file: artifact.mjs\nmode: full\ndigest: ${"d".repeat(64)}\n\n     1\tfirst\n[full_result=/tmp/truncated]`
-        }
-      ]
-    }
-  )
-  await f.after(
-    "execute",
-    { code: 'tokensave_read({ file: "external.mjs", mode: "full" })' },
-    {
-      content: [
-        {
-          type: "text",
-          text: `file: external.mjs\nmode: full\ndigest: ${"e".repeat(64)}\n\n     1\tfirst\n`
-        }
-      ]
-    }
-  )
-  await f.after("shell", { command: "ls" }, { content: "plain output" })
-
-  const injected = { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' }
-  await f.before("execute", injected)
-  assert.match(injected.code, new RegExp(`if_digest: "${digest}"`))
-  const fromJSON = { code: 'tokensave_read({ file: "second.mjs", mode: "full" })' }
-  await f.before("execute", fromJSON)
-  assert.match(fromJSON.code, new RegExp(`if_digest: "${otherDigest}"`))
-  for (const file of ["stub.mjs", "artifact.mjs", "external.mjs"]) {
-    const input = { code: `tokensave_read({ file: "${file}", mode: "full" })` }
-    await f.before("execute", input)
-    assert.doesNotMatch(input.code, /if_digest/)
-  }
-  const untouched = { code: "console.log(1)" }
-  await f.before("execute", untouched)
-  assert.equal(untouched.code, "console.log(1)")
-  const lines = {
-    code: 'tokensave_read({ file: "source.mjs", mode: "lines", lines: "1-2" })'
-  }
-  await f.before("execute", lines)
-  assert.doesNotMatch(lines.code, /if_digest/)
-})
-
-test("compaction drops collected digests so stale bodies are not reused", async t => {
-  const f = await fixture(t)
-  const full = `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n\ntokensave_metrics: before=10 after=10 result=10 saved=0`
-  await f.after(
-    "execute",
-    { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' },
-    { content: [{ type: "text", text: full }] }
-  )
-  const before = { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' }
-  await f.before("execute", before)
-  assert.match(before.code, new RegExp(`if_digest: "${digest}"`))
-
-  await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
-  const afterCompaction = {
-    code: 'tokensave_read({ file: "source.mjs", mode: "full" })'
-  }
-  await f.before("execute", afterCompaction)
-  assert.doesNotMatch(
-    afterCompaction.code,
-    /if_digest/,
-    "the model no longer sees the old body, so the digest must not be injected"
+  assert.equal(
+    f.toolHooks.has("execute.before"),
+    false,
+    "the proxy owns the read identity and the digest injection"
   )
 })
 

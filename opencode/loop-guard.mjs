@@ -1,5 +1,4 @@
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
-import { readTexts } from "./read-results.mjs"
 import { boundToolResult } from "./output-bounds.mjs"
 import { sanitizeMessageTexts } from "./dsml.mjs"
 
@@ -16,29 +15,6 @@ const repeatTools = new Set([
   "webfetch",
   "websearch"
 ])
-const digestHeader = /^file: (.+)\nmode: full\ndigest: ([a-f0-9]{64})\n/
-
-export const digestKey = (root, file) => {
-  const canonical =
-    typeof root === "string" ? root.replace(/\/+$/, "") : ""
-  return canonical ? `${canonical}\u0000${file}` : file
-}
-
-const knownGraphRoot = (args, root) => {
-  if (!/\bgraph_root\s*:/.test(args)) return true
-  const match = /\bgraph_root\s*:\s*(["'`])([^"'`\n]*)\1\s*(?:[,}]|$)/.exec(args)
-  const canonical =
-    typeof root === "string" ? root.replace(/\/+$/, "") : null
-  return Boolean(
-    match && canonical && match[2].replace(/\/+$/, "") === canonical
-  )
-}
-
-const canonicalReads = (code, root) =>
-  (code.match(/tokensave_read\(\s*\{[\s\S]*?\}\s*\)/g) ?? []).every((call) =>
-    knownGraphRoot(call, root)
-  )
-
 const softNotice = (reads, implementation) =>
   implementation
     ? `Harness progress guard: ${reads} read calls since the last file change. Stop gathering. Make the first edit named in the plan, or report a concrete blocker.`
@@ -104,27 +80,6 @@ const appendNotice = (event, text) => {
   else result.content = [{ type: "text", text }]
 }
 
-export function injectDigests(code, digests, root) {
-  let changed = 0
-  const next = code.replace(
-    /tokensave_read\(\s*\{([\s\S]*?)\}\s*\)/g,
-    (call, args) => {
-      if (/\bif_digest\s*:/.test(args)) return call
-      if (/\bforce\s*:/.test(args)) return call
-      if (!knownGraphRoot(args, root)) return call
-      const mode = /\bmode\s*:\s*["'`]([^"'`]+)["'`]/.exec(args)
-      if (mode && mode[1] !== "full") return call
-      const file = /\bfile\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(args)
-      if (!file) return call
-      const digest = digests.get(digestKey(root, file[1]))
-      if (!digest) return call
-      changed++
-      return `tokensave_read({ if_digest: "${digest}",${args}})`
-    }
-  )
-  return { code: next, changed }
-}
-
 export async function registerLoopGuard(
   context,
   contextCache,
@@ -139,7 +94,6 @@ export async function registerLoopGuard(
         level: 0,
         edited: false,
         skills: new Set(),
-        digests: new Map(),
         repeats: new Map(),
         resume: false,
         dsmlLoopWarned: false
@@ -154,7 +108,6 @@ export async function registerLoopGuard(
     s.reads = 0
     s.level = 0
     s.edited = false
-    s.digests.clear()
     s.repeats.clear()
   })
 
@@ -264,33 +217,6 @@ export async function registerLoopGuard(
             : softNotice(s.reads, s.edited)
       )
     }
-    if (event.status !== "completed") return
-    if (!canonicalReads(code, context.location?.directory)) return
-    for (const text of readTexts(event.result)) {
-      if (/full_result=|unchanged: true/.test(text)) continue
-      const match = digestHeader.exec(text)
-      if (match)
-        s.digests.set(
-          digestKey(context.location?.directory, match[1]),
-          match[2]
-        )
-    }
-  })
-
-  await context.tool.hook("execute.before", async (event) => {
-    if (event.tool !== "execute") return
-    const code = event.input?.code
-    if (typeof code !== "string" || !code.includes("tokensave_read")) return
-    const result = injectDigests(
-      code,
-      state(sessionOf(event)).digests,
-      context.location?.directory
-    )
-    if (!result.changed) return
-    event.input.code = result.code
-    process.stderr.write(
-      `Harness loop guard: injected ${result.changed} read digest(s) from earlier full reads.\n`
-    )
   })
 
   return {
