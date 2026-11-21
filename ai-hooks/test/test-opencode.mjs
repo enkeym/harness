@@ -432,8 +432,9 @@ test("every bundled DeepSeek model carries the working input limit", () => {
   )
   const models = config.providers.deepseek.models
   for (const [name, model] of Object.entries(models)) {
-    assert.ok(
-      model.limit?.input >= contextPolicy.opencode.maxTokens,
+    assert.equal(
+      model.limit?.input,
+      contextPolicy.opencode.maxTokens,
       `${name} must declare the working input limit`
     )
     assert.equal(
