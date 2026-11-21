@@ -4,6 +4,7 @@ import {
   isPeakAt,
   nextOffPeakAt
 } from "./cost-policy.mjs"
+import { OPENCODE_GO_PROVIDER_ID } from "./opencode-go-tuning/tuning.mjs"
 
 const sessionMessages = (context, sessionID) =>
   context.data?.session?.message?.list?.(sessionID) ??
@@ -11,6 +12,12 @@ const sessionMessages = (context, sessionID) =>
   []
 
 const money = (value) => `$${value.toFixed(6)}`
+export const costText = (value) =>
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? money(value)
+    : ""
+export const isPlanModel = (model) =>
+  model?.providerID === OPENCODE_GO_PROVIDER_ID
 const modelOf = (message) => message.model?.id ?? message.modelID
 const moscowTime = (date) =>
   date.toLocaleTimeString("ru-RU", {

@@ -1,7 +1,7 @@
 import "./env-isolate.mjs"
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import plugin from "../../opencode/tui.js"
+import plugin, { costText, isPlanModel } from "../../opencode/tui.js"
 
 const context = (messages, notifications) => {
   let layer
@@ -55,4 +55,17 @@ test("/cost reports messages without a known tariff instead of a zero total", as
   assert.match(notifications[0].message, /Нет сообщений с известным тарифом/)
   assert.match(notifications[0].message, /без тарифа: 1/)
   assert.equal(notifications[0].variant, "warning")
+})
+
+test("plan meters are reserved for the Go subscription provider", () => {
+  assert.equal(isPlanModel({ providerID: "opencode-go", id: "deepseek-v4.1-flash" }), true)
+  assert.equal(isPlanModel({ providerID: "deepseek", id: "deepseek-flash" }), false)
+  assert.equal(isPlanModel(undefined), false)
+})
+
+test("non-plan models show their session spend instead of the plan meters", () => {
+  assert.equal(costText(0.000123), "$0.000123")
+  assert.equal(costText(0), "")
+  assert.equal(costText(undefined), "")
+  assert.equal(costText(Number.NaN), "")
 })

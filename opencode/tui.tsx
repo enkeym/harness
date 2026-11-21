@@ -1,4 +1,4 @@
-import plugin from "./tui.js"
+import plugin, { costText, isPlanModel } from "./tui.js"
 import { createMemo, createSignal, Show } from "solid-js"
 
 const REFRESH_MS = 60_000
@@ -74,6 +74,14 @@ const liveCounts = (context, sessionID) => {
   ].filter(Boolean)
 }
 
+const selectedModel = (context, sessionID) =>
+  sessionID ? context.data.session.get(sessionID)?.model : undefined
+
+const sessionSpend = (context, sessionID) => {
+  if (!sessionID) return ""
+  return costText(context.data.session.cost?.(sessionID))
+}
+
 const PromptFooter = (props) => {
   const location = createMemo(() => {
     const target = props.context.location ?? props.context.data.location.default()
@@ -93,6 +101,11 @@ const PromptFooter = (props) => {
   const live = createMemo(() =>
     props.sessionID ? liveCounts(props.context, props.sessionID).join(" · ") : ""
   )
+  const right = createMemo(() => {
+    if (props.mode === "shell" || !props.showDetails || !props.sessionID) return ""
+    if (isPlanModel(selectedModel(props.context, props.sessionID))) return props.usage()
+    return sessionSpend(props.context, props.sessionID)
+  })
   const left = createMemo(() => {
     if (props.mode === "shell") return "esc exit shell mode"
     return [location(), usage(), live()].filter(Boolean).join(" · ")
@@ -105,7 +118,7 @@ const PromptFooter = (props) => {
           <text fg={props.context.theme.text.muted} wrapMode="none" flexShrink={1}>{value()}</text>
         )}
       </Show>
-      <Show when={props.mode !== "shell" && props.showDetails && props.usage()}>
+      <Show when={right()}>
         {(value) => (
           <text fg={props.context.theme.text.muted} wrapMode="none" flexShrink={0}>{value()}</text>
         )}
@@ -153,12 +166,6 @@ export default {
       )
     })
     if (typeof replace === "function") disposals.push(replace)
-
-    const render = () => (text() ? <text fg={context.theme.text.muted}>{text()}</text> : null)
-    for (const slot of ["home.footer.status"]) {
-      const dispose = context.ui.slot?.({ append: slot, render })
-      if (typeof dispose === "function") disposals.push(dispose)
-    }
 
     return () => disposals.reverse().forEach((dispose) => dispose())
   }
