@@ -1744,6 +1744,61 @@ for (const type of [
   })
 }
 
+test("OpenCode refreshes the cost report when observation times out", async (t) => {
+  const { directory, harnessRoot, project, env } = executionSandbox(t)
+  const state = path.join(directory, "state")
+  const runner = `
+    import { setTimeout } from 'node:timers/promises';
+    import plugin from ${JSON.stringify(pathToFileURL(path.join(harnessRoot, "opencode/harness.js")).href)};
+    await plugin.setup({
+      location: { directory: process.env.TEST_PROJECT },
+      app: { version: "2.2.5" },
+      command: { transform: async () => {} },
+      tool: { transform: async () => {}, hook: async () => {} },
+      rpc: { register: async () => ({}) },
+      storage: { scan: async () => ({ entries: [] }), get: async () => undefined },
+      model: { transform: async callback => callback({ list: () => [] }) },
+      event: { subscribe: async () => (async function* () {
+        await setTimeout(50);
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_hang" } };
+      })() },
+      session: {
+        hook: async () => {},
+        get: async () => ({ parentID: "ses_parent", location: { directory: process.env.TEST_PROJECT } }),
+        context: () => new Promise(() => {})
+      }
+    });
+    await setTimeout(400);
+  `
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", runner],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      timeout: 15000,
+      env: {
+        ...process.env,
+        ...env,
+        TEST_PROJECT: project,
+        XDG_STATE_HOME: state,
+        XDG_CONFIG_HOME: path.join(directory, "config"),
+        HARNESS_OBSERVATION_TIMEOUT_MS: "1",
+        HARNESS_OBSERVATION_WAIT_MS: "5000"
+      }
+    }
+  )
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+  assert.match(result.stderr, /exceeded its time limit/)
+  const reports = fs.readdirSync(
+    path.join(state, "harness/optimize/opencode/reports")
+  )
+  assert.ok(
+    reports.some((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name)),
+    "the budget report is written even when evidence collection times out"
+  )
+})
+
 test("OpenCode falls back to the setup directory when the session API fails", async (t) => {
   const { directory, harnessRoot, project, calls, env } = executionSandbox(t)
   const runner = `

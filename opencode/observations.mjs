@@ -421,11 +421,12 @@ async function save(record, stateDirectory) {
 export async function collectObservations(
   api,
   sessionID,
-  { stateDirectory, directory, stats } = {}
+  { stateDirectory, directory, stats, cancelled } = {}
 ) {
   const visited = new Set()
   const files = []
   const collect = async (id) => {
+    if (cancelled?.()) return
     if (visited.has(id)) throw new Error("Cyclic OpenCode session family")
     visited.add(id)
     const info = await api.get(id)
@@ -552,6 +553,7 @@ export async function collectObservations(
         record.gaps.push("handoff-observation-unavailable")
       }
     }
+    if (cancelled?.()) return
     files.push(await save(record, stateDirectory))
   }
   await collect(sessionID)

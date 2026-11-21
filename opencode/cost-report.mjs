@@ -7,6 +7,9 @@ import { deepseekModels } from "./model-routing.mjs"
 import { requestTypeOf, supportedObservationVersion } from "./observations.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 import { cacheMetrics, numeric } from "../ai-hooks/bin/cache-metrics.mjs"
+import { serialByKey } from "./lifecycle-metrics.mjs"
+
+const reports = serialByKey()
 
 export const defaultCostConfig = Object.freeze({
   timeZone: "Europe/Moscow",
@@ -845,6 +848,11 @@ export async function readCostEvidence({ stateDirectory } = {}) {
 }
 
 export async function refreshCostReport(options = {}) {
+  const key = costStateRoot(options.stateDirectory)
+  return reports(key, () => writeCostReport(options))
+}
+
+async function writeCostReport(options) {
   const config = validateCostConfig(
     options.config ?? (await readJSON(costConfigFile(), {}))
   )

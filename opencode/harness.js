@@ -35,6 +35,7 @@ import {
 import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
 
+const observationTimedOut = Symbol("observation-timed-out")
 const claimed = (globalThis[Symbol.for("harness.events.claimed")] ??= new Set())
 const claim = (event) => {
   if (!event.id) return true
@@ -136,18 +137,20 @@ export default {
         }
     }
     const enqueueObservation = serialByKey()
-    const collectEvidence = async (sessionID, target, stats) => {
+    const collectEvidence = async (sessionID, target, stats, started, cancelled) => {
       try {
         await refreshBudgetDay()
         return await collectObservations(observationAPI(context), sessionID, {
           directory: target,
-          stats
+          stats,
+          cancelled
         })
       } catch (error) {
         void recordLifecycle(
           {
             sessionID,
             stage: "observe-end",
+            durationMs: Date.now() - started,
             ok: false,
             error: error.name
           },
@@ -180,10 +183,12 @@ export default {
         const started = Date.now()
         void recordLifecycle({ sessionID, stage: "observe-start" }, { directory: target })
         const stats = {}
+        const token = { expired: false }
         const files = await awaitBounded(
-          collectEvidence(sessionID, target, stats),
+          collectEvidence(sessionID, target, stats, started, () => token.expired),
           observationTimeoutMs(),
           () => {
+            token.expired = true
             void recordLifecycle(
               {
                 sessionID,
@@ -196,7 +201,7 @@ export default {
             process.stderr.write(
               "Harness observation exceeded its time limit; the queue continues and the next turn retries.\n"
             )
-            return null
+            return observationTimedOut
           }
         )
         if (files === null) return []
@@ -204,14 +209,25 @@ export default {
           const newWarnings = await awaitBounded(
             refreshBudget(sessionID),
             observationWaitMs(),
-            () => []
+            () => {
+              void recordLifecycle(
+                {
+                  sessionID,
+                  stage: "budget-deferred",
+                  durationMs: Date.now() - started,
+                  waitedMs: observationWaitMs()
+                },
+                { directory: target }
+              )
+              return []
+            }
           )
           void recordLifecycle(
             {
               sessionID,
               stage: "observe-end",
               durationMs: Date.now() - started,
-              files: files.length,
+              files: Array.isArray(files) ? files.length : 0,
               pages: stats.pages ?? 0,
               warnings: newWarnings.length
             },

@@ -342,3 +342,24 @@ test("reports and assessments persist privately, reject invalid edits and dedupl
   await assert.rejects(updateAssessment("ses_long", { accepted: "yes" }, { stateDirectory }), /assessment/)
   await assert.rejects(updateAssessment("../escape", {}, { stateDirectory }), /session/)
 })
+
+test("four concurrent refreshes report each new warning once", async t => {
+  const stateDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cost-report-"))
+  t.after(() => fs.rm(stateDirectory, { recursive: true, force: true }))
+  const base = observationDirectory("/project", stateDirectory)
+  await fs.mkdir(path.join(base, "sessions"), { recursive: true })
+  await fs.writeFile(path.join(base, "sessions/ses_long.json"), JSON.stringify(record("ses_long", Array.from({ length: 100 }, (_, i) => step(`msg_${i}`, { model: { providerID: "deepseek", id: "deepseek-flash", variant: "high" } })))))
+  const options = { stateDirectory, date: "2026-11-02", config: { ...defaultCostConfig, dailyNativeUSD: 0.0001, sessionCompactions: null, minimumAssistantCacheHitRate: null, maximumCompactionInputShare: null, maximumLargeToolOutputShare: null } }
+
+  const results = await Promise.all(Array.from({ length: 4 }, () => refreshCostReport(options)))
+  const warnings = results.flatMap((result) =>
+    result.newWarnings.map((warning) => JSON.stringify([warning.code, warning.sessionID, warning.limit]))
+  )
+
+  assert.equal(warnings.length, 2, "the shared report is updated once, not once per parallel caller")
+  assert.equal(new Set(warnings).size, 2)
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(costStateRoot(stateDirectory), "reports", "2026-11-02.warnings.json"))).length,
+    2
+  )
+})
