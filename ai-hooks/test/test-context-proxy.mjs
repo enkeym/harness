@@ -45,11 +45,17 @@ test('proxy suppresses only content still held in the current generation', async
   assert.match((await c.call('tokensave_read', args)).result.content[0].text, /useful content/);
   assert.equal((await c.call('tokensave_read', args)).result.content[0].text, 'unchanged: true');
   assert.equal(c.calls()[1].arguments.if_digest, 'a'.repeat(64));
+  await c.call('tokensave_read', { ...args, lines: '3-4' });
+  assert.equal(c.calls().at(-1).arguments.if_digest, undefined, 'a different range is not the held body');
+  await c.call('tokensave_read', { ...args, lines: '1 - 2' });
+  assert.equal(c.calls().at(-1).arguments.if_digest, 'a'.repeat(64), 'the same range in another notation still matches');
+  await c.call('tokensave_read', { ...args, format: 'json' });
+  assert.equal(c.calls().at(-1).arguments.if_digest, undefined, 'a different format is not the held body');
   fs.writeFileSync(c.generation, JSON.stringify({ v: 1, task: 'one', generation: 2 }));
   assert.match((await c.call('tokensave_read', args)).result.content[0].text, /useful content/);
-  assert.equal(c.calls()[2].arguments.if_digest, undefined);
+  assert.equal(c.calls().at(-1).arguments.if_digest, undefined);
   await c.call('tokensave_read', { ...args, graph_root: '/another/project' });
-  assert.equal(c.calls()[3].arguments.graph_root, '/another/project');
+  assert.equal(c.calls().at(-1).arguments.graph_root, '/another/project');
 });
 
 test('aggregate adapter budget preserves full artifacts and never caches truncated reads', async t => {

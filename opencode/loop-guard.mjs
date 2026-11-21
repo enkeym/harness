@@ -18,6 +18,27 @@ const repeatTools = new Set([
 ])
 const digestHeader = /^file: (.+)\nmode: full\ndigest: ([a-f0-9]{64})\n/
 
+export const digestKey = (root, file) => {
+  const canonical =
+    typeof root === "string" ? root.replace(/\/+$/, "") : ""
+  return canonical ? `${canonical}\u0000${file}` : file
+}
+
+const knownGraphRoot = (args, root) => {
+  if (!/\bgraph_root\s*:/.test(args)) return true
+  const match = /\bgraph_root\s*:\s*(["'`])([^"'`\n]*)\1\s*(?:[,}]|$)/.exec(args)
+  const canonical =
+    typeof root === "string" ? root.replace(/\/+$/, "") : null
+  return Boolean(
+    match && canonical && match[2].replace(/\/+$/, "") === canonical
+  )
+}
+
+const canonicalReads = (code, root) =>
+  (code.match(/tokensave_read\(\s*\{[\s\S]*?\}\s*\)/g) ?? []).every((call) =>
+    knownGraphRoot(call, root)
+  )
+
 const softNotice = (reads, implementation) =>
   implementation
     ? `Harness progress guard: ${reads} read calls since the last file change. Stop gathering. Make the first edit named in the plan, or report a concrete blocker.`
@@ -90,19 +111,12 @@ export function injectDigests(code, digests, root) {
     (call, args) => {
       if (/\bif_digest\s*:/.test(args)) return call
       if (/\bforce\s*:/.test(args)) return call
-      const graphRoot =
-        /\bgraph_root\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(args)
-      if (graphRoot) {
-        const canonical =
-          typeof root === "string" ? root.replace(/\/+$/, "") : null
-        if (!canonical || graphRoot[1].replace(/\/+$/, "") !== canonical)
-          return call
-      }
+      if (!knownGraphRoot(args, root)) return call
       const mode = /\bmode\s*:\s*["'`]([^"'`]+)["'`]/.exec(args)
       if (mode && mode[1] !== "full") return call
       const file = /\bfile\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(args)
       if (!file) return call
-      const digest = digests.get(file[1])
+      const digest = digests.get(digestKey(root, file[1]))
       if (!digest) return call
       changed++
       return `tokensave_read({ if_digest: "${digest}",${args}})`
@@ -139,6 +153,7 @@ export async function registerLoopGuard(
     s.resume = true
     s.reads = 0
     s.level = 0
+    s.edited = false
     s.digests.clear()
     s.repeats.clear()
   })
@@ -250,10 +265,15 @@ export async function registerLoopGuard(
       )
     }
     if (event.status !== "completed") return
+    if (!canonicalReads(code, context.location?.directory)) return
     for (const text of readTexts(event.result)) {
       if (/full_result=|unchanged: true/.test(text)) continue
       const match = digestHeader.exec(text)
-      if (match) s.digests.set(match[1], match[2])
+      if (match)
+        s.digests.set(
+          digestKey(context.location?.directory, match[1]),
+          match[2]
+        )
     }
   })
 
@@ -278,6 +298,7 @@ export async function registerLoopGuard(
       const s = state(sessionID ?? currentSession)
       s.reads = 0
       s.level = 0
+      s.edited = false
       s.repeats.clear()
     }
   }

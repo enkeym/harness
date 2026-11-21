@@ -3,7 +3,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { injectDigests, registerLoopGuard } from "../../opencode/loop-guard.mjs"
+import { digestKey, injectDigests, registerLoopGuard } from "../../opencode/loop-guard.mjs"
 
 const digest = "a".repeat(64)
 const otherDigest = "b".repeat(64)
@@ -109,8 +109,8 @@ async function fixture(
 
 test("digest injection only rewrites literal full reads with a known digest", () => {
   const digests = new Map([
-    ["source.mjs", digest],
-    ["other.mjs", otherDigest]
+    [digestKey(undefined, "source.mjs"), digest],
+    [digestKey(undefined, "other.mjs"), otherDigest]
   ])
 
   assert.equal(
@@ -146,10 +146,13 @@ test("digest injection only rewrites literal full reads with a known digest", ()
       .changed,
     0
   )
+  const projectDigests = new Map([
+    [digestKey("/project", "source.mjs"), digest]
+  ])
   assert.equal(
     injectDigests(
       'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/other" })',
-      digests,
+      projectDigests,
       "/project"
     ).changed,
     0,
@@ -157,11 +160,38 @@ test("digest injection only rewrites literal full reads with a known digest", ()
   )
   const sameRoot = injectDigests(
     'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/project/" })',
-    digests,
+    projectDigests,
     "/project"
   )
   assert.equal(sameRoot.changed, 1, "the canonical root may reuse the digest")
   assert.match(sameRoot.code, new RegExp(`if_digest: "${digest}"`))
+  assert.equal(
+    injectDigests(
+      'tokensave_read({ file: "source.mjs", mode: "full" })',
+      projectDigests,
+      "/moved"
+    ).changed,
+    0,
+    "a digest from the previous root is not reused after the session moves"
+  )
+  assert.equal(
+    injectDigests(
+      'tokensave_read({ file: "source.mjs", mode: "full", graph_root: root })',
+      digests,
+      "/project"
+    ).changed,
+    0,
+    "a computed graph_root cannot prove the project"
+  )
+  assert.equal(
+    injectDigests(
+      'tokensave_read({ file: "source.mjs", mode: "full", graph_root: "/project" + suffix })',
+      digests,
+      "/project"
+    ).changed,
+    0,
+    "a concatenated graph_root cannot prove the project"
+  )
   assert.equal(
     injectDigests(
       'tokensave_read({ file: "source.mjs", mode: "full", force: true })',
@@ -170,6 +200,48 @@ test("digest injection only rewrites literal full reads with a known digest", ()
     0,
     "an explicit force is not overridden"
   )
+})
+
+test("a digest read through another graph_root is not reused for this project", async t => {
+  const f = await fixture(t)
+  const metrics = "\n\ntokensave_metrics: before=10 after=10 result=10 saved=0"
+  await f.after(
+    "execute",
+    {
+      code: 'tokensave_read({ graph_root: "/other", file: "source.mjs", mode: "full" })'
+    },
+    {
+      content: [
+        {
+          type: "text",
+          text: `file: source.mjs\nmode: full\ndigest: ${digest}\n\n     1\tfirst\n${metrics}`
+        }
+      ]
+    }
+  )
+  const foreign = { code: 'tokensave_read({ file: "source.mjs", mode: "full" })' }
+  await f.before("execute", foreign)
+  assert.doesNotMatch(foreign.code, /if_digest/)
+
+  await f.after(
+    "execute",
+    {
+      code: `tokensave_read({ graph_root: "${f.directory}", file: "canon.mjs", mode: "full" })`
+    },
+    {
+      content: [
+        {
+          type: "text",
+          text: `file: canon.mjs\nmode: full\ndigest: ${otherDigest}\n\n     1\tfirst\n${metrics}`
+        }
+      ]
+    }
+  )
+  const canonical = {
+    code: `tokensave_read({ graph_root: "${f.directory}", file: "canon.mjs", mode: "full" })`
+  }
+  await f.before("execute", canonical)
+  assert.match(canonical.code, new RegExp(`if_digest: "${otherDigest}"`))
 })
 
 test("after hook collects full-read digests from text and JSON results only", async t => {
@@ -272,6 +344,21 @@ test("compaction drops collected digests so stale bodies are not reused", async 
     /if_digest/,
     "the model no longer sees the old body, so the digest must not be injected"
   )
+})
+
+test("compaction treats the next phase as unknown instead of repeating the previous edit", async t => {
+  const f = await fixture(t)
+  await f.after("edit", { file: "source.mjs" })
+  await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
+  const resumed = await f.contextHook()
+  const resume = resumed.messages.at(-1).content[0].text
+  assert.match(resume, /next unfinished step/)
+  assert.doesNotMatch(resume, /make the first source edit/)
+
+  for (let i = 0; i < 41; i++) await f.after("read", { file: `r${i}.mjs` })
+  const after = await f.contextHook()
+  assert.ok(after.tools.execute, "an unknown phase must not withdraw tools")
+  assert.ok(after.tools.edit, "an unknown phase must not withdraw tools")
 })
 
 test("read budget warns at 20 reads and again at 40 without changing the tool list", async t => {
@@ -559,7 +646,7 @@ test("mixed non-text execute results are never bounded or rewritten", async t =>
   assert.deepEqual(fs.readdirSync(outputDir), [])
 })
 
-test("a finished turn resets the read budget for the next user message", async t => {
+test("a finished turn resets the read budget and the phase for the next user message", async t => {
   const f = await fixture(t)
   await f.after("edit", { file: "a.mjs" })
   for (let i = 0; i < 19; i++) await f.after("read", { file: `a${i}.mjs` })
@@ -577,12 +664,26 @@ test("a finished turn resets the read budget for the next user message", async t
   assert.ok(fresh.tools.read)
   assert.equal(fresh.system.length, 0)
 
-  for (let i = 0; i < 40; i++) await f.after("read", { file: `b${i}.mjs` })
+  const nextTask = {}
+  for (let i = 0; i < 20; i++) await f.after("read", { file: `b${i}.mjs` }, i === 19 ? nextTask : {})
+  assert.match(f.notice(nextTask), /20 read calls without a file change/)
+  assert.doesNotMatch(f.notice(nextTask), /Make the first edit/)
+  for (let i = 20; i < 60; i++) await f.after("read", { file: `b${i}.mjs` })
+  const readOnly = await f.contextHook()
+  assert.ok(readOnly.tools.read, "a new task is an unknown phase until it edits")
+  assert.ok(readOnly.tools.shell, "an unknown phase must not withdraw tools")
+
   await f.sessionHooks.get("compaction")({ sessionID: "session", system: [] })
   const resumed = await f.contextHook()
   assert.ok(resumed.tools.shell)
   assert.match(resumed.messages[0].content[0].text, /Harness resume after compaction/)
   assert.doesNotMatch(JSON.stringify(resumed.messages), /progress guard/)
+
+  await f.after("edit", { file: "c.mjs" })
+  for (let i = 0; i < 19; i++) await f.after("read", { file: `c${i}.mjs` })
+  const implemented = {}
+  await f.after("read", { file: "c19.mjs" }, implemented)
+  assert.match(f.notice(implemented), /20 read calls since the last file change/)
 })
 
 test("plan mode and sessions without edit tools are never blocked", async t => {
@@ -600,7 +701,7 @@ test("plan mode and sessions without edit tools are never blocked", async t => {
   assert.equal(readOnly.system.length, 0)
 })
 
-test("compaction resumes once with cached ranges, skills and the edit budget", async t => {
+test("compaction resumes once with cached ranges and skills without carrying the edit phase", async t => {
   const f = await fixture(t)
   await f.after("skill", { id: "react-frontend" })
   await f.after("edit", { file: "a.mjs" })
@@ -614,8 +715,9 @@ test("compaction resumes once with cached ranges, skills and the edit budget", a
   assert.match(resume, /Active skills before compaction: react-frontend/)
   assert.match(
     resume,
-    /Resume protocol: make the first source edit within 12 tool calls/
+    /Resume protocol: continue the next unfinished step of the plan within 12 tool calls/
   )
+  assert.doesNotMatch(resume, /make the first source edit/)
   assert.equal((resume.match(/Do not rebuild the plan/g) ?? []).length, 1)
   assert.equal(f.references.length, 1)
 
