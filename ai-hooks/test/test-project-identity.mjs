@@ -27,6 +27,20 @@ function index(dir, kind) {
   fs.writeFileSync(path.join(dir, sub, db), '');
 }
 
+async function seedTokenSave(dir, paths) {
+  let DatabaseSync;
+  const warningListeners = process.rawListeners('warning');
+  process.removeAllListeners('warning');
+  try { ({ DatabaseSync } = await import('node:sqlite')); } finally {
+    for (const listener of warningListeners) process.on('warning', listener);
+  }
+  const db = new DatabaseSync(path.join(dir, '.tokensave', 'tokensave.db'));
+  db.exec('create table if not exists files (path text primary key)');
+  const insert = db.prepare('insert or replace into files (path) values (?)');
+  for (const file of paths) insert.run(file);
+  db.close();
+}
+
 function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'project-identity-')));
   const root = path.join(home, 'proj');
@@ -158,6 +172,43 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   check('только один маркер: код 0', res.status, 0);
   checkOk('отсутствующий маркер виден, корни не обязаны совпадать', res.out.includes('.ragsave/rag.db не найден'));
   check('ragsave не вызывался', res.calls, ['tokensave status', 'tokensave status -j', 'tokensave servers']);
+}
+
+{
+  const sb = sandbox();
+  sb.setTsJson({ last_sync_at: sb.headCt + 100, last_updated: sb.headCt });
+  const res = sb.run(sb.root);
+  check('last_updated на границе HEAD: код 0', res.status, 0);
+  checkOk('граница объяснена без отставания и цикла sync', res.out.includes('last_updated совпадает с HEAD') && res.out.includes('stale_commits=1') && !res.out.includes('отставание по содержимому'));
+  check('диагностика на границе не запускает sync', res.calls.filter((c) => c === 'tokensave sync').length, 0);
+}
+
+{
+  const sb = sandbox();
+  const sub = path.join(sb.root, 'packages', 'app');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.writeFileSync(path.join(sub, 'settings.jsonc'), '{}\n');
+  check('git add файла подкаталога', spawnSync('git', ['-C', sb.root, 'add', 'packages/app/settings.jsonc']).status, 0);
+  index(sub, 'tokensave');
+  await seedTokenSave(sub, ['settings.jsonc']);
+  fs.writeFileSync(sb.tsStatus, `│ Project: ${sub} │\n│ Branch: [single-db] │\n`);
+  const res = sb.run(sub);
+  check('индекс в подкаталоге монорепо: код 0', res.status, 0);
+  checkOk('покрытие подкаталога найдено', res.out.includes('покрытие: .jsonc'));
+}
+
+{
+  const sb = sandbox();
+  const sub = path.join(sb.root, 'packages', 'app');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.writeFileSync(path.join(sub, 'settings.jsonc'), '{}\n');
+  check('git add файла подкаталога', spawnSync('git', ['-C', sb.root, 'add', 'packages/app/settings.jsonc']).status, 0);
+  index(sub, 'tokensave');
+  await seedTokenSave(sub, ['other.jsonc']);
+  fs.writeFileSync(sb.tsStatus, `│ Project: ${sub} │\n│ Branch: [single-db] │\n`);
+  const res = sb.run(sub);
+  check('непокрытый .jsonc подкаталога: код 0', res.status, 0);
+  checkOk('пропуск покрытия виден с путём worktree', res.out.includes('нет покрытия: 1') && res.out.includes('packages/app/settings.jsonc'));
 }
 
 process.exitCode = failed ? 1 : 0;
