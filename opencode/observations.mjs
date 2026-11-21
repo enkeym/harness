@@ -401,7 +401,7 @@ async function pages(read, stats) {
   return data
 }
 
-async function save(record, stateDirectory) {
+async function save(record, stateDirectory, cancelled) {
   const base = observationDirectory(record.project, stateDirectory)
   const directory = path.join(base, "sessions")
   await fs.mkdir(directory, { recursive: true, mode: 0o700 })
@@ -415,6 +415,7 @@ async function save(record, stateDirectory) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error
   }
+  if (cancelled?.()) return null
   return writePrivateJSON(file, record)
 }
 
@@ -554,7 +555,8 @@ export async function collectObservations(
       }
     }
     if (cancelled?.()) return
-    files.push(await save(record, stateDirectory))
+    const saved = await save(record, stateDirectory, cancelled)
+    if (saved) files.push(saved)
   }
   await collect(sessionID)
   return files

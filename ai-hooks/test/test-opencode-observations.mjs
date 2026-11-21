@@ -128,6 +128,28 @@ test("a cancelled collection writes no late session record", async (t) => {
   await assert.rejects(fs.readFile(recordPath), /ENOENT/, "the timed-out collection leaves no record behind")
 })
 
+test("a collection that expires during the final write leaves no late session record", async (t) => {
+  const state = await fs.mkdtemp(path.join(os.tmpdir(), "harness-observations-"))
+  t.after(() => fs.rm(state, { recursive: true, force: true }))
+  const recordPath = path.join(observationDirectory("/project", state), "sessions", "ses_root.json")
+  let checks = 0
+  const api = {
+    version: "2.3.0",
+    messageCoverage: "complete-pages",
+    get: async () => info(),
+    messages: async () => ({ data: [message()], cursor: {} }),
+    children: async () => ({ data: [], cursor: {} })
+  }
+
+  const files = await collectObservations(api, "ses_root", {
+    stateDirectory: state,
+    cancelled: () => ++checks >= 3
+  })
+
+  assert.deepEqual(files, [], "an expiry during the final write reports no saved file")
+  await assert.rejects(fs.readFile(recordPath), /ENOENT/, "the expired final write leaves no record behind")
+})
+
 test("native observation requests shrink malformed pages without swallowing command errors", async () => {
   const run = async (command, args) => {
     const limit = args.find(value => value.startsWith("limit="))
