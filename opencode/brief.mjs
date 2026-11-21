@@ -112,9 +112,12 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
           const plan = await readPlan(context, sessionID)
           if (plan) {
             const promptStarted = Date.now()
+            const source = await context.session
+              .get({ sessionID })
+              .catch(() => undefined)
             await context.session.prompt({
               sessionID,
-              text: planReference(plan),
+              text: planReference(plan, source?.location?.directory),
               delivery: "steer"
             })
             void recordLifecycle(

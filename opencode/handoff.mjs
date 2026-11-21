@@ -91,7 +91,7 @@ export async function registerHandoff(context, onTransfer, contextCache) {
       if (continueAfterCompaction && activePlan)
         await context.session.prompt({
           sessionID,
-          text: planReference(activePlan),
+          text: planReference(activePlan, source.location.directory),
           delivery: "steer"
         })
       await notify(

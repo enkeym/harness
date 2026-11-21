@@ -96,7 +96,10 @@ test("Handoff reuses the managed plan after the session moved to another directo
   assert.equal(f.compacted.length, 1)
   assert.equal(f.prompts.length, 1)
   assert.equal(f.prompts[0].delivery, "steer")
-  assert.match(f.prompts[0].text, /Task plan: \.opencode\/plans\//)
+  assert.ok(
+    f.prompts[0].text.startsWith(`Task plan: ${plan.file}\n`),
+    "a moved session gets the absolute plan path instead of a relative one"
+  )
   assert.equal(fs.existsSync(path.join(moved, ".opencode", "plans")), false)
   assert.match(fs.readFileSync(plan.file, "utf8"), /keep one source of state/i)
 })
@@ -159,13 +162,24 @@ test("Handoff reports an empty summary without compacting", async (t) => {
 })
 
 test("the plan reference carries the path without the plan body", () => {
-  const reference = planReference({
+  const plan = {
     root: "/project",
     file: "/project/.opencode/plans/user-plan.md",
     id: "user-plan"
-  })
+  }
+  const reference = planReference(plan, "/project")
   assert.match(reference, /Task plan: \.opencode\/plans\/user-plan\.md/)
   assert.doesNotMatch(reference, /##/)
+  assert.match(
+    planReference(plan, "/other"),
+    /Task plan: \/project\/\.opencode\/plans\/user-plan\.md/,
+    "another working directory needs the absolute path"
+  )
+  assert.match(
+    planReference(plan, "/project/"),
+    /Task plan: \.opencode\/plans\/user-plan\.md/,
+    "a trailing slash is the same project root"
+  )
 })
 
 test("the generated checkpoint marks a truncated objective line", async (t) => {

@@ -8,9 +8,10 @@ import { collectObservations } from "../../opencode/observations.mjs"
 import {
   recordLifecycle,
   awaitBounded,
+  serialByKey,
   lifecycleJournalFile
 } from "../../opencode/lifecycle-metrics.mjs"
-import { observationWaitMs } from "../bin/context-policy.mjs"
+import { observationTimeoutMs, observationWaitMs } from "../bin/context-policy.mjs"
 
 const tokens = (input = 10) => ({ input, output: 2, reasoning: 3, cache: { read: 5, write: 0 } })
 const message = (id = "msg_1") => ({ id, type: "assistant", model: { providerID: "deepseek", id: "deepseek-v4-pro" }, agent: "build", time: { created: 2, completed: 5 }, cost: 0, tokens: tokens(), content: [{ type: "tool", id: "tool_1", name: "read", state: { status: "completed", input: { file: "private.txt" }, content: [{ type: "text", text: "secret output" }] }, time: { created: 3, completed: 4 } }] })
@@ -87,14 +88,61 @@ test("awaitBounded returns the settled value, rethrows rejection and bounds a hu
   assert.ok(Date.now() - started < 2000)
 })
 
+test("serialByKey keeps a hung task from blocking another key and frees its own queue", async () => {
+  const enqueue = serialByKey()
+  const order = []
+  const hung = enqueue("ses_a", () =>
+    awaitBounded(new Promise(() => {}), 40, () => [])
+  )
+  const other = await enqueue("ses_b", async () => {
+    order.push("b")
+    return ["warning"]
+  })
+  assert.deepEqual(other, ["warning"])
+  assert.deepEqual(order, ["b"], "another session is not queued behind the hung one")
+  assert.deepEqual(await hung, [], "the hung task is bounded")
+  assert.equal(
+    await enqueue("ses_a", async () => "next"),
+    "next",
+    "the same key accepts new work after its timeout"
+  )
+
+  const serialized = []
+  await Promise.all([
+    enqueue("ses_c", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      serialized.push(1)
+    }),
+    enqueue("ses_c", async () => serialized.push(2))
+  ])
+  assert.deepEqual(serialized, [1, 2], "one key runs strictly in order")
+
+  const drained = []
+  enqueue("ses_d", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    drained.push("first")
+  })
+  enqueue("ses_d", async () => drained.push("second"))
+  await enqueue.drain()
+  assert.deepEqual(
+    drained,
+    ["first", "second"],
+    "drain waits for queued work instead of dropping it"
+  )
+})
+
 test("observation wait comes from the config layer with an env override", () => {
   assert.equal(observationWaitMs(), 20000)
+  assert.equal(observationTimeoutMs(), 300000)
 
   process.env.HARNESS_OBSERVATION_WAIT_MS = "250"
+  process.env.HARNESS_OBSERVATION_TIMEOUT_MS = "900"
   try {
     assert.equal(observationWaitMs(), 250)
+    assert.equal(observationTimeoutMs(), 900)
   } finally {
     delete process.env.HARNESS_OBSERVATION_WAIT_MS
+    delete process.env.HARNESS_OBSERVATION_TIMEOUT_MS
   }
 })
 

@@ -3,9 +3,14 @@ import { fileURLToPath } from "node:url"
 import {
   contextPolicy,
   readHandoffPrompt,
+  observationTimeoutMs,
   observationWaitMs
 } from "../ai-hooks/bin/context-policy.mjs"
-import { recordLifecycle, awaitBounded } from "./lifecycle-metrics.mjs"
+import {
+  recordLifecycle,
+  awaitBounded,
+  serialByKey
+} from "./lifecycle-metrics.mjs"
 import { readInstructions } from "./instructions.mjs"
 import { deduplicateContext } from "./context-cache.mjs"
 import { registerHandoff } from "./handoff.mjs"
@@ -130,31 +135,77 @@ export default {
           )
         }
     }
-    let observationQueue = Promise.resolve()
-    const observe = (sessionID, target = directory) => {
-      const result = observationQueue.then(async () => {
+    const enqueueObservation = serialByKey()
+    const collectEvidence = async (sessionID, target, stats) => {
+      try {
+        await refreshBudgetDay()
+        return await collectObservations(observationAPI(context), sessionID, {
+          directory: target,
+          stats
+        })
+      } catch (error) {
+        void recordLifecycle(
+          {
+            sessionID,
+            stage: "observe-end",
+            ok: false,
+            error: error.name
+          },
+          { directory: target }
+        )
+        process.stderr.write(
+          `Harness observation failed (${error.name}); session evidence remains incomplete.\n`
+        )
+        return null
+      }
+    }
+    const refreshBudget = async (sessionID) => {
+      const { report, newWarnings } = await refreshCostReport()
+      for (const warning of newWarnings)
+        process.stderr.write(
+          `Harness cost warning: ${warning.code}; ${warning.sessionID ?? "daily"}; observed=${warning.observed}; limit=${warning.limit}.\n`
+        )
+      if (
+        report.warnings.some(
+          (warning) =>
+            warning.code === "native-estimate-budget" ||
+            warning.code === "provider-budget"
+        )
+      )
+        await enforceBudget(sessionID, report.date)
+      return newWarnings
+    }
+    const observe = (sessionID, target = directory) =>
+      enqueueObservation(sessionID, async () => {
         const started = Date.now()
         void recordLifecycle({ sessionID, stage: "observe-start" }, { directory: target })
-        try {
-          await refreshBudgetDay()
-          const stats = {}
-          const files = await collectObservations(observationAPI(context), sessionID, {
-            directory: target,
-            stats
-          })
-          const { report, newWarnings } = await refreshCostReport()
-          for (const warning of newWarnings)
+        const stats = {}
+        const files = await awaitBounded(
+          collectEvidence(sessionID, target, stats),
+          observationTimeoutMs(),
+          () => {
+            void recordLifecycle(
+              {
+                sessionID,
+                stage: "observe-timeout",
+                durationMs: Date.now() - started,
+                timeoutMs: observationTimeoutMs()
+              },
+              { directory: target }
+            )
             process.stderr.write(
-              `Harness cost warning: ${warning.code}; ${warning.sessionID ?? "daily"}; observed=${warning.observed}; limit=${warning.limit}.\n`
+              "Harness observation exceeded its time limit; the queue continues and the next turn retries.\n"
             )
-          if (
-            report.warnings.some(
-              (warning) =>
-                warning.code === "native-estimate-budget" ||
-                warning.code === "provider-budget"
-            )
+            return null
+          }
+        )
+        if (files === null) return []
+        try {
+          const newWarnings = await awaitBounded(
+            refreshBudget(sessionID),
+            observationWaitMs(),
+            () => []
           )
-            await enforceBudget(sessionID, report.date)
           void recordLifecycle(
             {
               sessionID,
@@ -184,9 +235,6 @@ export default {
           return []
         }
       })
-      observationQueue = result
-      return result
-    }
     const contextCache = await registerContextCache(context)
     const loopGuard = await registerLoopGuard(context, contextCache)
     const handoff = await registerHandoff(context, observe, contextCache)
@@ -466,7 +514,7 @@ export default {
     })
     return async () => {
       abort.abort()
-      await observationQueue
+      await enqueueObservation.drain()
     }
   }
 }

@@ -20,6 +20,24 @@ export function recordLifecycle(entry, { directory, stateDirectory } = {}) {
   })().catch(() => {})
 }
 
+export function serialByKey() {
+  const tails = new Map()
+  const run = (key, task) => {
+    const previous = tails.get(key) ?? Promise.resolve()
+    const result = previous.then(task)
+    tails.set(
+      key,
+      result.then(
+        () => {},
+        () => {}
+      )
+    )
+    return result
+  }
+  run.drain = () => Promise.all([...tails.values()])
+  return run
+}
+
 export async function awaitBounded(pending, waitMs, onTimeout) {
   const raced = await Promise.race([
     Promise.resolve(pending).then(
