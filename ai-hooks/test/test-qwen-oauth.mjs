@@ -194,3 +194,61 @@ test("fetchModels retries a transient connection reset", async () => {
   assert.equal(calls, 2)
   assert.deepEqual(result.models, ["qwen3.8-max"])
 })
+
+test("refreshTokens gives up after bounded attempts on a persistent dns failure", async () => {
+  let calls = 0
+  await withFetch(
+    async () => {
+      calls += 1
+      throw networkError("EAI_AGAIN")
+    },
+    () =>
+      assert.rejects(refreshTokens("refresh"), (error) => {
+        assert.match(error.message, /EAI_AGAIN/)
+        assert.doesNotMatch(error.message, /не удалось обновить токен/)
+        assert.equal(error.code, "EAI_AGAIN")
+        return true
+      })
+  )
+
+  assert.equal(calls, 4)
+})
+
+test("refreshTokens does not retry a cancelled request", async () => {
+  let calls = 0
+  await withFetch(
+    async () => {
+      calls += 1
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError")
+    },
+    () => assert.rejects(refreshTokens("refresh"), /aborted/)
+  )
+
+  assert.equal(calls, 1)
+})
+
+test("refreshTokens does not retry an http 401", async () => {
+  let calls = 0
+  await withFetch(
+    async () => {
+      calls += 1
+      return json({}, 401)
+    },
+    () => assert.rejects(refreshTokens("refresh"), /qwen oauth 401/)
+  )
+
+  assert.equal(calls, 1)
+})
+
+test("refreshTokens does not retry an http 429", async () => {
+  let calls = 0
+  await withFetch(
+    async () => {
+      calls += 1
+      return json({}, 429)
+    },
+    () => assert.rejects(refreshTokens("refresh"), /qwen oauth 429/)
+  )
+
+  assert.equal(calls, 1)
+})
