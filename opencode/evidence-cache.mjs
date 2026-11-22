@@ -11,7 +11,7 @@ import {
   sessionExists,
   writePrivateJSON
 } from "./local-state.mjs"
-import { ensurePlan, planTarget, prunePlans, readPlan } from "./plan-store.mjs"
+import { ensurePlan, planTarget, prunePlans, readAcceptance, readPlan } from "./plan-store.mjs"
 
 export const contextCacheKey = (sessionID) => `context-cache:${sessionID}`
 export const legacyContextCacheKey = (sessionID) => `task-context:${sessionID}`
@@ -269,7 +269,7 @@ export async function registerContextCache(context) {
     editor.add({
       name: "context_cache",
       description:
-        "Save and restore selected already-observed TokenSave ranges with hash validation, linked to the managed task plan. The plan file holds the objective, checkpoint and remaining steps. Complete deletes only this task cache after work and checks finish. Never cache the entire investigation.",
+        "Save and restore selected already-observed TokenSave ranges with hash validation, linked to the managed task plan. Complete requires each managed implementation criterion to have its own closing evidence and deletes only this task cache. Never cache the entire investigation.",
       input: {
         type: "object",
         properties: {
@@ -319,6 +319,16 @@ export async function registerContextCache(context) {
         })
         const saved = await load(sessionID)
         if (action === "complete") {
+          const acceptance = await readAcceptance(context, sessionID)
+          if (acceptance && (acceptance.issues.length || acceptance.pending.length)) {
+            const problems = [
+              ...acceptance.issues,
+              ...acceptance.pending.map(({ id, status, reason }) =>
+                `${id} [${status}]${reason ? ` (${reason})` : ""}`
+              )
+            ]
+            throw new Error(`Task acceptance is unfinished: ${problems.join("; ")}`)
+          }
           if (saved) await fs.unlink(fileFor(saved.id))
           await context.storage.remove(contextCacheKey(sessionID))
           await context.storage.remove(legacyContextCacheKey(sessionID))

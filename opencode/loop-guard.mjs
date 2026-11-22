@@ -1,6 +1,7 @@
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 import { boundToolResult } from "./output-bounds.mjs"
 import { sanitizeMessageTexts } from "./dsml.mjs"
+import { readAcceptance } from "./plan-store.mjs"
 
 const policy = contextPolicy.opencode
 const readTools = new Set(["read", "grep", "glob", "skill", "execute", "shell"])
@@ -95,6 +96,7 @@ export async function registerLoopGuard(
         edited: false,
         skills: new Set(),
         repeats: new Map(),
+        verification: null,
         resume: false,
         dsmlLoopWarned: false
       })
@@ -108,6 +110,7 @@ export async function registerLoopGuard(
     s.reads = 0
     s.level = 0
     s.edited = false
+    s.verification = null
     s.repeats.clear()
   })
 
@@ -155,7 +158,7 @@ export async function registerLoopGuard(
         }]
       })
     }
-    if (event.agent === "plan" || !s.edited) return
+    if (event.agent === "plan" || !s.edited || s.verification) return
     if (s.level >= 3) {
       event.tools = {}
       return
@@ -192,6 +195,7 @@ export async function registerLoopGuard(
       s.edited = true
       s.reads = 0
       s.level = 0
+      s.verification = null
       s.repeats.clear()
     } else if (
       readTools.has(event.tool) &&
@@ -208,14 +212,32 @@ export async function registerLoopGuard(
             : 0
     if (event.status === "completed" && level > s.level) {
       s.level = level
-      appendNotice(
-        event,
-        level === 3
-          ? stopNotice(s.edited)
-          : level === 2
-            ? hardNotice(s.edited)
-            : softNotice(s.reads, s.edited)
-      )
+      const acceptance = level >= 2 && event.agent !== "plan"
+        ? await readAcceptance(context, sessionOf(event)).catch(() => null)
+        : null
+      const criterion = acceptance?.pending[0]
+      if (acceptance) {
+        if (level === 3) s.verification = { warned: false }
+        const next = criterion
+          ? `Verify acceptance criterion ${criterion.id} with its specific source and check.`
+          : acceptance.issues.length
+            ? "Resolve the acceptance list issues in the task plan."
+            : "Reconcile the plan and run the completion check."
+        const reserve = level === 3
+          ? ` The next ${policy.verificationReads} reads are a checkpoint, not a tool limit.`
+          : ""
+        appendNotice(event, `Harness progress guard: stop broad exploration. ${next}${reserve}`)
+      } else {
+        appendNotice(event, level === 3 ? stopNotice(s.edited) : level === 2 ? hardNotice(s.edited) : softNotice(s.reads, s.edited))
+      }
+    } else if (event.status === "completed" && s.verification && !s.verification.warned && s.reads >= policy.stopReads + policy.verificationReads) {
+      s.verification.warned = true
+      const acceptance = await readAcceptance(context, sessionOf(event)).catch(() => null)
+      const criterion = acceptance?.pending[0]
+      const next = criterion
+        ? `Continue ${criterion.id} [${criterion.status}] with its exact check, or report the concrete blocker.`
+        : "Follow the remaining acceptance work in the plan or run the completion check."
+      appendNotice(event, `Harness progress guard: verification reserve exhausted; tools remain available. ${next} Reuse earlier results instead of repeating a lookup.`)
     }
   })
 
@@ -225,6 +247,7 @@ export async function registerLoopGuard(
       s.reads = 0
       s.level = 0
       s.edited = false
+      s.verification = null
       s.repeats.clear()
     }
   }

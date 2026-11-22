@@ -14,7 +14,9 @@ export const planKey = (sessionID) => `plan:${sessionID}`
 export const planIndexKey = (id) => `plan-index:${id}`
 export const checkpointHeading = "## Checkpoint"
 export const remainingHeading = "## Оставшиеся шаги"
+export const acceptanceHeading = "## Acceptance criteria"
 const objectiveHeading = "## Objective"
+const acceptanceRow = /^- ([a-z0-9][a-z0-9.-]*) \[(closed|defect|not checked)\] (.+)$/i
 
 export const planPath = (plan) => path.relative(plan.root, plan.file)
 
@@ -133,6 +135,50 @@ export async function readPlan(context, sessionID) {
   return plan
 }
 
+function acceptanceFrom(text) {
+  const section = sectionContent(text, acceptanceHeading)
+  const issues = []
+  const pending = []
+  const ids = new Map()
+  for (const line of section.split("\n").map(line => line.trim()).filter(Boolean)) {
+    const match = acceptanceRow.exec(line)
+    if (!match) {
+      issues.push("Invalid acceptance row; use `- ID [not checked] criterion`")
+      continue
+    }
+    const [, id, rawStatus, detail] = match
+    const key = id.toLowerCase()
+    if (ids.has(key)) {
+      issues.push(`Duplicate acceptance criterion ${id}`)
+      continue
+    }
+    ids.set(key, id)
+    const status = rawStatus.toLowerCase()
+    const separator = detail.indexOf(" | ")
+    const criterion = (separator === -1 ? detail : detail.slice(0, separator)).trim()
+    const evidence = separator === -1 ? "" : detail.slice(separator + 3).trim()
+    if (!criterion) issues.push(`${id} has no acceptance criterion`)
+    if (status === "closed" && !/^(test|source):\s+\S/i.test(evidence)) {
+      pending.push({ id, status: "not checked", reason: "missing specific test: or source: evidence" })
+    } else if (status !== "closed") {
+      pending.push({ id, status })
+    }
+  }
+  if (!section) issues.push(`Add ${acceptanceHeading} to the task plan before completing`)
+  return { ids, issues, pending }
+}
+
+export async function readAcceptance(context, sessionID) {
+  const plan = await readPlan(context, sessionID)
+  if (plan?.stage !== "implementation") return null
+
+  const { ids, issues, pending } = acceptanceFrom(await fs.readFile(plan.file, "utf8"))
+  for (const id of plan.acceptanceIDs ?? []) {
+    if (!ids.has(id.toLowerCase())) issues.push(`Missing original acceptance criterion ${id}`)
+  }
+  return { issues, pending }
+}
+
 export async function createPlan(
   context,
   { sessionID, directory, objective, stage }
@@ -210,7 +256,9 @@ export async function updatePlan(
 ) {
   const plan = await readPlan(context, sessionID)
   if (!plan) return null
-  if (remaining?.trim() || checkpoint?.trim()) {
+  let acceptanceIDs = plan.acceptanceIDs
+  const startingImplementation = stage === "implementation" && plan.stage !== stage
+  if (startingImplementation || remaining?.trim() || checkpoint?.trim()) {
     const original = await fs.readFile(plan.file, "utf8")
     const current = sectionContent(original, checkpointHeading)
     const fillsRemaining = remaining?.trim() && !sectionContent(original, remainingHeading)
@@ -221,9 +269,10 @@ export async function updatePlan(
       text = replaceSection(text, checkpointHeading, checkpointFor(checkpoint))
     else if (!current || (fillsRemaining && plan.ownership === "managed" && current === initialCheckpoint(original)))
       text = replaceSection(text, checkpointHeading, checkpointFor(remaining ?? ""))
+    if (startingImplementation) acceptanceIDs = [...acceptanceFrom(original).ids.values()]
     if (text !== original) await writePrivateText(plan.file, text)
   }
-  const updated = { ...plan, stage, updatedAt: Date.now() }
+  const updated = { ...plan, stage, ...(acceptanceIDs?.length ? { acceptanceIDs } : {}), updatedAt: Date.now() }
   await context.storage.set(planKey(sessionID), updated)
   await indexPlan(context, updated)
   return updated

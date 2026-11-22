@@ -77,6 +77,8 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
     } else if (state.stage === "planning") {
       const plan = await readPlan(context, event.sessionID)
       event.system.push({ type: "text", text: `${planningInstructions}${plan ? ` Task plan: ${planPath(plan)}. Keep the objective, decisions, checkpoint and remaining steps there; do not repeat them in the Handoff.` : ""} Use brief_transition(stage=implement) only when implementation is authorized and the plan is ready. Pass only the plan path in the Handoff for a saved plan; include the remaining steps only as a fallback if they could not be saved.` })
+    } else if (state.stage === "implementation") {
+      event.system.push({ type: "text", text: "Before editing, read the saved plan line by line and account for every requirement and check in its acceptance rows. Start at the first unresolved row. Never remove a row or substitute a nearby check. Each row needs its own evidence; context_cache(action=complete) must succeed before reporting completion." })
     }
   })
   return {

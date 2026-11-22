@@ -11,7 +11,7 @@ The task plan file (`.opencode/plans/<task-id>.md`) is the single canonical sour
 
 Carry only unfinished steps into the remaining plan; never repeat completed phases as next steps, never copy the executed part of the checklist, and do not tell the receiver to re-read the whole plan or reload already-loaded skills to rediscover progress.
 
-If acceptance checks remain, pass the plan path and identify the next unchecked criterion without copying the checkpoint. If no plan is available, preserve each open criterion explicitly in the summary with its current status and remaining check. Never turn a partial check or a general passing suite into closure of an unchecked criterion. On resume, continue with that criterion rather than repeating the full review.
+If acceptance checks remain, pass the plan path and identify the first unresolved criterion by its ID, status and next check without copying the checkpoint or the acceptance list. If no plan is available, preserve each open criterion explicitly in the summary with its current status and remaining check. Never turn a partial check or a general passing suite into closure of an unchecked criterion. On resume, continue with that criterion rather than repeating the full review.
 
 Handoff is a transfer, not a completion step. A finished or blocked task is not transferred: do not create or refresh its checkpoint, and do not offer a handoff at the end of completed work. A long session whose work is done ends with the result, not with a handoff.
 

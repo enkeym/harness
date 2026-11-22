@@ -216,7 +216,9 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
     tokens: contextPolicy.opencode.keepTokens
   })
   assert.equal(contextPolicy.opencode.keepTokens, 10000)
-  assert.equal(contextPolicy.opencode.startTokens, 95000)
+  assert.equal(contextPolicy.opencode.startTokens, 150000)
+  assert.equal(contextPolicy.opencode.maxTokens, 175000)
+  assert.equal(loadConfig(directory).current.compaction.buffer, 25000)
   assert.equal(loadConfig(directory).current.compaction.keep.tokens, 10000)
   assert.equal(loadConfig(directory).current.agents.plan.disabled, true)
   assert.equal(loadConfig(directory).current.agents.plan.disable, undefined)
@@ -381,6 +383,7 @@ test("installer trims reasoning effort unsupported by a bundled model", () => {
       deepseek: {
         models: {
           "deepseek-flash": {
+            limit: { input: 120000, output: 8192 },
             capabilities: {
               reasoning: { supported: true, effort: ["low", "high", "max"] },
               vision: true
@@ -388,6 +391,7 @@ test("installer trims reasoning effort unsupported by a bundled model", () => {
             settings: { api: "chat", reasoningEffort: "max" }
           },
           "deepseek-v4-pro": {
+            limit: { input: 80000, output: 8192 },
             capabilities: {
               reasoning: { supported: true, effort: ["max"] }
             },
@@ -405,6 +409,8 @@ test("installer trims reasoning effort unsupported by a bundled model", () => {
   }
   migrateBundledModels(config, defaults)
   const models = config.providers.deepseek.models
+  assert.equal(models["deepseek-flash"].limit.input, 175000)
+  assert.equal(models["deepseek-v4-pro"].limit.input, 80000)
   assert.deepEqual(models["deepseek-flash"].capabilities.reasoning.effort, [
     "low",
     "high"
@@ -567,12 +573,16 @@ export default { id: "harness", setup: async context => {
         : undefined
       const transition = briefStage && !briefStages.has(briefStage)
       if (transition) briefStages.add(briefStage)
-      const completeTask =
-        primary &&
-        JSON.stringify(input).includes("TASK_NATIVE_COMPLETE") &&
-        !completedTask
-      if (completeTask) completedTask = true
-      const callStage = completeTask ? "complete" : briefStage
+      const completionMode = primary
+        ? /TASK_NATIVE_COMPLETE_CLOSED/.test(JSON.stringify(input))
+          ? "closed"
+          : /TASK_NATIVE_COMPLETE_OPEN/.test(JSON.stringify(input))
+            ? "open"
+            : undefined
+        : undefined
+      const completeTask = completionMode && completedTask !== completionMode
+      if (completeTask) completedTask = completionMode
+      const callStage = completeTask ? `complete_${completionMode}` : briefStage
       const handoff =
         briefStage === "plan"
           ? "BRIEF_NATIVE_HANDOFF. Design the module; resolve nodata. Implementation authorized."
@@ -1291,6 +1301,12 @@ export default { id: "harness", setup: async context => {
     /Task plan: \.opencode\/plans\//
   )
   await api(`/experimental/session/${briefSource.data.id}/wait`, {})
+  const plannedFile = /Task plan: (\.opencode\/plans\/[a-z0-9-]+\.md)/.exec(
+    JSON.stringify(plannerRequest)
+  )?.[1]
+  assert.ok(plannedFile)
+  const criteria = "\n## Acceptance criteria\n\n- A1 [not checked] Check native fixture routing\n"
+  fs.appendFileSync(path.join(directory, plannedFile), criteria)
   assert.deepEqual(
     (await api(`/session/${briefSource.data.id}`)).data.permissions,
     briefSource.data.permissions
@@ -1340,10 +1356,23 @@ export default { id: "harness", setup: async context => {
   const briefSourceAfter = await api(`/session/${briefSource.data.id}`)
   assert.equal(briefSourceAfter.data.model.id, "deepseek-flash")
   assert.deepEqual(briefSourceAfter.data.permissions, briefSource.data.permissions)
-  const completionStart = requests.length
+  const blockedStart = requests.length
   await api(`/session/${briefSource.data.id}/prompt`, {
-    text: "TASK_NATIVE_COMPLETE"
+    text: "TASK_NATIVE_COMPLETE_OPEN"
   })
+  await api(`/experimental/session/${briefSource.data.id}/wait`, {})
+  assert.ok(requests.slice(blockedStart).some((value) =>
+    JSON.stringify(value).includes("Task acceptance is unfinished: A1 [not checked]")
+  ))
+
+  const planFile = path.join(directory, implementationPlan)
+  const text = fs.readFileSync(planFile, "utf8")
+  fs.writeFileSync(planFile, text.replace(
+    "- A1 [not checked] Check native fixture routing",
+    "- A1 [closed] Check native fixture routing | source: test-opencode.mjs implementationRequest contains the saved plan path"
+  ))
+  const completionStart = requests.length
+  await api(`/session/${briefSource.data.id}/prompt`, { text: "TASK_NATIVE_COMPLETE_CLOSED" })
   await api(`/experimental/session/${briefSource.data.id}/wait`, {})
   assert.ok(
     requests

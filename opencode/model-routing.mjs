@@ -1,5 +1,7 @@
 import { deepseekTokenRates } from "./cost-policy.mjs"
 
+const previousBundledInputLimit = 120000
+
 export const deepseekModels = {
   flash: { providerID: "deepseek", id: "deepseek-flash" },
   pro: { providerID: "deepseek", id: "deepseek-v4-pro" }
@@ -34,6 +36,8 @@ export function migrateBundledModels(config, defaults) {
     for (const [id, source] of Object.entries(bundled)) {
       if (!models[id] || !source.cost) continue
       models[id] = { ...models[id], cost: structuredClone(source.cost) }
+      if (models[id].limit?.input === previousBundledInputLimit && source.limit?.input)
+        models[id].limit = { ...models[id].limit, input: source.limit.input }
       trimEffort(models[id], source)
     }
   }

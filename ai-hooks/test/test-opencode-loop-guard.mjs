@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
 import { registerLoopGuard } from "../../opencode/loop-guard.mjs"
+import { createPlan } from "../../opencode/plan-store.mjs"
 
 async function fixture(
   t,
@@ -19,8 +20,10 @@ async function fixture(
   const sessionHooks = new Map()
   const toolHooks = new Map()
   const references = []
+  const stored = new Map()
   const context = {
     location: { directory },
+    storage: { get: async key => stored.get(key), set: async (key, value) => stored.set(key, value) },
     session: { hook: async (name, hook) => sessionHooks.set(name, hook) },
     tool: { hook: async (name, hook) => toolHooks.set(name, hook) }
   }
@@ -91,6 +94,7 @@ async function fixture(
     sessionHooks,
     toolHooks,
     directory,
+    context,
     references
   }
 }
@@ -402,6 +406,37 @@ test("mixed non-text execute results are never bounded or rewritten", async t =>
   await f.after("execute", { code: "return mixed" }, mixed)
   assert.deepEqual(mixed.content, before.content)
   assert.deepEqual(fs.readdirSync(outputDir), [])
+})
+
+test("an open acceptance criterion keeps verification and edit tools after exceeding the reserve", async t => {
+  const f = await fixture(t)
+  const plan = await createPlan(f.context, {
+    sessionID: "session",
+    directory: f.directory,
+    objective: "Verify cancellation",
+    stage: "implementation"
+  })
+  fs.appendFileSync(plan.file, "\n## Acceptance criteria\n\n- A1 [not checked] Cancel during a successful status read\n")
+  await f.after("edit", { file: "a.mjs" })
+  const stop = {}
+  for (let i = 0; i < 60; i++) await f.after("read", { file: `a${i}.mjs` }, i === 59 ? stop : {})
+
+  assert.match(f.notice(stop), /A1/)
+  assert.ok((await f.contextHook()).tools.read)
+
+  await f.after("shell", { command: "node --test cancel.test.mjs" })
+  const exhausted = {}
+  for (let i = 0; i < 4; i++) await f.after("read", { file: "same.mjs" }, i === 3 ? exhausted : {})
+  assert.match(f.notice(exhausted), /reserve exhausted.*A1.*not checked/i)
+  const { tools } = await f.contextHook()
+  for (const name of ["read", "edit", "shell", "execute"]) assert.ok(tools[name], name)
+  assert.match(fs.readFileSync(plan.file, "utf8"), /A1 \[not checked\]/)
+
+  const repeated = {}
+  await f.after("read", { file: "same.mjs" }, repeated)
+  assert.match(f.notice(repeated), /repeat guard/i)
+  assert.doesNotMatch(f.notice(repeated), /reserve exhausted/i)
+  assert.ok((await f.contextHook()).tools.read)
 })
 
 test("a finished turn resets the read budget and the phase for the next user message", async t => {

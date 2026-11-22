@@ -5,13 +5,14 @@ export const contextPolicy = Object.freeze({
   maxTokens: 120000,
   maxOutputTokens: 8192,
   opencode: Object.freeze({
-    startTokens: 95000,
-    maxTokens: 120000,
+    startTokens: 150000,
+    maxTokens: 175000,
     keepTokens: 10000,
     resumeEditBudget: 12,
     softReads: 20,
     hardReads: 40,
     stopReads: 60,
+    verificationReads: 4,
     toolOutputBytes: 6 * 1024,
     artifactFullOutputBytes: 24 * 1024
   })

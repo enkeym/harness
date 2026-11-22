@@ -7,7 +7,7 @@ import path from "node:path"
 import { registerBrief } from "../../opencode/brief.mjs"
 import { registerHandoff } from "../../opencode/handoff.mjs"
 import { registerContextCache } from "../../opencode/evidence-cache.mjs"
-import { checkpointHeading, planKey, remainingHeading, replaceSection } from "../../opencode/plan-store.mjs"
+import { checkpointHeading, createPlan, planKey, remainingHeading, replaceSection, updatePlan } from "../../opencode/plan-store.mjs"
 import { finishCompaction } from "../../opencode/session-compaction.mjs"
 import { readBriefPolicy } from "../bin/brief-policy.mjs"
 
@@ -202,6 +202,74 @@ test("brief preserves observed TokenSave evidence through planning and implement
   const restored = await f.tools.get("context_cache").execute({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] }, { sessionID: "source" })
   assert.match(restored.content, /2\tsecond/)
   assert.match((await f.tools.get("context_cache").execute({ action: "restore" }, { sessionID: "other" })).content, /No saved/)
+})
+
+test("the managed implementation cannot complete until each acceptance criterion has evidence", async t => {
+  const f = fixture(t)
+  await registerContextCache(f.context)
+  const plan = await createPlan(f.context, {
+    sessionID: "source",
+    directory: f.directory,
+    objective: "Verify route changes and cancellation.",
+    stage: "implementation"
+  })
+  const complete = () => f.tools.get("context_cache").execute({ action: "complete" }, { sessionID: "source" })
+  const original = fs.readFileSync(plan.file, "utf8")
+  const record = (...rows) => fs.writeFileSync(plan.file, `${original}\n## Acceptance criteria\n\n${rows.join("\n")}\n`)
+
+  await assert.rejects(complete(), /add.*Acceptance criteria/i)
+
+  record(
+    "- A1 [closed] Deadline expires after 60 seconds | test: node --test deadline.test.mjs: passed",
+    "- A2 [not checked] Cancel while a successful status read is in flight"
+  )
+  await assert.rejects(complete(), /A2/)
+
+  record(
+    "- A1 [closed] Deadline expires after 60 seconds",
+    "- A2 [defect] Cancel while a successful status read is in flight | rejected stale result incorrectly"
+  )
+  await assert.rejects(complete(), /A1.*A2/s)
+
+  record(
+    "- A1 [closed] Deadline expires after 60 seconds | 522 passed",
+    "- A2 [closed] Cancel while a successful status read is in flight | test: node --test cancel.test.mjs: passed"
+  )
+  await assert.rejects(complete(), /A1.*evidence/i)
+
+  record(
+    "- A1 [closed] Deadline expires after 60 seconds | test: node --test deadline.test.mjs: passed",
+    "- A2 [closed] Cancel while a successful status read is in flight | test: node --test cancel.test.mjs: passed"
+  )
+  assert.match((await complete()).content, /Context cache cleared/)
+  assert.ok(fs.existsSync(plan.file))
+})
+
+test("removing an original acceptance row does not complete the plan", async t => {
+  const f = fixture(t)
+  await registerContextCache(f.context)
+  const plan = await createPlan(f.context, {
+    sessionID: "source",
+    directory: f.directory,
+    objective: "Verify route changes and cancellation.",
+    stage: "planning"
+  })
+  const record = (...rows) => {
+    const current = fs.readFileSync(plan.file, "utf8")
+    fs.writeFileSync(plan.file, replaceSection(current, "## Acceptance criteria", rows.join("\n")))
+  }
+  record("- A1 [not checked] Check deadline", "- A2 [not checked] Check cancellation")
+  await updatePlan(f.context, { sessionID: "source", remaining: "Check both conditions" })
+
+  record("- A2 [closed] Check cancellation | test: node --test cancel.test.mjs: passed")
+  const complete = () => f.tools.get("context_cache").execute({ action: "complete" }, { sessionID: "source" })
+  await assert.rejects(complete(), /missing.*A1/i)
+
+  record(
+    "- A1 [closed] Check deadline | test: node --test deadline.test.mjs: passed",
+    "- A2 [closed] Check cancellation | test: node --test cancel.test.mjs: passed"
+  )
+  assert.match((await complete()).content, /Context cache cleared/)
 })
 
 test("routine turns, disabled routing, errors and cancellation compact nothing", async t => {

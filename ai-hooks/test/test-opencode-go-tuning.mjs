@@ -18,14 +18,14 @@ test("the opencode-go provider id matches the registry", () => {
 })
 
 test("caps default to the harness token policy and ignore malformed environment", () => {
-  assert.deepEqual(opencodeGoCaps({}), { cap: 8192, inputCap: 120_000 })
+  assert.deepEqual(opencodeGoCaps({}), { cap: 8192, inputCap: 175_000 })
   assert.deepEqual(opencodeGoCaps({ OPENCODE_GO_OUTPUT_CAP: "4096", OPENCODE_GO_INPUT_CAP: "90000" }), {
     cap: 4096,
     inputCap: 90_000
   })
   assert.deepEqual(opencodeGoCaps({ OPENCODE_GO_OUTPUT_CAP: "0", OPENCODE_GO_INPUT_CAP: "-5" }), {
     cap: 8192,
-    inputCap: 120_000
+    inputCap: 175_000
   })
 })
 
@@ -34,7 +34,7 @@ test("large provider limits are capped to the token policy", () => {
 
   assert.deepEqual(model.limit, {
     context: 1_048_576,
-    input: 120_000,
+    input: 175_000,
     output: 8192
   })
 })
@@ -63,7 +63,7 @@ test("a model without limits is still capped safely", () => {
   const model = tuneOpencodeGoModel({}, opencodeGoCaps({}))
 
   assert.equal(model.limit.output, 8192)
-  assert.equal(model.limit.input, 120_000)
+  assert.equal(model.limit.input, 175_000)
 })
 
 test("tuning keeps pricing, settings and variants untouched", () => {
