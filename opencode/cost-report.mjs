@@ -121,13 +121,26 @@ export function validateCostConfig(config) {
   return merged
 }
 
-export function localDate(timestamp, timeZone = defaultCostConfig.timeZone) {
-  const parts = new Intl.DateTimeFormat("en", {
+const dateFormatters = new Map()
+const maximumDateFormatters = 8
+
+function dateFormatter(timeZone) {
+  const cached = dateFormatters.get(timeZone)
+  if (cached) return cached
+  const formatter = new Intl.DateTimeFormat("en", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).formatToParts(new Date(timestamp))
+  })
+  if (dateFormatters.size >= maximumDateFormatters)
+    dateFormatters.delete(dateFormatters.keys().next().value)
+  dateFormatters.set(timeZone, formatter)
+  return formatter
+}
+
+export function localDate(timestamp, timeZone = defaultCostConfig.timeZone) {
+  const parts = dateFormatter(timeZone).formatToParts(new Date(timestamp))
   return ["year", "month", "day"]
     .map((key) => parts.find((part) => part.type === key).value)
     .join("-")

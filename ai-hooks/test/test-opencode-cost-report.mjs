@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport, readCostEvidence, checkDeepSeekBalance, costStateRoot } from "../../opencode/cost-report.mjs"
+import { buildCostReport, refreshCostReport, updateAssessment, defaultCostConfig, formatCostReport, readCostEvidence, checkDeepSeekBalance, costStateRoot, localDate } from "../../opencode/cost-report.mjs"
 import { observationDirectory } from "../../opencode/observations.mjs"
 
 const stamp = Date.parse("2026-11-02T12:00:00Z")
@@ -84,6 +84,66 @@ test("daily report attributes messages by timezone and never sums native parent 
   assert.equal(data.families[0].nativeFamilyTotalUSD, null)
   assert.deepEqual(data.families[0].missingSessionIDs, ["ses_missing"])
   assert.equal(data.families[0].complete, false)
+})
+
+test("localDate reuses a bounded formatter with exact timezone and DST output", () => {
+  const Original = Intl.DateTimeFormat
+  const expected = (timestamp, timeZone) => {
+    const parts = new Original("en", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date(timestamp))
+    return ["year", "month", "day"]
+      .map((key) => parts.find((part) => part.type === key).value)
+      .join("-")
+  }
+  let constructed = 0
+  class CountingDateTimeFormat extends Original {
+    constructor(locale, options) {
+      super(locale, options)
+      constructed++
+    }
+  }
+  Intl.DateTimeFormat = CountingDateTimeFormat
+  try {
+    const zone = "Asia/Kathmandu"
+    const base = Date.parse("2026-11-02T18:14:59Z")
+    const first = constructed
+    for (let hour = 0; hour < 48; hour++)
+      assert.equal(
+        localDate(base + hour * 3600000, zone),
+        expected(base + hour * 3600000, zone)
+      )
+    assert.ok(
+      constructed - first <= 1,
+      "one formatter is created for a time zone"
+    )
+    const reused = constructed
+    for (let hour = 0; hour < 48; hour++)
+      localDate(base + hour * 3600000, zone)
+    assert.equal(constructed, reused, "later calls reuse the cached formatter")
+
+    for (const [timestamp, timeZone] of [
+      [Date.parse("2026-11-02T20:59:59Z"), "Europe/Moscow"],
+      [Date.parse("2026-11-02T21:00:00Z"), "Europe/Moscow"],
+      [Date.parse("2026-03-08T06:59:59Z"), "America/New_York"],
+      [Date.parse("2026-03-08T07:00:00Z"), "America/New_York"],
+      [Date.parse("2026-11-01T05:59:59Z"), "America/New_York"],
+      [Date.parse("2026-11-01T06:00:00Z"), "America/New_York"]
+    ])
+      assert.equal(
+        localDate(timestamp, timeZone),
+        expected(timestamp, timeZone),
+        `${timeZone} ${timestamp}`
+      )
+
+    assert.throws(() => localDate(base, "Not/AZone"), RangeError)
+    assert.throws(() => localDate(base, "Not/AZone"), RangeError)
+  } finally {
+    Intl.DateTimeFormat = Original
+  }
 })
 
 test("report keeps known token totals separate from missing usage", () => {
