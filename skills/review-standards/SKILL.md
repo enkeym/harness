@@ -70,6 +70,11 @@ structural rules and:
 **Tests and docs**
 - Changed behaviour with no test that fails on the old code → Important;
   how to write it: `test-conventions`.
+- A test or receipt proves only the case it runs: when a threshold, empty or
+  missing input or an event order has its own outcome in the contract and the
+  tests stay on one side of it, report the missed guarantee with the independent
+  counterexample, executed in memory or stated as the manual check; a green
+  suite and a receipt do not close it.
 - A changed command, env variable, endpoint, config key or hook behaviour →
   the README, `.env.example` or doc describing it changes in the same diff.
 

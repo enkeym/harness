@@ -17,6 +17,14 @@ needs: `test-coverage`.
   with the right args, error thrown. Not private methods, not call order.
 - Per function: normal case, a boundary (empty, zero, max), the error. A bug
   fix starts with the test that reproduces it.
+- For new or changed behaviour, follow Red → Green with the same scenario:
+  run the test against the old behaviour and record the actual failure, change
+  the smallest contract, then rerun that test unchanged before the nearest
+  existing tests. An already-green test is compatibility coverage, not a
+  reproduction; an import error, missing fixture or typo is a setup fault, not
+  Red.
+- Check-only work with no behaviour change runs the named target check on the
+  current code; do not invent a Red or edit runtime just to produce one.
 - A test that cannot fail (mock returns exactly what is asserted) is not a
   test. Check it goes red against a broken implementation.
 

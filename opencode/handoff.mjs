@@ -10,7 +10,7 @@ const active =
 export const hasRawConfiguration = (text) =>
   /^\s*(?:export\s+)?[A-Z][A-Z0-9_]*\s*=\s*\S+/m.test(text)
 
-export async function registerHandoff(context, onTransfer, contextCache) {
+export async function registerHandoff(context, onTransfer) {
   const rpc = await context.rpc.register(handoffRpc, {})
   const notify = (sessionID, status, message) =>
     rpc.events.emit("changed", { sessionID, status, message })
@@ -53,18 +53,16 @@ export async function registerHandoff(context, onTransfer, contextCache) {
           transfer.id
       }
       const plan = await readPlan(context, sessionID)
-      let activePlan = plan
-      if (!plan) {
-        const request = prompt?.text?.trim() ?? ""
-        const explicit = /^[^\s]+\.md$/.test(request) ? request : null
-        if (explicit) {
-          activePlan = await adoptPlan(context, {
-            sessionID,
-            directory: source.location.directory,
-            file: explicit,
-            stage: transfer?.brief?.stage ?? "handoff"
-          })
-        }
+      let activePlan = plan?.completedAt ? null : plan
+      const request = prompt?.text?.trim() ?? ""
+      const explicit = /^[^\s]+\.md$/.test(request) ? request : null
+      if (explicit) {
+        activePlan = await adoptPlan(context, {
+          sessionID,
+          directory: source.location.directory,
+          file: explicit,
+          stage: transfer?.brief?.stage ?? "handoff"
+        })
       }
       if (!activePlan) {
         const text = transfer?.summary !== undefined
@@ -85,8 +83,6 @@ export async function registerHandoff(context, onTransfer, contextCache) {
           stage: transfer?.brief?.stage ?? "handoff"
         })
       }
-      const messages = await context.session.context({ sessionID })
-      await contextCache?.prepare(sessionID, messages)
       await compactSession(context, sessionID)
       if (continueAfterCompaction && activePlan)
         await context.session.prompt({

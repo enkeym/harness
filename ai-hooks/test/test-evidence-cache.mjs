@@ -17,11 +17,19 @@ async function fixture(t) {
   const text = `file: source.mjs\nmode: full\ndigest: ${"a".repeat(64)}\n\n     1\tfirst\n     2\tsecond\n     3\tthird\n\ntokensave_metrics: before=10 after=10 result=10 saved=0`
   const stored = new Map()
   const hooks = new Map()
+  const writes = []
   let execute
   const context = {
     app: { version: "2.2.6" },
     location: { directory },
-    storage: { get: async key => stored.get(key), set: async (key, value) => stored.set(key, value), remove: async key => stored.delete(key) },
+    storage: {
+      get: async key => stored.get(key),
+      set: async (key, value) => {
+        if (key.startsWith("context-cache:")) writes.push(key)
+        stored.set(key, value)
+      },
+      remove: async key => stored.delete(key)
+    },
     tool: { transform: async edit => edit({ add: tool => { execute = tool.execute } }) },
     session: {
       get: async ({ sessionID }) => ({ id: sessionID }),
@@ -39,7 +47,7 @@ async function fixture(t) {
     if (after) entries = entries.slice(entries.findIndex(value => value.key === after) + 1)
     return { entries: entries.slice(0, limit), next: entries.length > limit ? entries[limit].key : null }
   }
-  return { directory, context, hooks, memory, run, save, scan, stored }
+  return { directory, context, hooks, memory, run, save, scan, stored, writes }
 }
 
 test("context cache survives a transfer and restores only selected unchanged evidence", async t => {
@@ -149,6 +157,7 @@ test("native compaction persists observed evidence without an agent save and res
   await f.hooks.get("compaction")({ sessionID: "source", system: [] })
 
   assert.equal(fs.readdirSync(path.join(f.directory, ".opencode/context-cache")).length, 1)
+  assert.equal(f.writes.length, 2, "each compaction writes one cache binding")
   assert.match(event.messages[0].content[0].text, /Cached context:/)
   assert.match(event.messages[0].content[0].text, /Cached ranges: source.mjs:1-3/)
   assert.doesNotMatch(event.messages[0].content[0].text, /Continue step 2/)
@@ -161,7 +170,13 @@ test("native compaction persists observed evidence without an agent save and res
 test("native compaction caches evidence without a second checkpoint", async t => {
   const f = await fixture(t)
   await f.save()
-  await f.hooks.get("compaction")({ sessionID: "source", system: [] })
+  f.writes.length = 0
+  const prepare = f.memory.prepare
+  f.memory.prepare = async (...args) => `${await prepare(...args)}\nprepared once`
+  const event = { sessionID: "source", system: [] }
+  await f.hooks.get("compaction")(event)
+  assert.equal(f.writes.length, 1, "one compaction writes one cache binding")
+  assert.match(event.messages[0].content[0].text, /prepared once/)
   const restored = await f.run({ action: "restore" })
   assert.match(restored.content, /Cached ranges: source.mjs:2-3/)
   assert.doesNotMatch(restored.content, /checkpoint/i)
@@ -208,12 +223,140 @@ test("context cache completes through the native storage removal API and can be 
     remove: async key => stored.delete(key)
   }
   await f.save()
+  await f.run(
+    { action: "save", sources: [{ file: "source.mjs", lines: "2" }] },
+    "other"
+  )
+  const plans = path.join(f.directory, ".opencode/plans")
+  fs.mkdirSync(plans, { recursive: true })
+  fs.writeFileSync(
+    path.join(plans, "user-plan.md"),
+    "## Checkpoint\n\n- Keep the user plan\n\n## Acceptance criteria\n\n" +
+      '- A1 [closed] Keep the user plan | check: test node --test ai-hooks/test/test-evidence-cache.mjs -t "context cache completes" | test: node --test ai-hooks/test/test-evidence-cache.mjs -t "context cache completes" => 1 passed\n'
+  )
+  await adoptPlan(f.context, {
+    sessionID: "source",
+    directory: f.directory,
+    file: ".opencode/plans/user-plan.md",
+    stage: "implementation"
+  })
 
-  await f.run({ action: "complete" })
-  await f.run({ action: "complete" })
+  const first = await f.run({ action: "complete" })
+  const second = await f.run({ action: "complete" })
 
+  assert.match(first.content, /Task acceptance completed for/)
+  assert.match(second.content, /No context cache file was removed/)
+  assert.match(second.content, /Task acceptance completed for/)
   assert.equal(stored.has(contextCacheKey("source")), false)
   assert.match((await f.run({ action: "restore" })).content, /No saved/)
+  assert.match(
+    (await f.run({ action: "restore" }, "other")).content,
+    /Cached ranges: source.mjs:2-2/
+  )
+  assert.ok(fs.existsSync(path.join(plans, "user-plan.md")))
+})
+
+test("an explicit scope change replaces finished evidence with the active range", async t => {
+  const f = await fixture(t)
+  fs.writeFileSync(path.join(f.directory, "finished.mjs"), "done one\ndone two\n")
+  fs.writeFileSync(path.join(f.directory, "active.mjs"), "open one\nopen two\n")
+  const text = (file, digest, lines) =>
+    `file: ${file}\nmode: full\ndigest: ${digest.repeat(64)}\n\n` +
+    lines.map((line, index) => `     ${index + 1}\t${line}`).join("\n") +
+    "\n\ntokensave_metrics: before=10 after=10 result=10 saved=0"
+  f.context.session.context = async () => [
+    {
+      content: [
+        {
+          type: "tool",
+          name: "execute",
+          state: {
+            status: "completed",
+            content: text("finished.mjs", "b", ["done one", "done two"])
+          }
+        }
+      ]
+    },
+    {
+      content: [
+        {
+          type: "tool",
+          name: "execute",
+          state: {
+            status: "completed",
+            content: text("active.mjs", "c", ["open one", "open two"])
+          }
+        }
+      ]
+    }
+  ]
+
+  await f.run({ action: "save", sources: [{ file: "finished.mjs", lines: "1-2" }] })
+  await f.run({ action: "save", sources: [{ file: "active.mjs", lines: "1-2" }] })
+
+  const directory = path.join(f.directory, ".opencode/context-cache")
+  const saved = JSON.parse(
+    fs.readFileSync(path.join(directory, fs.readdirSync(directory)[0]), "utf8")
+  )
+  assert.deepEqual(saved.sources.map(source => source.file), ["active.mjs"])
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "active.mjs", lines: "1-2" }] })).content,
+    /open one/
+  )
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "finished.mjs", lines: "1-2" }] })).content,
+    /Missing cached range/
+  )
+
+  await f.hooks.get("compaction")({ sessionID: "source", system: [] })
+  const afterCompaction = JSON.parse(
+    fs.readFileSync(path.join(directory, fs.readdirSync(directory)[0]), "utf8")
+  )
+  assert.deepEqual(
+    afterCompaction.sources.map(source => source.file),
+    ["active.mjs"]
+  )
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "finished.mjs", lines: "1-2" }] })).content,
+    /Missing cached range/
+  )
+
+  fs.writeFileSync(path.join(f.directory, "active.mjs"), "open one changed\nopen two\n")
+  await f.hooks.get("compaction")({ sessionID: "source", system: [] })
+  const afterEdit = JSON.parse(
+    fs.readFileSync(path.join(directory, fs.readdirSync(directory)[0]), "utf8")
+  )
+  assert.deepEqual(afterEdit.sources.map(source => source.file), ["active.mjs"])
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "active.mjs", lines: "1-2" }] })).content,
+    /open one changed/
+  )
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "finished.mjs", lines: "1-2" }] })).content,
+    /Missing cached range/
+  )
+})
+
+test("save without sources keeps the selection and an empty array clears it", async t => {
+  const f = await fixture(t)
+  await f.save()
+
+  const kept = await f.run({ action: "save" })
+  assert.match(kept.content, /Cached ranges: source.mjs:2-3/)
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] })).content,
+    /2\tsecond/
+  )
+  const cleared = await f.run({ action: "save", sources: [] })
+  assert.match(cleared.content, /selection cleared/i)
+  assert.match(
+    (await f.run({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] })).content,
+    /No saved/
+  )
+  assert.equal(
+    fs.readdirSync(path.join(f.directory, ".opencode/context-cache")).length,
+    0
+  )
 })
 
 test("context cache storage key stays shared with observations", async t => {

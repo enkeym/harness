@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
+import path from "node:path"
 import { readBriefPolicy, planningInstructions } from "../ai-hooks/bin/brief-policy.mjs"
-import { createPlan, planPath, planReference, readPlan, updatePlan } from "./plan-store.mjs"
+import { createPlan, planPath, planReference, readPlan, recordSteering, updatePlan } from "./plan-store.mjs"
 import { hasRawConfiguration } from "./handoff.mjs"
 import { recordLifecycle } from "./lifecycle-metrics.mjs"
 
@@ -29,11 +30,14 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
       queueing.add(sessionID)
       try {
         const current = await context.storage.get(`brief:${sessionID}`)
+        const boundPlan = await readPlan(context, sessionID)
+        const completed = Boolean(boundPlan?.completedAt)
         if (current?.pending || current?.submitted) throw new Error("Brief transfer already queued; finish this turn")
+        if (stage === "implement" && completed) throw new Error("No planning phase to complete; start a new brief")
         if (stage === "implement" && current?.implemented) throw new Error("Implementation is already authorized; continue it")
         if (stage === "implement" && current?.stage !== "planning") throw new Error("No planning phase to complete")
         if (stage === "plan" && current?.stage === "planning") throw new Error("Already planning; do not transfer recursively")
-        if (stage === "plan" && current?.stage === "implementation") throw new Error("Implementation is authorized; continue the remaining plan instead of planning again")
+        if (stage === "plan" && current?.stage === "implementation" && !completed) throw new Error("Implementation is authorized; continue the remaining plan instead of planning again")
         if (typeof summary !== "string" || !summary.trim() || summary.length > 6000) throw new Error("Expected a compact Handoff")
         if (hasRawConfiguration(summary)) throw new Error("Handoff contains raw configuration content")
         const source = await context.session.get({ sessionID })
@@ -62,6 +66,8 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
     }
   }))
   await context.session.hook("prompt", async event => {
+    if (!/^Task plan: /.test(event.prompt?.text ?? ""))
+      await recordSteering(context, event.sessionID, event.prompt?.text ?? "")
     const state = await context.storage.get(`brief:${event.sessionID}`)
     if (state?.pending || state?.submitted) {
       const { pending, submitted, ...rest } = state
@@ -78,9 +84,41 @@ export async function registerBrief(context, handoff, policy = readBriefPolicy("
       const plan = await readPlan(context, event.sessionID)
       event.system.push({ type: "text", text: `${planningInstructions}${plan ? ` Task plan: ${planPath(plan)}. Keep the objective, decisions, checkpoint and remaining steps there; do not repeat them in the Handoff.` : ""} Use brief_transition(stage=implement) only when implementation is authorized and the plan is ready. Pass only the plan path in the Handoff for a saved plan; include the remaining steps only as a fallback if they could not be saved.` })
     } else if (state.stage === "implementation") {
+      let plan
+      try {
+        plan = await readPlan(context, event.sessionID)
+      } catch (error) {
+        if (error.code !== "ERR_MISSING_PLAN") throw error
+        event.system.push({ type: "text", text: error.message })
+        return
+      }
+      if (plan?.completedAt) return
       event.system.push({ type: "text", text: "Before editing, read the saved plan line by line and account for every requirement and check in its acceptance rows. Start at the first unresolved row. Never remove a row or substitute a nearby check. Each row needs its own evidence; context_cache(action=complete) must succeed before reporting completion." })
     }
   })
+  if (typeof context.tool?.hook === "function") {
+    const fileTools = new Set(["edit", "write", "patch"])
+    await context.tool.hook("execute.before", async event => {
+      if (!fileTools.has(event.tool)) return
+      const state = await context.storage.get(`brief:${event.sessionID}`)
+      if (state?.stage !== "planning") return
+      const plan = await readPlan(context, event.sessionID).catch(() => null)
+      if (!plan || plan.ownership !== "managed" || plan.completedAt) return
+      const patchText = event.input?.patchText
+      const targets =
+        event.tool === "patch" && typeof patchText === "string"
+          ? [
+              ...patchText.matchAll(/^\*\*\* (?:Add|Delete|Update) File: (.+)$/gm),
+              ...patchText.matchAll(/^\*\*\* Move to: (.+)$/gm)
+            ].map(match => match[1])
+          : [event.input?.path]
+      if (!targets.length || targets.some(target => typeof target !== "string" || !target)) return
+      if (targets.every(target => path.resolve(plan.root, target) === plan.file)) return
+      throw new Error(
+        "Planning phase keeps production files read-only; edit the managed plan and call brief_transition(stage=implement) when it is ready."
+      )
+    })
+  }
   return {
     async settle(sessionID, succeeded) {
       if (settling.has(sessionID)) return

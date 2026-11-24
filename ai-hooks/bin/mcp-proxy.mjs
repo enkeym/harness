@@ -844,23 +844,24 @@ input.on("line", (line) => {
   }
   if (catalog && !starting && message.method?.startsWith("notifications/")) return
   if (!prepareCall(message)) return
-  if (Object.hasOwn(message, "id") && message.method) {
+  if (Object.hasOwn(message, "id") && message.method)
     pending.set(message.id, message.method)
-    requestTimers.set(
-      message.id,
-      setTimeout(() => {
-        const error = new Error(
-          "MCP backend request timed out; completion unknown"
-        )
-        if (catalog) restartBackend(error)
-        else fail(error)
-      }, policy.requestTimeoutMs)
-    )
-  }
   ready()
     .then(() => {
       if (closing) return
-      if (Object.hasOwn(message, "id") && message.method && !pending.has(message.id)) return
+      const tracked = Object.hasOwn(message, "id") && message.method
+      if (tracked && !pending.has(message.id)) return
+      if (tracked)
+        requestTimers.set(
+          message.id,
+          setTimeout(() => {
+            const error = new Error(
+              "MCP backend request timed out; completion unknown"
+            )
+            if (catalog) restartBackend(error)
+            else fail(error)
+          }, policy.requestTimeoutMs)
+        )
       write(message)
     })
     .catch(fail)

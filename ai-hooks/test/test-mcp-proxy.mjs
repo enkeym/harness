@@ -13,9 +13,10 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, playwright = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest } = {}) {
+function client(t, { lazy = false, playwright = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest, handshakeDelayMs = 0, recordCalls = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
+  const calls = recordCalls ? path.join(dir, 'calls') : undefined;
   const catalog = path.join(dir, 'catalog.json');
   const policyFile = path.join(dir, 'policy.json');
   fs.writeFileSync(policyFile, JSON.stringify(policy));
@@ -25,7 +26,7 @@ function client(t, { lazy = false, playwright = false, extension = false, token 
   const backendArgs = extension ? [backend, '--extension'] : [backend];
   fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: backendArgs, initialize, tools }));
   const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog, ...(playwright ? ['--playwright-compat'] : [])] : ['--compact']), '--', process.execPath, ...backendArgs], {
-    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: token ? 'test-token' : '', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_BREAK_ONCE: breakOnce ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: token ? 'test-token' : '', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_BREAK_ONCE: breakOnce ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', FAKE_MCP_HANDSHAKE_DELAY_MS: String(handshakeDelayMs), ...(calls ? { FAKE_MCP_CALLS: calls } : {}), ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
   const notifications = [];
@@ -63,7 +64,7 @@ function client(t, { lazy = false, playwright = false, extension = false, token 
       send({ id, method, params });
     });
   }
-  return { rpc, send, starts, notifications, messages, exited, p };
+  return { rpc, send, starts, calls, notifications, messages, exited, p };
 }
 
 test('catalog discovery and ping do not launch the lazy backend; concurrent calls launch it once', async (t) => {
@@ -307,6 +308,32 @@ test('catalog mode recovers from a broken backend pipe without replaying the pen
   assert.deepEqual((await c.rpc('tools/list')).result.tools, listed);
   assert.equal((await c.rpc('tools/call', { name: 'read' })).result.content[0].text, 'file content once');
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\nstart\n');
+});
+
+test('a lazy handshake longer than the request deadline still gives the request its full deadline', async t => {
+  const c = client(t, { lazy: true, handshakeDelayMs: 300, policy: { requestTimeoutMs: 150, shutdownGraceMs: 20 } });
+  await c.rpc('initialize', initialize);
+  const call = await c.rpc('tools/call', { name: 'read' });
+  assert.equal(call.error, undefined);
+  assert.equal(call.result.content[0].text, 'file content once');
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+});
+
+test('cancelling during a delayed handshake neither sends the call nor breaks the next one', async t => {
+  const c = client(t, { lazy: true, handshakeDelayMs: 300, recordCalls: true, policy: { requestTimeoutMs: 1000, shutdownGraceMs: 20 } });
+  await c.rpc('initialize', initialize);
+  c.send({ id: 'waiting', method: 'tools/call', params: { name: 'read' } });
+  const deadline = Date.now() + 1000;
+  while (!fs.existsSync(c.starts) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.ok(fs.existsSync(c.starts));
+  c.send({ method: 'notifications/cancelled', params: { requestId: 'waiting' } });
+
+  const next = await c.rpc('tools/call', { name: 'read' }, 'next');
+  assert.equal(next.error, undefined);
+  assert.equal(next.result.content[0].text, 'file content once');
+  assert.equal(c.messages.filter((message) => message.id === 'waiting').length, 0);
+  assert.equal(fs.readFileSync(c.calls, 'utf8'), 'next:read\n');
+  assert.equal(c.p.exitCode, null);
 });
 
 test('a cancelled request is dropped and forwarded instead of timing out the backend', async t => {

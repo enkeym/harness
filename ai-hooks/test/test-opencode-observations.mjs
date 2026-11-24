@@ -4,7 +4,7 @@ import { test } from "node:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { collectObservations, summarizeSession, observationDirectory, requestObservation, supportedObservationVersion } from "../../opencode/observations.mjs"
+import { collectObservations, summarizeSession, observationDirectory, requestObservation } from "../../opencode/observations.mjs"
 
 const tokens = (input = 10) => ({ input, output: 2, reasoning: 3, cache: { read: 5, write: 0 } })
 const info = (id = "ses_root") => ({ id, location: { directory: "/project" }, time: { created: 1, updated: 10 }, cost: 0, tokens: tokens(12), outcome: "succeeded" })
@@ -42,7 +42,10 @@ test("observations keep stop, length and missing finish distinct", () => {
 
 test("observations reject unsupported schemas and duplicate messages instead of plausible totals", () => {
   assert.throws(() => summarizeSession({ info: info(), messages: [message(), message()] }, "2.2.5"), /Duplicate/)
-  assert.throws(() => summarizeSession({ info: info(), messages: [message()] }, "1.0.0"), /Unsupported/)
+  assert.throws(
+    () => summarizeSession({ info: { ...info(), location: {} }, messages: [message()] }, "2.4.0"),
+    /Unsupported OpenCode session schema/
+  )
   const partial = message()
   delete partial.tokens.cache.write
   assert.throws(() => summarizeSession({ info: info(), messages: [partial] }, "2.2.5"), /tokens/)
@@ -287,17 +290,21 @@ test("context snapshots preserve earlier steps across compaction and full pages 
   assert.equal(record.messageCoverage, "complete-pages")
 })
 
-test("supported observation versions cover validated 2.2 and 2.3 releases", () => {
-  assert.equal(supportedObservationVersion("2.2.5"), true)
-  assert.equal(supportedObservationVersion("2.2.6"), true)
-  assert.equal(supportedObservationVersion("2.2.10"), true)
-  assert.equal(supportedObservationVersion("2.3.0"), true)
-  assert.equal(supportedObservationVersion("2.3.4"), true)
-  assert.equal(supportedObservationVersion("2.1.9"), false)
-  assert.equal(supportedObservationVersion("2.4.0"), false)
-  assert.equal(supportedObservationVersion("3.0.0"), false)
-  assert.equal(supportedObservationVersion("2.2"), false)
-  assert.equal(supportedObservationVersion(undefined), false)
+test("observations accept a new OpenCode version when its reported schema is valid", () => {
+  const record = summarizeSession(
+    { info: info(), messages: [message()] },
+    "2.4.0"
+  )
+  assert.equal(record.clientVersion, "2.4.0")
+  assert.equal(record.sequence.length, 1)
+  assert.throws(
+    () =>
+      summarizeSession(
+        { info: { ...info(), location: {} }, messages: [message()] },
+        "2.4.0"
+      ),
+    /Unsupported OpenCode session schema/
+  )
 })
 
 test("request records carry every required usage field without leaking content", () => {

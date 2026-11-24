@@ -26,8 +26,8 @@ const hardNotice = (implementation) =>
     : "Harness progress guard: the read budget is exhausted without a file change in this session. Do not start another read or shell command for new material; reuse confirmed results and answer with the verified result or the exact blocker. Any further read is a repeated operation the user pays for."
 const stopNotice = (implementation) =>
   implementation
-    ? "Harness progress guard: the session exceeded the read budget without a file change and all tools are withdrawn for this turn. Answer now with the verified result, or name the exact blocker and the next step."
-    : "Harness progress guard: the session exceeded the read budget without a file change. Verification tools stay available, but do not gather new material: answer now with the verified result, or name the exact blocker and the next step."
+    ? "Harness progress guard: the read checkpoint is reached without a file change. Name the current result, the exact remaining check and the gap; tools stay available, but do not repeat a lookup."
+    : "Harness progress guard: the read checkpoint is reached without a file change. Verification tools stay available, but do not gather new material: answer with the verified result, or name the exact blocker and the next step."
 
 const verificationRun =
   /(?:^|[\s;&|(`])(?:npm (?:run )?(?:test|check)|pnpm (?:run )?(?:test|check)|yarn (?:test|check)|node --test|pytest|cargo test|go test|make (?:test|check)|install\.sh --check)\b/
@@ -157,11 +157,6 @@ export async function registerLoopGuard(
           .join("\n")
         }]
       })
-    }
-    if (event.agent === "plan" || !s.edited || s.verification) return
-    if (s.level >= 3) {
-      event.tools = {}
-      return
     }
   })
 

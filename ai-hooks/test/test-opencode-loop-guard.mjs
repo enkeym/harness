@@ -235,7 +235,7 @@ test("read-only audit in build gets advisory notices and keeps every tool", asyn
   const stop = {}
   for (let i = 40; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
   await f.after("read", { file: "a59.mjs" }, stop)
-  assert.match(f.notice(stop), /exceeded the read budget without a file change/)
+  assert.match(f.notice(stop), /read checkpoint is reached without a file change/)
   assert.match(f.notice(stop), /Verification tools stay available/)
 
   const event = await f.contextHook()
@@ -243,24 +243,46 @@ test("read-only audit in build gets advisory notices and keeps every tool", asyn
     assert.ok(event.tools[name], `${name} must stay available in an unknown phase`)
 })
 
-test("stop level withdraws every tool only in a proven implementation", async t => {
+test("checkpoints without a plan keep verification and MCP tools after an edit", async t => {
   const f = await fixture(t)
   await f.after("edit", { file: "a.mjs" })
   for (let i = 0; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
-  const stop = {}
-  await f.after("read", { file: "a59.mjs" }, stop)
-  assert.match(f.notice(stop), /all tools are withdrawn for this turn/)
+  for (const [checkpoint, names] of [
+    [59, (await f.contextHook()).tools],
+    [60, null],
+    [64, null]
+  ]) {
+    if (checkpoint === 60) {
+      const stop = {}
+      await f.after("read", { file: "a59.mjs" }, stop)
+      assert.match(f.notice(stop), /read checkpoint is reached without a file change/)
+    }
+    if (checkpoint === 64)
+      for (let i = 0; i < 4; i++) await f.after("read", { file: `a${60 + i}.mjs` })
+    const tools = names ?? (await f.contextHook()).tools
+    for (const name of ["read", "grep", "glob", "skill", "shell", "execute", "edit", "write"])
+      assert.ok(tools[name], `${name} must stay available at ${checkpoint} reads`)
+  }
+})
 
-  const event = await f.contextHook()
-  assert.deepEqual(event.tools, {})
-  assert.equal(event.system.length, 0)
-
-  await f.after("execute", {
-    code: 'await tools.tokensave.tokensave_multi_str_replace({ path: "a.mjs", replacements: [] })'
+test("a handoff plan keeps verification and MCP tools at every checkpoint", async t => {
+  const f = await fixture(t)
+  await createPlan(f.context, {
+    sessionID: "session",
+    directory: f.directory,
+    objective: "Continue the remaining plan",
+    stage: "handoff"
   })
-  const resumed = await f.contextHook()
-  assert.ok(resumed.tools.read)
-  assert.ok(resumed.tools.execute)
+  await f.after("edit", { file: "a.mjs" })
+  for (let i = 0; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
+  for (const checkpoint of [59, 60, 64]) {
+    if (checkpoint === 60) await f.after("read", { file: "a59.mjs" })
+    if (checkpoint === 64)
+      for (let i = 0; i < 4; i++) await f.after("read", { file: `a${60 + i}.mjs` })
+    const { tools } = await f.contextHook()
+    for (const name of ["read", "grep", "glob", "skill", "shell", "execute", "edit", "write"])
+      assert.ok(tools[name], `${name} must stay available at ${checkpoint} reads`)
+  }
 })
 
 test("a failed edit neither resets the budget nor authorizes withdrawal", async t => {
@@ -418,11 +440,17 @@ test("an open acceptance criterion keeps verification and edit tools after excee
   })
   fs.appendFileSync(plan.file, "\n## Acceptance criteria\n\n- A1 [not checked] Cancel during a successful status read\n")
   await f.after("edit", { file: "a.mjs" })
+  for (let i = 0; i < 59; i++) await f.after("read", { file: `a${i}.mjs` })
+  const beforeStop = await f.contextHook()
+  for (const name of ["read", "edit", "shell", "execute"])
+    assert.ok(beforeStop.tools[name], `${name} at 59 reads`)
   const stop = {}
-  for (let i = 0; i < 60; i++) await f.after("read", { file: `a${i}.mjs` }, i === 59 ? stop : {})
+  await f.after("read", { file: "a59.mjs" }, stop)
 
   assert.match(f.notice(stop), /A1/)
-  assert.ok((await f.contextHook()).tools.read)
+  const atStop = await f.contextHook()
+  for (const name of ["read", "edit", "shell", "execute"])
+    assert.ok(atStop.tools[name], `${name} at 60 reads`)
 
   await f.after("shell", { command: "node --test cancel.test.mjs" })
   const exhausted = {}
@@ -448,8 +476,9 @@ test("a finished turn resets the read budget and the phase for the next user mes
   assert.match(f.notice(soft), /20 read calls since the last file change/)
 
   for (let i = 20; i < 60; i++) await f.after("read", { file: `a${i}.mjs` })
-  const blocked = await f.contextHook()
-  assert.deepEqual(blocked.tools, {})
+  const finished = await f.contextHook()
+  for (const name of ["read", "shell", "execute", "edit"])
+    assert.ok(finished.tools[name], `${name} must stay available before the turn ends`)
 
   f.guard.finishTurn("session")
   const fresh = await f.contextHook()

@@ -17,6 +17,7 @@ import { registerHandoff } from "./handoff.mjs"
 import { finishCompaction } from "./session-compaction.mjs"
 import { registerBrief } from "./brief.mjs"
 import { registerContextCache } from "./evidence-cache.mjs"
+import { acceptanceStatus } from "./plan-store.mjs"
 import { registerLoopGuard } from "./loop-guard.mjs"
 import { registerQuestionGuard } from "./question-guard.mjs"
 import { registerEmptyResponseGuard } from "./empty-response.mjs"
@@ -35,6 +36,46 @@ import {
 } from "./dsml.mjs"
 import { deepseekModels } from "./model-routing.mjs"
 import { isPeakAt, deepseekTokenRates } from "./cost-policy.mjs"
+
+export function createAcceptanceNotifier(notify) {
+  const seen = new Set()
+  return async (context, sessionID) => {
+    const status = await acceptanceStatus(context, sessionID)
+    if (!status) return false
+    const key = `${sessionID}:${status.planID ?? status.path ?? status.kind}:${status.kind}:${status.first ?? ""}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    notify("Приёмка не завершена", status.message)
+    return true
+  }
+}
+
+export async function handleSuccessfulTurn({
+  context,
+  sessionID,
+  source,
+  questionGuard,
+  emptyResponseGuard,
+  acceptanceNotifier,
+  settle
+}) {
+  try {
+    await questionGuard.check(sessionID, source)
+  } catch (error) {
+    process.stderr.write(`Harness question guard failed: ${error.message}\n`)
+  }
+  try {
+    await emptyResponseGuard.check(sessionID, source)
+  } catch (error) {
+    process.stderr.write(`Harness empty response guard failed: ${error.message}\n`)
+  }
+  await settle()
+  try {
+    await acceptanceNotifier(context, sessionID)
+  } catch (error) {
+    process.stderr.write(`Harness acceptance notice failed: ${error.message}\n`)
+  }
+}
 
 const observationTimedOut = Symbol("observation-timed-out")
 const claimed = (globalThis[Symbol.for("harness.events.claimed")] ??= new Set())
@@ -78,6 +119,7 @@ export default {
       })
       pending?.catch?.(() => {})
     }
+    const acceptanceNotifier = createAcceptanceNotifier(notify)
     await context.model.transform((editor) => {
       for (const model of editor.list()) {
         if (model.limit.context <= 0) continue
@@ -254,7 +296,7 @@ export default {
       })
     const contextCache = await registerContextCache(context)
     const loopGuard = await registerLoopGuard(context, contextCache)
-    const handoff = await registerHandoff(context, observe, contextCache)
+    const handoff = await registerHandoff(context, observe)
     const brief = await registerBrief(context, handoff)
     const questionGuard = await registerQuestionGuard(context)
     const emptyResponseGuard = await registerEmptyResponseGuard(context)
@@ -445,51 +487,48 @@ export default {
               "Длинная сессия",
               "Контекст сессии растёт; запустите /handoff вручную, когда закончите текущий шаг."
             )
-          if (event.type === "session.execution.succeeded")
+          const settleTurn = async () => {
+            const settleStarted = Date.now()
             try {
-              await questionGuard.check(sessionID, source)
+              await brief.settle(
+                sessionID,
+                event.type === "session.execution.succeeded"
+              )
+              void recordLifecycle(
+                {
+                  sessionID,
+                  stage: "settle",
+                  durationMs: Date.now() - settleStarted
+                },
+                { directory }
+              )
             } catch (error) {
+              void recordLifecycle(
+                {
+                  sessionID,
+                  stage: "settle",
+                  durationMs: Date.now() - settleStarted,
+                  ok: false,
+                  error: error.name
+                },
+                { directory }
+              )
               process.stderr.write(
-                `Harness question guard failed: ${error.message}\n`
+                `Harness brief transfer failed: ${error.message}\n`
               )
             }
-          if (event.type === "session.execution.succeeded")
-            try {
-              await emptyResponseGuard.check(sessionID, source)
-            } catch (error) {
-              process.stderr.write(
-                `Harness empty response guard failed: ${error.message}\n`
-              )
-            }
-          const settleStarted = Date.now()
-          try {
-            await brief.settle(
-              sessionID,
-              event.type === "session.execution.succeeded"
-            )
-            void recordLifecycle(
-              {
-                sessionID,
-                stage: "settle",
-                durationMs: Date.now() - settleStarted
-              },
-              { directory }
-            )
-          } catch (error) {
-            void recordLifecycle(
-              {
-                sessionID,
-                stage: "settle",
-                durationMs: Date.now() - settleStarted,
-                ok: false,
-                error: error.name
-              },
-              { directory }
-            )
-            process.stderr.write(
-              `Harness brief transfer failed: ${error.message}\n`
-            )
           }
+          if (event.type === "session.execution.succeeded")
+            await handleSuccessfulTurn({
+              context,
+              sessionID,
+              source,
+              questionGuard,
+              emptyResponseGuard,
+              acceptanceNotifier,
+              settle: settleTurn
+            })
+          else await settleTurn()
           try {
             await contextCache.prune()
           } catch (error) {

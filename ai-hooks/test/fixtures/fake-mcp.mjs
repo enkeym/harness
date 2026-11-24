@@ -4,6 +4,7 @@ import { createInterface } from "node:readline"
 
 fs.appendFileSync(process.env.FAKE_MCP_STARTS, "start\n")
 const breakOnce = process.env.FAKE_MCP_BREAK_ONCE && fs.readFileSync(process.env.FAKE_MCP_STARTS, "utf8").trim().split("\n").length === 1
+const handshakeDelayMs = Number(process.env.FAKE_MCP_HANDSHAKE_DELAY_MS || 0)
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
 const clientRequests = new Map()
 if (process.env.FAKE_MCP_DESCENDANT) {
@@ -57,6 +58,8 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   } else if (request.method === "resources/list") {
     result = { resources: [] }
   } else if (request.method === "tools/call") {
+    if (process.env.FAKE_MCP_CALLS)
+      fs.appendFileSync(process.env.FAKE_MCP_CALLS, `${request.id}:${request.params.name}\n`)
     if (request.params.name === "request_roots") {
       const id = `roots-${request.id}`
       clientRequests.set(id, request.id)
@@ -95,5 +98,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       isError: false
     }
   }
-  send({ jsonrpc: "2.0", id: request.id, result })
+  const reply = () => send({ jsonrpc: "2.0", id: request.id, result })
+  if (request.method === "initialize" && handshakeDelayMs) setTimeout(reply, handshakeDelayMs)
+  else reply()
 })

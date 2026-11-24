@@ -4,7 +4,7 @@ import path from "node:path"
 import { readJSON, writePrivateJSON, writePrivateText } from "./local-state.mjs"
 import { deepseekCostBreakdownAt } from "./cost-policy.mjs"
 import { deepseekModels } from "./model-routing.mjs"
-import { requestTypeOf, supportedObservationVersion } from "./observations.mjs"
+import { requestTypeOf } from "./observations.mjs"
 import { contextPolicy } from "../ai-hooks/bin/context-policy.mjs"
 import { cacheMetrics, numeric } from "../ai-hooks/bin/cache-metrics.mjs"
 import { serialByKey } from "./lifecycle-metrics.mjs"
@@ -804,7 +804,6 @@ export async function readCostEvidence({ stateDirectory } = {}) {
         if (
           ![1, 2].includes(record?.schemaVersion) ||
           record.client !== "opencode" ||
-          !supportedObservationVersion(record.clientVersion) ||
           !Array.isArray(record.sequence) ||
           !record.project ||
           `${record.sessionID}.json` !== file.name

@@ -12,6 +12,10 @@ import {
   lifecycleJournalFile
 } from "../../opencode/lifecycle-metrics.mjs"
 import { observationTimeoutMs, observationWaitMs } from "../bin/context-policy.mjs"
+import { createAcceptanceNotifier, handleSuccessfulTurn } from "../../opencode/harness.js"
+import { planKey } from "../../opencode/plan-store.mjs"
+import { registerQuestionGuard } from "../../opencode/question-guard.mjs"
+import { registerEmptyResponseGuard } from "../../opencode/empty-response.mjs"
 
 const tokens = (input = 10) => ({ input, output: 2, reasoning: 3, cache: { read: 5, write: 0 } })
 const message = (id = "msg_1") => ({ id, type: "assistant", model: { providerID: "deepseek", id: "deepseek-v4-pro" }, agent: "build", time: { created: 2, completed: 5 }, cost: 0, tokens: tokens(), content: [{ type: "tool", id: "tool_1", name: "read", state: { status: "completed", input: { file: "private.txt" }, content: [{ type: "text", text: "secret output" }] }, time: { created: 3, completed: 4 } }] })
@@ -166,4 +170,184 @@ test("collectObservations counts pages and saved files into stats", async (t) =>
   assert.equal(files.length, 1)
   assert.ok(fs.existsSync(files[0]))
   assert.equal(stats.pages, 2)
+})
+
+function acceptanceFixture(t, first = "First open criterion") {
+  const directory = sandbox(t, "harness-acceptance-")
+  fs.mkdirSync(path.join(directory, ".opencode", "plans"), { recursive: true })
+  const file = path.join(directory, ".opencode", "plans", "audit-task.md")
+  fs.writeFileSync(
+    file,
+    "## Checkpoint\n\n- Текущий шаг: 1\n\n## Acceptance criteria\n\n" +
+      `- A1 [not checked] ${first}\n` +
+      "- A2 [not checked] Second open criterion\n"
+  )
+  const stored = new Map([
+    [
+      planKey("ses_open"),
+      {
+        version: 1,
+        id: "audit-task",
+        file,
+        root: directory,
+        sessionID: "ses_open",
+        ownership: "managed",
+        stage: "implementation",
+        updatedAt: Date.now()
+      }
+    ]
+  ])
+  const calls = []
+  let turn = null
+  const context = {
+    storage: {
+      get: async key => stored.get(key),
+      set: async (key, value) => stored.set(key, value),
+      remove: async key => stored.delete(key)
+    },
+    session: {
+      prompt: async value => calls.push({ method: "prompt", value }),
+      generate: async value => calls.push({ method: "generate", value }),
+      compact: async value => calls.push({ method: "compact", value }),
+      synthetic: async value => calls.push({ method: "synthetic", value }),
+      context: async () =>
+        turn
+          ? [
+              {
+                id: "msg_user",
+                type: "user",
+                content: [{ type: "text", text: "Continue" }]
+              },
+              {
+                type: "assistant",
+                content: [{ type: "text", text: turn }]
+              }
+            ]
+          : []
+    }
+  }
+  const notices = []
+  const notify = createAcceptanceNotifier((title, message) =>
+    notices.push({ title, message })
+  )
+  return {
+    context,
+    file,
+    notices,
+    notify,
+    stored,
+    calls,
+    setTurn: value => {
+      turn = value
+    }
+  }
+}
+
+test("a successful turn reports open acceptance once without a receipt or a model call", async t => {
+  const f = acceptanceFixture(t)
+
+  assert.equal(await f.notify(f.context, "ses_open"), true)
+  assert.equal(await f.notify(f.context, "ses_open"), false)
+
+  assert.equal(f.notices.length, 1)
+  assert.match(f.notices[0].title, /Приёмка не завершена/)
+  assert.match(f.notices[0].message, /A1/)
+  assert.match(f.notices[0].message, /unfinished/i)
+  assert.equal(f.stored.get(planKey("ses_open")).completedAt, undefined)
+  assert.equal(f.calls.length, 0)
+  assert.match(fs.readFileSync(f.file, "utf8"), /A1 \[not checked\]/)
+})
+
+test("a successful turn reports acceptance that is closed but not finalized", async t => {
+  const f = acceptanceFixture(t)
+  fs.writeFileSync(
+    f.file,
+    "## Checkpoint\n\n- Текущий шаг: 1\n\n## Acceptance criteria\n\n" +
+      '- A1 [closed] First criterion | check: test node --test ai-hooks/test/test-brief.mjs -t "first" | test: node --test ai-hooks/test/test-brief.mjs -t "first" => 1 passed\n' +
+      '- A2 [closed] Second criterion | check: test node --test ai-hooks/test/test-brief.mjs -t "second" | test: node --test ai-hooks/test/test-brief.mjs -t "second" => 1 passed\n'
+  )
+
+  assert.equal(await f.notify(f.context, "ses_open"), true)
+  assert.equal(await f.notify(f.context, "ses_open"), false)
+
+  assert.equal(f.notices.length, 1)
+  assert.match(f.notices[0].message, /not finalized/i)
+  assert.match(f.notices[0].message, /context_cache/)
+  assert.equal(f.stored.get(planKey("ses_open")).completedAt, undefined)
+  assert.equal(f.calls.length, 0)
+})
+
+test("the successful-turn handler runs guards and one acceptance notice without model work", async t => {
+  const f = acceptanceFixture(t)
+  const order = []
+
+  await handleSuccessfulTurn({
+    context: f.context,
+    sessionID: "ses_open",
+    source: { agent: "build" },
+    questionGuard: { check: async () => order.push("question") },
+    emptyResponseGuard: { check: async () => order.push("empty") },
+    acceptanceNotifier: f.notify,
+    settle: async () => order.push("settle")
+  })
+
+  assert.deepEqual(order, ["question", "empty", "settle"])
+  assert.equal(f.notices.length, 1)
+  assert.equal(f.calls.length, 0)
+  assert.equal(f.stored.get(planKey("ses_open")).completedAt, undefined)
+})
+
+test("a question, an agreed pause and an exact blocker start no model work", async t => {
+  for (const [mode, criterion, turn, synthetic] of [
+    [
+      "question",
+      "Which boundary should be checked?",
+      "Проверки прошли.\n\nWhich boundary should be checked?",
+      true
+    ],
+    [
+      "agreed pause",
+      "Pause after the current step",
+      "Pause after the current step.\n\nNo work until the user agrees.",
+      false
+    ],
+    [
+      "exact blocker",
+      "Blocked: the original section 1.4 is missing",
+      "Blocked: the original section 1.4 is missing.\n\nNo work can continue.",
+      false
+    ]
+  ])
+    await t.test(mode, async t => {
+      const f = acceptanceFixture(t, criterion)
+      f.setTurn(turn)
+      const questionGuard = await registerQuestionGuard(f.context)
+      const emptyResponseGuard = await registerEmptyResponseGuard(f.context)
+
+      await handleSuccessfulTurn({
+        context: f.context,
+        sessionID: "ses_open",
+        source: { agent: "build" },
+        questionGuard,
+        emptyResponseGuard,
+        acceptanceNotifier: f.notify,
+        settle: async () => {}
+      })
+
+      assert.deepEqual(
+        f.calls.filter(call =>
+          ["prompt", "generate", "compact"].includes(call.method)
+        ),
+        [],
+        `${mode} must not start model work`
+      )
+      assert.equal(
+        f.calls.filter(call => call.method === "synthetic").length,
+        synthetic ? 1 : 0
+      )
+      assert.equal(f.notices.length, 1)
+      assert.match(f.notices[0].message, /A1/)
+      assert.match(fs.readFileSync(f.file, "utf8"), new RegExp(criterion))
+      assert.equal(f.stored.get(planKey("ses_open")).completedAt, undefined)
+    })
 })

@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { registerHandoff } from "../../opencode/handoff.mjs"
 import { registerContextCache } from "../../opencode/evidence-cache.mjs"
-import { createPlan, planReference } from "../../opencode/plan-store.mjs"
+import { completePlan, createPlan, planReference } from "../../opencode/plan-store.mjs"
 import { finishCompaction } from "../../opencode/session-compaction.mjs"
 import { cachePolicy } from "../../opencode/cache-policy.mjs"
 
@@ -17,6 +17,7 @@ function fixture(t) {
   const events = []
   const compacted = []
   const prompts = []
+  const sessionHooks = new Map()
   let execute
   let compact
   const context = {
@@ -29,7 +30,7 @@ function fixture(t) {
     },
     session: {
       wait: async () => {},
-      hook: async () => {},
+      hook: async (name, hook) => { sessionHooks.set(name, hook) },
       context: async ({ sessionID } = {}) => !sessionID || sessionID === "source" ? [{ id: "msg_source", type: "user", content: [{ type: "text", text: "Continue" }] }] : [],
       get: async () => ({ location: { directory }, agent: "build", model: { id: "model", providerID: "fixture" }, title: "Source" }),
       generate: async () => ({ text: "Continue the remaining plan." }),
@@ -38,7 +39,11 @@ function fixture(t) {
     }
   }
   compact = async () => {}
-  context.session.compact = (value) => { compacted.push(value); return compact(value) }
+  context.session.compact = async (value) => {
+    compacted.push(value)
+    await compact(value)
+    await sessionHooks.get("compaction")?.({ sessionID: value.sessionID, messages: [], system: [] })
+  }
   return {
     context,
     directory,
@@ -46,6 +51,7 @@ function fixture(t) {
     events,
     compacted,
     prompts,
+    sessionHooks,
     setCompact: (value) => { compact = value },
     run: (text = "") => execute({ sessionID: "source", prompt: { text } })
   }
@@ -128,13 +134,29 @@ test("Handoff caches observed ranges and keeps them bound to the same session", 
     ? [{ type: "assistant", content: [{ type: "tool", name: "execute", state: { status: "completed", content: [{ type: "text", text }] } }] }]
     : []
   f.context.session.generate = async () => { generations++; return { text: "Next edit source.mjs:2" } }
-  const memory = await registerContextCache(f.context)
-  await registerHandoff(f.context, undefined, memory)
+  await registerContextCache(f.context)
+  await registerHandoff(f.context)
+  let snapshots = 0
+  let cacheWrites = 0
+  const capture = f.context.session.context
+  f.context.session.context = async (args) => { snapshots++; return capture(args) }
+  const set = f.context.storage.set
+  f.context.storage.set = async (key, value) => {
+    if (key.startsWith("context-cache:")) cacheWrites++
+    return set(key, value)
+  }
 
   await f.run()
 
   assert.equal(generations, 1)
   assert.equal(f.compacted.length, 1)
+  assert.equal(snapshots, 1, "one compaction takes one session snapshot")
+  assert.equal(cacheWrites, 1, "one compaction writes one cache binding")
+  assert.equal(
+    fs.readdirSync(path.join(f.directory, ".opencode/context-cache")).length,
+    1,
+    "one compaction writes one cache entry"
+  )
   const restored = await run({ action: "restore", sources: [{ file: "source.mjs", lines: "2" }] }, { sessionID: "source" })
   assert.match(restored.content, /2\tsecond/)
 })
@@ -224,6 +246,33 @@ test("Handoff adopts an explicit user plan path and keeps it unmanaged", async (
   assert.doesNotMatch(f.prompts[0].text, /Keep working/)
   assert.equal((await f.context.storage.get("plan:source")).ownership, "user")
   assert.equal(fs.readFileSync(file, "utf8").includes("Keep working"), true)
+})
+
+test("Handoff opens an explicit next plan after the managed plan completed", async (t) => {
+  const f = fixture(t)
+  await createPlan(f.context, {
+    sessionID: "source",
+    directory: f.directory,
+    objective: "Completed plan",
+    stage: "implementation"
+  })
+  await completePlan(f.context, "source")
+  fs.mkdirSync(path.join(f.directory, ".opencode/plans"), { recursive: true })
+  const file = path.join(f.directory, ".opencode/plans/next-plan.md")
+  fs.writeFileSync(
+    file,
+    "## Checkpoint\n\n- Next step\n\n## Оставшиеся шаги\n\n### 1. Next task\n"
+  )
+  f.context.session.generate = async () => {
+    assert.fail("An explicit plan must bypass summary generation")
+  }
+  await registerHandoff(f.context)
+
+  await f.run(".opencode/plans/next-plan.md")
+
+  assert.equal((await f.context.storage.get("plan:source")).file, file)
+  assert.equal((await f.context.storage.get("plan:source")).completedAt, undefined)
+  assert.match(f.prompts[0].text, /Task plan: \.opencode\/plans\/next-plan\.md/)
 })
 
 test("Handoff rejects an explicit plan outside the plans directory", async (t) => {

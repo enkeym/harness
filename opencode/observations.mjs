@@ -9,15 +9,6 @@ import { contextCacheKey, legacyContextCacheKey } from "./evidence-cache.mjs"
 
 const counterKeys = ["input", "output", "reasoning", "cacheRead", "cacheWrite"]
 
-export function supportedObservationVersion(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(
-    typeof version === "string" ? version : ""
-  )
-  if (!match) return false
-  const [major, minor, patch] = match.slice(1).map(Number)
-  return major === 2 && ((minor === 2 && patch >= 5) || minor === 3)
-}
-
 export function requestTypeOf(step) {
   if (step.type === "compaction") return "compaction"
   if (step.usageKind === "auxiliary") return "auxiliary"
@@ -208,8 +199,6 @@ export function summarizeSession(
   },
   version
 ) {
-  if (!supportedObservationVersion(version))
-    throw new Error(`Unsupported OpenCode observation version: ${version}`)
   if (
     !/^ses_[a-zA-Z0-9_-]+$/.test(info?.id) ||
     !info.location?.directory ||

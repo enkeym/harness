@@ -1,9 +1,12 @@
 import "./env-isolate.mjs"
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import { randomBytes } from "node:crypto"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { createInterface } from "node:readline"
+import { Readable } from "node:stream"
 import { pathToFileURL } from "node:url"
 import { spawn, spawnSync } from "node:child_process"
 import { createServer } from "node:http"
@@ -1305,7 +1308,7 @@ export default { id: "harness", setup: async context => {
     JSON.stringify(plannerRequest)
   )?.[1]
   assert.ok(plannedFile)
-  const criteria = "\n## Acceptance criteria\n\n- A1 [not checked] Check native fixture routing\n"
+  const criteria = "\n## Acceptance criteria\n\n- A1 [not checked] Check native fixture routing | check: source fixture.mjs:1\n"
   fs.appendFileSync(path.join(directory, plannedFile), criteria)
   assert.deepEqual(
     (await api(`/session/${briefSource.data.id}`)).data.permissions,
@@ -1366,10 +1369,14 @@ export default { id: "harness", setup: async context => {
   ))
 
   const planFile = path.join(directory, implementationPlan)
+  fs.writeFileSync(
+    path.join(directory, "fixture.mjs"),
+    'export const route = "/fixture"\n'
+  )
   const text = fs.readFileSync(planFile, "utf8")
   fs.writeFileSync(planFile, text.replace(
     "- A1 [not checked] Check native fixture routing",
-    "- A1 [closed] Check native fixture routing | source: test-opencode.mjs implementationRequest contains the saved plan path"
+    "- A1 [closed] Check native fixture routing | check: source fixture.mjs:1 | source: fixture.mjs:1 => route fixture is served"
   ))
   const completionStart = requests.length
   await api(`/session/${briefSource.data.id}/prompt`, { text: "TASK_NATIVE_COMPLETE_CLOSED" })
@@ -1379,32 +1386,113 @@ export default { id: "harness", setup: async context => {
       .slice(completionStart)
       .some((value) =>
         JSON.stringify(value).includes(
-          "Context cache cleared. Other tasks and plan files were preserved."
+          "Context cache cleared. Task acceptance completed for"
         )
       )
   )
 })
 
-test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", (t) => {
-  const directory = sandbox(t)
+test("OpenCode discovers ask with shell access and native edit, subagent and MCP mutation restrictions", async (t) => {
+  let server
+  let closed
+  let eventInput
+  let eventLines
+  let output
+  const directory = sandbox(t, async () => {
+    output?.close()
+    eventLines?.close()
+    eventInput?.destroy()
+    if (closed) {
+      server.stdin.end()
+      server.kill()
+      await closed
+    }
+  })
   const config = path.join(directory, "config")
   fs.mkdirSync(path.join(config, "agents"), { recursive: true })
   fs.symlinkSync(
     path.resolve(import.meta.dirname, "../../opencode/agent/ask.md"),
     path.join(config, "agents/ask.md")
   )
-  const result = spawnSync("opencode", ["debug", "agents", "--standalone"], {
-    cwd: directory,
-    encoding: "utf8",
-    timeout: 15000,
-    env: {
-      ...process.env,
-      OPENCODE_CONFIG_DIR: config,
-      XDG_CONFIG_HOME: path.join(directory, "xdg"),
-      XDG_DATA_HOME: path.join(directory, "data"),
-      XDG_STATE_HOME: path.join(directory, "state")
-    }
+  const env = {
+    ...process.env,
+    OPENCODE_CONFIG_DIR: config,
+    XDG_CONFIG_HOME: path.join(directory, "xdg"),
+    XDG_DATA_HOME: path.join(directory, "data"),
+    XDG_STATE_HOME: path.join(directory, "state"),
+    OPENCODE_PASSWORD: randomBytes(24).toString("base64url")
+  }
+  const timeout = 15000
+  server = spawn(
+    "opencode",
+    ["serve", "--stdio", "--hostname", "127.0.0.1", "--port", "0"],
+    { cwd: directory, env, signal: AbortSignal.timeout(timeout) }
+  )
+  let serverError
+  server.on("error", (error) => {
+    serverError = error
   })
+  closed = new Promise((resolve) => {
+    server.once("close", resolve)
+  })
+  let log = ""
+  server.stderr.on("data", (chunk) => {
+    log += chunk
+  })
+  output = createInterface({ input: server.stdout })
+  const first = await output[Symbol.asyncIterator]().next()
+  if (first.done)
+    throw (
+      serverError ?? new Error(log || "opencode server closed before its address")
+    )
+  const url = new URL(JSON.parse(first.value).url)
+  assert.equal(url.protocol, "http:")
+  assert.equal(url.hostname, "127.0.0.1")
+  const headers = {
+    authorization: `Basic ${Buffer.from(`opencode:${env.OPENCODE_PASSWORD}`).toString("base64")}`
+  }
+  const deadline = AbortSignal.timeout(timeout)
+  const request = (route) =>
+    fetch(new URL(route, url), {
+      headers,
+      redirect: "error",
+      signal: deadline
+    })
+  const stream = await request("/api/event?types=plugin.updated")
+  assert.equal(stream.status, 200)
+  eventInput = Readable.fromWeb(stream.body)
+  eventLines = createInterface({ input: eventInput })
+  const eventIterator = eventLines[Symbol.asyncIterator]()
+  const nextEvent = async () => {
+    for (;;) {
+      const { done, value } = await eventIterator.next()
+      if (done) throw new Error("event stream ended")
+      if (value.startsWith("data:")) return JSON.parse(value.slice(5))
+    }
+  }
+  assert.equal((await nextEvent()).type, "server.connected")
+  const location = new URLSearchParams({ "location[directory]": directory })
+  const response = await request(`/api/agent?${location}`)
+  assert.equal(response.status, 200)
+  await response.arrayBuffer()
+  for (;;) {
+    const event = await nextEvent()
+    if (
+      event.type === "plugin.updated" &&
+      event.location?.directory === directory
+    )
+      break
+  }
+  const result = spawnSync(
+    "opencode",
+    ["debug", "agents", "--server", url.href],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      timeout,
+      env
+    }
+  )
   assert.equal(result.status, 0, result.stderr)
   const agent = JSON.parse(result.stdout).find((value) => value.id === "ask")
   assert.equal(agent.mode, "primary")
@@ -1669,6 +1757,7 @@ function executionSandbox(t) {
     "handoff.mjs",
     "handoff-rpc.mjs",
     "plan-store.mjs",
+    "test-receipts.mjs",
     "session-compaction.mjs",
     "model-routing.mjs",
     "observations.mjs",
