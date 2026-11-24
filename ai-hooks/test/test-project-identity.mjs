@@ -42,7 +42,7 @@ async function seedTokenSave(dir, paths, dbFile = 'tokensave.db') {
   db.close();
 }
 
-function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
+function sandbox({ indexes = ['tokensave', 'ragsave'], servers = 'No tokensave servers running.' } = {}) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'project-identity-')));
   const root = path.join(home, 'proj');
   fs.mkdirSync(root, { recursive: true });
@@ -60,7 +60,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
     'echo "tokensave $*" >> "$FAKE_CALLS"',
     'if [ "$1" = status ] && [ "${2:-}" = -j ]; then cat "$FAKE_TS_JSON";',
     'elif [ "$1" = status ]; then cat "$FAKE_TS_STATUS";',
-    'else echo "No tokensave servers running."; fi'
+    'else cat "$FAKE_TS_SERVERS"; fi'
   ].join('\n'));
   fs.writeFileSync(rg, [
     '#!/usr/bin/env bash',
@@ -74,6 +74,8 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const tsStatus = path.join(home, 'ts-status.txt');
   const tsJson = path.join(home, 'ts-status.json');
   const rgStatus = path.join(home, 'rg-status.json');
+  const tsServers = path.join(home, 'ts-servers.txt');
+  fs.writeFileSync(tsServers, `${servers}\n`);
   fs.writeFileSync(tsStatus, `│ Project: ${root} │\n│ Branch: [single-db] │\n`);
   const setTsJson = (fields) => fs.writeFileSync(tsJson, `${JSON.stringify({
     last_sync_at: headCt + 300,
@@ -97,6 +99,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
     AI_HOOKS_RAGSAVE_CMD: rg,
     FAKE_CALLS: calls,
     FAKE_TS_STATUS: tsStatus,
+    FAKE_TS_SERVERS: tsServers,
     FAKE_TS_JSON: tsJson,
     FAKE_RG_STATUS: rgStatus,
     PLAYWRIGHT_MCP_EXTENSION_TOKEN: 'test-token'
@@ -105,7 +108,7 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
     const res = spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf8', env, timeout: 30000 });
     return { status: res.status, out: res.stdout + res.stderr, calls: lines(calls) };
   };
-  return { home, root, headCt, run, tsStatus, setTsJson };
+  return { home, root, headCt, run, tsStatus, setTsJson, setServers: (text) => fs.writeFileSync(tsServers, `${text}\n`) };
 }
 
 {
@@ -119,6 +122,21 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   checkOk('свежий индекс отмечен ✓', res.out.includes('индекс свежий'));
   checkOk('Playwright проверен отдельно', res.out.includes('Playwright') && res.out.includes('PLAYWRIGHT_MCP_EXTENSION_TOKEN задан'));
   check('backend вызван только для статуса', res.calls, ['tokensave status', 'tokensave status -j', 'tokensave servers', 'ragsave status']);
+}
+
+{
+  const sb = sandbox({
+    servers: [
+      '   PID  VERSION  PROJECT',
+      '560899   7.17.3  /home/korolev/harness',
+      '                 └─ db: /home/korolev/harness/.tokensave/branches/dev.db'
+    ].join('\n')
+  });
+  const res = sb.run(sb.root);
+  checkOk('показана строка запущенного сервера, а не заголовок таблицы', res.out.includes('запущенные серверы: 1, 560899') && !res.out.includes('запущенные серверы: PID'));
+  sb.setServers('No tokensave servers running.');
+  const idle = sb.run(sb.root);
+  checkOk('без запущенных серверов строки о серверах нет', !idle.out.includes('запущенные серверы'));
 }
 
 {

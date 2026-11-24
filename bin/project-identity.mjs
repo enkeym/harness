@@ -185,7 +185,8 @@ if (!found.tokensave) {
     } catch {}
   }
   const servers = run(bin, ['servers'], found.tokensave, { NO_COLOR: '1' }).trim();
-  if (servers) good(`запущенные серверы: ${servers.split('\n')[0]}`);
+  const running = servers.split('\n').filter((line) => /^\s*\d+\s/.test(line));
+  if (running.length) good(`запущенные серверы: ${running.length}, ${running[0].trim()}`);
 }
 
 console.log('RAGSave:');
