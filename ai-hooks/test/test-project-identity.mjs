@@ -27,14 +27,15 @@ function index(dir, kind) {
   fs.writeFileSync(path.join(dir, sub, db), '');
 }
 
-async function seedTokenSave(dir, paths) {
+async function seedTokenSave(dir, paths, dbFile = 'tokensave.db') {
   let DatabaseSync;
   const warningListeners = process.rawListeners('warning');
   process.removeAllListeners('warning');
   try { ({ DatabaseSync } = await import('node:sqlite')); } finally {
     for (const listener of warningListeners) process.on('warning', listener);
   }
-  const db = new DatabaseSync(path.join(dir, '.tokensave', 'tokensave.db'));
+  fs.mkdirSync(path.dirname(path.join(dir, '.tokensave', dbFile)), { recursive: true });
+  const db = new DatabaseSync(path.join(dir, '.tokensave', dbFile));
   db.exec('create table if not exists files (path text primary key)');
   const insert = db.prepare('insert or replace into files (path) values (?)');
   for (const file of paths) insert.run(file);
@@ -209,6 +210,22 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   const res = sb.run(sub);
   check('непокрытый .jsonc подкаталога: код 0', res.status, 0);
   checkOk('пропуск покрытия виден с путём worktree', res.out.includes('нет покрытия: 1') && res.out.includes('packages/app/settings.jsonc'));
+}
+
+{
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.root, 'settings.jsonc'), '{}\n');
+  check('git add .jsonc рабочей ветки', spawnSync('git', ['-C', sb.root, 'add', 'settings.jsonc']).status, 0);
+  check('git branch другой ветки', spawnSync('git', ['-C', sb.root, 'checkout', '-q', '-b', 'work']).status, 0);
+  await seedTokenSave(sb.root, ['settings.jsonc'], path.join('branches', 'work.db'));
+  fs.writeFileSync(path.join(sb.root, '.tokensave', 'branch-meta.json'), `${JSON.stringify({
+    default_branch: 'main',
+    branches: { main: { db_file: 'tokensave.db' }, work: { db_file: 'branches/work.db' } }
+  })}\n`);
+  fs.writeFileSync(sb.tsStatus, `│ Project: ${sb.root} │\n│ Branch: [work] │\n`);
+  const res = sb.run(sb.root);
+  check('покрытие активной ветки: код 0', res.status, 0);
+  checkOk('покрытие читается из БД ветки, а не из default-ветки', res.out.includes('покрытие: .jsonc') && !res.out.includes('нет покрытия'));
 }
 
 process.exitCode = failed ? 1 : 0;

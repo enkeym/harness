@@ -64,6 +64,19 @@ const branchOf = (dir) => {
   const head = git('-C', dir, 'rev-parse', '--short', 'HEAD');
   return head ? `detached ${head}` : 'неизвестна';
 };
+const indexDb = (dir, worktree) => {
+  const indexDir = path.join(dir, '.tokensave');
+  try {
+    const meta = JSON.parse(fs.readFileSync(path.join(indexDir, 'branch-meta.json'), 'utf8'));
+    const branch = worktree ? git('-C', worktree, 'branch', '--show-current') : '';
+    const file = branch && meta.branches?.[branch]?.db_file;
+    if (file) {
+      const candidate = path.join(indexDir, file);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  } catch {}
+  return path.join(indexDir, 'tokensave.db');
+};
 
 function tokensaveBinary() {
   if (process.env.AI_HOOKS_TOKENSAVE_CMD) return process.env.AI_HOOKS_TOKENSAVE_CMD;
@@ -150,7 +163,7 @@ if (!found.tokensave) {
       const indexRel = path.relative(found.worktree, found.tokensave);
       if (!indexRel.startsWith('..') && !path.isAbsolute(indexRel)) {
         const base = indexRel ? `${indexRel.split(path.sep).join('/')}/` : '';
-        const db = new DatabaseSync(path.join(found.tokensave, '.tokensave', 'tokensave.db'), { readOnly: true });
+        const db = new DatabaseSync(indexDb(found.tokensave, found.worktree), { readOnly: true });
         const indexed = new Set(db.prepare('select path from files').all().map((r) => r.path));
         db.close();
         const coverageClasses = git('-C', found.worktree, 'ls-files')
