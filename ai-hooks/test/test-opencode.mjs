@@ -25,6 +25,24 @@ function sandbox(t, beforeCleanup = async () => {}) {
   return directory
 }
 
+function runInstaller(home) {
+  return (configDirectory, ...args) =>
+    spawnSync(
+      "bash",
+      [path.resolve(import.meta.dirname, "../../install.sh"), ...args],
+      {
+        env: {
+          ...process.env,
+          HOME: home,
+          SHELL: "/bin/bash",
+          OPENCODE_CONFIG_DIR: configDirectory
+        },
+        encoding: "utf8",
+        timeout: 10000
+      }
+    )
+}
+
 function instructionText(value) {
   const messages = value.messages ?? value.input ?? []
   const contentText = (message) =>
@@ -246,6 +264,88 @@ test("OpenCode installer preserves both configs and reports conflicting skills",
   assert.deepEqual(preferences.favorite, [])
   assert.equal(fs.statSync(stateFile).mode & 0o777, 0o600)
   assert.equal(fs.readFileSync(alternative, "utf8"), '{"model":"user/model"}')
+})
+
+test("OpenCode keeps user CLI settings and installs CLI defaults only when missing", (t) => {
+  const home = sandbox(t)
+  const directory = path.join(home, "opencode")
+  fs.mkdirSync(directory, { recursive: true })
+  const cli = path.join(directory, "cli.json")
+  const personal = '{ // user CLI settings\n "mouse": null,\n "tabs": {"mode": false}\n}\n'
+  fs.writeFileSync(cli, personal)
+  const run = runInstaller(home)
+
+  const installed = run(directory)
+  assert.equal(installed.status, 0, installed.stderr + installed.stdout)
+  assert.equal(fs.readFileSync(cli, "utf8"), personal)
+  assert.ok(fs.lstatSync(cli).isFile())
+  const checked = run(directory, "--check")
+  assert.equal(checked.status, 0, checked.stderr + checked.stdout)
+
+  const source = path.resolve(import.meta.dirname, "../../opencode/cli.json")
+  const defaults = fs.readFileSync(source)
+  const fresh = path.join(home, "fresh")
+  fs.mkdirSync(fresh)
+  const freshInstall = run(fresh)
+  assert.equal(freshInstall.status, 0, freshInstall.stderr + freshInstall.stdout)
+  const freshCli = path.join(fresh, "cli.json")
+  assert.ok(fs.lstatSync(freshCli).isFile())
+  assert.equal(fs.readFileSync(freshCli).equals(defaults), true)
+  const edited = '{ "mouse": true }\n'
+  fs.writeFileSync(freshCli, edited)
+  assert.equal(fs.readFileSync(source).equals(defaults), true)
+  const freshCheck = run(fresh, "--check")
+  assert.equal(freshCheck.status, 0, freshCheck.stderr + freshCheck.stdout)
+  assert.equal(fs.readFileSync(freshCli, "utf8"), edited)
+  assert.equal(fs.readFileSync(source).equals(defaults), true)
+})
+
+test("OpenCode migrates a managed CLI link without changing the shared default", (t) => {
+  const home = sandbox(t)
+  const run = runInstaller(home)
+  const source = path.resolve(import.meta.dirname, "../../opencode/cli.json")
+  const directory = path.join(home, "opencode")
+  fs.mkdirSync(directory, { recursive: true })
+  const cli = path.join(directory, "cli.json")
+
+  assert.equal(run(directory).status, 0)
+  fs.unlinkSync(cli)
+  fs.symlinkSync(source, cli)
+  const current = fs.readFileSync(source)
+  const before = run(directory, "--check")
+  assert.equal(before.status, 1, before.stderr + before.stdout)
+  assert.ok(fs.lstatSync(cli).isSymbolicLink())
+  assert.equal(fs.readFileSync(source).equals(current), true)
+
+  const migrated = run(directory)
+  assert.equal(migrated.status, 0, migrated.stderr + migrated.stdout)
+  assert.ok(fs.lstatSync(cli).isFile())
+  assert.equal(fs.readFileSync(cli).equals(current), true)
+  assert.equal(fs.readFileSync(source).equals(current), true)
+  const after = run(directory, "--check")
+  assert.equal(after.status, 0, after.stderr + after.stdout)
+})
+
+test("OpenCode leaves foreign and dangling CLI links untouched", (t) => {
+  const home = sandbox(t)
+  const run = runInstaller(home)
+  const directory = path.join(home, "opencode")
+  fs.mkdirSync(directory, { recursive: true })
+  const cli = path.join(directory, "cli.json")
+  const missing = path.join(home, "missing-cli.json")
+  const external = path.join(home, "external-cli.json")
+  fs.writeFileSync(external, '{ "mouse": true }\n')
+
+  fs.symlinkSync(missing, cli)
+  assert.equal(run(directory).status, 1)
+  assert.equal(fs.readlinkSync(cli), missing)
+  assert.equal(fs.existsSync(missing), false)
+
+  fs.unlinkSync(cli)
+  fs.symlinkSync(external, cli)
+  assert.equal(run(directory).status, 1)
+  assert.equal(fs.readlinkSync(cli), external)
+  assert.equal(fs.readFileSync(external, "utf8"), '{ "mouse": true }\n')
 })
 
 test("model routing removes legacy overrides and preserves user configuration", (t) => {

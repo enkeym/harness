@@ -23,6 +23,6 @@
     "openai/gpt-6.1-terra": "low",
     "openai/gpt-6.2-sol": "high",
     "opencode/deepseek-v4.1-flash": "low",
-    "opencode-go/deepseek-v4.1-flash": "high"
+    "opencode-go/deepseek-v4.1-flash": "low"
   }
 }

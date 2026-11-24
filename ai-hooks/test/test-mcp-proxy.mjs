@@ -13,7 +13,7 @@ const proxy = path.resolve(here, '../bin/mcp-proxy.mjs');
 const backend = path.join(here, 'fixtures/fake-mcp.mjs');
 const initialize = { protocolVersion: '2024-11-05', capabilities: { tools: { listChanged: true } }, serverInfo: { name: 'fake', version: '1' } };
 
-function client(t, { lazy = false, playwright = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest, handshakeDelayMs = 0, recordCalls = false } = {}) {
+function client(t, { lazy = false, playwright = false, extension = false, token = true, protocol, policy = {}, stubborn = false, descendant = false, breakOnce = false, name, resources = false, onRequest, handshakeDelayMs = 0, recordCalls = false, environment = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-proxy-'));
   const starts = path.join(dir, 'starts');
   const calls = recordCalls ? path.join(dir, 'calls') : undefined;
@@ -26,7 +26,7 @@ function client(t, { lazy = false, playwright = false, extension = false, token 
   const backendArgs = extension ? [backend, '--extension'] : [backend];
   fs.writeFileSync(catalog, JSON.stringify({ command: process.execPath, args: backendArgs, initialize, tools }));
   const p = spawn(process.execPath, [proxy, ...(lazy ? ['--catalog', catalog, ...(playwright ? ['--playwright-compat'] : [])] : ['--compact']), '--', process.execPath, ...backendArgs], {
-    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: token ? 'test-token' : '', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_BREAK_ONCE: breakOnce ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', FAKE_MCP_HANDSHAKE_DELAY_MS: String(handshakeDelayMs), ...(calls ? { FAKE_MCP_CALLS: calls } : {}), ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, PLAYWRIGHT_MCP_EXTENSION_TOKEN: token ? 'test-token' : '', HARNESS_MCP_POLICY_FILE: policyFile, FAKE_MCP_STARTS: starts, FAKE_MCP_STUBBORN: stubborn ? '1' : '', FAKE_MCP_DESCENDANT: descendant ? '1' : '', FAKE_MCP_BREAK_ONCE: breakOnce ? '1' : '', FAKE_MCP_NAME: name ?? '', FAKE_MCP_RESOURCES: resources ? '1' : '', FAKE_MCP_HANDSHAKE_DELAY_MS: String(handshakeDelayMs), ...(calls ? { FAKE_MCP_CALLS: calls } : {}), ...(protocol ? { FAKE_MCP_PROTOCOL: protocol } : {}), ...environment }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
   const notifications = [];
@@ -142,6 +142,27 @@ test('Playwright browser calls fail fast without the extension token instead of 
   assert.equal(response.error.code, -32603);
   assert.match(response.error.message, /PLAYWRIGHT_MCP_EXTENSION_TOKEN/);
   assert.equal(fs.existsSync(c.starts), false);
+});
+
+test('Playwright resolves WSL Chrome at backend launch and preserves an explicit override', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-wsl-chrome-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const chrome = path.join(dir, 'chrome.exe');
+  fs.writeFileSync(chrome, '', { mode: 0o700 });
+
+  for (const [lookupPath, explicitPath, expectedPath] of [
+    [dir, '', chrome],
+    [dir, '/custom/chrome', '/custom/chrome'],
+    [path.join(dir, 'missing'), '', ''],
+  ]) {
+    const c = client(t, { lazy: true, playwright: true, extension: true, environment: {
+      WSL_DISTRO_NAME: 'test', PATH: lookupPath, PLAYWRIGHT_MCP_EXECUTABLE_PATH: explicitPath,
+    } });
+    await c.rpc('initialize', initialize);
+    assert.equal(fs.existsSync(c.starts), false);
+    const response = await c.rpc('tools/call', { name: 'browser_tabs', arguments: {} });
+    assert.equal(response.result.structuredContent.chromePath, expectedPath);
+  }
 });
 
 test('tokensave symbol tools accept name and id aliases', async (t) => {

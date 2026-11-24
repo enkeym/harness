@@ -39,7 +39,7 @@ paths:
   `ai-hooks/bin/context-state.mjs:safeRead` и `ai-hooks/bin/mcp-proxy.mjs:prepareCall`
   используют общую retry-политику.
 - `PLAYWRIGHT_MCP_EXECUTABLE_PATH` — определяет `bin/playwright-env.mjs:playwrightEnv`,
-  сохраняет `bin/mcp-sync.mjs:syncOpenCode`.
+  применяет `ai-hooks/bin/mcp-proxy.mjs:launch` при старте браузерного backend.
 - `PLAYWRIGHT_MCP_EXTENSION_TOKEN` — берётся из `~/.config/harness/env`;
   `bin/mcp-sync.mjs:syncOpenCode` передаёт ссылку `{env:...}`. `mcp/playwright-tools.json` не должен закреплять путь, профиль
   или токен в аргументах.

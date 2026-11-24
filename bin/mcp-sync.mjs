@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { playwrightEnv } from './playwright-env.mjs';
 import { expandHome } from './home-path.mjs';
 import { good, warn, bad } from './report.mjs';
 import { resolveCommand } from './command-path.mjs';
@@ -74,11 +73,12 @@ for (const [name, s] of Object.entries(readJson(SERVERS))) {
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const opencodeEnvironment = (name, environment) => {
-  const source = { ...process.env, ...environment };
-  const discovered = name === 'playwright' ? playwrightEnv(source) : {};
-  const keys = new Set([...Object.keys(environment), ...Object.keys(discovered)]);
-  if (name === 'playwright' && source.PLAYWRIGHT_MCP_EXTENSION_TOKEN) keys.add('PLAYWRIGHT_MCP_EXTENSION_TOKEN');
-  return Object.fromEntries([...keys].map((key) => [key, `{env:${key}}`]));
+  const keys = new Set(Object.keys(environment));
+  if (name === 'playwright' && process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN) keys.add('PLAYWRIGHT_MCP_EXTENSION_TOKEN');
+  return Object.fromEntries([...keys].map((key) => {
+    const value = environment[key];
+    return [key, typeof value === 'string' && /^\{env:[A-Za-z_][A-Za-z0-9_]*\}$/.test(value) ? value : `{env:${key}}`];
+  }));
 };
 
 async function syncOpenCode() {
@@ -89,7 +89,7 @@ async function syncOpenCode() {
   let changed = false;
   for (const [name, server] of Object.entries(servers)) {
     const have = current.mcp.servers[name];
-    const environment = opencodeEnvironment(name, { ...(have?.environment ?? {}), ...server.env });
+    const environment = opencodeEnvironment(name, { ...server.env, ...have?.environment });
     const command = [server.command, ...server.args];
     const desired = { ...have, type: 'local', command, environment };
     delete desired.url;

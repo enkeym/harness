@@ -17,11 +17,13 @@ test("retrieval guidance reaches native tools without changing execution or sche
   }
   assert.match(tools.get("shell").description, /never search \/ or the home tree/)
   assert.match(tools.get("shell").description, /never create placeholder\/background shells/)
+  assert.match(tools.get("shell").description, /A known path or an earlier MCP call does not justify local source retrieval/)
   assert.match(tools.get("skill").description, /Load only a skill whose described scope this task actually touches/)
   assert.equal(tools.get("skill").description.includes("before project exploration"), false)
   assert.match(tools.get("skill").description, /returned Base directory/)
   assert.match(tools.get("subagent").description, /^Use only when the user explicitly requests delegation/)
   assert.match(tools.get("execute").description, /Discover MCP schemas with search before calling them/)
+  assert.match(tools.get("execute").description, /Narrow paths, ranges and limits before the call; do not slice serialized MCP results/)
   assert.equal(tools.get("edit").description, "Original edit")
   for (const tool of tools.values()) {
     assert.equal(tool.execute, execute)

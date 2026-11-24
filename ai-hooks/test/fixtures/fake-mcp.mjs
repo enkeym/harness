@@ -92,7 +92,10 @@ createInterface({ input: process.stdin }).on("line", (line) => {
           ? { arguments: request.params.arguments }
           : {}),
         ...(request.params.name.startsWith("browser_")
-          ? { tokenPresent: Boolean(process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN) }
+          ? {
+            tokenPresent: Boolean(process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN),
+            chromePath: process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH
+          }
           : {})
       },
       isError: false

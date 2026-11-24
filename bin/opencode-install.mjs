@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { randomUUID } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { isDeepStrictEqual } from "node:util"
 import { installShell } from "./shell-install.mjs"
@@ -25,6 +26,51 @@ if (args.some((arg) => arg !== "--check")) {
   process.exit(2)
 }
 const check = args.includes("--check")
+const cliSettings = path.join(directory, "cli.json")
+const cliDefaults = path.resolve(root, "opencode/cli.json")
+function installCliFile() {
+  let stat
+  try {
+    stat = fs.lstatSync(cliSettings)
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error
+  }
+  if (!stat) {
+    if (check) {
+      console.error(`✗ ${cliSettings} — требуется установка`)
+      return 1
+    }
+    fs.mkdirSync(directory, { recursive: true })
+    fs.writeFileSync(cliSettings, fs.readFileSync(cliDefaults), { mode: 0o600 })
+    console.log(`✓ ${cliSettings}`)
+    return 0
+  }
+  if (stat.isFile()) return 0
+  if (stat.isSymbolicLink()) {
+    let managed = false
+    try {
+      managed = fs.realpathSync(cliSettings) === fs.realpathSync(cliDefaults)
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error
+    }
+    if (managed) {
+      if (check) {
+        console.error(`✗ ${cliSettings} — требуется миграция ссылки в файл`)
+        return 1
+      }
+      const temporary = `${cliSettings}.tmp-${randomUUID()}`
+      fs.writeFileSync(temporary, fs.readFileSync(cliSettings), {
+        mode: 0o600,
+        flag: "wx"
+      })
+      fs.renameSync(temporary, cliSettings)
+      console.log(`✓ ${cliSettings} — ссылка заменена файлом`)
+      return 0
+    }
+  }
+  console.error(`✗ ${cliSettings} — существующий файл или ссылка сохранены; устраните конфликт установки`)
+  return 1
+}
 const defaults = readConfig(path.join(root, "opencode/opencode.jsonc"))
 const { settings, current } = loadConfig(directory)
 const desired = structuredClone(mergeConfig(defaults, current))
@@ -112,7 +158,6 @@ if (!isDeepStrictEqual(state, preferences)) {
 }
 const links = [
   [path.join(directory, "plugins/harness"), "opencode"],
-  [path.join(directory, "cli.json"), "opencode/cli.json"],
   [path.join(directory, "agents/ask.md"), "opencode/agent/ask.md"],
   ...harnessLinks(home),
   ...skillLinks(root, path.join(directory, "skills"), { shared: true })
@@ -120,6 +165,7 @@ const links = [
 for (const [target, relative] of links) {
   drift += installLink(target, path.resolve(root, relative), check)
 }
+drift += installCliFile()
 drift += installDefaults(
   path.join(home, ".tokensave/config.toml"),
   path.join(root, "tokensave/config.toml"),

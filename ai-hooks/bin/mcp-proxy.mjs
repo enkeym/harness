@@ -16,6 +16,7 @@ import {
 } from "./context-state.mjs"
 import { mcpPolicy as policy, retryAllowed, retryDelay } from "./mcp-policy.mjs"
 import { execFileSync } from "node:child_process"
+import { playwrightEnv } from "../../bin/playwright-env.mjs"
 
 const args = process.argv.slice(2)
 const split = args.indexOf("--")
@@ -636,8 +637,17 @@ function fail(error) {
 }
 
 function launch() {
+  let env = process.env
+  if (extensionTokenRequired) {
+    try {
+      env = { ...env, ...playwrightEnv(env) }
+    } catch {
+      console.error("mcp-proxy: Windows Chrome was not detected; using Playwright defaults")
+    }
+  }
   const launched = spawn(command, args.slice(split + 2), {
     detached: process.platform !== "win32",
+    env,
     stdio: ["pipe", "pipe", "inherit"]
   })
   child = launched
