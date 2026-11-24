@@ -801,6 +801,21 @@ async function entries(directory) {
   }
 }
 
+const sessionReadBatchSize = 8
+
+async function readSessionRecord(directory, name) {
+  const record = await readJSON(path.join(directory, name))
+  if (
+    ![1, 2].includes(record?.schemaVersion) ||
+    record.client !== "opencode" ||
+    !Array.isArray(record.sequence) ||
+    !record.project ||
+    `${record.sessionID}.json` !== name
+  )
+    throw new Error("Unsupported record")
+  return record
+}
+
 export async function readCostEvidence({ stateDirectory } = {}) {
   const root = costStateRoot(stateDirectory)
   const records = []
@@ -809,27 +824,23 @@ export async function readCostEvidence({ stateDirectory } = {}) {
   for (const folder of await entries(root)) {
     if (!folder.isDirectory() || !/^[a-f0-9]{16}$/.test(folder.name)) continue
     const base = path.join(root, folder.name)
-    for (const file of await entries(path.join(base, "sessions"))) {
-      if (!file.isFile() || !/^ses_[a-zA-Z0-9_-]+\.json$/.test(file.name))
-        continue
-      try {
-        const record = await readJSON(path.join(base, "sessions", file.name))
-        if (
-          ![1, 2].includes(record?.schemaVersion) ||
-          record.client !== "opencode" ||
-          !Array.isArray(record.sequence) ||
-          !record.project ||
-          `${record.sessionID}.json` !== file.name
-        )
-          throw new Error("Unsupported record")
-        records.push(record)
-      } catch {
-        errors.push({
-          projectKey: folder.name,
-          file: file.name,
-          kind: "invalid-session-record"
-        })
-      }
+    const sessions = path.join(base, "sessions")
+    const files = (await entries(sessions)).filter(
+      (file) => file.isFile() && /^ses_[a-zA-Z0-9_-]+\.json$/.test(file.name)
+    )
+    for (let offset = 0; offset < files.length; offset += sessionReadBatchSize) {
+      const batch = files.slice(offset, offset + sessionReadBatchSize)
+      const results = await Promise.allSettled(
+        batch.map((file) => readSessionRecord(sessions, file.name))
+      )
+      for (const [index, result] of results.entries())
+        if (result.status === "fulfilled") records.push(result.value)
+        else
+          errors.push({
+            projectKey: folder.name,
+            file: batch[index].name,
+            kind: "invalid-session-record"
+          })
     }
     for (const file of await entries(base))
       if (file.isFile() && /^billing-baseline-.*\.json$/.test(file.name)) {

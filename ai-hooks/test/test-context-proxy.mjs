@@ -121,7 +121,7 @@ test('ordinary sessions bound text and retrieve exact artifacts or UTF-8 ranges 
   const full = (await c.call('harness_read_result', { path: file, full: true })).result;
   assert.equal(full.content[0].text, 'я'.repeat(20000));
   assert.equal(full._meta, undefined);
-  assert.deepEqual(full.structuredContent, { harnessArtifact: true, full: true, text: 'я'.repeat(20000) });
+  assert.deepEqual(full.structuredContent, { harnessArtifact: true, full: true, path: file, text: 'я'.repeat(20000) });
   assert.equal(c.calls().length, 1);
   assert.equal((await c.call('harness_read_result', { path: file, offset: 40001 })).error.code, -32602);
   assert.equal((await c.call('harness_read_result', { path: c.generation })).error.code, -32602);
@@ -137,6 +137,29 @@ test('a full proxy artifact within the ceiling passes the output bound', async t
   assert.equal(boundToolResult(event, { dir: c.dir }), false);
   assert.equal(JSON.parse(event.result.content[0].text).text, full.content[0].text);
   assert.ok(Buffer.byteLength(full.content[0].text) > 6 * 1024);
+});
+
+test('a full proxy artifact over the ceiling keeps the original file for ranged reads', async t => {
+  const c = client(t, false);
+  const original = (await c.call('large')).result._meta.harnessFullResult;
+  const dir = path.dirname(original);
+  const files = fs.readdirSync(dir).sort();
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const full = (await c.call('harness_read_result', { path: original, full: true })).result;
+    const event = { status: 'completed', tool: 'execute', result: { content: [{ type: 'text', text: JSON.stringify(full.structuredContent) }] } };
+    assert.equal(boundToolResult(event, { dir }), true);
+    assert.equal(event.result._meta.harnessFullResult, original);
+    assert.equal(event.result._meta.originalTextBytes, 40000);
+    const text = event.result.content.map(block => block.text).join('');
+    assert.ok(Buffer.byteLength(text) <= 6 * 1024);
+    assert.match(text, /harness_read_result\(path, offset, bytes\)/);
+    assert.doesNotMatch(text, /or full=true/);
+  }
+
+  assert.deepEqual(fs.readdirSync(dir).sort(), files);
+  const range = (await c.call('harness_read_result', { path: original, offset: 2, bytes: 8 })).result;
+  assert.deepEqual(range.structuredContent, { text: 'я'.repeat(4), offset: 2, nextOffset: 10, totalBytes: 40000 });
 });
 
 test('artifact write failure returns successful unabridged backend output', async t => {

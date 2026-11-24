@@ -384,6 +384,49 @@ test("evidence accepts schema 2 records regardless of client version and rejects
   assert.deepEqual(errors.map((entry) => entry.file).sort(), ["ses_future.json"])
 })
 
+test("evidence reads session files concurrently without losing order or errors", async t => {
+  const stateDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cost-report-session-reads-"))
+  t.after(() => fs.rm(stateDirectory, { recursive: true, force: true }))
+  const base = observationDirectory("/project", stateDirectory)
+  const sessions = path.join(base, "sessions")
+  await fs.mkdir(sessions, { recursive: true })
+  const invalidFile = "ses_04.json"
+  for (let i = 0; i < 12; i++) {
+    const id = `ses_${String(i).padStart(2, "0")}`
+    const file = `${id}.json`
+    await fs.writeFile(
+      path.join(sessions, file),
+      file === invalidFile ? "{" : JSON.stringify(record(id, [step(id)]))
+    )
+  }
+  const names = await fs.readdir(sessions)
+  const readFile = fs.readFile
+  let active = 0
+  let peak = 0
+  t.mock.method(fs, "readFile", async (file, ...args) => {
+    if (path.dirname(file) !== sessions) return readFile(file, ...args)
+    active++
+    peak = Math.max(peak, active)
+    try {
+      await new Promise(resolve => setImmediate(resolve))
+      return await readFile(file, ...args)
+    } finally {
+      active--
+    }
+  })
+
+  const { records, errors } = await readCostEvidence({ stateDirectory })
+
+  assert.ok(peak > 1 && peak <= 8, `expected bounded concurrency, observed ${peak}`)
+  assert.deepEqual(records.map(({ sessionID }) => sessionID),
+    names.filter(name => name !== invalidFile).map(name => path.basename(name, ".json")))
+  assert.deepEqual(errors, [{
+    projectKey: path.basename(base),
+    file: invalidFile,
+    kind: "invalid-session-record"
+  }])
+})
+
 test("reports and assessments persist privately, reject invalid edits and deduplicate notifications", async t => {
   const stateDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cost-report-"))
   t.after(() => fs.rm(stateDirectory, { recursive: true, force: true }))

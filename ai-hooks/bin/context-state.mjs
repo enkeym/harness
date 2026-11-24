@@ -252,7 +252,8 @@ export function boundTextResult(result, budget, dir, policy = mcpPolicy, options
   const reused = reusableArtifact(result, dir);
   const file = reused ? reused.file : writeArtifact(result, dir, policy);
   const fullBytes = reused ? reused.bytes : bytes;
-  const marker = `\n[full_result=${file}; bytes=${fullBytes}; read with harness_read_result(path, offset, bytes) or full=true]`;
+  const fullHint = options?.suggestFullRead === false ? '' : ' or full=true';
+  const marker = `\n[full_result=${file}; bytes=${fullBytes}; read with harness_read_result(path, offset, bytes)${fullHint}]`;
   const content = [];
   let remaining = Math.max(0, budget - Buffer.byteLength(marker));
   for (const block of result.content) {

@@ -22,14 +22,14 @@ const textBlocks = (content) => {
   return null
 }
 
-const artifactFullRequest = (content) => {
+const fullArtifact = (content) => {
   const text = content.map((part) => part.text).join("")
-  if (!text.startsWith("{")) return false
+  if (!text.startsWith("{")) return null
   try {
     const value = JSON.parse(text)
-    return value?.harnessArtifact === true && value?.full === true
+    return value?.harnessArtifact === true && value?.full === true ? value : null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -56,15 +56,25 @@ export function boundToolResult(
       : null)
   if (!content?.length) return false
   const bytes = content.reduce((sum, part) => sum + Buffer.byteLength(part.text), 0)
-  const limit = artifactFullRequest(content)
-    ? Math.max(budget, contextPolicy.opencode.artifactFullOutputBytes)
-    : budget
-  if (bytes <= limit) return false
+  if (bytes <= budget) return false
+  const artifact = fullArtifact(content)
+  if (artifact && bytes <= contextPolicy.opencode.artifactFullOutputBytes)
+    return false
+  const source = typeof artifact?.path === "string" && typeof artifact.text === "string"
+    ? {
+        harnessFullResult: artifact.path,
+        originalTextBytes: Buffer.byteLength(artifact.text)
+      }
+    : {}
   let bounded
   try {
-    bounded = boundTextResult({ ...result, content }, budget, dir, undefined, {
-      anyText: true
-    })
+    bounded = boundTextResult(
+      { ...result, content, _meta: { ...result._meta, ...source } },
+      budget,
+      dir,
+      undefined,
+      { anyText: true, suggestFullRead: !artifact }
+    )
   } catch (error) {
     process.stderr.write(`Harness output bounds skipped: ${error.message}\n`)
     return false

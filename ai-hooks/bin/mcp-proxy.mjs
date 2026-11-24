@@ -155,6 +155,7 @@ function artifactCall(message) {
         structuredContent: {
           harnessArtifact: true,
           full: true,
+          path: input.path,
           text: result.content.map((block) => block.text).join("")
         }
       })
