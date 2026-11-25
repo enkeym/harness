@@ -68,8 +68,18 @@ test('create posts the description and planned team fields once and returns the 
   assert.deepEqual(JSON.parse(post.body), {
     name: 'Новая задача', desc: 'Проверить результат', dept: 'dept-1', team: 'Команда',
     planned: true, status: 'todo', category: 'task', priority: 'P2',
-    start: '2026-11-25', end: '2026-11-27'
+    start: '2026-11-25', end: '2026-11-27', assignee: 'emp-1'
   });
+});
+
+test('create refuses an identity without employeeId and does not POST', async (t) => {
+  const api = await apiFixture(t, { identity: { id: 7, employeeId: null, role: 'user' } });
+
+  const result = await api.run(createArgs);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /employeeId/);
+  assert.deepEqual(api.writes(), []);
 });
 
 test('5xx and a successful status without a task key do not cause a second POST', async (t) => {

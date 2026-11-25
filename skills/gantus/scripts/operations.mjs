@@ -101,7 +101,13 @@ export function createTask(config, flags) {
   checkPriority(priority);
   checkDates({ start, end });
 
-  verifyIdentity(config);
+  const identity = verifyIdentity(config);
+  if (identity.employeeId === null) {
+    throw new GantusError(
+      'у учётной записи нет employeeId в /api/auth/me; исполнителя назначить нельзя',
+      'auth'
+    );
+  }
   const board = fetchBoard(config);
   const response = request(config, {
     method: 'POST',
@@ -116,7 +122,8 @@ export function createTask(config, flags) {
       priority,
       start,
       end,
-      category: 'task'
+      category: 'task',
+      assignee: identity.employeeId
     },
     mutation: true
   });

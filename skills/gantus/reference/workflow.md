@@ -15,7 +15,8 @@ cookie. The CLI reads the process environment and never the file itself.
 
 | Variable | Meaning |
 |---|---|
-| `GANTUS_BASE_URL` | Closed Gantus origin. HTTPS required; plain HTTP only for `localhost`, `127.0.0.1` or `[::1]` tests and trusted local tunnels. No path, query, fragment or credentials. |
+| `GANTUS_BASE_URL` | Closed Gantus origin. HTTPS, or plain HTTP for `localhost`, `127.0.0.1` or `[::1]`, or one literal RFC1918 IPv4 origin exactly matched by `GANTUS_ALLOW_HTTP_ORIGIN`. No path, query, fragment or credentials. |
+| `GANTUS_ALLOW_HTTP_ORIGIN` | Optional exact HTTP origin — scheme, literal RFC1918 IPv4 and exact port — for that one private host. Not a global HTTP bypass: another host, port, public address or hostname stays rejected. Use only on a trusted network segment; the session cookie and writes are sent without TLS. |
 | `GANTUS_TEAM_ID` | Exact id of the single configured board. |
 | `GANTUS_SESSION_COOKIE` | Owner-provided authorized session cookie, one `name=value` pair. Never captured from a browser and never replaced by a Bearer key. On 401 ask the owner to refresh it. |
 | `GANTUS_USER_ID` | Expected numeric `/api/auth/me.id`; a different account stops before board data. |
@@ -23,7 +24,8 @@ cookie. The CLI reads the process environment and never the file itself.
 
 Validation happens before any request. Missing or invalid values exit 2 and
 send nothing. HTTP redirects are not followed, proxies are disabled, and the
-cookie travels only in the request header.
+cookie travels only in the request header. The HTTP opt-in permits that exact
+origin but never encrypts traffic, so trust the whole network path.
 
 ## Commands
 
@@ -69,10 +71,15 @@ One `POST /api/data/tasks` with `Content-Type: application/json` and exactly:
 
 ```
 name, desc, dept = board.deptId, team = board.teamName, planned: true,
-status: "todo", priority: P0..P3, start, end, category: "task"
+status: "todo", priority: P0..P3, start, end, category: "task",
+assignee = identity.employeeId
 ```
 
-`desc` and both dates are explicit non-empty input; no dates are invented. A
+`desc` and both dates are explicit non-empty input; no dates are invented. The
+assignee is always the authenticated account: `employeeId` comes from
+`/api/auth/me`, whose `id` was already checked against `GANTUS_USER_ID`. A
+missing `employeeId` blocks the create instead of leaving the task unassigned.
+A
 2xx response must contain a safe `taskKey` and `id`. A 2xx without them, a 5xx
 or a timeout is an ambiguous write: report it, never repeat the POST. A single
 POST does not promise placement in a manually chosen column; Kanban placement
