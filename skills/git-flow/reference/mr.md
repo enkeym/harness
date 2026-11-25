@@ -234,7 +234,9 @@ encoded, written out in full.
    foreign review text. `sync` reads the bare comments array and reuses only the
    current account's exact MR, branch and body, comparing `authorId` with the
    authenticated user `id`; a missing or invalid author blocks and a foreign
-   exact body is a conflict. A substantive change adds a new QA.
+   exact body is a conflict. Body equality ignores terminal line endings only;
+   internal blank lines, spaces and other text stay significant. A substantive
+   change adds a new QA.
 
    There is no documented machine testing status. The target is the exact
    `GANTUS_TESTING_COLUMN_ID` and only source columns in

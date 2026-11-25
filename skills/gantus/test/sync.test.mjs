@@ -25,11 +25,12 @@ function receipt(overrides = {}) {
 
 function syncArgs({
   mr = receipt(), desc = finalDesc, expected = '', body = qa, userId = '7',
-  expectedMrDesc, expectedCardId = '12'
+  expectedMrDesc, expectedCardId = '12', qaFile
 } = {}) {
+  const qaArgs = qaFile === undefined ? ['--qa', body] : ['--qa-file', qaFile];
   const args = [
     'sync', '--key', 'STR-12', '--mr', JSON.stringify(mr), '--desc', desc,
-    '--qa', body, '--gitlab-user-id', userId, '--expected-desc', expected,
+    ...qaArgs, '--gitlab-user-id', userId, '--expected-desc', expected,
     '--expected-card-id', expectedCardId
   ];
   if (expectedMrDesc !== undefined) args.push('--expected-mr-desc', expectedMrDesc);
@@ -812,4 +813,145 @@ test('sync blocks an exact QA body whose author is unknown or invalid and a fore
   assert.equal(assigned.status, 1);
   assert.match(assigned.stderr, /назначена/);
   assert.deepEqual(foreign.writes(), []);
+});
+
+test('sync confirms a QA file with a terminal LF when the server stores it without one', async (t) => {
+  const cwd = initRepo(t, { branch: source });
+  const tasks = [task(12, { assignee: 'emp-1', desc: finalDesc })];
+  const board = boardFixture(tasks);
+  const stored = [];
+  const api = await apiFixture(t, {
+    tasks,
+    board,
+    taskComments: () => stored,
+    autoWrite: false,
+    write: (req) => {
+      if (req.method === 'POST' && req.url === `${taskPath}/12/comments`) {
+        stored.push({ id: 'c1', authorId: 7, body: qaBody });
+        return [201, { id: 'c1' }];
+      }
+      if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
+        board.cards.find((card) => card.id === '12').columnId = 'col-testing';
+        return [200, {}];
+      }
+      return [200, {}];
+    }
+  });
+  const qaFile = path.join(cwd, 'qa.txt');
+  fs.writeFileSync(qaFile, `${qa}\n`, 'utf8');
+
+  const result = resultOf(await api.run(
+    syncArgs({ expected: finalDesc, qaFile }),
+    { cwd, env: testingEnv() }
+  ));
+
+  assert.equal(result.qa.commented, true);
+  assert.equal(result.qa.deduplicated, false);
+  assert.equal(result.testingMove.moved, true);
+  assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
+    ['POST', `${taskPath}/12/comments`, { body: qaBody }],
+    ['PATCH', '/api/kanban/cards/12', { columnId: 'col-testing', orderedIds: ['12'] }]
+  ]);
+});
+
+test('sync compares QA apart from terminal line endings only', async (t) => {
+  const cwd = initRepo(t, { branch: source });
+  const tasks = [
+    task(12, { assignee: 'emp-1', kanbanColumnId: 'col-testing', desc: finalDesc })
+  ];
+  const board = boardFixture(tasks);
+  for (const storedBody of [`${qaBody}\n`, `${qaBody}\r\n`]) {
+    const own = await apiFixture(t, {
+      tasks, board, taskComments: [{ id: 'c1', body: storedBody, authorId: 7 }]
+    });
+    const result = resultOf(await own.run(syncArgs({ expected: finalDesc }), {
+      cwd, env: testingEnv()
+    }));
+    assert.equal(result.qa.commented, false);
+    assert.equal(result.qa.deduplicated, true);
+    assert.deepEqual(own.writes(), []);
+  }
+
+  for (const authorId of [null, 8]) {
+    const blocked = await apiFixture(t, {
+      tasks, board, taskComments: [{ id: 'c1', body: `${qaBody}\n`, authorId }]
+    });
+    const result = await blocked.run(syncArgs({ expected: finalDesc }), {
+      cwd, env: testingEnv()
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, authorId === null ? /автор/ : /другим автором/);
+    assert.deepEqual(blocked.writes(), []);
+  }
+
+  const distinct = [`${qaBody}\nДополнительный шаг`, `${qaBody}\n `, `${qaBody}\r`];
+  for (const storedBody of distinct) {
+    const changed = await apiFixture(t, {
+      tasks,
+      board,
+      taskComments: [{ id: 'c1', body: storedBody, authorId: 7 }],
+      write: () => [201, { id: 'c2' }]
+    });
+    const added = resultOf(await changed.run(syncArgs({ expected: finalDesc }), {
+      cwd, env: testingEnv()
+    }));
+    assert.equal(added.qa.commented, true);
+    assert.deepEqual(changed.writes().map(({ url, body }) => [url, JSON.parse(body)]), [
+      [`${taskPath}/12/comments`, { body: qaBody }]
+    ]);
+  }
+});
+
+test('sync promotes each allowed source column from the configured list of two', async (t) => {
+  for (const columnId of ['col-todo', 'col-review']) {
+    const cwd = initRepo(t, { branch: source });
+    const tasks = [
+      task(12, { assignee: 'emp-1', kanbanColumnId: columnId, desc: finalDesc })
+    ];
+    const board = boardFixture(tasks);
+    const api = await apiFixture(t, {
+      tasks,
+      board,
+      taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }],
+      write: (req) => {
+        if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
+          board.cards.find((card) => card.id === '12').columnId = 'col-testing';
+          return [200, {}];
+        }
+        return [200, {}];
+      }
+    });
+
+    const result = resultOf(await api.run(syncArgs({ expected: finalDesc }), {
+      cwd, env: testingEnv()
+    }));
+
+    assert.equal(result.testingMove.moved, true, columnId);
+    assert.equal(result.testingMove.columnId, 'col-testing');
+    assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
+      ['PATCH', '/api/kanban/cards/12', { columnId: 'col-testing', orderedIds: ['12'] }]
+    ]);
+  }
+
+  const cwd = initRepo(t, { branch: source });
+  const tasks = [
+    task(12, { assignee: 'emp-1', kanbanColumnId: 'col-progress', desc: finalDesc })
+  ];
+  const board = boardFixture(tasks);
+  board.columns.push({ id: 'col-progress', boardId: 'b1', status: 'in-progress', name: 'In progress' });
+  const blocked = await apiFixture(t, {
+    tasks,
+    board,
+    taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }]
+  });
+
+  const result = resultOf(await blocked.run(syncArgs({ expected: finalDesc }), {
+    cwd, env: testingEnv()
+  }));
+
+  assert.equal(result.testingMove.moved, false);
+  assert.equal(result.testingMove.reason, 'source-not-allowed');
+  assert.equal(result.testingMove.columnId, 'col-progress');
+  assert.equal(blocked.writes().some(({ url }) => url.startsWith('/api/kanban/cards/')), false);
+  assert.deepEqual(blocked.writes(), []);
 });

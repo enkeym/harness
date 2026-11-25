@@ -511,8 +511,21 @@ function readSyncReceipt(value, desc, gitlabUserId) {
   return receipt;
 }
 
+function withoutTerminalLineEndings(value) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 10) {
+    end -= 1;
+    if (end > 0 && value.charCodeAt(end - 1) === 13) end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+function sameQaBody(left, right) {
+  return withoutTerminalLineEndings(left) === withoutTerminalLineEndings(right);
+}
+
 function qaCommentBody(receipt, qa) {
-  return `Проверка MR !${receipt.iid} (${receipt.source_branch})\n\n${qa}`;
+  return `Проверка MR !${receipt.iid} (${receipt.source_branch})\n\n${withoutTerminalLineEndings(qa)}`;
 }
 
 function descriptionBlocks(value) {
@@ -652,7 +665,7 @@ export function syncTask(config, flags, cwd) {
       ? null
       : String(comment.authorId)
   );
-  const matchingQa = comments.filter((comment) => comment.body === body);
+  const matchingQa = comments.filter((comment) => sameQaBody(comment.body, body));
   if (matchingQa.some((comment) => {
     const author = authorOf(comment);
     return author === null || !/^\d+$/.test(author);
@@ -717,7 +730,7 @@ export function syncTask(config, flags, cwd) {
       try {
         const afterComments = fetchComments(config, card);
         const confirmed = afterComments.some((comment) => (
-          comment.body === body && authorOf(comment) === String(identity.id)
+          sameQaBody(comment.body, body) && authorOf(comment) === String(identity.id)
         ));
         if (!confirmed) {
           throw unconfirmedWrite('QA не подтверждён после записи');

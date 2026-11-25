@@ -238,9 +238,10 @@ QA is one readable comment:
 a manual run that did not happen and never copies task or foreign review text.
 Before posting, `sync` reads the task comments resource. It reuses a comment
 only when the author is the current account and the body exactly matches the
-same MR, branch and QA. A missing or invalid author is ambiguous and blocks; an
-exact body from another author is a conflict and is never reused. A changed QA
-adds one new comment.
+same MR, branch and QA apart from terminal line endings; internal blank lines,
+spaces and other text stay significant. A missing or invalid author is ambiguous
+and blocks; an exact body from another author is a conflict and is never reused.
+A changed QA adds one new comment.
 
 There is no documented machine status for testing. The target is the exact
 `GANTUS_TESTING_COLUMN_ID`; `GANTUS_TESTING_FROM_COLUMN_IDS` lists the only
