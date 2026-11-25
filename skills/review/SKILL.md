@@ -26,6 +26,12 @@ is a manual user action in GitLab; offer no agent publication option.
 The exact delivery and failure rules are in
 [reference/gitlab.md](reference/gitlab.md#drafts).
 
+With `gantus` in the active skill catalog, and only on an explicit request,
+load it by exact id and run `node <gantus-base>/scripts/gantus.mjs get
+--key <STR>` with the reviewed repository as the unchanged cwd for read-only
+context on the user's own ticket. Never fetch it implicitly, copy task data
+into an MR or draft notes, or publish it.
+
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —
 the user fetches before calling /review, the MR mode (1.2) aside; no diff

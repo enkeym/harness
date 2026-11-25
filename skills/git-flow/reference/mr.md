@@ -109,3 +109,13 @@ encoded, written out in full.
 3. A failed call → one line distinguishing authorization, permissions, network
    or local config access; retain the prepared body and report its path.
    Continue authorized local work. Do not hand the user a login or secret-reading step.
+4. Optional Gantus link: only if the active skill catalog contains `gantus`,
+   load it by exact id. Only after your own confirmed MR **create** POST on this
+   branch — never for PUT/update, draft, dry run or failure — take exactly one
+   `STR-<digits>` from that response's `source_branch`, not from the title, and
+   reuse the same POST stdout as a minimal receipt (`iid`, `web_url`,
+   `source_branch`, `state`, `draft`). Make no second MR request and store
+   nothing else. Run
+   `node <gantus-base>/scripts/gantus.mjs review-ready --key <STR> --mr <json>`
+   with the target repository as the unchanged cwd. Skip without the skill or
+   its configuration; a Gantus error is reported separately and never retried.
