@@ -125,6 +125,157 @@ test('Playwright starts on the first browser call, reuses attached tabs and acce
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
 });
 
+test('browser_tabs rejects a url without action or with an incompatible explicit action', async t => {
+  const c = client(t, { lazy: true, playwright: true });
+  await c.rpc('initialize', initialize);
+  for (const input of [
+    { url: 'http://127.0.0.1:5173/start' },
+    { action: 'list', url: 'http://127.0.0.1:5173/start' },
+    { action: 'select', index: 1, url: 'http://127.0.0.1:5173/start' },
+    { action: 'close', url: 'http://127.0.0.1:5173/start' },
+  ]) {
+    const response = await c.rpc('tools/call', { name: 'browser_tabs', arguments: input });
+    assert.equal(response.error?.code, -32602, JSON.stringify(input));
+    assert.match(response.error?.message ?? '', /action "new"/, JSON.stringify(input));
+    assert.equal(response.result, undefined, JSON.stringify(input));
+  }
+  assert.equal(fs.existsSync(c.starts), false);
+});
+
+test('browser_tabs rejects empty, whitespace and non-string new urls before starting the backend', async t => {
+  const c = client(t, { lazy: true, playwright: true });
+  await c.rpc('initialize', initialize);
+  for (const url of ['', '   ', null, 42, {}]) {
+    const response = await c.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'new', url } });
+    assert.equal(response.error?.code, -32602, JSON.stringify(url));
+    assert.match(response.error?.message ?? '', /url/i, JSON.stringify(url));
+    assert.equal(response.result, undefined, JSON.stringify(url));
+  }
+  assert.equal(fs.existsSync(c.starts), false);
+});
+
+test('browser_tabs url misuse is not dispatched to an already running backend', async t => {
+  const c = client(t, { lazy: true, playwright: true, recordCalls: true });
+  await c.rpc('initialize', initialize);
+  assert.equal((await c.rpc('tools/call', { name: 'browser_tabs' })).error, undefined);
+  const before = fs.readFileSync(c.calls, 'utf8');
+  const response = await c.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'list', url: 'http://127.0.0.1:5173/' } });
+  assert.equal(response.error?.code, -32602);
+  assert.equal(fs.readFileSync(c.calls, 'utf8'), before);
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+});
+
+test('browser_tabs defaults to list and forwards explicit operations and known urls unchanged', async t => {
+  const c = client(t, { lazy: true, playwright: true, recordCalls: true });
+  await c.rpc('initialize', initialize);
+  for (const [params, expected] of [
+    [{ name: 'browser_tabs' }, { action: 'list' }],
+    [{ name: 'browser_tabs', arguments: {} }, { action: 'list' }],
+    [{ name: 'browser_tabs', arguments: { action: 'list' } }, { action: 'list' }],
+    [{ name: 'browser_tabs', arguments: { action: 'select', index: 1 } }, { action: 'select', index: 1 }],
+    [{ name: 'browser_tabs', arguments: { action: 'close', index: 2 } }, { action: 'close', index: 2 }],
+    [{ name: 'browser_tabs', arguments: { action: 'new', url: 'http://127.0.0.1:5173/start?x=1#frag' } }, { action: 'new', url: 'http://127.0.0.1:5173/start?x=1#frag' }],
+    [{ name: 'browser_tabs', arguments: { action: 'new', url: 'http://localhost:5173/' } }, { action: 'new', url: 'http://localhost:5173/' }],
+    [{ name: 'browser_tabs', arguments: { action: 'new', url: 'about:blank' } }, { action: 'new', url: 'about:blank' }],
+  ]) {
+    const response = await c.rpc('tools/call', params);
+    assert.deepEqual(response.result.structuredContent.arguments, expected);
+    assert.deepEqual(response.result.content, [{ type: 'text', text: 'file content once' }]);
+  }
+  const records = fs.readFileSync(c.calls, 'utf8').trim().split('\n');
+  assert.equal(records.length, 8);
+  assert.ok(records.every(record => record.endsWith(':browser_tabs')));
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+});
+
+test('browser_tabs new without url keeps the result and adds a hint to that reply only', async t => {
+  const c = client(t, { lazy: true, playwright: true, environment: { FAKE_MCP_DELAY_ID: 'slow', FAKE_MCP_DELAY_MS: '120' } });
+  await c.rpc('initialize', initialize);
+  const slow = c.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'new' } }, 'slow');
+  const fast = c.rpc('tools/call', { name: 'browser_tabs' }, 'fast');
+  const fastResponse = await fast;
+  assert.deepEqual(fastResponse.result.content, [{ type: 'text', text: 'file content once' }]);
+  const response = await slow;
+  assert.deepEqual(response.result.structuredContent.arguments, { action: 'new' });
+  assert.equal(response.result.structuredContent.distinctMetadata, 42);
+  assert.equal(response.result.structuredContent.tokenPresent, true);
+  assert.equal(response.result.content[0].text, 'file content once');
+  assert.equal(response.result.content.length, 2);
+  assert.match(response.result.content[1].text, /browser_navigate/);
+  assert.match(response.result.content[1].text, /url/i);
+  assert.match(response.result.content[1].text, /Page URL|snapshot/);
+  assert.equal(response.result.isError, false);
+});
+
+test('browser_tabs new without url does not mask backend errors', async t => {
+  const rejected = client(t, { lazy: true, playwright: true, environment: { FAKE_MCP_JSON_ERROR: 'browser_tabs' } });
+  await rejected.rpc('initialize', initialize);
+  const jsonError = await rejected.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'new' } });
+  assert.deepEqual(jsonError.error, { code: -32602, message: 'backend rejected arguments' });
+  assert.equal(jsonError.result, undefined);
+
+  const failed = client(t, { lazy: true, playwright: true, environment: { FAKE_MCP_IS_ERROR: 'browser_tabs' } });
+  await failed.rpc('initialize', initialize);
+  const toolError = await failed.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'new' } });
+  assert.deepEqual(toolError.result, {
+    content: [{ type: 'text', text: 'backend tool failed' }],
+    structuredContent: { failure: true },
+    isError: true,
+  });
+});
+
+test('browser_tabs new with url keeps a tool error and adds recovery guidance', async t => {
+  const c = client(t, { lazy: true, playwright: true, recordCalls: true, environment: { FAKE_MCP_IS_ERROR: 'browser_tabs' } });
+  await c.rpc('initialize', initialize);
+  const response = await c.rpc('tools/call', {
+    name: 'browser_tabs',
+    arguments: { action: 'new', url: 'http://127.0.0.1:5173/start?secret=none' },
+  });
+  assert.equal(response.error, undefined);
+  assert.equal(response.result.isError, true);
+  assert.deepEqual(response.result.structuredContent, { failure: true });
+  assert.equal(response.result.content.length, 1);
+  assert.ok(response.result.content[0].text.startsWith('backend tool failed'));
+  assert.match(response.result.content[0].text, /browser_tabs.*list|action "list"/i);
+  assert.match(response.result.content[0].text, /browser_navigate/);
+  assert.match(response.result.content[0].text, /Page URL|snapshot/);
+  assert.doesNotMatch(response.result.content[0].text, /127\.0\.0\.1|5173|secret/);
+  assert.equal(fs.readFileSync(c.calls, 'utf8').trim().split('\n').length, 1);
+});
+
+test('browser_tabs recovery guidance is limited to tool errors on new with url', async t => {
+  const listed = client(t, { lazy: true, playwright: true, environment: { FAKE_MCP_IS_ERROR: 'browser_tabs' } });
+  await listed.rpc('initialize', initialize);
+  const listError = await listed.rpc('tools/call', { name: 'browser_tabs', arguments: { action: 'list' } });
+  assert.deepEqual(listError.result, {
+    content: [{ type: 'text', text: 'backend tool failed' }],
+    structuredContent: { failure: true },
+    isError: true,
+  });
+
+  const transport = client(t, { lazy: true, playwright: true, environment: { FAKE_MCP_JSON_ERROR: 'browser_tabs' } });
+  await transport.rpc('initialize', initialize);
+  const rejected = await transport.rpc('tools/call', {
+    name: 'browser_tabs',
+    arguments: { action: 'new', url: 'http://127.0.0.1:5173/start' },
+  });
+  assert.deepEqual(rejected.error, { code: -32602, message: 'backend rejected arguments' });
+  assert.equal(rejected.result, undefined);
+});
+
+test('browser_tabs schema documents default list, new with url and the navigation fallback', async t => {
+  const c = client(t, { lazy: true, playwright: true });
+  await c.rpc('initialize', initialize);
+  const schema = (await c.rpc('tools/list')).result.tools.find(tool => tool.name === 'browser_tabs').inputSchema;
+  assert.match(schema.properties.action.description, /Defaults to list/i);
+  assert.match(schema.properties.action.description, /new/);
+  assert.match(schema.properties.url.description, /browser_navigate/);
+  assert.match(schema.properties.url.description, /snapshot/i);
+  assert.equal(schema.anyOf, undefined);
+  assert.equal(schema.oneOf, undefined);
+  assert.equal(fs.existsSync(c.starts), false);
+});
+
 test('the pinned Playwright catalog matches the registered backend command', () => {
   const servers = JSON.parse(fs.readFileSync(path.resolve(here, '../../mcp/servers.json'), 'utf8'));
   const catalog = JSON.parse(fs.readFileSync(path.resolve(here, '../../mcp/playwright-tools.json'), 'utf8'));
@@ -141,6 +292,9 @@ test('Playwright browser calls fail fast without the extension token instead of 
   const response = await c.rpc('tools/call', { name: 'browser_tabs', arguments: {} });
   assert.equal(response.error.code, -32603);
   assert.match(response.error.message, /PLAYWRIGHT_MCP_EXTENSION_TOKEN/);
+  const invalidUrl = await c.rpc('tools/call', { name: 'browser_tabs', arguments: { url: 'http://127.0.0.1:5173/' } });
+  assert.equal(invalidUrl.error.code, -32603);
+  assert.match(invalidUrl.error.message, /PLAYWRIGHT_MCP_EXTENSION_TOKEN/);
   assert.equal(fs.existsSync(c.starts), false);
 });
 
@@ -310,7 +464,89 @@ test('catalog mode reports a request timeout and keeps serving after a backend r
   const call = await c.rpc('tools/call', { name: 'read' });
   assert.equal(call.error, undefined);
   assert.equal(call.result.content[0].text, 'file content once');
+  assert.match(hung.error.message, /^MCP backend request timed out; completion unknown$/);
   assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\nstart\n');
+});
+
+test('Playwright timeout restart preserves unknown completion and adds tab recovery guidance', async t => {
+  const c = client(t, {
+    lazy: true,
+    playwright: true,
+    recordCalls: true,
+    environment: { FAKE_MCP_HANG_NAMES: 'browser_evaluate,browser_navigate' },
+    policy: { requestTimeoutMs: 200, shutdownGraceMs: 20 },
+  });
+  await c.rpc('initialize', initialize);
+  const [evaluated, navigated] = await Promise.all([
+    c.rpc('tools/call', { name: 'browser_evaluate', arguments: { expression: 'location.href' } }, 'evaluate'),
+    c.rpc('tools/call', { name: 'browser_navigate', arguments: { url: 'http://127.0.0.1:5173/start' } }, 'navigate'),
+  ]);
+  for (const response of [evaluated, navigated]) {
+    assert.equal(response.error.code, -32603);
+    assert.match(response.error.message, /timed out; completion unknown/);
+    assert.match(response.error.message, /browser_tabs.*list|action "list"/i);
+    assert.match(response.error.message, /selected tab/i);
+    assert.match(response.error.message, /Page URL|snapshot/i);
+    assert.match(response.error.message, /refs|indices/i);
+    assert.doesNotMatch(response.error.message, /127\.0\.0\.1|5173|location\.href|http:/);
+  }
+  assert.equal(c.p.exitCode, null);
+  assert.equal(fs.readFileSync(c.calls, 'utf8').trim().split('\n').length, 2);
+});
+
+test('Playwright restart serves fresh calls and does not replay timed-out browser work', async t => {
+  const c = client(t, {
+    lazy: true,
+    playwright: true,
+    recordCalls: true,
+    environment: { FAKE_MCP_HANG_NAMES: 'browser_evaluate' },
+    policy: { requestTimeoutMs: 200, shutdownGraceMs: 20 },
+  });
+  await c.rpc('initialize', initialize);
+  const timedOut = await c.rpc('tools/call', { name: 'browser_evaluate', arguments: { expression: 'location.href' } }, 'reused');
+  assert.equal(timedOut.error.code, -32603);
+  assert.match(timedOut.error.message, /browser_tabs.*list|action "list"/i);
+
+  const listed = await c.rpc('tools/call', { name: 'browser_tabs' }, 'reused');
+  assert.equal(listed.error, undefined);
+  assert.deepEqual(listed.result.structuredContent.arguments, { action: 'list' });
+
+  const navigated = await c.rpc('tools/call', { name: 'browser_navigate', arguments: { url: 'http://127.0.0.1:5173/start' } }, 'navigate');
+  assert.equal(navigated.error, undefined);
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\nstart\n');
+  assert.deepEqual(fs.readFileSync(c.calls, 'utf8').trim().split('\n').map(line => line.split(':')[1]), [
+    'browser_evaluate',
+    'browser_tabs',
+    'browser_navigate',
+  ]);
+});
+
+test('a repeated Playwright timeout after restart keeps the recovery guidance', async t => {
+  const c = client(t, {
+    lazy: true,
+    playwright: true,
+    recordCalls: true,
+    environment: { FAKE_MCP_HANG_NAMES: 'browser_evaluate' },
+    policy: { requestTimeoutMs: 200, shutdownGraceMs: 20 },
+  });
+  await c.rpc('initialize', initialize);
+  for (const round of ['first', 'second']) {
+    const timedOut = await c.rpc('tools/call', { name: 'browser_evaluate', arguments: { expression: 'location.href' } }, round);
+    assert.equal(timedOut.error.code, -32603);
+    assert.match(timedOut.error.message, /timed out; completion unknown/);
+    assert.match(timedOut.error.message, /Playwright backend was restarted/);
+    assert.match(timedOut.error.message, /browser_tabs.*list|action "list"/i);
+    assert.doesNotMatch(timedOut.error.message, /location\.href|http:/);
+  }
+  assert.equal(c.p.exitCode, null);
+  const listed = await c.rpc('tools/call', { name: 'browser_tabs' });
+  assert.equal(listed.error, undefined);
+  assert.deepEqual(listed.result.structuredContent.arguments, { action: 'list' });
+  assert.deepEqual(fs.readFileSync(c.calls, 'utf8').trim().split('\n').map(line => line.split(':')[1]), [
+    'browser_evaluate',
+    'browser_evaluate',
+    'browser_tabs',
+  ]);
 });
 
 test('catalog mode recovers from a broken backend pipe without replaying the pending call', async t => {

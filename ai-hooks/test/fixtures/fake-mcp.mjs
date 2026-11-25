@@ -5,6 +5,9 @@ import { createInterface } from "node:readline"
 fs.appendFileSync(process.env.FAKE_MCP_STARTS, "start\n")
 const breakOnce = process.env.FAKE_MCP_BREAK_ONCE && fs.readFileSync(process.env.FAKE_MCP_STARTS, "utf8").trim().split("\n").length === 1
 const handshakeDelayMs = Number(process.env.FAKE_MCP_HANDSHAKE_DELAY_MS || 0)
+const delayId = process.env.FAKE_MCP_DELAY_ID
+const delayMs = Number(process.env.FAKE_MCP_DELAY_MS || 0)
+const hangNames = new Set((process.env.FAKE_MCP_HANG_NAMES || "").split(",").filter(Boolean))
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
 const clientRequests = new Map()
 if (process.env.FAKE_MCP_DESCENDANT) {
@@ -73,12 +76,32 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       setInterval(() => {}, 1000)
       return
     }
-    if (request.params.name === "hang") return
+    if (request.params.name === "hang" || hangNames.has(request.params.name)) return
     if (request.params.name === "fail") {
       send({
         jsonrpc: "2.0",
         id: request.id,
         error: { code: -32602, message: "bad arguments" }
+      })
+      return
+    }
+    if (process.env.FAKE_MCP_JSON_ERROR === request.params.name) {
+      send({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32602, message: "backend rejected arguments" }
+      })
+      return
+    }
+    if (process.env.FAKE_MCP_IS_ERROR === request.params.name) {
+      send({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          content: [{ type: "text", text: "backend tool failed" }],
+          structuredContent: { failure: true },
+          isError: true
+        }
       })
       return
     }
@@ -102,6 +125,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     }
   }
   const reply = () => send({ jsonrpc: "2.0", id: request.id, result })
-  if (request.method === "initialize" && handshakeDelayMs) setTimeout(reply, handshakeDelayMs)
+  if (delayMs && String(request.id) === delayId) setTimeout(reply, delayMs)
+  else if (request.method === "initialize" && handshakeDelayMs) setTimeout(reply, handshakeDelayMs)
   else reply()
 })

@@ -62,6 +62,10 @@ if (playwrightCompat) {
     if (tool.name === "browser_tabs") {
       schema.required = (schema.required || []).filter((key) => key !== "action")
       schema.properties.action.default = "list"
+      schema.properties.action.description =
+        "Operation to perform. Defaults to list when omitted; use new with url when the target address is known."
+      schema.properties.url.description =
+        "URL for a new tab. When the address is known, pass it with action new. To start from an empty tab, omit url, then call browser_navigate with the url and verify the Page URL and snapshot."
     } else if (tool.name === "browser_click") {
       schema.properties.ref = { type: "string", description: "Alias for target" }
       schema.required = (schema.required || []).filter((key) => key !== "target")
@@ -288,9 +292,37 @@ function prepareCall(message) {
       })
       return false
     }
-    if (params.name === "browser_tabs" && input.action === undefined)
-      input.action = "list"
-    else if (params.name === "browser_click" && input.target === undefined && input.ref !== undefined)
+    if (params.name === "browser_tabs") {
+      if (input.action === undefined) input.action = "list"
+      if (Object.hasOwn(input, "url") && input.action !== "new") {
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32602,
+            message:
+              'browser_tabs only accepts url with action "new". Use action "new" with this url, or call browser_navigate on the selected tab.'
+          }
+        })
+        return false
+      }
+      if (
+        input.action === "new" &&
+        Object.hasOwn(input, "url") &&
+        (typeof input.url !== "string" || input.url.trim() === "")
+      ) {
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32602,
+            message:
+              'browser_tabs action "new" requires a non-empty string url when url is provided. Omit url to open an empty tab, or pass the target address and verify the Page URL and snapshot.'
+          }
+        })
+        return false
+      }
+    } else if (params.name === "browser_click" && input.target === undefined && input.ref !== undefined)
       input.target = input.ref
     else if (params.name === "browser_evaluate" && input.function === undefined && input.expression !== undefined)
       input.function = `() => (${input.expression})`
@@ -431,7 +463,18 @@ function prepareCall(message) {
     rangeKey,
     autoDigest,
     generation: heldGeneration,
-    retries: 0
+    retries: 0,
+    tabsHint:
+      playwrightCompat &&
+      params.name === "browser_tabs" &&
+      params.arguments?.action === "new" &&
+      !Object.hasOwn(params.arguments || {}, "url"),
+    tabsErrorHint:
+      playwrightCompat &&
+      params.name === "browser_tabs" &&
+      params.arguments?.action === "new" &&
+      typeof params.arguments?.url === "string" &&
+      params.arguments.url.trim() !== ""
   })
   return true
 }
@@ -605,10 +648,19 @@ function restartBackend(error) {
   starting = undefined
   clearTimeout(handshakeTimer)
   for (const id of pending.keys()) {
+    const call = calls.get(id)
+    const browser =
+      playwrightCompat &&
+      call?.message?.params?.name?.startsWith("browser_")
     send({
       jsonrpc: "2.0",
       id,
-      error: { code: -32603, message: error.message }
+      error: {
+        code: -32603,
+        message: browser
+          ? `${error.message}\n\nHarness: the Playwright backend was restarted after an unknown outcome; the previous browser action may already have completed. Call browser_tabs with action "list" first and verify the selected tab is yours, not Welcome or another session. If the target is not reached, safely select your tab or create one with a known URL. Old tab indices and refs may be stale: check the Page URL and a fresh snapshot before interacting again, and do not replay the previous action blindly.`
+          : error.message
+      }
     })
   }
   pending.clear()
@@ -760,8 +812,36 @@ function launch() {
           if (failures.size > policy.failureEntries)
             failures.delete(failures.keys().next().value)
         } else failures.delete(call.key)
+        if (call.tabsErrorHint && message.result?.isError) {
+          const hint =
+            'Harness: the new tab may have been created before this tool error. Run browser_tabs action "list" first, identify the new or selected tab against the previous tabs, then continue on that confirmed tab. For a known HTTP(S) target, call browser_navigate explicitly and verify the fresh Page URL and snapshot. Do not auto-retry the rejected URL; use the real HTTP(S) address or a local HTTP fixture.'
+          const content = Array.isArray(message.result.content)
+            ? message.result.content
+            : []
+          const firstText = content.findIndex((block) => block.type === "text")
+          if (firstText < 0)
+            message.result.content = [
+              ...content,
+              { type: "text", text: hint }
+            ]
+          else
+            message.result.content = content.map((block, index) =>
+              index === firstText
+                ? { ...block, text: `${block.text}\n\n${hint}` }
+                : block
+            )
+        }
       } else {
         failures.delete(call.key)
+        if (call.tabsHint && message.result) {
+          message.result.content = [
+            ...(Array.isArray(message.result.content) ? message.result.content : []),
+            {
+              type: "text",
+              text: "Harness: browser_tabs created a new tab without a url. If you know the target address, call browser_navigate with that url on this tab, then verify the Page URL and snapshot."
+            }
+          ]
+        }
         if (
           call.rangeKey &&
           call.generation &&
