@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { apiFixture, boardFixture, initRepo, remote, runCli, task } from './helpers.mjs';
 
 const source = 'feature/STR-12';
+const gitlabRemote = 'https://gitlab.example.invalid/group/repo.git';
+const githubRemote = 'https://github.example.invalid/group/repo.git';
 
 function resultOf(result) {
   assert.equal(result.status, 0, result.stderr);
@@ -245,4 +247,61 @@ test('preflight stops known fatal comment and testing-target reasons, but not a 
   assert.equal(blocked.testing.reason, 'source-not-allowed');
   assert.equal(blocked.testing.columnId, 'col-done');
   assert.deepEqual(later.writes(), []);
+});
+
+test('exact Git origin rejects the same repository path on another host and accepts the configured GitLab origin', async (t) => {
+  const tasks = [task(12, { assignee: 'emp-1', desc: 'Требования карточки' })];
+  const api = await apiFixture(t, { tasks, board: boardFixture(tasks) });
+
+  const cwd = initRepo(t, { branch: source, upstream: gitlabRemote });
+  for (const args of [['preflight'], ['review-lookup', '--branch', source]]) {
+    const result = resultOf(await api.run(args, {
+      cwd,
+      env: { GANTUS_GIT_REMOTE: githubRemote }
+    }));
+    assert.equal(result.applicable, false);
+    assert.equal(result.reason, 'remote-mismatch');
+  }
+  assert.deepEqual(api.server.requests, []);
+  assert.deepEqual(api.writes(), []);
+
+  const preflight = resultOf(await api.run(['preflight'], {
+    cwd,
+    env: { GANTUS_GIT_REMOTE: gitlabRemote }
+  }));
+  const lookup = resultOf(await api.run(['review-lookup', '--branch', source], {
+    cwd,
+    env: { GANTUS_GIT_REMOTE: gitlabRemote }
+  }));
+
+  assert.equal(preflight.ready, true);
+  assert.equal(preflight.taskKey, 'STR-12');
+  assert.equal(preflight.card.id, '12');
+  assert.equal(lookup.found, true);
+  assert.equal(lookup.taskKey, 'STR-12');
+  assert.equal(lookup.card.id, '12');
+  assert.equal(lookup.card.desc, 'Требования карточки');
+  assert.notEqual(new URL(api.server.url).origin, new URL(gitlabRemote).origin);
+  assert.deepEqual(api.writes(), []);
+});
+
+test('a Git origin with and without .git is not interchangeable', async (t) => {
+  const tasks = [task(12, { assignee: 'emp-1' })];
+  const cases = [
+    { upstream: gitlabRemote.replace(/\.git$/, ''), configured: gitlabRemote },
+    { upstream: gitlabRemote, configured: gitlabRemote.replace(/\.git$/, '') }
+  ];
+  for (const entry of cases) {
+    const api = await apiFixture(t, { tasks, board: boardFixture(tasks) });
+    const cwd = initRepo(t, { branch: source, upstream: entry.upstream });
+
+    const result = resultOf(await api.run(['preflight'], {
+      cwd,
+      env: { GANTUS_GIT_REMOTE: entry.configured }
+    }));
+
+    assert.equal(result.applicable, false);
+    assert.equal(result.reason, 'remote-mismatch');
+    assert.deepEqual(api.server.requests, []);
+  }
 });

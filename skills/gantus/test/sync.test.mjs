@@ -173,6 +173,45 @@ test('sync is a no-op for the same description, own QA and testing column', asyn
   assert.deepEqual(api.writes(), []);
 });
 
+test('sync writes once and deduplicates on an exact GitLab origin without a testing target', async (t) => {
+  const gitlabRemote = 'https://gitlab.example.invalid/team/repo.git';
+  const gitlabMr = 'https://gitlab.example.invalid/team/repo/-/merge_requests/26';
+  const cwd = initRepo(t, { branch: source, upstream: gitlabRemote });
+  const tasks = [
+    task(12, { assignee: 'emp-1', kanbanColumnId: 'col-testing', desc: '' })
+  ];
+  const board = boardFixture(tasks);
+  const api = await apiFixture(t, { tasks, board, taskComments: [] });
+  const env = { GANTUS_GIT_REMOTE: gitlabRemote };
+
+  const first = resultOf(await api.run(
+    syncArgs({ mr: receipt({ web_url: gitlabMr }), expected: '' }),
+    { cwd, env }
+  ));
+
+  assert.equal(first.description.updated, true);
+  assert.equal(first.qa.commented, true);
+  assert.equal(first.testingMove.moved, false);
+  assert.equal(first.testingMove.reason, 'not-configured');
+  assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
+    ['PATCH', `${taskPath}/12`, { desc: finalDesc }],
+    ['POST', `${taskPath}/12/comments`, { body: qaBody }]
+  ]);
+
+  const writesAfterFirst = api.writes().length;
+  const second = resultOf(await api.run(
+    syncArgs({ mr: receipt({ web_url: gitlabMr }), expected: finalDesc }),
+    { cwd, env }
+  ));
+
+  assert.equal(second.description.updated, false);
+  assert.equal(second.qa.commented, false);
+  assert.equal(second.qa.deduplicated, true);
+  assert.equal(second.testingMove.moved, false);
+  assert.equal(second.testingMove.reason, 'not-configured');
+  assert.equal(api.writes().length, writesAfterFirst);
+});
+
 test('sync refuses a stale description instead of replacing the latest manual edit', async (t) => {
   const cwd = initRepo(t, { branch: source });
   const tasks = [task(12, { assignee: 'emp-1', desc: 'Ручная правка' })];
@@ -195,9 +234,12 @@ test('sync refuses a foreign card, foreign MR, draft, or a different MR body', a
     [{}, syncArgs({ mr: receipt({
       web_url: 'https://git.example.invalid/other/repo/-/merge_requests/26'
     }) }), /проект/],
+    [{}, syncArgs({ mr: receipt({
+      web_url: 'https://github.example.invalid/group/repo/-/merge_requests/26'
+    }) }), /проект/, true],
     [{}, syncArgs({ mr: receipt({ source_branch: 'feature/STR-99' }) }), /ветка/]
   ];
-  for (const [options, args, error] of cases) {
+  for (const [options, args, error, beforeAnyRequest = false] of cases) {
     const cwd = initRepo(t, { branch: source });
     const tasks = options.tasks ?? [task(12)];
     const board = boardFixture(tasks);
@@ -207,6 +249,7 @@ test('sync refuses a foreign card, foreign MR, draft, or a different MR body', a
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, error);
+    if (beforeAnyRequest) assert.deepEqual(api.server.requests, []);
     assert.deepEqual(api.writes(), []);
   }
 });
