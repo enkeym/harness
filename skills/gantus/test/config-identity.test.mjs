@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { loadConfig } from '../scripts/config.mjs';
 import { apiFixture, createArgs, gantusEnv, runCli, sendJson, startServer } from './helpers.mjs';
 
 const get = ['get', '--key', 'STR-12'];
@@ -23,6 +24,56 @@ test('invalid or missing config stops before sending credentials', async (t) => 
     assert.doesNotMatch(result.stderr, /test-cookie|user:pass/);
   }
   assert.equal(server.requests.length, 0);
+});
+
+test('an exact opt-in accepts one private HTTP origin without a request', () => {
+  const config = loadConfig(gantusEnv('http://10.13.35.2:3100/', {
+    GANTUS_ALLOW_HTTP_ORIGIN: 'http://10.13.35.2:3100'
+  }));
+
+  assert.equal(config.origin, 'http://10.13.35.2:3100');
+  assert.equal(config.protocol, 'http:');
+  assert.equal(config.cookie, 'session=test-cookie');
+});
+
+test('the HTTP opt-in rejects every other origin and host before a request', async () => {
+  const cases = [
+    [gantusEnv('http://10.13.35.2:3100'), /GANTUS_ALLOW_HTTP_ORIGIN/],
+    [gantusEnv('http://10.13.35.2:3100', {
+      GANTUS_ALLOW_HTTP_ORIGIN: 'http://10.13.35.3:3100'
+    }), /GANTUS_ALLOW_HTTP_ORIGIN/],
+    [gantusEnv('http://10.13.35.2:3100', {
+      GANTUS_ALLOW_HTTP_ORIGIN: 'http://10.13.35.2:3101'
+    }), /GANTUS_ALLOW_HTTP_ORIGIN/],
+    [gantusEnv('http://10.13.35.2:3100/api', {
+      GANTUS_ALLOW_HTTP_ORIGIN: 'http://10.13.35.2:3100'
+    }), /без пути/],
+    [gantusEnv('http://user:pass@10.13.35.2:3100', {
+      GANTUS_ALLOW_HTTP_ORIGIN: 'http://10.13.35.2:3100'
+    }), /учётные данные/],
+    [gantusEnv('http://203.0.113.10:3100', {
+      GANTUS_ALLOW_HTTP_ORIGIN: 'http://203.0.113.10:3100'
+    }), /RFC1918/],
+    [gantusEnv('http://gantus.internal:3100', {
+      GANTUS_ALLOW_HTTP_ORIGIN: 'http://gantus.internal:3100'
+    }), /RFC1918/]
+  ];
+  for (const [env, expected] of cases) {
+    const result = await runCli(get, { env });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, expected);
+    assert.doesNotMatch(result.stderr, /test-cookie|user:pass/);
+  }
+});
+
+test('HTTPS and loopback HTTP stay allowed without the opt-in', () => {
+  const https = loadConfig(gantusEnv('https://gantus.example.invalid'));
+  assert.equal(https.origin, 'https://gantus.example.invalid');
+  assert.equal(https.protocol, 'https:');
+
+  const loopback = loadConfig(gantusEnv('http://127.0.0.1:3100/'));
+  assert.equal(loopback.origin, 'http://127.0.0.1:3100');
+  assert.equal(loopback.protocol, 'http:');
 });
 
 test('redirect is not followed or allowed to forward the session', async (t) => {

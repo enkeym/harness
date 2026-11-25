@@ -7,10 +7,44 @@ export class GantusError extends Error {
 }
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+const PRIVATE_IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 const RESOURCE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function isId(value) {
   return typeof value === 'string' && RESOURCE_ID.test(value);
+}
+
+function isPrivateIPv4(hostname) {
+  const match = PRIVATE_IPV4.exec(hostname);
+  if (!match) return false;
+  const octets = match.slice(1).map(Number);
+  if (octets.some((octet) => octet > 255)) return false;
+  const [first, second] = octets;
+  return first === 10
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168);
+}
+
+function assertHttpOriginAllowed(url, env) {
+  if (!isPrivateIPv4(url.hostname)) {
+    throw new GantusError('GANTUS_BASE_URL: незашифрованный HTTP разрешён только для loopback или приватного IPv4 (RFC1918) с GANTUS_ALLOW_HTTP_ORIGIN', 'config');
+  }
+  const allowedOrigin = required(env, 'GANTUS_ALLOW_HTTP_ORIGIN');
+  let allowed;
+  try {
+    allowed = new URL(allowedOrigin);
+  } catch {
+    throw new GantusError('GANTUS_ALLOW_HTTP_ORIGIN: некорректный URL', 'config');
+  }
+  if (allowed.protocol !== 'http:'
+    || allowed.username || allowed.password
+    || allowed.search || allowed.hash
+    || (allowed.pathname !== '/' && allowed.pathname !== '')) {
+    throw new GantusError('GANTUS_ALLOW_HTTP_ORIGIN: ожидается HTTP origin без пути и учётных данных', 'config');
+  }
+  if (allowed.origin !== url.origin) {
+    throw new GantusError('GANTUS_ALLOW_HTTP_ORIGIN: origin не совпадает с GANTUS_BASE_URL', 'config');
+  }
 }
 
 function required(env, name) {
@@ -36,7 +70,7 @@ export function loadConfig(env = process.env) {
     throw new GantusError('GANTUS_BASE_URL: нужен HTTPS origin', 'config');
   }
   if (url.protocol === 'http:' && !LOOPBACK_HOSTS.has(url.hostname)) {
-    throw new GantusError('GANTUS_BASE_URL: незашифрованный HTTP разрешён только для loopback', 'config');
+    assertHttpOriginAllowed(url, env);
   }
   if (url.username || url.password) {
     throw new GantusError('GANTUS_BASE_URL: URL не должен содержать учётные данные', 'config');

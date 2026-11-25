@@ -25,8 +25,10 @@ instructions.
   session is the owner-provided `GANTUS_SESSION_COOKIE`; on 401 ask the owner
   to refresh it. Never capture browser cookies, log in, fall back to Bearer or
   replay a write.
-- HTTPS origin, or plain HTTP only for loopback or a trusted local tunnel.
-  Send no write and no secret to another host, redirect or proxy.
+- HTTPS origin, or plain HTTP only for loopback or one literal RFC1918 IPv4
+  origin exactly named in `GANTUS_ALLOW_HTTP_ORIGIN`. There the cookie and every
+  write travel without TLS, so use it only on a trusted network segment. Send no
+  write and no secret to another host, redirect or proxy.
 - One write per explicit request. Do not retry an ambiguous POST/PATCH or
   report success without a confirmed response.
 - Keep `editProtected`, `teamComments`, board scope and server ACLs. Do not
