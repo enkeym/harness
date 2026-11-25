@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { parseArgs } from './args.mjs';
-import { GantusError, loadConfig } from './config.mjs';
+import { GantusError, loadConfig, loadOptionalConfig } from './config.mjs';
 import { dispatch } from './operations.mjs';
 
 try {
   const parsed = parseArgs(process.argv.slice(2));
-  const config = loadConfig(process.env);
+  const config = parsed.command === 'preflight' || parsed.command === 'review-lookup'
+    ? loadOptionalConfig(process.env)
+    : loadConfig(process.env);
   const result = dispatch(parsed, config, process.cwd());
   console.log(JSON.stringify(result));
 } catch (error) {

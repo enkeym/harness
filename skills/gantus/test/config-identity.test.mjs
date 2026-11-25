@@ -26,6 +26,23 @@ test('invalid or missing config stops before sending credentials', async (t) => 
   assert.equal(server.requests.length, 0);
 });
 
+test('testing sync configuration is either absent or complete', async (t) => {
+  const server = await startServer((req, res) => sendJson(res, 200, {}));
+  t.after(() => server.close());
+
+  for (const env of [
+    gantusEnv(server.url, { GANTUS_TESTING_COLUMN_ID: 'col-testing' }),
+    gantusEnv(server.url, { GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo' }),
+    gantusEnv(server.url, {
+      GANTUS_TESTING_COLUMN_ID: 'bad id', GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo'
+    })
+  ]) {
+    const result = await runCli(get, { env });
+    assert.equal(result.status, 2);
+  }
+  assert.equal(server.requests.length, 0);
+});
+
 test('an exact opt-in accepts one private HTTP origin without a request', () => {
   const config = loadConfig(gantusEnv('http://10.13.35.2:3100/', {
     GANTUS_ALLOW_HTTP_ORIGIN: 'http://10.13.35.2:3100'

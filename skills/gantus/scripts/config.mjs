@@ -3,6 +3,7 @@ export class GantusError extends Error {
     super(message);
     this.name = 'GantusError';
     this.code = code;
+    this.ambiguous = false;
   }
 }
 
@@ -58,6 +59,25 @@ function required(env, name) {
   return value;
 }
 
+function optionalIdList(env, name) {
+  const value = env[name];
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || value.trim() === '' || /[\r\n]/.test(value)) {
+    throw new GantusError(`некорректное значение: ${name}`, 'config');
+  }
+  const ids = value.split(',').map((item) => item.trim());
+  if (ids.some((id) => !isId(id)) || new Set(ids).size !== ids.length) {
+    throw new GantusError(`${name}: ожидается список уникальных идентификаторов колонок`, 'config');
+  }
+  return Object.freeze(ids);
+}
+
+export function loadOptionalConfig(env = process.env) {
+  const requiredNames = ['GANTUS_BASE_URL', 'GANTUS_TEAM_ID', 'GANTUS_SESSION_COOKIE', 'GANTUS_USER_ID'];
+  const configured = requiredNames.some((name) => env[name] !== undefined);
+  return configured ? loadConfig(env) : null;
+}
+
 export function loadConfig(env = process.env) {
   const baseUrl = required(env, 'GANTUS_BASE_URL');
   let url;
@@ -98,6 +118,16 @@ export function loadConfig(env = process.env) {
   if (gitRemote !== undefined && (/[\r\n]/.test(gitRemote) || gitRemote.trim() === '')) {
     throw new GantusError('GANTUS_GIT_REMOTE: некорректное значение', 'config');
   }
+  const testingColumn = env.GANTUS_TESTING_COLUMN_ID;
+  if (testingColumn !== undefined && !isId(testingColumn)) {
+    throw new GantusError('GANTUS_TESTING_COLUMN_ID: недопустимый идентификатор колонки', 'config');
+  }
+  const testingFrom = optionalIdList(env, 'GANTUS_TESTING_FROM_COLUMN_IDS');
+  if ((testingColumn === undefined) !== (testingFrom === null)) {
+    throw new GantusError(
+      'GANTUS_TESTING_COLUMN_ID и GANTUS_TESTING_FROM_COLUMN_IDS задаются вместе', 'config'
+    );
+  }
 
   return Object.freeze({
     origin: url.origin,
@@ -105,6 +135,8 @@ export function loadConfig(env = process.env) {
     teamId,
     cookie,
     userId,
-    gitRemote: gitRemote === undefined ? null : gitRemote
+    gitRemote: gitRemote === undefined ? null : gitRemote,
+    testingColumnId: testingColumn ?? null,
+    testingFromColumnIds: testingFrom
   });
 }

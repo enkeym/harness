@@ -17,10 +17,12 @@ export function safeId(value, label) {
 }
 
 function failure(message, code, ambiguous) {
-  return new GantusError(
+  const error = new GantusError(
     ambiguous ? `${message}; результат записи неизвестен, не повторяй запрос` : message,
     code
   );
+  error.ambiguous = ambiguous;
+  return error;
 }
 
 export function request(config, {

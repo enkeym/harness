@@ -29,6 +29,27 @@ the menu. No preamble on what was run — that goes to the summary.
 
 A severity with no findings — its title dropped.
 
+## Task compliance
+
+For MR mode with a confirmed card, this block precedes severities and the
+standards/security findings:
+
+~~~
+**Соответствие задаче: ✅ | ❌ | не проверено**
+
+| Требование | Доказательство на pinned diff/тесте | Статус |
+|---|---|---|
+| <критерий или граничный сценарий> | `<sha>:<path>:<line>` или `<тест>` | выполнено/не выполнено/не проверено |
+~~~
+
+- Cover every mandatory requirement and boundary case; a condition's needed
+  files are evidence even when the quality pass would skip them.
+- A missing mandatory result is ❌ even when the current tests are green. A
+  confirmed extra is listed separately and never replaces a missed criterion.
+- A manual criterion not actually run stays `не проверено`.
+- No card or no confirmed key/access → `Соответствие задаче не проверено:
+  <причина>`; never print a task-level ✅.
+
 ## MR comments
 
 One per finding, Minor included, in number order — the body of a draft note

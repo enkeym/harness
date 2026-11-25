@@ -193,13 +193,20 @@ test('rename uses the authoritative name and preserves HEAD, staged and unstaged
   fs.writeFileSync(file, 'staged\n');
   git(cwd, ['add', 'file.txt']);
   fs.appendFileSync(file, 'unstaged\n');
-  const before = [git(cwd, ['rev-parse', 'HEAD']), git(cwd, ['diff', 'HEAD']), git(cwd, ['diff', '--cached'])];
+  fs.writeFileSync(path.join(cwd, 'untracked.txt'), 'untracked\n');
+  const before = [
+    git(cwd, ['rev-parse', 'HEAD']), git(cwd, ['diff', 'HEAD']),
+    git(cwd, ['diff', '--cached']), git(cwd, ['status', '--porcelain'])
+  ];
 
   const result = resultOf(await api.run(rename, { cwd, env: { GANTUS_GIT_REMOTE: remote } }));
 
   assert.equal(result.to, 'feature/STR-12-from-gantus');
   assert.equal(git(cwd, ['branch', '--show-current']), result.to);
-  assert.deepEqual([git(cwd, ['rev-parse', 'HEAD']), git(cwd, ['diff', 'HEAD']), git(cwd, ['diff', '--cached'])], before);
+  assert.deepEqual([
+    git(cwd, ['rev-parse', 'HEAD']), git(cwd, ['diff', 'HEAD']),
+    git(cwd, ['diff', '--cached']), git(cwd, ['status', '--porcelain'])
+  ], before);
 });
 
 test('rename refuses base, detached, existing target, upstream and other STR', async (t) => {

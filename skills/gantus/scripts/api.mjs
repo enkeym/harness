@@ -156,6 +156,46 @@ export function taskId(card) {
   return safeId(card.id, 'задача');
 }
 
+export function isOwned(identity, card) {
+  const creator = card.creatorUserId === null ? null : String(card.creatorUserId);
+  if (creator !== null && creator === String(identity.id)) return true;
+  return identity.employeeId !== null && card.assignee === identity.employeeId;
+}
+
+export function assertOwnedCard(identity, card) {
+  if (!isOwned(identity, card)) {
+    throw new GantusError('карточка не принадлежит текущему пользователю', 'auth');
+  }
+}
+
+export function assertAssignedTo(identity, card) {
+  if (identity.employeeId === null || card.assignee !== identity.employeeId) {
+    throw new GantusError('карточка назначена не текущему пользователю', 'auth');
+  }
+}
+
+export function fetchComments(config, card) {
+  const id = safeId(card.id, 'задача');
+  const payload = request(config, {
+    method: 'GET',
+    path: `/api/data/tasks/${encodeURIComponent(id)}/comments`
+  });
+  if (!Array.isArray(payload)) {
+    throw new GantusError('сервер не вернул комментарии задачи', 'protocol');
+  }
+  return payload.map((comment) => {
+    if (!comment || typeof comment !== 'object' || typeof comment.body !== 'string') {
+      throw new GantusError('сервер вернул некорректный комментарий', 'protocol');
+    }
+    const author = comment.authorId;
+    if (author !== null && author !== undefined
+        && typeof author !== 'number' && typeof author !== 'string') {
+      throw new GantusError('сервер вернул некорректного автора комментария', 'protocol');
+    }
+    return { body: comment.body, authorId: author ?? null };
+  });
+}
+
 export function assertEditAllowed(identity, card) {
   if (!card.editProtected || identity.role === 'admin') return;
   const creator = card.creatorUserId === null ? null : String(card.creatorUserId);

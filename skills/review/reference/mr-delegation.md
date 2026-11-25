@@ -11,17 +11,22 @@ ranges and findings already obtained at that revision.
 
 For explicitly requested delegation, give each worker exactly one pinned MR,
 `review_worker: true`, repository path, user focus, constraints, discussions,
+the coordinator's single `review-lookup` result or a safe criteria summary,
 necessary evidence and the required review skills. Never send the entire parent
-history or delegate the whole queue. Workers do not delegate, fetch, switch
-branches, edit files, run tests/typecheck or write external notes.
+history, the whole queue or board credentials. Workers do not read the board
+again, delegate, fetch, switch branches, edit files, run tests/typecheck or
+write external notes.
 
 The worker performs full review mode in shared review-pass and returns pinned
-identity, findings with path/line and evidence, read/unread coverage and unresolved
-questions. An incomplete pass remains incomplete; uncertainty does not trigger
-another model. The coordinator reuses the result without repeating the pass.
+identity, the task requirement map with evidence, findings with path/line,
+read/unread coverage and unresolved questions. A missing card or access is
+reported as `соответствие задаче не проверено`, never as ✅. An incomplete pass
+remains incomplete; uncertainty does not trigger another model. The coordinator
+reuses the result without repeating the pass.
 
 Validate unsupported claims with only the missing range or dependency contract.
 After fixes, inspect changed hunks and affected contracts, retaining valid prior
 coverage. Formatting and draft delivery do not reopen the review. Before creating
-authorized drafts, recheck MR diff_refs; changed revisions require fresh evidence.
-Delivery follows [gitlab.md](gitlab.md) and [report.md](report.md).
+authorized drafts, recheck MR diff_refs; changed revisions require fresh evidence
+and do not inherit an earlier Spec ✅. Delivery follows
+[gitlab.md](gitlab.md) and [report.md](report.md).

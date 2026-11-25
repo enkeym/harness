@@ -7,7 +7,7 @@ export function isTaskKey(value) {
   return typeof value === 'string' && TASK_KEY.test(value);
 }
 
-function branchKeys(branch) {
+export function branchKeys(branch) {
   const keys = new Set();
   for (const match of branch.matchAll(STRICT_KEY)) keys.add(match[2]);
   return [...keys];

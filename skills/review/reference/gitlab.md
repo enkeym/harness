@@ -21,9 +21,10 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> user
 node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<encoded-project>/merge_requests?state=opened&order_by=updated_at&per_page=50&page=1'
 ```
 
-- Drop the MRs authored by the `/user` name before counting: the user's own
-  branch gets the fix menu through the `<branch>` row, never drafts; its
-  `!<iid>` → its source branch through that row.
+- An explicit `!<iid>` or URL may point to the user's own MR: review it on the
+  pinned MR diff and keep the fix menu, never redirect it to the local branch.
+  A generic queue lists the colleagues' MRs; do not drop an explicitly named
+  own MR.
 - Option label `!<iid> <title, ≤40 chars>`, description
   `<source> → <target>, <author>`, plus `черновик` when `draft`.
 - None left → `Открытых MR коллег нет`, stop. Otherwise use the requested MR
@@ -39,11 +40,24 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<enco
 ## Scope of one MR
 
 1. GET `projects/<encoded-project>/merge_requests/<iid>` → `diff_refs` (`base_sha`,
-   `start_sha`, `head_sha`), `source_branch`, `target_branch`, `web_url`.
-2. `git fetch origin <source> <target>`; a fork MR (source not on origin) →
+   `start_sha`, `head_sha`), `source_branch`, `target_branch`, `web_url`, and the
+   numeric `source_project_id`, `target_project_id`.
+2. Require the MR's numeric `source_project_id` and `target_project_id` to equal
+   the numeric `project.id` of the configured origin, resolved once through the
+   client. A fork, a foreign project, a missing or non-numeric id, or an
+   unresolved origin project skips `review-lookup`: report `соответствие задаче
+   не проверено` with that reason and continue the standard code review. Never
+   guess a link.
+3. From the confirmed `source_branch`, run exactly one read-only
+   `review-lookup --branch <source_branch>` before fetch, discussions, diff or
+   pass. The key comes only from that branch, never the title or local `HEAD`.
+   Missing configuration, no/several keys, no/several cards or lost access →
+   continue the code review and report `соответствие задаче не проверено` with
+   that reason; no Spec ✅ and no board write.
+4. `git fetch origin <source> <target>`; a fork MR (source not on origin) →
    `git fetch origin refs/merge-requests/<iid>/head`. Check
    `git rev-parse -q --verify <head_sha>^{commit}` and the same for `base_sha`.
-3. Scope = `git diff <base_sha> <head_sha>` — the diff GitLab shows, so the
+5. Scope = `git diff <base_sha> <head_sha>` — the diff GitLab shows, so the
    line anchors land. Files as `git show <head_sha>:<path>`. Header mode
    `MR !<iid> <title>`; ticket commits do not apply.
 

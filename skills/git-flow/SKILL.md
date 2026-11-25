@@ -64,6 +64,29 @@ MR", "описание для Jira", "собери описание"). **Never a
 own, never after every commit.** An unrequested MR reads as "ready" and gets
 merged half-finished.
 
+On a project with configured Gantus, an explicit request to publish or update
+the MR runs the read-only `gantus preflight` during intake, before any push or
+GitLab write; the ordered procedure is in
+[reference/mr.md](reference/mr.md#procedure). Commit and checks follow, then the
+confirmed MR write and the post-confirmation `sync`; a single MR never runs the
+legacy `review-ready`. A plain MR in another repository with a
+globally set `GANTUS_GIT_REMOTE` is not applicable: it continues ordinary
+GitLab delivery without a board call. An explicit Gantus request with
+`configured:false`, `applicable:false`, a configuration error or a fatal
+preflight reason is blocked and never degraded into a plain publication. On
+the matching configured repo, a branch without a key returns `needsLink`; do
+not continue as a plain MR — finish the scoped branch-only link and repeat
+preflight, or ask one targeted question and stop. A plain review, commit,
+push, MR text request or a project publication ban never writes to Gantus and
+never turns into publication.
+
+An explicit request to create working branches for completed local changes is
+a separate branch-only flow: classify the diff into independent units, create
+one linked card and branch per unit without duplicates, preserve unrelated
+staged/unstaged/untracked changes, and add QA without pushing, opening an MR or
+advancing a card. A request for an ordinary branch with an exact user-supplied
+name creates no card by itself.
+
 Stay within the requested Git operation. Ask before push unless already authorized;
 local operations need no extra confirmation.
 

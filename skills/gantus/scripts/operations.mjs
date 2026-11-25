@@ -1,10 +1,14 @@
 import fs from 'node:fs';
-import { GantusError } from './config.mjs';
+import { GantusError, isId } from './config.mjs';
 import { request } from './http.mjs';
 import {
+  assertAssignedTo,
   assertCommentAllowed,
   assertEditAllowed,
+  assertOwnedCard,
   fetchBoard,
+  fetchComments,
+  isOwned,
   resolveCard,
   reviewColumn,
   taskId,
@@ -17,11 +21,12 @@ import {
   currentBranch,
   hasPublishedEvidence,
   head,
+  originRemote,
   renameCurrentBranch,
   validBranchName,
   worktreeState
 } from './git.mjs';
-import { isTaskKey, singleTaskKey } from './keys.mjs';
+import { branchKeys, isTaskKey, singleTaskKey } from './keys.mjs';
 
 const EDITABLE = new Set(['name', 'desc', 'priority']);
 const FORBIDDEN_EDIT = new Set([
@@ -37,6 +42,32 @@ const PRIORITIES = new Set(['P0', 'P1', 'P2', 'P3']);
 function requiredValue(flags, name) {
   const value = flags[name];
   if (typeof value !== 'string' || value.trim() === '') {
+    throw new GantusError(`не указан --${name}`, 'usage');
+  }
+  return value;
+}
+
+function textFlag(flags, name, { required = false, allowEmpty = false } = {}) {
+  const direct = flags[name];
+  const file = flags[`${name}-file`];
+  if (direct !== undefined && file !== undefined) {
+    throw new GantusError(`используйте либо --${name}, либо --${name}-file`, 'usage');
+  }
+  let value = direct;
+  if (file !== undefined) {
+    try {
+      const stat = fs.statSync(file);
+      if (!stat.isFile() || stat.size > 1024 * 1024) throw new Error('size');
+      value = fs.readFileSync(file, 'utf8');
+    } catch {
+      throw new GantusError(`--${name}-file: файл недоступен или слишком большой`, 'usage');
+    }
+  }
+  if (value === undefined) {
+    if (required) throw new GantusError(`не указан --${name}`, 'usage');
+    return undefined;
+  }
+  if (!allowEmpty && value.trim() === '') {
     throw new GantusError(`не указан --${name}`, 'usage');
   }
   return value;
@@ -67,7 +98,7 @@ function checkDates(flags) {
   }
 }
 
-function cardView(board, card) {
+function cardView(board, card, identity) {
   const column = board.columns.find((item) => item.id === card.columnId);
   return {
     taskKey: card.taskKey,
@@ -76,15 +107,128 @@ function cardView(board, card) {
     status: card.status,
     priority: card.priority,
     columnId: card.columnId,
-    column: column?.name ?? null
+    column: column?.name ?? null,
+    own: isOwned(identity, card)
   };
 }
 
 export function getTask(config, flags) {
   const key = requiredValue(flags, 'key');
+  const identity = verifyIdentity(config);
+  const board = fetchBoard(config);
+  return cardView(board, resolveCard(board, key), identity);
+}
+
+export function preflightTask(config, flags, cwd) {
+  const explicitKey = flags.key;
+  if (explicitKey !== undefined && !isTaskKey(explicitKey)) {
+    throw new GantusError('--key: ожидается один строгий ключ STR-<digits>', 'usage');
+  }
+  if (config === null) return { configured: false };
+  if (!config.gitRemote) {
+    return { configured: true, applicable: false, reason: 'remote-not-configured' };
+  }
+  const actual = originRemote(cwd);
+  if (actual === null || actual !== config.gitRemote) {
+    return { configured: true, applicable: false, reason: 'remote-mismatch' };
+  }
+  const branch = currentBranch(cwd);
+  if (!branch) throw new GantusError('preflight требует именованную текущую ветку', 'git');
+  const keys = branchKeys(branch);
+  if (keys.length > 1) {
+    throw new GantusError(`в ветке ${branch} несколько ключей STR; действие отменено`, 'ambiguous');
+  }
+  if (explicitKey !== undefined) {
+    if (keys.length === 0) {
+      throw new GantusError(`в ветке ${branch} нет ключа STR; --key не совпадает`, 'ambiguous');
+    }
+    if (keys[0] !== explicitKey) {
+      throw new GantusError(`ключ ветки ${keys[0]} не совпадает с задачей ${explicitKey}`, 'ambiguous');
+    }
+  }
+  if (keys.length === 0) {
+    return {
+      configured: true,
+      applicable: true,
+      ready: false,
+      reason: 'no-key',
+      needsLink: true,
+      branch
+    };
+  }
+  const key = keys[0];
+  const identity = verifyIdentity(config);
+  const board = fetchBoard(config);
+  const card = resolveCard(board, key);
+  assertOwnedCard(identity, card);
+  assertAssignedTo(identity, card);
+  assertCommentAllowed(card);
+  const plan = testingPlan(config, board, card);
+  const testing = plan.kind === 'move'
+    ? { planned: true, columnId: plan.target.id }
+    : { planned: false, reason: plan.reason };
+  if (plan.columnId !== undefined) testing.columnId = plan.columnId;
+  return {
+    configured: true,
+    applicable: true,
+    ready: true,
+    taskKey: key,
+    card: { id: card.id, columnId: card.columnId, desc: card.desc },
+    testing
+  };
+}
+
+export function reviewLookup(config, flags, cwd) {
+  const branch = requiredValue(flags, 'branch');
+  if (config === null) return { configured: false };
+  if (!config.gitRemote) {
+    return { configured: true, applicable: false, reason: 'remote-not-configured' };
+  }
+  const actual = originRemote(cwd);
+  if (actual === null || actual !== config.gitRemote) {
+    return { configured: true, applicable: false, reason: 'remote-mismatch' };
+  }
+  const keys = branchKeys(branch);
+  if (keys.length === 0) {
+    return { configured: true, applicable: true, found: false, reason: 'no-key', branch };
+  }
+  if (keys.length > 1) {
+    return {
+      configured: true,
+      applicable: true,
+      found: false,
+      reason: 'several-keys',
+      keys,
+      branch
+    };
+  }
+  const key = keys[0];
   verifyIdentity(config);
   const board = fetchBoard(config);
-  return cardView(board, resolveCard(board, key));
+  const matches = board.cards.filter((card) => card.taskKey === key);
+  if (matches.length === 0) {
+    return { configured: true, applicable: true, found: false, reason: 'no-card', key };
+  }
+  if (matches.length > 1) {
+    return { configured: true, applicable: true, found: false, reason: 'several-cards', key };
+  }
+  const card = matches[0];
+  const column = board.columns.find((item) => item.id === card.columnId);
+  return {
+    configured: true,
+    applicable: true,
+    found: true,
+    taskKey: key,
+    card: {
+      id: card.id,
+      name: card.name,
+      desc: card.desc,
+      status: card.status,
+      columnId: card.columnId,
+      column: column?.name ?? null,
+      assignee: card.assignee
+    }
+  };
 }
 
 export function createTask(config, flags) {
@@ -225,14 +369,7 @@ function resolveTarget(board, selector) {
   return column;
 }
 
-function performMove(config, identity, key, selector) {
-  const board = fetchBoard(config);
-  const card = resolveCard(board, key);
-  assertEditAllowed(identity, card);
-  const target = resolveTarget(board, selector);
-  if (card.columnId === target.id) {
-    return { moved: false, taskKey: key, columnId: target.id, reason: 'already' };
-  }
+function moveCardFromSnapshot(config, board, card, target) {
   const ordered = board.cards
     .filter((item) => item.columnId === target.id && item.id !== card.id)
     .sort(compareCards)
@@ -244,6 +381,17 @@ function performMove(config, identity, key, selector) {
     json: { columnId: target.id, orderedIds: ordered },
     mutation: true
   });
+}
+
+function performMove(config, identity, key, selector) {
+  const board = fetchBoard(config);
+  const card = resolveCard(board, key);
+  assertEditAllowed(identity, card);
+  const target = resolveTarget(board, selector);
+  if (card.columnId === target.id) {
+    return { moved: false, taskKey: key, columnId: target.id, reason: 'already' };
+  }
+  moveCardFromSnapshot(config, board, card, target);
   return { moved: true, taskKey: key, columnId: target.id };
 }
 
@@ -343,6 +491,325 @@ export function reviewReady(config, flags, cwd) {
   return performMove(config, identity, key, { kind: 'review' });
 }
 
+function readSyncReceipt(value, desc, gitlabUserId) {
+  const receipt = readMrReceipt(value);
+  if (receipt.operation !== 'create' && receipt.operation !== 'update') {
+    throw new GantusError('--mr: операция должна быть create или update', 'usage');
+  }
+  if (typeof receipt.description !== 'string' || receipt.description !== desc) {
+    throw new GantusError('--mr: описание MR не совпадает с --desc', 'ambiguous');
+  }
+  const authorId = receipt.author?.id;
+  const authorOk = (typeof authorId === 'number' && Number.isSafeInteger(authorId))
+    || (typeof authorId === 'string' && /^\d+$/.test(authorId));
+  if (!authorOk) {
+    throw new GantusError('--mr: квитанция не содержит безопасный id автора', 'usage');
+  }
+  if (String(authorId) !== String(gitlabUserId)) {
+    throw new GantusError('--mr: автор MR не совпадает с текущим пользователем', 'auth');
+  }
+  return receipt;
+}
+
+function qaCommentBody(receipt, qa) {
+  return `Проверка MR !${receipt.iid} (${receipt.source_branch})\n\n${qa}`;
+}
+
+function descriptionBlocks(value) {
+  return value
+    .split(/\n[ \t]*\n/)
+    .map((block) => block.trim())
+    .filter((block) => block !== '');
+}
+
+function assertManualContext(finalDesc, cardDesc, mrDesc, replacedDesc) {
+  const card = descriptionBlocks(cardDesc);
+  const mr = descriptionBlocks(mrDesc);
+  const final = descriptionBlocks(finalDesc);
+  const replaced = descriptionBlocks(replacedDesc);
+  const finalSet = new Set(final);
+  if (finalSet.size !== final.length) {
+    throw new GantusError('итоговое описание повторяет раздел; запись отменена', 'conflict');
+  }
+  const cardSet = new Set(card);
+  const mrSet = new Set(mr);
+  const replacedSet = new Set(replaced);
+  for (const block of replacedSet) {
+    if (!cardSet.has(block) || !mrSet.has(block)) {
+      throw new GantusError('заменяемый блок отсутствует в обеих версиях; запись отменена', 'conflict');
+    }
+  }
+  for (const block of new Set([...card, ...mr])) {
+    if (!replacedSet.has(block) && !finalSet.has(block)) {
+      throw new GantusError('ручной контекст описания не сохранён; запись отменена', 'conflict');
+    }
+  }
+}
+
+function cardById(board, id) {
+  const matches = board.cards.filter((card) => card.id === id);
+  if (matches.length === 0) {
+    throw new GantusError('карточка заменена или не найдена на доске; перемещение отменено', 'not-found');
+  }
+  if (matches.length > 1) {
+    throw new GantusError('на доске несколько карточек с одним id; перемещение отменено', 'ambiguous');
+  }
+  return matches[0];
+}
+
+function isAmbiguousWrite(error) {
+  return error instanceof GantusError && error.ambiguous === true;
+}
+
+function unconfirmedWrite(message) {
+  const error = new GantusError(message, 'protocol');
+  error.ambiguous = true;
+  return error;
+}
+
+function testingPlan(config, board, card) {
+  if (config.testingColumnId === null) {
+    return { kind: 'skip', reason: 'not-configured' };
+  }
+  const target = board.columns.find((column) => column.id === config.testingColumnId);
+  if (!target) {
+    throw new GantusError('колонка тестирования не найдена на настроенной доске', 'not-found');
+  }
+  if (card.columnId === target.id) {
+    return { kind: 'skip', reason: 'already', columnId: target.id };
+  }
+  if (!config.testingFromColumnIds.includes(card.columnId)) {
+    return { kind: 'skip', reason: 'source-not-allowed', columnId: card.columnId };
+  }
+  return { kind: 'move', target };
+}
+
+function moveCardToColumn(config, board, card, target) {
+  const ordered = board.cards
+    .filter((item) => item.columnId === target.id && item.id !== card.id)
+    .sort(compareCards)
+    .map((item) => item.id);
+  ordered.push(card.id);
+  request(config, {
+    method: 'PATCH',
+    path: `/api/kanban/cards/${encodeURIComponent(card.id)}`,
+    json: { columnId: target.id, orderedIds: ordered },
+    mutation: true
+  });
+}
+
+export function syncTask(config, flags, cwd) {
+  const key = requiredValue(flags, 'key');
+  const desc = textFlag(flags, 'desc', { required: true });
+  const qa = textFlag(flags, 'qa', { required: true });
+  const expectedDesc = textFlag(flags, 'expected-desc', { required: true, allowEmpty: true });
+  const expectedMrDesc = textFlag(flags, 'expected-mr-desc', { allowEmpty: true }) ?? '';
+  const replacedDesc = textFlag(flags, 'replaced-desc', { allowEmpty: true }) ?? '';
+  const expectedCardId = requiredValue(flags, 'expected-card-id');
+  if (!isId(expectedCardId)) {
+    throw new GantusError('--expected-card-id: некорректный id карточки', 'usage');
+  }
+  const gitlabUserId = requiredValue(flags, 'gitlab-user-id');
+  if (!/^\d+$/.test(gitlabUserId)) {
+    throw new GantusError('--gitlab-user-id: ожидается числовой id пользователя', 'usage');
+  }
+  const receipt = readSyncReceipt(requiredValue(flags, 'mr'), desc, gitlabUserId);
+  if (receipt.operation === 'update'
+      && flags['expected-mr-desc'] === undefined
+      && flags['expected-mr-desc-file'] === undefined) {
+    throw new GantusError('sync update требует --expected-mr-desc прочитанного описания MR', 'usage');
+  }
+  const current = currentBranch(cwd);
+  if (!current || current !== receipt.source_branch) {
+    throw new GantusError('текущая ветка не совпадает с source_branch квитанции MR', 'git');
+  }
+  singleTaskKey(receipt.source_branch, key);
+  assertProjectRemote(config, cwd);
+  const expected = expectedMrUrl(config.gitRemote, receipt.iid);
+  if (!expected || receipt.web_url.replace(/\/+$/, '') !== expected) {
+    throw new GantusError('--mr: web_url не совпадает с проектом из GANTUS_GIT_REMOTE', 'ambiguous');
+  }
+
+  const identity = verifyIdentity(config);
+  const board = fetchBoard(config);
+  const card = resolveCard(board, key);
+  if (card.id !== expectedCardId) {
+    throw new GantusError('карточка не совпадает с id из preflight; запись отменена', 'conflict');
+  }
+  assertOwnedCard(identity, card);
+  assertAssignedTo(identity, card);
+  assertCommentAllowed(card);
+  const plan = testingPlan(config, board, card);
+  const currentDesc = card.desc ?? '';
+  if (currentDesc !== desc && currentDesc !== expectedDesc) {
+    throw new GantusError('описание карточки изменилось после сверки; запись отменена', 'conflict');
+  }
+  assertManualContext(desc, expectedDesc, expectedMrDesc, replacedDesc);
+  const comments = fetchComments(config, card);
+  const body = qaCommentBody(receipt, qa);
+  const authorOf = (comment) => (
+    comment.authorId === null || comment.authorId === undefined
+      ? null
+      : String(comment.authorId)
+  );
+  const matchingQa = comments.filter((comment) => comment.body === body);
+  if (matchingQa.some((comment) => {
+    const author = authorOf(comment);
+    return author === null || !/^\d+$/.test(author);
+  })) {
+    throw new GantusError(
+      'QA-комментарий с тем же текстом имеет неизвестного автора; запись отменена',
+      'ambiguous'
+    );
+  }
+  if (matchingQa.some((comment) => authorOf(comment) !== String(identity.id))) {
+    throw new GantusError(
+      'QA-комментарий с тем же текстом уже добавлен другим автором; запись отменена',
+      'conflict'
+    );
+  }
+  const ownQa = matchingQa.length > 0;
+  let descriptionUpdated = false;
+  if (currentDesc !== desc) {
+    try {
+      request(config, {
+        method: 'PATCH',
+        path: `/api/data/tasks/${encodeURIComponent(taskId(card))}`,
+        json: { desc },
+        mutation: true
+      });
+      descriptionUpdated = true;
+      try {
+        const after = fetchBoard(config);
+        const afterCard = cardById(after, card.id);
+        if ((afterCard.desc ?? '') !== desc) {
+          throw unconfirmedWrite('описание не подтверждено после записи');
+        }
+      } catch {
+        throw unconfirmedWrite('описание не подтверждено после записи');
+      }
+    } catch (error) {
+      if (error instanceof GantusError) {
+        const ambiguous = isAmbiguousWrite(error);
+        const state = ambiguous
+          ? 'результат обновления описания не подтверждён'
+          : 'описание не обновлено';
+        const combined = new GantusError(
+          `${state}; QA не добавлен; карточка не перемещена; ${error.message}`,
+          error.code
+        );
+        combined.ambiguous = ambiguous;
+        throw combined;
+      }
+      throw error;
+    }
+  }
+  let commented = false;
+  if (!ownQa) {
+    try {
+      request(config, {
+        method: 'POST',
+        path: `/api/data/tasks/${encodeURIComponent(taskId(card))}/comments`,
+        json: { body },
+        mutation: true
+      });
+      commented = true;
+      try {
+        const afterComments = fetchComments(config, card);
+        const confirmed = afterComments.some((comment) => (
+          comment.body === body && authorOf(comment) === String(identity.id)
+        ));
+        if (!confirmed) {
+          throw unconfirmedWrite('QA не подтверждён после записи');
+        }
+      } catch {
+        throw unconfirmedWrite('QA не подтверждён после записи');
+      }
+    } catch (error) {
+      if (error instanceof GantusError) {
+        const description = descriptionUpdated ? 'описание обновлено' : 'описание без изменений';
+        const ambiguous = isAmbiguousWrite(error);
+        const qaState = ambiguous
+          ? 'результат добавления QA не подтверждён'
+          : 'QA не добавлен';
+        const combined = new GantusError(
+          `${description}; ${qaState}; карточка не перемещена; ${error.message}`,
+          error.code
+        );
+        combined.ambiguous = ambiguous;
+        throw combined;
+      }
+      throw error;
+    }
+  }
+  let testingMove;
+  if (plan.kind !== 'move') {
+    testingMove = { moved: false, reason: plan.reason };
+    if (plan.columnId !== undefined) testingMove.columnId = plan.columnId;
+  } else {
+    try {
+      const fresh = fetchBoard(config);
+      const freshCard = cardById(fresh, card.id);
+      if (freshCard.id !== expectedCardId) {
+        throw new GantusError('карточка не совпадает с id из preflight; перемещение отменено', 'conflict');
+      }
+      if (freshCard.taskKey !== key) {
+        throw new GantusError('карточка с тем же id теперь имеет другой ключ; перемещение отменено', 'ambiguous');
+      }
+      if ((freshCard.desc ?? '') !== desc) {
+        throw new GantusError('описание карточки изменилось после публикации; перемещение отменено', 'conflict');
+      }
+      assertAssignedTo(identity, freshCard);
+      assertOwnedCard(identity, freshCard);
+      if (freshCard.columnId !== card.columnId) {
+        throw new GantusError('колонка карточки изменилась после публикации; перемещение отменено', 'conflict');
+      }
+      const freshPlan = testingPlan(config, fresh, freshCard);
+      if (freshPlan.kind === 'move') {
+        moveCardToColumn(config, fresh, freshCard, freshPlan.target);
+        try {
+          const movedBoard = fetchBoard(config);
+          const movedCard = cardById(movedBoard, card.id);
+          if (movedCard.columnId !== freshPlan.target.id) {
+            throw unconfirmedWrite('перемещение не подтверждено после записи');
+          }
+        } catch {
+          throw unconfirmedWrite('перемещение не подтверждено после записи');
+        }
+        testingMove = { moved: true, columnId: freshPlan.target.id };
+      } else {
+        testingMove = { moved: false, reason: freshPlan.reason };
+        if (freshPlan.columnId !== undefined) testingMove.columnId = freshPlan.columnId;
+      }
+    } catch (error) {
+      if (error instanceof GantusError) {
+        const description = descriptionUpdated ? 'обновлено' : 'без изменений';
+        const qaState = commented ? 'добавлен' : 'без изменений';
+        const ambiguous = isAmbiguousWrite(error);
+        const moveState = ambiguous
+          ? 'результат перемещения не подтверждён'
+          : 'карточка не перемещена';
+        const combined = new GantusError(
+          `описание ${description}; QA ${qaState}; ${error.message}; ${moveState}`,
+          error.code
+        );
+        combined.ambiguous = ambiguous;
+        throw combined;
+      }
+      throw error;
+    }
+  }
+
+  return {
+    synced: true,
+    taskKey: key,
+    mr: { iid: String(receipt.iid), operation: receipt.operation },
+    description: { updated: descriptionUpdated },
+    qa: { commented, deduplicated: ownQa },
+    testingMove
+  };
+}
+
 function assertRenameStillSafe(config, cwd, current, target) {
   assertProjectRemote(config, cwd);
   if (currentBranch(cwd) !== current) {
@@ -402,7 +869,10 @@ export function dispatch({ command, flags }, config, cwd) {
   if (command === 'edit') return editTask(config, flags);
   if (command === 'comment') return commentTask(config, flags);
   if (command === 'move') return moveTask(config, flags);
+  if (command === 'preflight') return preflightTask(config, flags, cwd);
+  if (command === 'review-lookup') return reviewLookup(config, flags, cwd);
   if (command === 'review-ready') return reviewReady(config, flags, cwd);
+  if (command === 'sync') return syncTask(config, flags, cwd);
   if (command === 'rename-branch') return renameBranch(config, flags, cwd);
   throw new GantusError('неизвестная команда', 'usage');
 }

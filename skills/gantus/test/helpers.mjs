@@ -59,7 +59,7 @@ export function task(number, overrides = {}) {
     kanbanOrder: number,
     taskKey: `STR-${number}`,
     name: `Задача ${number}`,
-    desc: 'Описание',
+    desc: null,
     status: 'todo',
     priority: 'P2',
     assignee: 'emp-2',
@@ -78,6 +78,7 @@ export function boardFixture(tasks = [task(12), task(123)]) {
     columns: [
       { id: 'col-todo', boardId: 'b1', status: 'todo', name: 'В работе' },
       { id: 'col-review', boardId: 'b1', status: 'review', name: 'На ревью' },
+      { id: 'col-testing', boardId: 'b1', status: null, name: 'Тестирование' },
       { id: 'col-done', boardId: 'b1', status: 'done', name: 'Готово' }
     ],
     cards: tasks.map((entry) => ({
@@ -91,12 +92,13 @@ export async function apiFixture(t, options = {}) {
   const tasks = options.tasks ?? [task(12), task(123)];
   const board = options.board ?? boardFixture(tasks);
   let servedBoard = typeof board === 'function' ? null : board;
+  let servedComments = Array.isArray(options.taskComments) ? options.taskComments : [];
   const bootstrap = {
     departments: [{ id: 'dept-1', tag: 'STR', teamComments: { Команда: options.comments ?? true } }],
     tasks,
     ...options.bootstrap
   };
-  const server = await startServer((req, res) => {
+  const server = await startServer(async (req, res, body) => {
     if (req.method === 'GET') {
       if (req.url === '/api/auth/me') return sendJson(res, 200, options.identity ?? identity);
       if (req.url === boardPath) {
@@ -104,9 +106,39 @@ export async function apiFixture(t, options = {}) {
         return sendJson(res, 200, servedBoard);
       }
       if (req.url === bootstrapPath) return sendJson(res, 200, bootstrap);
+      const comments = /^\/api\/data\/tasks\/([^/]+)\/comments$/.exec(req.url);
+      if (comments) {
+        if (typeof options.taskComments === 'function') {
+          return sendJson(res, 200, options.taskComments(req, comments[1]));
+        }
+        return sendJson(res, 200, servedComments);
+      }
       return sendJson(res, 404);
     }
     const reply = options.write ? options.write(req, servedBoard) : [200, {}];
+    const status = reply[0];
+    if (options.autoWrite !== false && status >= 200 && status < 300) {
+      let payload = null;
+      try { payload = JSON.parse(body); } catch { payload = null; }
+      const task = /^\/api\/data\/tasks\/([^/]+)$/.exec(req.url);
+      if (req.method === 'PATCH' && task && typeof payload?.desc === 'string') {
+        const target = tasks.find((entry) => entry.id === task[1]);
+        if (target) target.desc = payload.desc;
+      }
+      const taskComments = /^\/api\/data\/tasks\/([^/]+)\/comments$/.exec(req.url);
+      if (req.method === 'POST' && taskComments && typeof payload?.body === 'string') {
+        servedComments.push({
+          id: `c${servedComments.length + 1}`,
+          authorId: (options.identity ?? identity).id,
+          body: payload.body
+        });
+      }
+      const card = /^\/api\/kanban\/cards\/([^/]+)$/.exec(req.url);
+      if (req.method === 'PATCH' && card && typeof payload?.columnId === 'string') {
+        const target = servedBoard?.cards?.find((entry) => entry.id === card[1]);
+        if (target) target.columnId = payload.columnId;
+      }
+    }
     sendJson(res, ...reply);
   });
   t.after(() => server.close());
