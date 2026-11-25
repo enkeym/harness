@@ -658,7 +658,7 @@ function restartBackend(error) {
       error: {
         code: -32603,
         message: browser
-          ? `${error.message}\n\nHarness: the Playwright backend was restarted after an unknown outcome; the previous browser action may already have completed. Call browser_tabs with action "list" first and verify the selected tab is yours, not Welcome or another session. If the target is not reached, safely select your tab or create one with a known URL. Old tab indices and refs may be stale: check the Page URL and a fresh snapshot before interacting again, and do not replay the previous action blindly.`
+          ? `${error.message}\n\nHarness: the Playwright backend was restarted after an unknown outcome; the previous browser action may already have completed. Call browser_tabs with action "list" first. A tab that is about:blank, merely selected, or listed under the same old index does not prove that this task created it; if you cannot prove ownership, do not select, close or reuse that tab. Open your own tab with a known HTTP(S) URL, then verify the fresh Page URL and snapshot. Old tab indices and refs may be stale: check the Page URL and a fresh snapshot before interacting again, and do not replay the previous action blindly. Do not target Welcome or another session's tab.`
           : error.message
       }
     })

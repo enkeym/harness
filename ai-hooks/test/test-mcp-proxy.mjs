@@ -485,7 +485,10 @@ test('Playwright timeout restart preserves unknown completion and adds tab recov
     assert.equal(response.error.code, -32603);
     assert.match(response.error.message, /timed out; completion unknown/);
     assert.match(response.error.message, /browser_tabs.*list|action "list"/i);
-    assert.match(response.error.message, /selected tab/i);
+    assert.match(response.error.message, /about:blank/);
+    assert.match(response.error.message, /does not prove/i);
+    assert.match(response.error.message, /do not select, close or reuse/i);
+    assert.match(response.error.message, /known HTTP\(S\) URL/i);
     assert.match(response.error.message, /Page URL|snapshot/i);
     assert.match(response.error.message, /refs|indices/i);
     assert.doesNotMatch(response.error.message, /127\.0\.0\.1|5173|location\.href|http:/);
@@ -544,6 +547,33 @@ test('a repeated Playwright timeout after restart keeps the recovery guidance', 
   assert.deepEqual(listed.result.structuredContent.arguments, { action: 'list' });
   assert.deepEqual(fs.readFileSync(c.calls, 'utf8').trim().split('\n').map(line => line.split(':')[1]), [
     'browser_evaluate',
+    'browser_evaluate',
+    'browser_tabs',
+  ]);
+});
+
+test('a cancelled Playwright browser call gets no recovery text and is not replayed', async t => {
+  const c = client(t, {
+    lazy: true,
+    playwright: true,
+    recordCalls: true,
+    environment: { FAKE_MCP_HANG_NAMES: 'browser_evaluate' },
+    policy: { requestTimeoutMs: 150, shutdownGraceMs: 20 },
+  });
+  await c.rpc('initialize', initialize);
+  const listed = await c.rpc('tools/call', { name: 'browser_tabs' });
+  assert.equal(listed.error, undefined);
+  c.send({ id: 'cancelled-eval', method: 'tools/call', params: { name: 'browser_evaluate', arguments: { expression: 'location.href' } } });
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  c.send({ method: 'notifications/cancelled', params: { requestId: 'cancelled-eval' } });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(c.messages.filter((message) => message.id === 'cancelled-eval').length, 0);
+  assert.equal(c.p.exitCode, null);
+  const after = await c.rpc('tools/call', { name: 'browser_tabs' });
+  assert.equal(after.error, undefined);
+  assert.equal(fs.readFileSync(c.starts, 'utf8'), 'start\n');
+  assert.deepEqual(fs.readFileSync(c.calls, 'utf8').trim().split('\n').map(line => line.split(':')[1]), [
+    'browser_tabs',
     'browser_evaluate',
     'browser_tabs',
   ]);
