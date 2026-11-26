@@ -111,12 +111,16 @@ Closes <TICKET>
 ## Opening the MR in GitLab
 
 Use the shared client `node ~/.config/harness/repo/bin/gitlab-api.mjs`.
-It uses existing glab authorization for the explicit host; GITLAB_TOKEN,
-GLAB_TOKEN or GITLAB_ACCESS_TOKEN is a fallback only when the client cannot
-start or read its configuration. Never read credential stores, print tokens,
-run login, or infer an expired session from a filesystem/network failure.
-The client enforces timeouts, validates HTTP/JSON and returns nonzero on failure.
-Never pipe an unchecked curl request into jq. Never retry an ambiguous POST.
+It selects one transport for the explicit `--hostname` and keeps it for the
+whole call: a non-empty GITLAB_TOKEN, GLAB_TOKEN or GITLAB_ACCESS_TOKEN (first
+set wins) sends the request through curl without starting glab; without a token
+it uses the existing glab session. It never switches transport after an error,
+never retries an ambiguous POST or PUT, never starts a login, and never reads
+credential stores or prints tokens. A missing glab and a missing token are
+reported together; a filesystem, network or HTTP failure is not an expired
+session. The client enforces timeouts, rejects non-2xx responses and validates
+HTTP/JSON, returning nonzero on failure. Never pipe an unchecked curl request
+into jq.
 
 `git remote get-url origin` (`https://<host>/<group>/<repo>.git` or
 `git@<host>:<group>/<repo>.git`) → `<api>` =
@@ -264,7 +268,8 @@ encoded, written out in full.
    deliberate. Testing is a later `review-merge` step in the `/review` clean-MR
    flow, only after the user confirmed the merge of that exact MR and the fresh
    board/digest/discussion gates passed; an ambiguous merge outcome is
-   reconciled read-only by `post-merge`. An explicit start request
+   reconciled read-only by `post-merge`, and only a separate explicit
+   `move-to-testing` request performs the recovery move. An explicit start request
    uses `start --key <STR>` and is unrelated to publication; branch-only cards
    stay in todo until it is requested. This flow never merges an MR itself.
 

@@ -58,7 +58,8 @@ becomes publication merely because the Gantus catalog entry exists. `/review`
 never writes MR notes, approvals or Gantus descriptions and comments. Its only
 possible state write is the explicitly confirmed `review-merge` of a clean
 pinned MR and the review→testing move it performs; an ambiguous merge outcome
-is reconciled only by the read-only `post-merge`.
+is reconciled only by the read-only `post-merge`, and a recovery move only by a
+separate explicit `move-to-testing` request.
 
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —

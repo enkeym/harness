@@ -117,6 +117,20 @@ function sandbox({ indexes = ['tokensave', 'ragsave'] } = {}) {
   check('tokensave: старт в самом $HOME — не запускается', [sb.run(['tokensave'], {}, sb.home).calls], [[]]);
 }
 
+{
+  const sb = sandbox({ indexes: [] });
+  const outside = path.join(sb.home, 'outside');
+  fs.mkdirSync(outside);
+  const before = sb.run(['tokensave'], {}, outside);
+  check('tokensave: старт вне индексированного проекта — отказ, backend не запущен',
+    [before.status, before.calls], [1, []]);
+  index(sb.root, 'tokensave');
+  const first = sb.run(['tokensave'], {}, sb.root);
+  check('tokensave: первый default-вызов после переноса — новый корень',
+    [first.status, first.calls, first.cwds],
+    [0, [['serve', '-p', sb.root]], [sb.root]]);
+}
+
 // === ragsave ===
 
 {

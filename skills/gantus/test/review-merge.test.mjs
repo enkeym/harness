@@ -88,7 +88,7 @@ async function setup(t, options = {}) {
       return sendJson(res, ...reply);
     }
     return sendJson(res, 404, {});
-  });
+  }, { user: options.gitlabUser });
   const tasks = options.tasks ?? [
     task(12, { kanbanColumnId: 'col-review', kanbanOrder: 2, assignee: 'emp-2' }),
     task(123, { kanbanColumnId: 'col-testing', kanbanOrder: 1 })
@@ -98,6 +98,7 @@ async function setup(t, options = {}) {
     upstream: `${fixture.url}/group/repo.git`
   });
   const api = await apiFixture(t, {
+    identity: options.identity,
     tasks,
     board: options.board ?? boardFixture(tasks),
     autoWrite: options.autoWrite,
@@ -152,6 +153,24 @@ test('a clean MR merges once after board, discussions and GET, then moves review
   assert.ok(!context.fixture.requests.some((request) => request.method === 'POST'));
 });
 
+test('an ordinary should-remove flag still merges with removal disabled', async (t) => {
+  const context = await setup(t, {
+    mr: ({ fixture }) => openMr(fixture, { should_remove_source_branch: true })
+  });
+
+  const result = await context.run();
+
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.merged, true);
+  assert.deepEqual(parsed.testMove, { moved: true, columnId: 'col-testing' });
+  const gitlabWrites = context.fixture.requests.filter((request) => request.method !== 'GET');
+  assert.equal(gitlabWrites.length, 1);
+  assert.deepEqual(JSON.parse(gitlabWrites[0].body), {
+    sha: headSha, should_remove_source_branch: false
+  });
+});
+
 test('merge is blocked on a changed revision, Draft, fork, conflicts, policy or checks', async (t) => {
   const variants = [
     { diff_refs: { base_sha: baseSha, start_sha: startSha, head_sha: 'e'.repeat(40) } },
@@ -165,6 +184,7 @@ test('merge is blocked on a changed revision, Draft, fork, conflicts, policy or 
     { blocking_discussions_resolved: false },
     { has_conflicts: true },
     { force_remove_source_branch: true },
+    { force_remove_source_branch: null },
     { diff_refs: null }
   ];
   for (const override of variants) {
@@ -178,6 +198,49 @@ test('merge is blocked on a changed revision, Draft, fork, conflicts, policy or 
     assert.deepEqual(writes(context.api), [], JSON.stringify(override));
     assert.ok(!context.fixture.requests.some((request) => request.method === 'PUT'));
   }
+});
+
+test('a GitLab target drift with the reviewed source head blocks the merge', async (t) => {
+  const context = await setup(t, {
+    mr: (fixture) => openMr(fixture, { target_branch: 'main' })
+  });
+
+  const result = await context.run();
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /ветки MR не совпадают/);
+  assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 0);
+  assert.deepEqual(writes(context.api), []);
+});
+
+test('the target order observed at move time is sent in orderedIds and foreign cards keep their order', async (t) => {
+  const tasks = [
+    task(12, { kanbanColumnId: 'col-review', kanbanOrder: 2 }),
+    task(123, { kanbanColumnId: 'col-testing', kanbanOrder: 1 }),
+    task(124, { kanbanColumnId: 'col-testing', kanbanOrder: 2 })
+  ];
+  let boardReads = 0;
+  const context = await setup(t, {
+    tasks,
+    board: () => {
+      boardReads += 1;
+      if (boardReads >= 3) {
+        tasks.find((entry) => entry.id === '123').kanbanOrder = 4;
+        tasks.find((entry) => entry.id === '124').kanbanOrder = 2;
+      }
+      return boardFixture(tasks);
+    }
+  });
+
+  const result = await context.run();
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(writes(context.api).map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
+    ['PATCH', '/api/kanban/cards/12', {
+      columnId: 'col-testing', orderedIds: ['124', '123', '12']
+    }]
+  ]);
+  assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
 });
 
 test('every discussion page is read and any unresolved or malformed note blocks the merge', async (t) => {
@@ -261,6 +324,96 @@ test('board permissions and the reviewed route are checked before the irreversib
   assert.deepEqual(same.fixture.requests, []);
 });
 
+test('a GitLab account mismatch or invalid user blocks before the merge PUT', async (t) => {
+  for (const user of [{ id: 8 }, { id: null }, { id: 'not-a-number' }, {}]) {
+    const context = await setup(t, { gitlabUser: user });
+
+    const result = await context.run();
+
+    assert.equal(result.status, 1, JSON.stringify(user));
+    assert.match(result.stderr, /GitLab-учётка|пользовател/, JSON.stringify(user));
+    assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 0);
+    assert.deepEqual(writes(context.api), [], JSON.stringify(user));
+  }
+});
+
+test('a colleague allowed by the board ACL may merge and move a foreign MR', async (t) => {
+  const cases = [
+    {
+      role: 'creator',
+      tasks: [task(12, {
+        kanbanColumnId: 'col-review', editProtected: true, creatorUserId: 7, assignee: 'emp-2'
+      }), task(123, { kanbanColumnId: 'col-testing', kanbanOrder: 1 })]
+    },
+    {
+      role: 'assignee',
+      tasks: [task(12, {
+        kanbanColumnId: 'col-review', editProtected: true, creatorUserId: 8, assignee: 'emp-1'
+      }), task(123, { kanbanColumnId: 'col-testing', kanbanOrder: 1 })]
+    },
+    {
+      role: 'admin',
+      identity: { id: 7, employeeId: 'emp-1', role: 'admin' },
+      tasks: [task(12, {
+        kanbanColumnId: 'col-review', editProtected: true, creatorUserId: 8, assignee: 'emp-2'
+      }), task(123, { kanbanColumnId: 'col-testing', kanbanOrder: 1 })]
+    }
+  ];
+  for (const options of cases) {
+    const context = await setup(t, options);
+
+    const result = await context.run();
+
+    assert.equal(result.status, 0, `${options.role}: ${result.stderr}`);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.merged, true, options.role);
+    assert.deepEqual(parsed.testMove, { moved: true, columnId: 'col-testing' }, options.role);
+    assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
+    assert.equal(writes(context.api).length, 1, options.role);
+  }
+});
+
+test('a lost board ACL after the merge keeps merged:true and sends no PATCH', async (t) => {
+  const tasks = [task(12, {
+    kanbanColumnId: 'col-review', editProtected: true, creatorUserId: 8, assignee: 'emp-1'
+  }), task(123, { kanbanColumnId: 'col-testing', kanbanOrder: 1 })];
+  let boardReads = 0;
+  const context = await setup(t, {
+    tasks,
+    board: () => {
+      boardReads += 1;
+      if (boardReads >= 2) {
+        tasks[0].assignee = 'emp-2';
+        tasks[0].creatorUserId = 8;
+      }
+      return boardFixture(tasks);
+    }
+  });
+
+  const result = await context.run();
+
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.merged, true);
+  assert.equal(parsed.testMove.moved, false);
+  assert.equal(boardReads, 3, 'board reads');
+  assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
+  assert.deepEqual(writes(context.api), []);
+});
+
+test('a parallel merge by another actor never triggers a Gantus PATCH', async (t) => {
+  const context = await setup(t, {
+    merge: () => [409, { message: 'already merged by another user' }]
+  });
+
+  const result = await context.run();
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /HTTP 409/);
+  assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
+  assert.deepEqual(writes(context.api), []);
+});
+
 test('a 2xx merge response without merged proof is reconciled by one authoritative GET', async (t) => {
   const context = await setup(t, {
     mr: ({ fixture, merges }) => (merges === 0 ? openMr(fixture) : mergedMr(fixture)),
@@ -291,6 +444,21 @@ test('an incomplete 2xx receipt after a successful GET still performs exactly on
   assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
   assert.equal(context.state.reads, 2);
   assert.equal(writes(context.api).length, 1);
+});
+
+test('an incomplete 2xx settled by a foreign merger performs no card PATCH', async (t) => {
+  const context = await setup(t, {
+    mr: ({ fixture, merges }) => (merges === 0 ? openMr(fixture) : mergedMr(fixture, { merge_user: { id: 8 } })),
+    merge: () => [200, { iid: 5, state: 'merged' }]
+  });
+
+  const result = await context.run();
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /не текущим пользователем/);
+  assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
+  assert.equal(context.state.reads, 2);
+  assert.deepEqual(writes(context.api), []);
 });
 
 test('an ambiguous merge transport stops without a second PUT or a board move', async (t) => {
@@ -361,6 +529,25 @@ test('one stale or mismatched source-head field blocks even when the other match
     assert.equal(result.status, 1, JSON.stringify(override));
     assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 1);
     assert.equal(context.state.reads, 2);
+    assert.deepEqual(writes(context.api), []);
+  }
+});
+
+test('the final open GET rejects a mismatched top-level sha before any write', async (t) => {
+  const variants = [
+    { sha: 'e'.repeat(40) },
+    { sha: null }
+  ];
+  for (const override of variants) {
+    const context = await setup(t, {
+      mr: ({ fixture }) => openMr(fixture, override)
+    });
+
+    const result = await context.run();
+
+    assert.equal(result.status, 1, JSON.stringify(override));
+    assert.match(result.stderr, /ревизия MR изменилась/);
+    assert.equal(context.fixture.requests.filter((request) => request.method === 'PUT').length, 0);
     assert.deepEqual(writes(context.api), []);
   }
 });

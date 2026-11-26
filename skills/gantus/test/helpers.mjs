@@ -212,8 +212,13 @@ export function git(cwd, args) {
   }).trim();
 }
 
-export async function gitlabServer(t, handler) {
-  const server = await startServer(handler);
+export async function gitlabServer(t, handler, options = {}) {
+  const server = await startServer(async (req, res, body, record) => {
+    if (req.method === 'GET' && req.url === '/api/v4/user') {
+      return sendJson(res, 200, options.user ?? { id: 7 });
+    }
+    return handler(req, res, body, record);
+  });
   t.after(() => server.close());
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gantus-glab-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -225,6 +230,7 @@ const args = process.argv.slice(2);
 let host = '';
 let method = 'GET';
 let input = null;
+let include = false;
 const rest = [];
 for (let index = 0; index < args.length; index += 1) {
   if (args[index] === '--hostname') host = args[++index];
@@ -232,6 +238,7 @@ for (let index = 0; index < args.length; index += 1) {
   else if (args[index] === '--input') input = args[++index];
   else if (args[index] === '--header') index += 1;
   else if (args[index] === '--single-attempt') continue;
+  else if (args[index] === '--include') include = true;
   else if (args[index] === 'api' && rest.length === 0) continue;
   else rest.push(args[index]);
 }
@@ -242,11 +249,16 @@ for (let index = 0; index < args.length; index += 1) {
     ...(body ? { body, headers: { 'content-type': 'application/json' } } : {})
   });
   const text = await response.text();
+  if (include) {
+    process.stdout.write('HTTP/1.1 ' + response.status + ' ' + response.statusText
+      + '\\r\\nContent-Type: ' + (response.headers.get('content-type') || 'application/json')
+      + '\\r\\n\\r\\n' + text);
+  }
   if (!response.ok) {
     process.stderr.write('HTTP ' + response.status + ': request failed\\n');
     process.exit(1);
   }
-  process.stdout.write(text);
+  if (!include) process.stdout.write(text);
 })().catch((error) => {
   process.stderr.write(String(error && error.message));
   process.exit(1);

@@ -24,6 +24,11 @@ const COMMAND_FLAGS = new Map([
     'mr-url', 'project-id', 'key', 'card-id', 'source-branch',
     'expected-target-branch', 'expected-sha', 'gitlab-user-id'
   ]],
+  ['move-to-testing', [
+    'mr-url', 'project-id', 'key', 'card-id', 'source-branch',
+    'expected-target-branch', 'expected-sha', 'gitlab-user-id',
+    'name-sha256', 'desc-sha256'
+  ]],
   ['rename-branch', ['key', 'branch']]
 ]);
 

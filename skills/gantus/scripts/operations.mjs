@@ -31,6 +31,7 @@ import { branchKeys, isTaskKey, singleTaskKey } from './keys.mjs';
 import {
   assertUnresolvedDiscussions,
   fetchDiscussions,
+  fetchGitlabUser,
   fetchMr,
   parseMrUrl,
   requestMerge,
@@ -896,6 +897,20 @@ function numericId(value) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function assertGitlabUser(pin, expected) {
+  const user = fetchGitlabUser(pin);
+  if (!user || typeof user !== 'object') {
+    throw new GantusError('GitLab вернул некорректного пользователя', 'protocol');
+  }
+  const id = numericId(user.id);
+  if (id === null) {
+    throw new GantusError('GitLab вернул некорректного пользователя', 'protocol');
+  }
+  if (String(id) !== expected) {
+    throw new GantusError('текущая GitLab-учётка не совпадает с проверенной; действие отменено', 'auth');
+  }
+}
+
 function requiredSha(flags, name) {
   const value = sha(requiredValue(flags, name));
   if (value === null) {
@@ -956,7 +971,8 @@ function assertMergeableMr(mr, pin, pins) {
     throw new GantusError('GitLab вернул MR без diff_refs; merge отменён', 'protocol');
   }
   if (sha(refs.base_sha) !== pins.baseSha || sha(refs.start_sha) !== pins.startSha
-      || sha(refs.head_sha) !== pins.headSha) {
+      || sha(refs.head_sha) !== pins.headSha
+      || (mr.sha !== undefined && sha(mr.sha) !== pins.headSha)) {
     throw new GantusError('ревизия MR изменилась после review; merge отменён', 'conflict');
   }
   if (mr.detailed_merge_status !== 'mergeable') {
@@ -973,7 +989,7 @@ function assertMergeableMr(mr, pin, pins) {
   }
 }
 
-function assertMergedMr(mr, pin, pins) {
+function assertMergedMr(mr, pin, pins, { requireMergedActor = false } = {}) {
   mrIdentity(mr, pin, pins);
   if (mr.state !== 'merged') {
     throw new GantusError('MR не подтверждён как merged; действие отменено', 'conflict');
@@ -998,6 +1014,9 @@ function assertMergedMr(mr, pin, pins) {
   if (mr.merge_commit_sha !== undefined && mr.merge_commit_sha !== null
       && sha(mr.merge_commit_sha) === null) {
     throw new GantusError('merge_commit_sha имеет некорректный формат', 'protocol');
+  }
+  if (requireMergedActor && (mr.merge_user === undefined || mr.merge_user === null)) {
+    throw new GantusError('merged MR не подтверждает пользователя merge; действие отменено', 'protocol');
   }
   if (mr.merge_user !== undefined && mr.merge_user !== null) {
     if (typeof mr.merge_user !== 'object') {
@@ -1110,6 +1129,7 @@ export function reviewMerge(config, flags, cwd) {
   mergeRoute(config, { key, cardId, nameSha256, descSha256 });
   assertUnresolvedDiscussions(fetchDiscussions(pin));
   const route = mergeRoute(config, { key, cardId, nameSha256, descSha256 });
+  assertGitlabUser(pin, pins.gitlabUserId);
   assertMergeableMr(fetchMr(pin), pin, pins);
 
   let confirmed = null;
@@ -1206,6 +1226,37 @@ export function postMerge(config, flags, cwd) {
   };
 }
 
+export function moveToTesting(config, flags, cwd) {
+  const key = requiredValue(flags, 'key');
+  const cardId = requiredValue(flags, 'card-id');
+  if (!isId(cardId)) {
+    throw new GantusError('--card-id: некорректный id', 'usage');
+  }
+  const pins = {
+    ...mergePins(flags),
+    sourceBranch: requiredValue(flags, 'source-branch'),
+    targetBranch: requiredValue(flags, 'expected-target-branch'),
+    headSha: requiredSha(flags, 'expected-sha')
+  };
+  const nameSha256 = requiredDigest(flags, 'name-sha256');
+  const descSha256 = requiredDigest(flags, 'desc-sha256');
+  assertProjectRemote(config, cwd);
+  const pin = mrPin(config, flags);
+  singleTaskKey(pins.sourceBranch, key);
+  const route = mergeRoute(config, { key, cardId, nameSha256, descSha256 });
+  assertGitlabUser(pin, pins.gitlabUserId);
+  assertMergedMr(fetchMr(pin), pin, pins, { requireMergedActor: true });
+  const testMove = moveAfterMerge(config, {
+    key, cardId, ...route, nameSha256, descSha256
+  });
+  return {
+    merged: true,
+    taskKey: key,
+    mr: { iid: String(pin.iid), sha: pins.headSha },
+    testMove
+  };
+}
+
 function assertRenameStillSafe(config, cwd, current, target) {
   assertProjectRemote(config, cwd);
   if (currentBranch(cwd) !== current) {
@@ -1271,6 +1322,7 @@ export function dispatch({ command, flags }, config, cwd) {
   if (command === 'review-ready') return reviewReady(config, flags, cwd);
   if (command === 'sync') return syncTask(config, flags, cwd);
   if (command === 'post-merge') return postMerge(config, flags, cwd);
+  if (command === 'move-to-testing') return moveToTesting(config, flags, cwd);
   if (command === 'review-merge') return reviewMerge(config, flags, cwd);
   if (command === 'rename-branch') return renameBranch(config, flags, cwd);
   throw new GantusError('неизвестная команда', 'usage');

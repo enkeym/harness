@@ -1,6 +1,6 @@
 ---
 name: gantus
-description: "Optional opt-in Gantus board integration: read, create, edit, comment and move tasks on one configured board, start explicit work, rename the local branch to an exact user-supplied name, run a read-only pre-publication preflight for an explicit MR create or update, read one task by a confirmed MR source branch during review, reconcile the shared MR description and QA before moving a task to review after a confirmed own non-draft MR create or update, merge a reviewed clean MR and move it from review to testing, and reconcile that post-merge move read-only after an ambiguous outcome. Uses an owner-provided session cookie; no browser capture, Bearer fallback, retries or automatic login."
+description: "Optional opt-in Gantus board integration: read, create, edit, comment and move tasks on one configured board, start explicit work, rename the local branch to an exact user-supplied name, run a read-only pre-publication preflight for an explicit MR create or update, read one task by a confirmed MR source branch during review, reconcile the shared MR description and QA before moving a task to review after a confirmed own non-draft MR create or update, merge a reviewed clean MR and move it from review to testing, reconcile that post-merge move read-only after an ambiguous outcome, and run the separate explicit recovery move to testing after that reconcile. Uses an owner-provided session cookie; no browser capture, Bearer fallback, retries or automatic login."
 ---
 
 # Gantus
@@ -9,7 +9,8 @@ Load this skill only when the user explicitly asks to work with a Gantus task,
 explicitly asks to create working branches or cards for completed local
 changes, when an explicit MR create/update request on a configured project
 reaches the mandatory pre-publication preflight, when an explicit start, merge
-of a reviewed clean MR, or post-merge reconcile is requested, or when an
+of a reviewed clean MR, post-merge reconcile or its explicitly requested
+recovery move is requested, or when an
 explicitly selected MR review
 needs its one read-only source-branch lookup. Run `preflight` before any GitLab
 or Gantus write; it derives the single strict branch key, with optional `--key`
@@ -114,6 +115,12 @@ instructions.
   never rolls back another column, sends one PATCH and reports an unconfirmed
   move without retrying. Moving a card after a confirmed merge needs fresh
   explicit consent; `post-merge` never does it.
+- `move-to-testing` is the separate recovery command for that fresh consent
+  after an ambiguous outcome or a restart. It re-pins the same MR URL, project,
+  branches, reviewed head, merger, card key/id and requirement SHA-256, proves
+  the board route/ACL and the merged MR read-only, and only then sends the same
+  single review → testing PATCH. It never sends a GitLab write, never re-merges,
+  treats an already-testing card as a no-op, and never retries an unknown PATCH.
 - `/review` reads one card only through `review-lookup --branch <source_branch>`
   for an explicitly selected MR; an ordinary review never reads a card
   automatically. The lookup and an ordinary review write nothing. The only

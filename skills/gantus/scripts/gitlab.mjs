@@ -107,6 +107,10 @@ export function fetchMr(pin) {
   return gitlabRequest({ host: pin.host, endpoint: mrEndpoint(pin.project, pin.iid) });
 }
 
+export function fetchGitlabUser(pin) {
+  return gitlabRequest({ host: pin.host, endpoint: 'user' });
+}
+
 export function fetchDiscussions(pin) {
   const discussions = [];
   for (let page = 1; page <= MAX_PAGES; page += 1) {

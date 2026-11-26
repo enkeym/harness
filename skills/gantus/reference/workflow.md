@@ -24,7 +24,7 @@ cookie. The CLI reads the process environment and never the file itself.
 | `GANTUS_GIT_REMOTE` | Exact `git remote get-url origin` for this repository. Required by `sync`, `review-lookup`, `review-ready` and `rename-branch`; another project cannot feed its STR into them. |
 | `GANTUS_REVIEW_COLUMN_ID` | Optional exact id of the one review column on the configured board. Set together with the source list; absent means `sync` updates text and QA but skips the move. |
 | `GANTUS_REVIEW_FROM_COLUMN_IDS` | Comma-separated unique ids of the source columns from which `sync` may move a card. Required when the review column is set. A later column is not rolled back. |
-| `GANTUS_TESTING_COLUMN_ID` | Optional exact id of the one testing column for `review-merge`; absent falls back to the single board column whose observed status is `testing`. The source is always the review column, so no separate source list exists. `post-merge` only reads the board and reports the actual card column. |
+| `GANTUS_TESTING_COLUMN_ID` | Optional exact id of the one testing column for `review-merge` and its `move-to-testing` recovery; absent falls back to the single board column whose observed status is `testing`. The source is always the review column, so no separate source list exists. `post-merge` only reads the board and reports the actual card column. |
 
 Validation happens before any request. Missing or invalid values exit 2 and
 send nothing. HTTP redirects are not followed, proxies are disabled, and the
@@ -50,7 +50,9 @@ Ids of the configured board (827, «Веб Гроза»), read from
 
 `sync` targets the review column 144 from the source columns 142 and 143;
 `review-merge` merges the reviewed MR and then moves 144 → 145, while
-`post-merge` only reconciles that move by reading GitLab and the board. If the
+`post-merge` only reconciles that move by reading GitLab and the board. When the
+merge outcome is ambiguous or the run restarted, `move-to-testing` performs the
+same move only after a separate explicit request and a read-only proof. If the
 board is changed, take the new ids from a board read and update this table and
 the environment together. A local fixture may report the testing column with a
 `null` status, so tests and a board without the machine status use the explicit
@@ -74,6 +76,7 @@ move --key STR-12 (--column COLUMN_ID | --to review)
 sync --key STR-12 --mr RECEIPT_FILE_OR_JSON --desc TEXT --qa TEXT --gitlab-user-id ID --expected-desc TEXT --expected-card-id ID [--expected-mr-desc TEXT] [--replaced-desc TEXT]
 review-merge --mr-url URL --project-id PROJECT_ID --key STR-12 --card-id ID --source-branch BRANCH --target-branch BRANCH --base-sha SHA --start-sha SHA --head-sha SHA --name-sha256 SHA256 --desc-sha256 SHA256 --gitlab-user-id ID
 post-merge --mr-url URL --project-id PROJECT_ID --key STR-12 --card-id ID --source-branch BRANCH --expected-target-branch BRANCH --expected-sha SHA --gitlab-user-id ID
+move-to-testing --mr-url URL --project-id PROJECT_ID --key STR-12 --card-id ID --source-branch BRANCH --expected-target-branch BRANCH --expected-sha SHA --name-sha256 SHA256 --desc-sha256 SHA256 --gitlab-user-id ID
 review-ready --key STR-12 --mr RECEIPT_FILE_OR_JSON
 rename-branch --key STR-12 --branch EXACT_BRANCH_NAME
 ```
@@ -390,13 +393,27 @@ a restart; recovery only re-reads `GET .../merge_requests/:iid` for that `iid`.
 Moving a card after a confirmed merge is a separate action that requires fresh
 explicit consent; it is never automatic and `post-merge` does not perform it.
 
+`move-to-testing` is that separate explicit recovery. It takes the same
+`--mr-url`, `--project-id`, `--source-branch`, `--expected-target-branch`,
+`--expected-sha`, `--gitlab-user-id`, `--key` and `--card-id` pins as
+`post-merge`, plus the card `--name-sha256` and `--desc-sha256`. It proves the
+same board route, unique key, card id, unchanged requirements and edit ACL, the
+authenticated GitLab user, and the merged MR with every pin, including a
+`merge_user.id` equal to `--gitlab-user-id`; a missing, invalid or foreign
+merger blocks. All of that is read-only. Only then does it send the one review → testing PATCH and one
+read-back. It never sends a GitLab write and never re-merges. A card already in
+testing is a no-op with no PATCH; drift, ACL loss, an invalid user or an
+unproven MR blocks before the PATCH. A definite PATCH rejection is reported as
+failed; a timeout, 5xx or unconfirmed read-back is reported as unknown and is
+not automatically repeated.
+
 The board move belongs to `review-merge` and runs only after the merge is
 confirmed. `--card-id` must match the card resolved from the key; a missing,
-replaced, duplicate or reassigned card blocks and is never guessed from a title
-or local `HEAD`. Only `editProtected` is enforced: admin, creator or assignee
-may move, so a reviewer's colleague is allowed when the existing ACL allows it.
-`assignee` and `teamComments` are not gates here because this step only moves a
-card; nothing is commented or rewritten.
+replaced or duplicate card blocks and is never guessed from a title or local
+`HEAD`. The current ACL is the only authority: `editProtected` permits admin,
+the current creator or the current assignee, so a reviewer's colleague is
+allowed only when that existing ACL allows it. `assignee` and `teamComments` are not
+gates here because this step only moves a card; nothing is commented or rewritten.
 
 The testing target is the exact `GANTUS_TESTING_COLUMN_ID`, otherwise the one
 board column whose observed machine status is `testing`; zero or several, or a
@@ -422,9 +439,11 @@ Success is
 `merged:true` is returned independently of `testMove`. A Gantus failure is
 separate from the successful GitLab merge: report the merge as done and the
 move as `{moved:false,reason:"failed"|"unconfirmed"}`, never re-merge and never
-send another PATCH automatically; recovery is read-only `post-merge` and a
-separate explicitly consented action. An ambiguous merge outcome uses
-`{moved:false,reason:"ambiguous-merge"}` and never reaches any board request.
+send another PATCH automatically; recovery is read-only `post-merge` followed,
+only with fresh explicit consent, by `move-to-testing`. An ambiguous merge
+outcome uses
+`{moved:false,reason:"ambiguous-merge"}`, never reaches the board move and
+sends no board writes; the earlier read-only board GETs may already have run.
 
 ## Review-ready
 

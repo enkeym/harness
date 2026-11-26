@@ -96,7 +96,10 @@ because findings were approved, drafts were authorized, or the review is clean.
    the review→testing route, and after every discussion page has been read it
    repeats that same route, key and fingerprint check on one fresh snapshot
    before the final MR read and PUT; it pins the source and testing target ids
-   from that internal route, not from a parameter. It reads every discussion
+   from that internal route, not from a parameter. Before that final MR read and
+   PUT it also performs a runtime `GET /user` and requires a valid `id` equal to
+   `--gitlab-user-id`; a missing, invalid or mismatched identity blocks with no
+   PUT. It reads every discussion
    page (`.../discussions?per_page=100&page=<n>`, bounded at 50 pages):
    an open resolvable thread blocks. Standalone non-resolvable notes are not
    unresolved threads; the reviewer already reads them, and an actionable
@@ -124,7 +127,9 @@ because findings were approved, drafts were authorized, or the review is clean.
    response check are mandatory. GitLab server guards remain final; this is not
    a cross-service CAS.
 4. Outcome handling is owned by the command: `400`, `401`, `403`, `405`, `409`
-   or `422` → no merge and no board move (`409` means the source SHA changed).
+   or `422` → no merge and no board move. `409` is a definite rejection; its
+   cause is not asserted without a parsed response — it may be a changed source
+   SHA or a concurrent merge.
    A 2xx body is accepted only when it proves the same `iid`, project ids,
    branches, reviewed source head, `state:"merged"`, `draft:false`, a parseable
    `merged_at` and, when present, the same merger; a 2xx with an incomplete or
@@ -155,7 +160,14 @@ because findings were approved, drafts were authorized, or the review is clean.
    merge. Recovery is a separate action that requires fresh explicit consent
    and is never automatic. The read-only `post-merge` re-verifies the merged MR
    by `iid` and reports the actual card column and status; it sends no PATCH
-   and does not move the card.
+   and does not move the card. When the earlier run left the card unmoved, the
+   recovery is: read-only `post-merge`, then fresh explicit consent, then
+   `move-to-testing` with the same saved pins (`--mr-url`, `--project-id`,
+   source/target, `--expected-sha`, `--gitlab-user-id`, `--key`, `--card-id`,
+   `--name-sha256`, `--desc-sha256`; full syntax in
+   `../../gantus/reference/workflow.md`). If those pins were lost, do not guess
+   them. `move-to-testing` moves only a merged MR proven to be merged by the
+   same authenticated GitLab user.
 7. A clean path has no comments and no drafts: do not create a positive,
    summary, approval or "merged" note and do not call any `draft_notes`
    endpoint. The report in chat and the merge menu are the whole output.
