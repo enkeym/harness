@@ -144,10 +144,10 @@ encoded, written out in full.
      publication before push. Never degrade an explicit Gantus request into a
      plain MR. A configuration error is not absence. Failure output never echoes
      the configured or actual git remote, because a URL can contain credentials.
-   - `ready:true`: keep the returned card `id`, `desc`, assignee and testing
+   - `ready:true`: keep the returned card `id`, `desc`, assignee and review
      plan. A matching remote blocks on several keys/cards, a mismatched key,
      another current assignee, disabled team comments or an unknown configured
-     testing target. A later column is a reported skip, not a failure.
+     review target. A later column is a reported skip, not a failure.
 2. Read-only GitLab candidate check before any push. Obtain the current numeric
    `user.id` once from the existing client. Resolve the numeric `project.id`
    from the origin, then make exactly one reading of
@@ -238,12 +238,12 @@ encoded, written out in full.
    internal blank lines, spaces and other text stay significant. A substantive
    change adds a new QA.
 
-   There is no documented machine testing status. The target is the exact
-   `GANTUS_TESTING_COLUMN_ID` and only source columns in
-   `GANTUS_TESTING_FROM_COLUMN_IDS` are promoted. Missing both reports
+   There is no documented machine review status. The target is the exact
+   `GANTUS_REVIEW_COLUMN_ID` and only source columns in
+   `GANTUS_REVIEW_FROM_COLUMN_IDS` are promoted. Missing both reports
    `not-configured` and skips the move; a later column reports
    `source-not-allowed` and is not rolled back; an unknown target blocks.
-   Already in testing is `already` with no write. After the text and QA writes,
+   Already in review is `already` with no write. After the text and QA writes,
    the move re-reads only the same card `id` and requires the published
    description, current own assignee and original column; a replaced card,
    manual edit, reassignment or column change blocks the move. Exactly one

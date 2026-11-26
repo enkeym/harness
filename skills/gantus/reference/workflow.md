@@ -22,13 +22,34 @@ cookie. The CLI reads the process environment and never the file itself.
 | `GANTUS_SESSION_COOKIE` | Owner-provided authorized session cookie, one `name=value` pair. Never captured from a browser and never replaced by a Bearer key. On 401 ask the owner to refresh it. |
 | `GANTUS_USER_ID` | Expected numeric `/api/auth/me.id`; a different account stops before board data. |
 | `GANTUS_GIT_REMOTE` | Exact `git remote get-url origin` for this repository. Required by `sync`, `review-lookup`, `review-ready` and `rename-branch`; another project cannot feed its STR into them. |
-| `GANTUS_TESTING_COLUMN_ID` | Optional exact id of the one testing column on the configured board. Set together with the source list; absent means `sync` updates text and QA but skips the move. |
-| `GANTUS_TESTING_FROM_COLUMN_IDS` | Comma-separated unique ids of the source columns from which `sync` may move a card. Required when the testing column is set. A later column is not rolled back. |
+| `GANTUS_REVIEW_COLUMN_ID` | Optional exact id of the one review column on the configured board. Set together with the source list; absent means `sync` updates text and QA but skips the move. |
+| `GANTUS_REVIEW_FROM_COLUMN_IDS` | Comma-separated unique ids of the source columns from which `sync` may move a card. Required when the review column is set. A later column is not rolled back. |
 
 Validation happens before any request. Missing or invalid values exit 2 and
 send nothing. HTTP redirects are not followed, proxies are disabled, and the
 cookie travels only in the request header. The HTTP opt-in permits that exact
 origin but never encrypts traffic, so trust the whole network path.
+
+## Board column ids
+
+Ids of the configured board (827, «Веб Гроза»), read from
+`GET /api/kanban/boards/:teamId`:
+
+| id  | name             | status     |
+| --- | ---------------- | ---------- |
+| 142 | К выполнению     | todo       |
+| 147 | На паузе         | paused     |
+| 146 | Заблокировано    | blocked    |
+| 272 | Ошибки           | paused     |
+| 143 | В работе         | inprogress |
+| 144 | На ревью         | review     |
+| 145 | Тестирование     | testing    |
+| 148 | Готово к релизу  | done       |
+| 271 | Обновлено        | done       |
+
+`sync` targets the review column 144 from the source columns 142 and 143. If
+the board is changed, take the new ids from a board read and update this table
+and the environment together.
 
 ## Commands
 
@@ -148,10 +169,10 @@ edits anything. Its JSON distinguishes:
   plain-MR pass: run the scoped branch-only workflow (reuse or create one linked
   card, name the branch `<prefix>/<key>`) and repeat preflight, or ask one
   targeted question and stop. Preflight itself makes no board request.
-- `{configured:true, applicable:true, ready:true, taskKey, card, testing}` —
+- `{configured:true, applicable:true, ready:true, taskKey, card, review}` —
   the current `origin` equals `GANTUS_GIT_REMOTE`, the branch has exactly one
   strict key, one card exists and is assigned to the current employee, comments
-  are enabled, and a configured testing target exists.
+  are enabled, and a configured review target exists.
 
 A plain MR in another repository with a globally configured
 `GANTUS_GIT_REMOTE` treats `applicable:false` as “Gantus does not apply here”
@@ -160,7 +181,7 @@ Gantus request treats any `configured:false`, `applicable:false` or non-zero
 exit as a blocker; it never degrades into a plain publication. A matching
 remote with a fatal known reason — several keys or cards, a mismatched key, a
 foreign current assignee, disabled team comments or an unknown configured
-testing target — also blocks before the MR write. A card already in a later
+review target — also blocks before the MR write. A card already in a later
 column is not fatal; preflight reports the skip reason.
 
 The branch key is authoritative and strict, never a title substring. A supplied
@@ -176,7 +197,7 @@ explicitly selected MR. Run it after that MR's authoritative metadata pins the
 confirmed `source_branch`, before `git fetch`, discussions, diff or the review
 pass. It reuses the configured origin, `/api/auth/me` identity, bootstrap board
 and strict branch key. It does not require the local branch, current assignee,
-team comments or a testing column, and it never writes.
+team comments or a review column, and it never writes.
 
 The key comes only from the confirmed source branch, never from the MR title or
 local `HEAD`. `no-key`, `several-keys`, `no-card` and `several-cards` are
@@ -186,7 +207,7 @@ board request. A missing card or access leaves the code review valid but
 reports `соответствие задаче не проверено`; it never becomes a task-level ✅.
 An ordinary review without a selected MR does not call this command.
 
-## Sync description, QA and testing
+## Sync description, QA and review
 
 `sync` is the single post-MR reconciliation for an explicit publish request. It
 runs only after the caller's own confirmed GitLab create or update POST/PUT,
@@ -243,12 +264,13 @@ spaces and other text stay significant. A missing or invalid author is ambiguous
 and blocks; an exact body from another author is a conflict and is never reused.
 A changed QA adds one new comment.
 
-There is no documented machine status for testing. The target is the exact
-`GANTUS_TESTING_COLUMN_ID`; `GANTUS_TESTING_FROM_COLUMN_IDS` lists the only
-source columns. Missing both skips the move with `not-configured`. An unknown
-target or partial configuration is an error. Already in the target is `already`
-with no write. A card in any other column is `source-not-allowed` and is not
-rolled back from a later stage.
+No documented machine status selects the target. It is the exact
+`GANTUS_REVIEW_COLUMN_ID` (144 on the current board);
+`GANTUS_REVIEW_FROM_COLUMN_IDS` lists the only source columns (142 and 143).
+Missing both skips the move with `not-configured`. An unknown target or partial
+configuration is an error. Already in the target is `already` with no write. A
+card in any other column is `source-not-allowed` and is not rolled back from a
+later stage.
 
 After the text and QA writes, the move uses a fresh board snapshot and finds
 only the same card by `id`. The fresh `desc` must equal the published body, the
@@ -256,11 +278,11 @@ current assignee must still be the authenticated employee, and the column must
 equal the column read before the writes. A replaced or missing card, changed
 description, other assignee or changed column blocks the move. Only then is
 the existing ordered move reused; exactly one transition into the configured
-testing column is sent.
+review column is sent.
 
 Success is one JSON object:
 `{synced, taskKey, mr:{iid,operation}, description:{updated}, qa:{commented,
-deduplicated}, testingMove:{moved,reason,columnId?}}`. A write error reports the
+deduplicated}, reviewMove:{moved,reason,columnId?}}`. A write error reports the
 completed steps, the unconfirmed step and the dependent work not started; an
 ambiguous POST/PATCH is never retried. GitLab, Gantus edit/comment/move and local
 review outcomes stay separate.
@@ -361,6 +383,6 @@ Gantus paragraphs in `skills/git-flow/reference/mr.md` and
 
 Local loopback fixtures prove the documented web contract and safety guards.
 They do not prove a live Gantus instance, its session/CSRF behaviour, ACL
-answers, the comments read used for QA dedupe, testing-column metadata, or the
+answers, the comments read used for QA dedupe, review-column metadata, or the
 exact create response. A live read/create/edit/comment/move/sync on a separately
 provided test board remains open and must not be replaced by fixture results.

@@ -26,15 +26,15 @@ test('invalid or missing config stops before sending credentials', async (t) => 
   assert.equal(server.requests.length, 0);
 });
 
-test('testing sync configuration is either absent or complete', async (t) => {
+test('review sync configuration is either absent or complete', async (t) => {
   const server = await startServer((req, res) => sendJson(res, 200, {}));
   t.after(() => server.close());
 
   for (const env of [
-    gantusEnv(server.url, { GANTUS_TESTING_COLUMN_ID: 'col-testing' }),
-    gantusEnv(server.url, { GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo' }),
+    gantusEnv(server.url, { GANTUS_REVIEW_COLUMN_ID: 'col-review' }),
+    gantusEnv(server.url, { GANTUS_REVIEW_FROM_COLUMN_IDS: 'col-todo' }),
     gantusEnv(server.url, {
-      GANTUS_TESTING_COLUMN_ID: 'bad id', GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo'
+      GANTUS_REVIEW_COLUMN_ID: 'bad id', GANTUS_REVIEW_FROM_COLUMN_IDS: 'col-todo'
     })
   ]) {
     const result = await runCli(get, { env });

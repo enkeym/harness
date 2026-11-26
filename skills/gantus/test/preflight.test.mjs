@@ -136,8 +136,8 @@ test('preflight reads one own assigned card and writes nothing', async (t) => {
     cwd,
     env: {
       GANTUS_GIT_REMOTE: remote,
-      GANTUS_TESTING_COLUMN_ID: 'col-testing',
-      GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo,col-review'
+      GANTUS_REVIEW_COLUMN_ID: 'col-review',
+      GANTUS_REVIEW_FROM_COLUMN_IDS: 'col-todo,col-progress'
     }
   }));
 
@@ -147,8 +147,8 @@ test('preflight reads one own assigned card and writes nothing', async (t) => {
   assert.equal(result.taskKey, 'STR-12');
   assert.equal(result.card.id, '12');
   assert.equal(result.card.columnId, 'col-todo');
-  assert.equal(result.testing.planned, true);
-  assert.equal(result.testing.columnId, 'col-testing');
+  assert.equal(result.review.planned, true);
+  assert.equal(result.review.columnId, 'col-review');
   assert.deepEqual(api.writes(), []);
 });
 
@@ -205,12 +205,12 @@ test('preflight blocks an ambiguous key, card, branch or project before any writ
   }
 });
 
-test('preflight stops known fatal comment and testing-target reasons, but not a later source column', async (t) => {
+test('preflight stops known fatal comment and review-target reasons, but not a later source column', async (t) => {
   const cwd = initRepo(t, { branch: source });
-  const testingEnv = {
+  const reviewEnv = {
     GANTUS_GIT_REMOTE: remote,
-    GANTUS_TESTING_COLUMN_ID: 'col-testing',
-    GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo,col-review'
+    GANTUS_REVIEW_COLUMN_ID: 'col-review',
+    GANTUS_REVIEW_FROM_COLUMN_IDS: 'col-todo,col-progress'
   };
 
   const disabledTasks = [task(12, { assignee: 'emp-1' })];
@@ -218,7 +218,7 @@ test('preflight stops known fatal comment and testing-target reasons, but not a 
     tasks: disabledTasks, board: boardFixture(disabledTasks), comments: false
   });
   const comments = await disabled.run(['preflight', '--key', 'STR-12'], {
-    cwd, env: testingEnv
+    cwd, env: reviewEnv
   });
   assert.equal(comments.status, 1);
   assert.match(comments.stderr, /комментарии отключены/);
@@ -229,10 +229,10 @@ test('preflight stops known fatal comment and testing-target reasons, but not a 
     tasks: unknownTasks, board: boardFixture(unknownTasks)
   });
   const target = await unknown.run(['preflight', '--key', 'STR-12'], {
-    cwd, env: { ...testingEnv, GANTUS_TESTING_COLUMN_ID: 'col-unknown' }
+    cwd, env: { ...reviewEnv, GANTUS_REVIEW_COLUMN_ID: 'col-unknown' }
   });
   assert.equal(target.status, 1);
-  assert.match(target.stderr, /колонка тестирования не найдена/);
+  assert.match(target.stderr, /колонка ревью не найдена/);
   assert.deepEqual(unknown.writes(), []);
 
   const laterTasks = [task(12, { assignee: 'emp-1', kanbanColumnId: 'col-done' })];
@@ -240,12 +240,12 @@ test('preflight stops known fatal comment and testing-target reasons, but not a 
     tasks: laterTasks, board: boardFixture(laterTasks)
   });
   const blocked = resultOf(await later.run(['preflight', '--key', 'STR-12'], {
-    cwd, env: testingEnv
+    cwd, env: reviewEnv
   }));
   assert.equal(blocked.ready, true);
-  assert.equal(blocked.testing.planned, false);
-  assert.equal(blocked.testing.reason, 'source-not-allowed');
-  assert.equal(blocked.testing.columnId, 'col-done');
+  assert.equal(blocked.review.planned, false);
+  assert.equal(blocked.review.reason, 'source-not-allowed');
+  assert.equal(blocked.review.columnId, 'col-done');
   assert.deepEqual(later.writes(), []);
 });
 

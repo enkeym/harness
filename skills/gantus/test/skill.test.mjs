@@ -42,8 +42,8 @@ test('commands, variables, disable and removal are documented', () => {
   }
   for (const name of [
     'GANTUS_BASE_URL', 'GANTUS_TEAM_ID', 'GANTUS_SESSION_COOKIE',
-    'GANTUS_USER_ID', 'GANTUS_GIT_REMOTE', 'GANTUS_TESTING_COLUMN_ID',
-    'GANTUS_TESTING_FROM_COLUMN_IDS'
+    'GANTUS_USER_ID', 'GANTUS_GIT_REMOTE', 'GANTUS_REVIEW_COLUMN_ID',
+    'GANTUS_REVIEW_FROM_COLUMN_IDS'
   ]) {
     assert.match(reference, new RegExp(name));
     assert.match(example, new RegExp(`^${name}=`, 'm'));
@@ -211,8 +211,8 @@ test('MR sync documents ownership, the shared body, QA and testing rules', () =>
   assert.match(skillText, /create working branches or cards/);
   assert.match(reference, /branch\/card creation/);
   assert.match(reference, /sync --key STR-12/);
-  assert.match(reference, /GANTUS_TESTING_COLUMN_ID/);
-  assert.match(reference, /GANTUS_TESTING_FROM_COLUMN_IDS/);
+  assert.match(reference, /GANTUS_REVIEW_COLUMN_ID/);
+  assert.match(reference, /GANTUS_REVIEW_FROM_COLUMN_IDS/);
   assert.match(reference, /no documented machine status/i);
   assert.match(reference, /compare-and-swap/);
   assert.match(reference, /manual context/);
@@ -238,7 +238,7 @@ test('MR sync documents ownership, the shared body, QA and testing rules', () =>
   assert.match(reference, /resume read-first|Resume after an unconfirmed write/i);
   assert.match(mr, /sync --key <STR>/);
   assert.match(mr, /same body/);
-  assert.match(mr, /GANTUS_TESTING_COLUMN_ID/);
+  assert.match(mr, /GANTUS_REVIEW_COLUMN_ID/);
   assert.match(mr, /source-not-allowed/);
   assert.match(mr, /never retry an ambiguous/i);
   assert.match(mr, /never run it together with step 8/);

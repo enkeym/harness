@@ -37,11 +37,11 @@ function syncArgs({
   return args;
 }
 
-function testingEnv(overrides = {}) {
+function reviewEnv(overrides = {}) {
   return {
     GANTUS_GIT_REMOTE: remote,
-    GANTUS_TESTING_COLUMN_ID: 'col-testing',
-    GANTUS_TESTING_FROM_COLUMN_IDS: 'col-todo,col-review',
+    GANTUS_REVIEW_COLUMN_ID: 'col-review',
+    GANTUS_REVIEW_FROM_COLUMN_IDS: 'col-todo,col-progress',
     ...overrides
   };
 }
@@ -51,7 +51,7 @@ function resultOf(result) {
   return JSON.parse(result.stdout);
 }
 
-test('sync writes one shared description and QA, then moves the owned card to testing', async (t) => {
+test('sync writes one shared description and QA, then moves the owned card to review', async (t) => {
   const cwd = initRepo(t, { branch: source });
   const tasks = [task(12, { assignee: 'emp-1' })];
   const board = boardFixture(tasks);
@@ -66,22 +66,22 @@ test('sync writes one shared description and QA, then moves the owned card to te
       }
       if (req.method === 'POST' && req.url === `${taskPath}/12/comments`) return [201, { id: 'c1' }];
       if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
-        board.cards.find((card) => card.id === '12').columnId = 'col-testing';
+        board.cards.find((card) => card.id === '12').columnId = 'col-review';
         return [200, {}];
       }
       return [200, {}];
     }
   });
 
-  const result = resultOf(await api.run(syncArgs(), { cwd, env: testingEnv() }));
+  const result = resultOf(await api.run(syncArgs(), { cwd, env: reviewEnv() }));
 
   assert.equal(result.description.updated, true);
   assert.equal(result.qa.commented, true);
-  assert.equal(result.testingMove.moved, true);
+  assert.equal(result.reviewMove.moved, true);
   assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
     ['PATCH', `${taskPath}/12`, { desc: finalDesc }],
     ['POST', `${taskPath}/12/comments`, { body: qaBody }],
-    ['PATCH', '/api/kanban/cards/12', { columnId: 'col-testing', orderedIds: ['12'] }]
+    ['PATCH', '/api/kanban/cards/12', { columnId: 'col-review', orderedIds: ['12'] }]
   ]);
 });
 
@@ -102,7 +102,7 @@ test('sync accepts a confirmed update receipt for the current branch and project
       }
       if (req.method === 'POST' && req.url === `${taskPath}/12/comments`) return [201, { id: 'c1' }];
       if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
-        board.cards.find((card) => card.id === '12').columnId = 'col-testing';
+        board.cards.find((card) => card.id === '12').columnId = 'col-review';
         return [200, {}];
       }
       return [200, {}];
@@ -116,13 +116,13 @@ test('sync accepts a confirmed update receipt for the current branch and project
       expected: manual,
       expectedMrDesc: manual
     }),
-    { cwd, env: testingEnv() }
+    { cwd, env: reviewEnv() }
   ));
 
   assert.equal(result.mr.operation, 'update');
   assert.equal(result.description.updated, true);
   assert.equal(result.qa.commented, true);
-  assert.equal(result.testingMove.moved, true);
+  assert.equal(result.reviewMove.moved, true);
   assert.deepEqual(JSON.parse(api.writes()[0].body), { desc: updated });
 });
 
@@ -142,7 +142,7 @@ test('sync treats an absent card description as empty for the read comparison', 
     }
   });
 
-  const result = resultOf(await api.run(syncArgs({ expected: '' }), { cwd, env: testingEnv() }));
+  const result = resultOf(await api.run(syncArgs({ expected: '' }), { cwd, env: reviewEnv() }));
 
   assert.equal(result.description.updated, true);
   assert.deepEqual(api.writes().map(({ method, url }) => [method, url]), [
@@ -150,11 +150,11 @@ test('sync treats an absent card description as empty for the read comparison', 
   ]);
 });
 
-test('sync is a no-op for the same description, own QA and testing column', async (t) => {
+test('sync is a no-op for the same description, own QA and review column', async (t) => {
   const cwd = initRepo(t, { branch: source });
   const tasks = [
     task(12, {
-      assignee: 'emp-1', kanbanColumnId: 'col-testing', desc: finalDesc
+      assignee: 'emp-1', kanbanColumnId: 'col-review', desc: finalDesc
     })
   ];
   const board = boardFixture(tasks);
@@ -164,13 +164,13 @@ test('sync is a no-op for the same description, own QA and testing column', asyn
     taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }]
   });
 
-  const result = resultOf(await api.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() }));
+  const result = resultOf(await api.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() }));
 
   assert.equal(result.description.updated, false);
   assert.equal(result.qa.commented, false);
   assert.equal(result.qa.deduplicated, true);
-  assert.equal(result.testingMove.moved, false);
-  assert.equal(result.testingMove.reason, 'already');
+  assert.equal(result.reviewMove.moved, false);
+  assert.equal(result.reviewMove.reason, 'already');
   assert.deepEqual(api.writes(), []);
 });
 
@@ -192,8 +192,8 @@ test('sync writes once and deduplicates on an exact GitLab origin without a test
 
   assert.equal(first.description.updated, true);
   assert.equal(first.qa.commented, true);
-  assert.equal(first.testingMove.moved, false);
-  assert.equal(first.testingMove.reason, 'not-configured');
+  assert.equal(first.reviewMove.moved, false);
+  assert.equal(first.reviewMove.reason, 'not-configured');
   assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
     ['PATCH', `${taskPath}/12`, { desc: finalDesc }],
     ['POST', `${taskPath}/12/comments`, { body: qaBody }]
@@ -208,8 +208,8 @@ test('sync writes once and deduplicates on an exact GitLab origin without a test
   assert.equal(second.description.updated, false);
   assert.equal(second.qa.commented, false);
   assert.equal(second.qa.deduplicated, true);
-  assert.equal(second.testingMove.moved, false);
-  assert.equal(second.testingMove.reason, 'not-configured');
+  assert.equal(second.reviewMove.moved, false);
+  assert.equal(second.reviewMove.reason, 'not-configured');
   assert.equal(api.writes().length, writesAfterFirst);
 });
 
@@ -219,7 +219,7 @@ test('sync refuses a stale description instead of replacing the latest manual ed
   const board = boardFixture(tasks);
   const api = await apiFixture(t, { tasks, board, taskComments: [] });
 
-  const result = await api.run(syncArgs({ expected: 'Старое описание' }), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs({ expected: 'Старое описание' }), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /изменилось|устарел/);
@@ -246,7 +246,7 @@ test('sync refuses a foreign card, foreign MR, draft, or a different MR body', a
     const board = boardFixture(tasks);
     const api = await apiFixture(t, { tasks, board, taskComments: [], ...options });
 
-    const result = await api.run(args, { cwd, env: testingEnv() });
+    const result = await api.run(args, { cwd, env: reviewEnv() });
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, error);
@@ -263,7 +263,7 @@ test('sync refuses a substituted card whose id differs from preflight', async (t
 
   const result = await api.run(
     syncArgs({ expected: finalDesc, expectedCardId: '12' }),
-    { cwd, env: testingEnv() }
+    { cwd, env: reviewEnv() }
   );
 
   assert.equal(result.status, 1);
@@ -281,7 +281,7 @@ test('sync requires exactly one STR key in the branch and on the board', async (
 
     const result = await api.run(
       syncArgs({ mr: receipt({ source_branch: branch }) }),
-      { cwd, env: testingEnv() }
+      { cwd, env: reviewEnv() }
     );
 
     assert.equal(result.status, 1);
@@ -301,7 +301,7 @@ test('sync deduplicates only its own identical QA comment and adds a changed one
     board,
     taskComments: [{ id: 'c1', body: qaBody, authorId: 8, empId: 'emp-1' }]
   });
-  const refused = await foreign.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+  const refused = await foreign.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /другим автором/);
   assert.deepEqual(foreign.writes(), []);
@@ -312,7 +312,7 @@ test('sync deduplicates only its own identical QA comment and adds a changed one
     taskComments: [{ id: 'c1', body: 'Старый QA', authorId: 7 }],
     write: () => [201, { id: 'c2' }]
   });
-  assert.equal(resultOf(await changed.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() })).qa.commented, true);
+  assert.equal(resultOf(await changed.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() })).qa.commented, true);
   assert.deepEqual(changed.writes().map(({ url, body }) => [url, JSON.parse(body)]), [
     [`${taskPath}/12/comments`, { body: qaBody }]
   ]);
@@ -331,9 +331,9 @@ test('sync keeps the card in a later column and reports a missing or invalid tes
     board: done,
     taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }]
   });
-  const blocked = resultOf(await later.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() }));
-  assert.equal(blocked.testingMove.moved, false);
-  assert.equal(blocked.testingMove.reason, 'source-not-allowed');
+  const blocked = resultOf(await later.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() }));
+  assert.equal(blocked.reviewMove.moved, false);
+  assert.equal(blocked.reviewMove.reason, 'source-not-allowed');
   assert.deepEqual(later.writes(), []);
 
   const unconfigured = await apiFixture(t, {
@@ -344,12 +344,12 @@ test('sync keeps the card in a later column and reports a missing or invalid tes
   const skipped = resultOf(await unconfigured.run(syncArgs({ expected: finalDesc }), {
     cwd, env: { GANTUS_GIT_REMOTE: remote }
   }));
-  assert.equal(skipped.testingMove.reason, 'not-configured');
+  assert.equal(skipped.reviewMove.reason, 'not-configured');
   assert.deepEqual(unconfigured.writes(), []);
 
   const invalid = await apiFixture(t, { tasks, board: done, taskComments: [] });
   const missing = await invalid.run(syncArgs({ expected: finalDesc }), {
-    cwd, env: testingEnv({ GANTUS_TESTING_COLUMN_ID: 'col-missing' })
+    cwd, env: reviewEnv({ GANTUS_REVIEW_COLUMN_ID: 'col-missing' })
   });
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /колонка/);
@@ -371,7 +371,7 @@ test('sync reports completed steps and never retries after a partial write failu
     }
   });
 
-  const result = await api.run(syncArgs(), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs(), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /описание обновлено/);
@@ -395,7 +395,7 @@ test('sync reports a failed move without retrying or hiding completed text work'
     }
   });
 
-  const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /результат перемещения не подтверждён/);
@@ -416,7 +416,7 @@ test('sync separates a definite 403 from an ambiguous write result', async (t) =
       ? [403, {}]
       : [200, {}]
   });
-  const description = await denied.run(syncArgs(), { cwd, env: testingEnv() });
+  const description = await denied.run(syncArgs(), { cwd, env: reviewEnv() });
   assert.equal(description.status, 1);
   assert.match(description.stderr, /описание не обновлено/);
   assert.doesNotMatch(description.stderr, /не подтверждён/);
@@ -429,7 +429,7 @@ test('sync separates a definite 403 from an ambiguous write result', async (t) =
     taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }],
     write: (req) => req.url === '/api/kanban/cards/12' ? [403, {}] : [200, {}]
   });
-  const move = await moveDenied.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+  const move = await moveDenied.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
   assert.equal(move.status, 1);
   assert.match(move.stderr, /карточка не перемещена/);
   assert.doesNotMatch(move.stderr, /не подтверждён/);
@@ -449,7 +449,7 @@ test('sync reports a failed description write without claiming a QA attempt', as
     }
   });
 
-  const result = await api.run(syncArgs(), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs(), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /результат обновления описания не подтверждён/);
@@ -494,7 +494,7 @@ test('sync accepts equals syntax and a payload file for exact option-like text',
       '--expected-mr-desc='
     ];
 
-    const result = resultOf(await api.run(args, { cwd, env: testingEnv() }));
+    const result = resultOf(await api.run(args, { cwd, env: reviewEnv() }));
 
     assert.equal(result.description.updated, true);
     assert.deepEqual(JSON.parse(api.writes()[0].body), { desc: exact });
@@ -530,7 +530,7 @@ test('sync preserves manual context from the card and an existing MR once', asyn
     '--expected-card-id', '12'
   ];
 
-  const result = resultOf(await api.run(args, { cwd, env: testingEnv() }));
+  const result = resultOf(await api.run(args, { cwd, env: reviewEnv() }));
 
   assert.equal(result.description.updated, true);
   assert.deepEqual(JSON.parse(api.writes()[0].body), { desc: final });
@@ -560,7 +560,7 @@ test('sync blocks a merge that loses manual context or repeats a block', async (
       '--desc', final, '--qa', qa, '--gitlab-user-id', '7',
       '--expected-desc', cardDesc, '--expected-mr-desc', mrDesc,
       '--expected-card-id', '12'
-    ], { cwd, env: testingEnv() });
+    ], { cwd, env: reviewEnv() });
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, error);
@@ -588,7 +588,7 @@ test('sync blocks a create that drops manual card context', async (t) => {
       desc: final,
       expected: cardDesc
     }),
-    { cwd, env: testingEnv() }
+    { cwd, env: reviewEnv() }
   );
 
   assert.equal(result.status, 1);
@@ -619,7 +619,7 @@ test('sync replaces declared obsolete generated blocks and keeps manual context'
   });
   args.push('--replaced-desc', 'Только CSV');
 
-  const result = resultOf(await api.run(args, { cwd, env: testingEnv() }));
+  const result = resultOf(await api.run(args, { cwd, env: reviewEnv() }));
 
   assert.equal(result.description.updated, true);
   assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
@@ -649,7 +649,7 @@ test('sync blocks an obsolete generated block unless it is explicitly declared',
       expected: cardDesc,
       expectedMrDesc: mrDesc
     }),
-    { cwd, env: testingEnv() }
+    { cwd, env: reviewEnv() }
   );
 
   assert.equal(result.status, 1);
@@ -679,7 +679,7 @@ test('sync refuses to declare a block that is not present on both sides as repla
   });
   args.push('--replaced-desc', 'Ручной контекст MR');
 
-  const result = await api.run(args, { cwd, env: testingEnv() });
+  const result = await api.run(args, { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /обеих|заменяемый/);
@@ -700,7 +700,7 @@ test('sync does not advance after a 2xx payload without an observable descriptio
       : [200, {}]
   });
 
-  const result = await api.run(syncArgs(), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs(), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /описание не подтверждено/);
@@ -723,7 +723,7 @@ test('sync does not move after a 2xx QA response without the own comment read-ba
       : [200, {}]
   });
 
-  const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /QA не подтверждён/);
@@ -742,7 +742,7 @@ test('sync reports an unconfirmed move when a 2xx did not change the board', asy
     write: (req) => req.url === '/api/kanban/cards/12' ? [200, {}] : [200, {}]
   });
 
-  const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+  const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /перемещение не подтверждено/);
@@ -777,7 +777,7 @@ test('sync refuses to move when the same card changed after the text and QA writ
       }
     });
 
-    const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+    const result = await api.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, error);
@@ -797,7 +797,7 @@ test('sync blocks an exact QA body whose author is unknown or invalid and a fore
       board,
       taskComments: [{ id: 'c1', body: qaBody, authorId }]
     });
-    const result = await unknown.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+    const result = await unknown.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /автор/);
     assert.deepEqual(unknown.writes(), []);
@@ -809,7 +809,7 @@ test('sync blocks an exact QA body whose author is unknown or invalid and a fore
   const foreign = await apiFixture(t, {
     tasks: foreignTasks, board: boardFixture(foreignTasks), taskComments: []
   });
-  const assigned = await foreign.run(syncArgs({ expected: finalDesc }), { cwd, env: testingEnv() });
+  const assigned = await foreign.run(syncArgs({ expected: finalDesc }), { cwd, env: reviewEnv() });
   assert.equal(assigned.status, 1);
   assert.match(assigned.stderr, /назначена/);
   assert.deepEqual(foreign.writes(), []);
@@ -831,7 +831,7 @@ test('sync confirms a QA file with a terminal LF when the server stores it witho
         return [201, { id: 'c1' }];
       }
       if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
-        board.cards.find((card) => card.id === '12').columnId = 'col-testing';
+        board.cards.find((card) => card.id === '12').columnId = 'col-review';
         return [200, {}];
       }
       return [200, {}];
@@ -842,15 +842,15 @@ test('sync confirms a QA file with a terminal LF when the server stores it witho
 
   const result = resultOf(await api.run(
     syncArgs({ expected: finalDesc, qaFile }),
-    { cwd, env: testingEnv() }
+    { cwd, env: reviewEnv() }
   ));
 
   assert.equal(result.qa.commented, true);
   assert.equal(result.qa.deduplicated, false);
-  assert.equal(result.testingMove.moved, true);
+  assert.equal(result.reviewMove.moved, true);
   assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
     ['POST', `${taskPath}/12/comments`, { body: qaBody }],
-    ['PATCH', '/api/kanban/cards/12', { columnId: 'col-testing', orderedIds: ['12'] }]
+    ['PATCH', '/api/kanban/cards/12', { columnId: 'col-review', orderedIds: ['12'] }]
   ]);
 });
 
@@ -865,7 +865,7 @@ test('sync compares QA apart from terminal line endings only', async (t) => {
       tasks, board, taskComments: [{ id: 'c1', body: storedBody, authorId: 7 }]
     });
     const result = resultOf(await own.run(syncArgs({ expected: finalDesc }), {
-      cwd, env: testingEnv()
+      cwd, env: reviewEnv()
     }));
     assert.equal(result.qa.commented, false);
     assert.equal(result.qa.deduplicated, true);
@@ -877,7 +877,7 @@ test('sync compares QA apart from terminal line endings only', async (t) => {
       tasks, board, taskComments: [{ id: 'c1', body: `${qaBody}\n`, authorId }]
     });
     const result = await blocked.run(syncArgs({ expected: finalDesc }), {
-      cwd, env: testingEnv()
+      cwd, env: reviewEnv()
     });
     assert.equal(result.status, 1);
     assert.match(result.stderr, authorId === null ? /автор/ : /другим автором/);
@@ -893,7 +893,7 @@ test('sync compares QA apart from terminal line endings only', async (t) => {
       write: () => [201, { id: 'c2' }]
     });
     const added = resultOf(await changed.run(syncArgs({ expected: finalDesc }), {
-      cwd, env: testingEnv()
+      cwd, env: reviewEnv()
     }));
     assert.equal(added.qa.commented, true);
     assert.deepEqual(changed.writes().map(({ url, body }) => [url, JSON.parse(body)]), [
@@ -903,7 +903,7 @@ test('sync compares QA apart from terminal line endings only', async (t) => {
 });
 
 test('sync promotes each allowed source column from the configured list of two', async (t) => {
-  for (const columnId of ['col-todo', 'col-review']) {
+  for (const columnId of ['col-todo', 'col-progress']) {
     const cwd = initRepo(t, { branch: source });
     const tasks = [
       task(12, { assignee: 'emp-1', kanbanColumnId: columnId, desc: finalDesc })
@@ -915,7 +915,7 @@ test('sync promotes each allowed source column from the configured list of two',
       taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }],
       write: (req) => {
         if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
-          board.cards.find((card) => card.id === '12').columnId = 'col-testing';
+          board.cards.find((card) => card.id === '12').columnId = 'col-review';
           return [200, {}];
         }
         return [200, {}];
@@ -923,22 +923,21 @@ test('sync promotes each allowed source column from the configured list of two',
     });
 
     const result = resultOf(await api.run(syncArgs({ expected: finalDesc }), {
-      cwd, env: testingEnv()
+      cwd, env: reviewEnv()
     }));
 
-    assert.equal(result.testingMove.moved, true, columnId);
-    assert.equal(result.testingMove.columnId, 'col-testing');
+    assert.equal(result.reviewMove.moved, true, columnId);
+    assert.equal(result.reviewMove.columnId, 'col-review');
     assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
-      ['PATCH', '/api/kanban/cards/12', { columnId: 'col-testing', orderedIds: ['12'] }]
+      ['PATCH', '/api/kanban/cards/12', { columnId: 'col-review', orderedIds: ['12'] }]
     ]);
   }
 
   const cwd = initRepo(t, { branch: source });
   const tasks = [
-    task(12, { assignee: 'emp-1', kanbanColumnId: 'col-progress', desc: finalDesc })
+    task(12, { assignee: 'emp-1', kanbanColumnId: 'col-testing', desc: finalDesc })
   ];
   const board = boardFixture(tasks);
-  board.columns.push({ id: 'col-progress', boardId: 'b1', status: 'in-progress', name: 'In progress' });
   const blocked = await apiFixture(t, {
     tasks,
     board,
@@ -946,12 +945,43 @@ test('sync promotes each allowed source column from the configured list of two',
   });
 
   const result = resultOf(await blocked.run(syncArgs({ expected: finalDesc }), {
-    cwd, env: testingEnv()
+    cwd, env: reviewEnv()
   }));
 
-  assert.equal(result.testingMove.moved, false);
-  assert.equal(result.testingMove.reason, 'source-not-allowed');
-  assert.equal(result.testingMove.columnId, 'col-progress');
+  assert.equal(result.reviewMove.moved, false);
+  assert.equal(result.reviewMove.reason, 'source-not-allowed');
+  assert.equal(result.reviewMove.columnId, 'col-testing');
   assert.equal(blocked.writes().some(({ url }) => url.startsWith('/api/kanban/cards/')), false);
   assert.deepEqual(blocked.writes(), []);
+});
+
+test('sync moves the card to the configured review column instead of testing', async (t) => {
+  const cwd = initRepo(t, { branch: source });
+  const tasks = [task(12, { assignee: 'emp-1', desc: finalDesc })];
+  const board = boardFixture(tasks);
+  const api = await apiFixture(t, {
+    tasks,
+    board,
+    taskComments: [{ id: 'c1', body: qaBody, authorId: 7 }],
+    write: (req) => {
+      if (req.method === 'PATCH' && req.url === '/api/kanban/cards/12') {
+        board.cards.find((card) => card.id === '12').columnId = 'col-review';
+        return [200, {}];
+      }
+      return [200, {}];
+    }
+  });
+
+  const result = resultOf(await api.run(syncArgs({ expected: finalDesc }), {
+    cwd,
+    env: {
+      GANTUS_GIT_REMOTE: remote,
+      GANTUS_REVIEW_COLUMN_ID: 'col-review',
+      GANTUS_REVIEW_FROM_COLUMN_IDS: 'col-todo'
+    }
+  }));
+
+  assert.ok(result.reviewMove, JSON.stringify(result));
+  assert.equal(result.reviewMove.moved, true);
+  assert.equal(result.reviewMove.columnId, 'col-review');
 });

@@ -163,18 +163,18 @@ export function preflightTask(config, flags, cwd) {
   assertOwnedCard(identity, card);
   assertAssignedTo(identity, card);
   assertCommentAllowed(card);
-  const plan = testingPlan(config, board, card);
-  const testing = plan.kind === 'move'
+  const plan = reviewPlan(config, board, card);
+  const review = plan.kind === 'move'
     ? { planned: true, columnId: plan.target.id }
     : { planned: false, reason: plan.reason };
-  if (plan.columnId !== undefined) testing.columnId = plan.columnId;
+  if (plan.columnId !== undefined) review.columnId = plan.columnId;
   return {
     configured: true,
     applicable: true,
     ready: true,
     taskKey: key,
     card: { id: card.id, columnId: card.columnId, desc: card.desc },
-    testing
+    review
   };
 }
 
@@ -580,18 +580,18 @@ function unconfirmedWrite(message) {
   return error;
 }
 
-function testingPlan(config, board, card) {
-  if (config.testingColumnId === null) {
+function reviewPlan(config, board, card) {
+  if (config.reviewColumnId === null) {
     return { kind: 'skip', reason: 'not-configured' };
   }
-  const target = board.columns.find((column) => column.id === config.testingColumnId);
+  const target = board.columns.find((column) => column.id === config.reviewColumnId);
   if (!target) {
-    throw new GantusError('колонка тестирования не найдена на настроенной доске', 'not-found');
+    throw new GantusError('колонка ревью не найдена на настроенной доске', 'not-found');
   }
   if (card.columnId === target.id) {
     return { kind: 'skip', reason: 'already', columnId: target.id };
   }
-  if (!config.testingFromColumnIds.includes(card.columnId)) {
+  if (!config.reviewFromColumnIds.includes(card.columnId)) {
     return { kind: 'skip', reason: 'source-not-allowed', columnId: card.columnId };
   }
   return { kind: 'move', target };
@@ -652,7 +652,7 @@ export function syncTask(config, flags, cwd) {
   assertOwnedCard(identity, card);
   assertAssignedTo(identity, card);
   assertCommentAllowed(card);
-  const plan = testingPlan(config, board, card);
+  const plan = reviewPlan(config, board, card);
   const currentDesc = card.desc ?? '';
   if (currentDesc !== desc && currentDesc !== expectedDesc) {
     throw new GantusError('описание карточки изменилось после сверки; запись отменена', 'conflict');
@@ -755,10 +755,10 @@ export function syncTask(config, flags, cwd) {
       throw error;
     }
   }
-  let testingMove;
+  let reviewMove;
   if (plan.kind !== 'move') {
-    testingMove = { moved: false, reason: plan.reason };
-    if (plan.columnId !== undefined) testingMove.columnId = plan.columnId;
+    reviewMove = { moved: false, reason: plan.reason };
+    if (plan.columnId !== undefined) reviewMove.columnId = plan.columnId;
   } else {
     try {
       const fresh = fetchBoard(config);
@@ -777,7 +777,7 @@ export function syncTask(config, flags, cwd) {
       if (freshCard.columnId !== card.columnId) {
         throw new GantusError('колонка карточки изменилась после публикации; перемещение отменено', 'conflict');
       }
-      const freshPlan = testingPlan(config, fresh, freshCard);
+      const freshPlan = reviewPlan(config, fresh, freshCard);
       if (freshPlan.kind === 'move') {
         moveCardToColumn(config, fresh, freshCard, freshPlan.target);
         try {
@@ -789,10 +789,10 @@ export function syncTask(config, flags, cwd) {
         } catch {
           throw unconfirmedWrite('перемещение не подтверждено после записи');
         }
-        testingMove = { moved: true, columnId: freshPlan.target.id };
+        reviewMove = { moved: true, columnId: freshPlan.target.id };
       } else {
-        testingMove = { moved: false, reason: freshPlan.reason };
-        if (freshPlan.columnId !== undefined) testingMove.columnId = freshPlan.columnId;
+        reviewMove = { moved: false, reason: freshPlan.reason };
+        if (freshPlan.columnId !== undefined) reviewMove.columnId = freshPlan.columnId;
       }
     } catch (error) {
       if (error instanceof GantusError) {
@@ -819,7 +819,7 @@ export function syncTask(config, flags, cwd) {
     mr: { iid: String(receipt.iid), operation: receipt.operation },
     description: { updated: descriptionUpdated },
     qa: { commented, deduplicated: ownQa },
-    testingMove
+    reviewMove
   };
 }
 

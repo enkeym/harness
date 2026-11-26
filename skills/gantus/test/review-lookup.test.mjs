@@ -9,7 +9,7 @@ function resultOf(result) {
   return JSON.parse(result.stdout);
 }
 
-test('review lookup reads one card by the source branch without ownership, comments or testing gates', async (t) => {
+test('review lookup reads one card by the source branch without ownership, comments or review gates', async (t) => {
   const cwd = initRepo(t, { branch: 'dev' });
   const tasks = [task(12, {
     assignee: 'emp-2',
@@ -31,7 +31,7 @@ test('review lookup reads one card by the source branch without ownership, comme
   assert.equal(result.card.id, '12');
   assert.equal(result.card.desc, 'Требования карточки');
   assert.equal(result.card.assignee, 'emp-2');
-  assert.equal('testing' in result, false);
+  assert.equal('review' in result, false);
   assert.deepEqual(api.writes(), []);
 });
 

@@ -77,6 +77,7 @@ export function boardFixture(tasks = [task(12), task(123)]) {
     board: { id: 'b1', deptId: 'dept-1', teamId: 'team-1', teamName: 'Команда' },
     columns: [
       { id: 'col-todo', boardId: 'b1', status: 'todo', name: 'В работе' },
+      { id: 'col-progress', boardId: 'b1', status: 'inprogress', name: 'В работе' },
       { id: 'col-review', boardId: 'b1', status: 'review', name: 'На ревью' },
       { id: 'col-testing', boardId: 'b1', status: null, name: 'Тестирование' },
       { id: 'col-done', boardId: 'b1', status: 'done', name: 'Готово' }

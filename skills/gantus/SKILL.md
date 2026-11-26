@@ -1,6 +1,6 @@
 ---
 name: gantus
-description: "Optional opt-in Gantus board integration: read, create, edit, comment and move tasks on one configured board, rename the local branch to an exact user-supplied name, run a read-only pre-publication preflight for an explicit MR create or update, read one task by a confirmed MR source branch during review, and reconcile the shared MR description and QA before moving a task to testing after a confirmed own non-draft MR create or update. Uses an owner-provided session cookie; no browser capture, Bearer fallback, retries or automatic login."
+description: "Optional opt-in Gantus board integration: read, create, edit, comment and move tasks on one configured board, rename the local branch to an exact user-supplied name, run a read-only pre-publication preflight for an explicit MR create or update, read one task by a confirmed MR source branch during review, and reconcile the shared MR description and QA before moving a task to review after a confirmed own non-draft MR create or update. Uses an owner-provided session cookie; no browser capture, Bearer fallback, retries or automatic login."
 ---
 
 # Gantus
@@ -52,13 +52,13 @@ instructions.
   `ready:true`. It derives the exact single branch key; `--key` is optional and
   must match it. A matching configured repo without a branch key is a link
   gate, never a plain-MR pass. It checks one card, current `assignee` (not
-  former creator), comments, remote and configured testing target before
+  former creator), comments, remote and configured review target before
   publication. Nothing is written, no board request is sent when the project
   does not match, and remote values are never echoed.
 - `review-lookup --branch <source_branch>` is the one read-only board read for
   an explicitly selected MR, after its metadata pins the confirmed branch and
   before fetch, discussions, diff or the pass. It needs no local branch,
-  assignee, team comments or testing column, and writes nothing. The key comes
+  assignee, team comments or review column, and writes nothing. The key comes
   only from the source branch, never the title or local `HEAD`. A missing key,
   card or access reports `соответствие задаче не проверено`, never a task ✅.
 - `sync` accepts the caller's own confirmed create or update receipt for an
@@ -68,7 +68,7 @@ instructions.
   `--expected-mr-desc`. The final body preserves distinct manual blocks from
   both sides once and blocks a losing or duplicated merge. It writes only
   changed text, adds one readable QA comment for the same MR, branch and body,
-  and moves to the one configured testing column only from an allowed source
+  and moves to the one configured review column only from an allowed source
   column. A stale description, foreign or unknown QA author, foreign card or
   MR, Draft, missing target, or ambiguous ownership blocks before the dependent
   write. Before the move it re-reads only the same card `id` and requires the

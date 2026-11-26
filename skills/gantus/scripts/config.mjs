@@ -118,14 +118,14 @@ export function loadConfig(env = process.env) {
   if (gitRemote !== undefined && (/[\r\n]/.test(gitRemote) || gitRemote.trim() === '')) {
     throw new GantusError('GANTUS_GIT_REMOTE: некорректное значение', 'config');
   }
-  const testingColumn = env.GANTUS_TESTING_COLUMN_ID;
-  if (testingColumn !== undefined && !isId(testingColumn)) {
-    throw new GantusError('GANTUS_TESTING_COLUMN_ID: недопустимый идентификатор колонки', 'config');
+  const reviewColumn = env.GANTUS_REVIEW_COLUMN_ID;
+  if (reviewColumn !== undefined && !isId(reviewColumn)) {
+    throw new GantusError('GANTUS_REVIEW_COLUMN_ID: недопустимый идентификатор колонки', 'config');
   }
-  const testingFrom = optionalIdList(env, 'GANTUS_TESTING_FROM_COLUMN_IDS');
-  if ((testingColumn === undefined) !== (testingFrom === null)) {
+  const reviewFrom = optionalIdList(env, 'GANTUS_REVIEW_FROM_COLUMN_IDS');
+  if ((reviewColumn === undefined) !== (reviewFrom === null)) {
     throw new GantusError(
-      'GANTUS_TESTING_COLUMN_ID и GANTUS_TESTING_FROM_COLUMN_IDS задаются вместе', 'config'
+      'GANTUS_REVIEW_COLUMN_ID и GANTUS_REVIEW_FROM_COLUMN_IDS задаются вместе', 'config'
     );
   }
 
@@ -136,7 +136,7 @@ export function loadConfig(env = process.env) {
     cookie,
     userId,
     gitRemote: gitRemote === undefined ? null : gitRemote,
-    testingColumnId: testingColumn ?? null,
-    testingFromColumnIds: testingFrom
+    reviewColumnId: reviewColumn ?? null,
+    reviewFromColumnIds: reviewFrom
   });
 }
