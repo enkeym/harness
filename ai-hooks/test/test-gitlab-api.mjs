@@ -75,6 +75,60 @@ try {
   assert.notEqual(result.status, 0);
   assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false, 'ambiguous write is never retried through curl');
 
+  if (fs.existsSync(env.FAKE_CURL_ARGS)) fs.unlinkSync(env.FAKE_CURL_ARGS);
+  result = run({
+    FAKE_GL_EXIT: '1',
+    FAKE_GL_ERROR: 'errors: [{"message":"permission denied"}]',
+    GITLAB_TOKEN: 'synthetic-audit-token'
+  }, ['--method', 'PUT', '--single-attempt', '--input', input]);
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false, 'strict mode never replays after glab ran');
+
+  result = run({
+    FAKE_GL_EXIT: '1',
+    FAKE_GL_ERROR: 'HTTP 502 Bad Gateway',
+    GITLAB_TOKEN: 'synthetic-audit-token'
+  }, ['--method', 'PUT', '--single-attempt', '--input', input]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /повтор запрещён/);
+  assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false);
+
+  result = run({
+    FAKE_GL_EXIT: '1',
+    FAKE_GL_ERROR: 'HTTP 502 Bad Gateway; refer to MR !409',
+    GITLAB_TOKEN: 'synthetic-audit-token'
+  }, ['--method', 'PUT', '--single-attempt', '--input', input]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /повтор запрещён/);
+  assert.doesNotMatch(result.stderr, /HTTP 409/);
+  assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false);
+
+  result = run({
+    FAKE_GL_EXIT: '1',
+    FAKE_GL_ERROR: 'refer to MR !409',
+    GITLAB_TOKEN: 'synthetic-audit-token'
+  }, ['--method', 'PUT', '--single-attempt', '--input', input]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /повтор запрещён/);
+  assert.doesNotMatch(result.stderr, /HTTP 409/);
+  assert.equal(fs.existsSync(env.FAKE_CURL_ARGS), false);
+
+  const curlOnly = path.join(tmp, 'curl-only');
+  const shellTools = path.join(tmp, 'shell-tools');
+  fs.mkdirSync(curlOnly);
+  fs.mkdirSync(shellTools);
+  fs.symlinkSync('/usr/bin/cat', path.join(shellTools, 'cat'));
+  fs.copyFileSync(path.join(fakeBin, 'curl'), path.join(curlOnly, 'curl'));
+  fs.chmodSync(path.join(curlOnly, 'curl'), 0o755);
+  result = run({
+    PATH: `${shellTools}:${curlOnly}`,
+    GITLAB_TOKEN: 'synthetic-audit-token',
+    FAKE_CURL_BODY: '{"iid":43}\n200'
+  }, ['--method', 'PUT', '--single-attempt', '--input', input]);
+  assert.equal(result.status, 0, result.stderr);
+  const strictArgv = fs.readFileSync(env.FAKE_CURL_ARGS, 'utf8').trimEnd().split('\n');
+  assert.equal(strictArgv[0], '-q', 'strict curl ignores user rc');
+
   result = run({ GITLAB_TOKEN: 'invalid\r\nheader' });
   assert.notEqual(result.status, 0);
   result = run({ FAKE_GL_BODY: 'not-json' });

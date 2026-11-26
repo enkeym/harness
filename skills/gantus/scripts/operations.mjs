@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { GantusError, isId } from './config.mjs';
 import { request } from './http.mjs';
@@ -10,7 +11,7 @@ import {
   fetchComments,
   isOwned,
   resolveCard,
-  reviewColumn,
+  statusColumn,
   taskId,
   verifyIdentity
 } from './api.mjs';
@@ -27,6 +28,14 @@ import {
   worktreeState
 } from './git.mjs';
 import { branchKeys, isTaskKey, singleTaskKey } from './keys.mjs';
+import {
+  assertUnresolvedDiscussions,
+  fetchDiscussions,
+  fetchMr,
+  parseMrUrl,
+  requestMerge,
+  sha
+} from './gitlab.mjs';
 
 const EDITABLE = new Set(['name', 'desc', 'priority']);
 const FORBIDDEN_EDIT = new Set([
@@ -222,7 +231,9 @@ export function reviewLookup(config, flags, cwd) {
     card: {
       id: card.id,
       name: card.name,
+      nameSha256: digest(card.name),
       desc: card.desc,
+      descSha256: digest(card.desc),
       status: card.status,
       columnId: card.columnId,
       column: column?.name ?? null,
@@ -361,7 +372,7 @@ function targetSelector(flags) {
 }
 
 function resolveTarget(board, selector) {
-  if (selector.kind === 'review') return reviewColumn(board);
+  if (selector.kind === 'review') return statusColumn(board, 'review', 'review');
   const column = board.columns.find((item) => item.id === selector.id);
   if (!column || column.boardId !== board.id) {
     throw new GantusError('колонка не найдена на настроенной доске', 'not-found');
@@ -823,6 +834,378 @@ export function syncTask(config, flags, cwd) {
   };
 }
 
+export function startTask(config, flags) {
+  const key = requiredValue(flags, 'key');
+  const identity = verifyIdentity(config);
+  const board = fetchBoard(config);
+  const card = resolveCard(board, key);
+  assertEditAllowed(identity, card);
+  const source = statusColumn(board, 'todo', 'todo');
+  const target = statusColumn(board, 'inprogress', 'inprogress');
+  if (card.columnId === target.id) {
+    return { moved: false, taskKey: key, columnId: target.id, reason: 'already' };
+  }
+  if (card.columnId !== source.id) {
+    return { moved: false, taskKey: key, columnId: card.columnId, reason: 'source-not-allowed' };
+  }
+  moveCardToColumn(config, board, card, target);
+  return {
+    moved: true, taskKey: key, fromColumnId: source.id, columnId: target.id
+  };
+}
+
+function columnById(board, id, label) {
+  const matches = board.columns.filter((item) => item.id === id);
+  if (matches.length === 0) {
+    throw new GantusError(`${label} не найдена на настроенной доске`, 'not-found');
+  }
+  if (matches.length > 1) {
+    throw new GantusError(`${label}: на доске несколько колонок с одним id`, 'protocol');
+  }
+  return matches[0];
+}
+
+function assertColumnStatus(column, expected, label) {
+  if (column.status !== null && column.status !== '' && column.status !== expected) {
+    throw new GantusError(`колонка ${label} имеет противоречащий статус; действие отменено`, 'ambiguous');
+  }
+}
+
+function reviewSourceColumn(config, board) {
+  if (config.reviewColumnId !== null) {
+    const column = columnById(board, config.reviewColumnId, 'колонка ревью');
+    assertColumnStatus(column, 'review', 'ревью');
+    return column;
+  }
+  return statusColumn(board, 'review', 'review');
+}
+
+function testingTarget(config, board) {
+  if (config.testingColumnId !== null) {
+    const column = columnById(board, config.testingColumnId, 'колонка тестирования');
+    assertColumnStatus(column, 'testing', 'тестирования');
+    return column;
+  }
+  return statusColumn(board, 'testing', 'testing');
+}
+
+function numericId(value) {
+  const parsed = typeof value === 'number'
+    ? value
+    : (typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : Number.NaN);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function requiredSha(flags, name) {
+  const value = sha(requiredValue(flags, name));
+  if (value === null) {
+    throw new GantusError(`--${name}: ожидается SHA коммита`, 'usage');
+  }
+  return value;
+}
+
+function requiredDigest(flags, name) {
+  const value = requiredValue(flags, name);
+  if (!/^[0-9a-f]{64}$/i.test(value)) {
+    throw new GantusError(`--${name}: ожидается SHA-256`, 'usage');
+  }
+  return value.toLowerCase();
+}
+
+function mrPin(config, flags) {
+  const pin = parseMrUrl(requiredValue(flags, 'mr-url'));
+  const expected = expectedMrUrl(config.gitRemote, pin.iid);
+  if (!expected || pin.webUrl.replace(/\/+$/, '') !== expected.replace(/\/+$/, '')) {
+    throw new GantusError('--mr-url не совпадает с проектом из GANTUS_GIT_REMOTE', 'ambiguous');
+  }
+  return pin;
+}
+
+function mrIdentity(mr, pin, pins) {
+  if (!mr || typeof mr !== 'object') {
+    throw new GantusError('GitLab вернул MR не в ожидаемом формате', 'protocol');
+  }
+  if (numericId(mr.iid) !== pin.iid) {
+    throw new GantusError('MR iid не совпадает с проверенным; действие отменено', 'conflict');
+  }
+  const projects = [mr.project_id, mr.source_project_id, mr.target_project_id].map(numericId);
+  if (projects.some((id) => id === null) || new Set(projects).size !== 1) {
+    throw new GantusError('MR относится к другому проекту или fork; действие отменено', 'conflict');
+  }
+  if (projects[0] !== numericId(pins.projectId)) {
+    throw new GantusError('MR разрешился в другой проект; действие отменено', 'conflict');
+  }
+  if (mr.source_branch !== pins.sourceBranch || mr.target_branch !== pins.targetBranch) {
+    throw new GantusError('ветки MR не совпадают с проверенными; действие отменено', 'conflict');
+  }
+  if (typeof mr.web_url !== 'string' || mr.web_url.replace(/\/+$/, '') !== pin.webUrl) {
+    throw new GantusError('MR web_url не совпадает с проверенным; действие отменено', 'conflict');
+  }
+}
+
+function assertMergeableMr(mr, pin, pins) {
+  mrIdentity(mr, pin, pins);
+  if (mr.state !== 'opened') {
+    throw new GantusError('MR уже не открыт; merge отменён', 'conflict');
+  }
+  if (mr.draft !== false) {
+    throw new GantusError('MR Draft или draft не подтверждён; merge отменён', 'conflict');
+  }
+  const refs = mr.diff_refs;
+  if (!refs || typeof refs !== 'object') {
+    throw new GantusError('GitLab вернул MR без diff_refs; merge отменён', 'protocol');
+  }
+  if (sha(refs.base_sha) !== pins.baseSha || sha(refs.start_sha) !== pins.startSha
+      || sha(refs.head_sha) !== pins.headSha) {
+    throw new GantusError('ревизия MR изменилась после review; merge отменён', 'conflict');
+  }
+  if (mr.detailed_merge_status !== 'mergeable') {
+    throw new GantusError('MR не в состоянии mergeable; merge отменён', 'conflict');
+  }
+  if (mr.blocking_discussions_resolved !== true) {
+    throw new GantusError('в MR остаются блокирующие обсуждения; merge отменён', 'conflict');
+  }
+  if (mr.has_conflicts !== false) {
+    throw new GantusError('MR имеет конфликты или это не подтверждено; merge отменён', 'conflict');
+  }
+  if (mr.force_remove_source_branch !== false) {
+    throw new GantusError('настройка проекта удалит source branch; merge отменён', 'conflict');
+  }
+}
+
+function assertMergedMr(mr, pin, pins) {
+  mrIdentity(mr, pin, pins);
+  if (mr.state !== 'merged') {
+    throw new GantusError('MR не подтверждён как merged; действие отменено', 'conflict');
+  }
+  if (mr.draft !== false) {
+    throw new GantusError('merged MR не должен быть Draft; действие отменено', 'conflict');
+  }
+  if (typeof mr.merged_at !== 'string' || Number.isNaN(Date.parse(mr.merged_at))) {
+    throw new GantusError('MR не содержит подтверждённого времени merge', 'protocol');
+  }
+  const heads = [];
+  if (mr.diff_refs !== undefined && mr.diff_refs !== null) {
+    if (typeof mr.diff_refs !== 'object') {
+      throw new GantusError('GitLab вернул некорректный diff_refs', 'protocol');
+    }
+    if (mr.diff_refs.head_sha !== undefined) heads.push(sha(mr.diff_refs.head_sha));
+  }
+  if (mr.sha !== undefined) heads.push(sha(mr.sha));
+  if (heads.length === 0 || heads.some((value) => value === null || value !== pins.headSha)) {
+    throw new GantusError('SHA источника не совпадает с проверенной ревизией; действие отменено', 'conflict');
+  }
+  if (mr.merge_commit_sha !== undefined && mr.merge_commit_sha !== null
+      && sha(mr.merge_commit_sha) === null) {
+    throw new GantusError('merge_commit_sha имеет некорректный формат', 'protocol');
+  }
+  if (mr.merge_user !== undefined && mr.merge_user !== null) {
+    if (typeof mr.merge_user !== 'object') {
+      throw new GantusError('GitLab вернул некорректного merge_user', 'protocol');
+    }
+    const merger = numericId(mr.merge_user.id);
+    if (merger === null) {
+      throw new GantusError('GitLab вернул некорректного merge_user', 'protocol');
+    }
+    if (String(merger) !== pins.gitlabUserId) {
+      throw new GantusError('merge выполнен не текущим пользователем; действие отменено', 'auth');
+    }
+  }
+}
+
+function digest(value) {
+  return createHash('sha256').update(value === null || value === undefined ? '' : String(value), 'utf8').digest('hex');
+}
+
+function mergeRoute(config, { key, cardId, nameSha256, descSha256 }) {
+  const identity = verifyIdentity(config);
+  const board = fetchBoard(config);
+  const card = resolveCard(board, key);
+  if (card.id !== cardId) {
+    throw new GantusError('карточка не совпадает с id из проверки; merge отменён', 'conflict');
+  }
+  if (digest(card.name) !== nameSha256 || digest(card.desc) !== descSha256) {
+    throw new GantusError('требования карточки изменились после review; merge отменён', 'conflict');
+  }
+  assertEditAllowed(identity, card);
+  const source = reviewSourceColumn(config, board);
+  const target = testingTarget(config, board);
+  if (target.id === source.id) {
+    throw new GantusError('колонки ревью и тестирования совпадают; merge отменён', 'ambiguous');
+  }
+  if (card.columnId !== source.id && card.columnId !== target.id) {
+    throw new GantusError('карточка не в колонке ревью; merge отменён', 'conflict');
+  }
+  return { sourceId: source.id, targetId: target.id };
+}
+
+function moveAfterMerge(config, { key, cardId, sourceId, targetId, nameSha256, descSha256 }) {
+  const identity = verifyIdentity(config);
+  const board = fetchBoard(config);
+  const keyed = board.cards.filter((card) => card.taskKey === key);
+  if (keyed.length !== 1 || keyed[0].id !== cardId) {
+    throw new GantusError('карточка с проверенным ключом заменена или продублирована; перемещение отменено', 'ambiguous');
+  }
+  const card = keyed[0];
+  if (digest(card.name) !== nameSha256 || digest(card.desc) !== descSha256) {
+    throw new GantusError('требования карточки изменились после review; перемещение отменено', 'conflict');
+  }
+  const source = reviewSourceColumn(config, board);
+  const target = testingTarget(config, board);
+  if (source.id !== sourceId || target.id !== targetId || target.id === source.id) {
+    throw new GantusError('маршрут ревью или тестирования изменился; перемещение отменено', 'conflict');
+  }
+  if (card.columnId === target.id) {
+    return { moved: false, reason: 'already', columnId: target.id };
+  }
+  if (card.columnId !== source.id) {
+    return { moved: false, reason: 'column-changed', columnId: card.columnId };
+  }
+  assertEditAllowed(identity, card);
+  moveCardToColumn(config, board, card, target);
+  try {
+    const after = fetchBoard(config);
+    const afterCard = cardById(after, cardId);
+    const afterKeyed = after.cards.filter((item) => item.taskKey === key);
+    if (afterKeyed.length !== 1 || afterCard.taskKey !== key || afterCard.columnId !== target.id) {
+      throw unconfirmedWrite('перемещение не подтверждено после записи');
+    }
+  } catch {
+    throw unconfirmedWrite('перемещение не подтверждено после записи');
+  }
+  return { moved: true, columnId: target.id };
+}
+
+function mergePins(flags) {
+  const gitlabUserId = requiredValue(flags, 'gitlab-user-id');
+  if (!/^\d+$/.test(gitlabUserId)) {
+    throw new GantusError('--gitlab-user-id: ожидается числовой id пользователя', 'usage');
+  }
+  const projectId = numericId(requiredValue(flags, 'project-id'));
+  if (projectId === null) {
+    throw new GantusError('--project-id: ожидается числовой id проекта', 'usage');
+  }
+  return { gitlabUserId, projectId };
+}
+
+export function reviewMerge(config, flags, cwd) {
+  const key = requiredValue(flags, 'key');
+  const cardId = requiredValue(flags, 'card-id');
+  if (!isId(cardId)) {
+    throw new GantusError('--card-id: некорректный id', 'usage');
+  }
+  const pins = {
+    ...mergePins(flags),
+    sourceBranch: requiredValue(flags, 'source-branch'),
+    targetBranch: requiredValue(flags, 'target-branch'),
+    baseSha: requiredSha(flags, 'base-sha'),
+    startSha: requiredSha(flags, 'start-sha'),
+    headSha: requiredSha(flags, 'head-sha')
+  };
+  const nameSha256 = requiredDigest(flags, 'name-sha256');
+  const descSha256 = requiredDigest(flags, 'desc-sha256');
+  assertProjectRemote(config, cwd);
+  const pin = mrPin(config, flags);
+  singleTaskKey(pins.sourceBranch, key);
+  mergeRoute(config, { key, cardId, nameSha256, descSha256 });
+  assertUnresolvedDiscussions(fetchDiscussions(pin));
+  const route = mergeRoute(config, { key, cardId, nameSha256, descSha256 });
+  assertMergeableMr(fetchMr(pin), pin, pins);
+
+  let confirmed = null;
+  let ambiguousTransport = false;
+  try {
+    const receipt = requestMerge(pin, {
+      sha: pins.headSha,
+      should_remove_source_branch: false
+    });
+    if (receipt !== null) {
+      try {
+        assertMergedMr(receipt, pin, pins);
+        confirmed = receipt;
+      } catch {
+        confirmed = null;
+      }
+    }
+  } catch (error) {
+    if (!error.verify) throw error;
+    ambiguousTransport = error.ambiguous === true;
+  }
+  if (confirmed === null) {
+    let fetched;
+    try {
+      fetched = fetchMr(pin);
+      assertMergedMr(fetched, pin, pins);
+    } catch (error) {
+      if (!ambiguousTransport) throw error;
+      throw new GantusError(
+        'результат merge не подтверждён; дальнейшая проверка — только read-only post-merge',
+        'conflict'
+      );
+    }
+    confirmed = fetched;
+    if (ambiguousTransport) {
+      return {
+        merged: true,
+        taskKey: key,
+        mr: { iid: String(pin.iid), sha: pins.headSha },
+        testMove: { moved: false, reason: 'ambiguous-merge' }
+      };
+    }
+  }
+  let testMove;
+  try {
+    testMove = moveAfterMerge(config, {
+      key, cardId, ...route, nameSha256, descSha256
+    });
+  } catch (error) {
+    if (!(error instanceof GantusError)) throw error;
+    testMove = { moved: false, reason: isAmbiguousWrite(error) ? 'unconfirmed' : 'failed' };
+  }
+  return {
+    merged: true,
+    taskKey: key,
+    mr: { iid: String(pin.iid), sha: pins.headSha },
+    testMove
+  };
+}
+
+export function postMerge(config, flags, cwd) {
+  const key = requiredValue(flags, 'key');
+  const cardId = requiredValue(flags, 'card-id');
+  if (!isId(cardId)) {
+    throw new GantusError('--card-id: некорректный id', 'usage');
+  }
+  const pins = {
+    ...mergePins(flags),
+    sourceBranch: requiredValue(flags, 'source-branch'),
+    targetBranch: requiredValue(flags, 'expected-target-branch'),
+    headSha: requiredSha(flags, 'expected-sha')
+  };
+  assertProjectRemote(config, cwd);
+  const pin = mrPin(config, flags);
+  singleTaskKey(pins.sourceBranch, key);
+  verifyIdentity(config);
+  const board = fetchBoard(config);
+  const card = resolveCard(board, key);
+  if (card.id !== cardId) {
+    throw new GantusError('карточка не совпадает с id из проверки; сверка отменена', 'conflict');
+  }
+  assertMergedMr(fetchMr(pin), pin, pins);
+  const column = board.columns.find((item) => item.id === card.columnId);
+  return {
+    merged: true,
+    taskKey: key,
+    mr: { iid: String(pin.iid), sha: pins.headSha },
+    card: {
+      id: card.id,
+      columnId: card.columnId,
+      column: column?.name ?? null,
+      status: card.status
+    }
+  };
+}
+
 function assertRenameStillSafe(config, cwd, current, target) {
   assertProjectRemote(config, cwd);
   if (currentBranch(cwd) !== current) {
@@ -879,6 +1262,7 @@ export function renameBranch(config, flags, cwd) {
 export function dispatch({ command, flags }, config, cwd) {
   if (command === 'get') return getTask(config, flags);
   if (command === 'create') return createTask(config, flags);
+  if (command === 'start') return startTask(config, flags);
   if (command === 'edit') return editTask(config, flags);
   if (command === 'comment') return commentTask(config, flags);
   if (command === 'move') return moveTask(config, flags);
@@ -886,6 +1270,8 @@ export function dispatch({ command, flags }, config, cwd) {
   if (command === 'review-lookup') return reviewLookup(config, flags, cwd);
   if (command === 'review-ready') return reviewReady(config, flags, cwd);
   if (command === 'sync') return syncTask(config, flags, cwd);
+  if (command === 'post-merge') return postMerge(config, flags, cwd);
+  if (command === 'review-merge') return reviewMerge(config, flags, cwd);
   if (command === 'rename-branch') return renameBranch(config, flags, cwd);
   throw new GantusError('неизвестная команда', 'usage');
 }

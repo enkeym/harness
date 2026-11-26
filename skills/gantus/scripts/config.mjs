@@ -72,6 +72,15 @@ function optionalIdList(env, name) {
   return Object.freeze(ids);
 }
 
+function optionalColumnId(env, name) {
+  const value = env[name];
+  if (value === undefined) return null;
+  if (!isId(value)) {
+    throw new GantusError(`${name}: недопустимый идентификатор колонки`, 'config');
+  }
+  return value;
+}
+
 export function loadOptionalConfig(env = process.env) {
   const requiredNames = ['GANTUS_BASE_URL', 'GANTUS_TEAM_ID', 'GANTUS_SESSION_COOKIE', 'GANTUS_USER_ID'];
   const configured = requiredNames.some((name) => env[name] !== undefined);
@@ -118,16 +127,14 @@ export function loadConfig(env = process.env) {
   if (gitRemote !== undefined && (/[\r\n]/.test(gitRemote) || gitRemote.trim() === '')) {
     throw new GantusError('GANTUS_GIT_REMOTE: некорректное значение', 'config');
   }
-  const reviewColumn = env.GANTUS_REVIEW_COLUMN_ID;
-  if (reviewColumn !== undefined && !isId(reviewColumn)) {
-    throw new GantusError('GANTUS_REVIEW_COLUMN_ID: недопустимый идентификатор колонки', 'config');
-  }
-  const reviewFrom = optionalIdList(env, 'GANTUS_REVIEW_FROM_COLUMN_IDS');
-  if ((reviewColumn === undefined) !== (reviewFrom === null)) {
+  const reviewColumnId = optionalColumnId(env, 'GANTUS_REVIEW_COLUMN_ID');
+  const reviewFromColumnIds = optionalIdList(env, 'GANTUS_REVIEW_FROM_COLUMN_IDS');
+  if ((reviewColumnId === null) !== (reviewFromColumnIds === null)) {
     throw new GantusError(
       'GANTUS_REVIEW_COLUMN_ID и GANTUS_REVIEW_FROM_COLUMN_IDS задаются вместе', 'config'
     );
   }
+  const testing = optionalColumnId(env, 'GANTUS_TESTING_COLUMN_ID');
 
   return Object.freeze({
     origin: url.origin,
@@ -136,7 +143,8 @@ export function loadConfig(env = process.env) {
     cookie,
     userId,
     gitRemote: gitRemote === undefined ? null : gitRemote,
-    reviewColumnId: reviewColumn ?? null,
-    reviewFromColumnIds: reviewFrom
+    reviewColumnId,
+    reviewFromColumnIds,
+    testingColumnId: testing
   });
 }

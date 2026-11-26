@@ -37,13 +37,13 @@ test('commands, variables, disable and removal are documented', () => {
   const skillText = read('SKILL.md');
   const reference = read('reference/workflow.md');
   const example = read('.env.example');
-  for (const command of ['get', 'preflight', 'review-lookup', 'create', 'edit', 'comment', 'move', 'sync', 'review-ready', 'rename-branch']) {
+  for (const command of ['get', 'preflight', 'review-lookup', 'create', 'start', 'edit', 'comment', 'move', 'sync', 'review-merge', 'post-merge', 'review-ready', 'rename-branch']) {
     assert.match(reference, new RegExp(`\\b${command}\\b`));
   }
   for (const name of [
     'GANTUS_BASE_URL', 'GANTUS_TEAM_ID', 'GANTUS_SESSION_COOKIE',
     'GANTUS_USER_ID', 'GANTUS_GIT_REMOTE', 'GANTUS_REVIEW_COLUMN_ID',
-    'GANTUS_REVIEW_FROM_COLUMN_IDS'
+    'GANTUS_REVIEW_FROM_COLUMN_IDS', 'GANTUS_TESTING_COLUMN_ID'
   ]) {
     assert.match(reference, new RegExp(name));
     assert.match(example, new RegExp(`^${name}=`, 'm'));
@@ -285,8 +285,87 @@ test('task requirements are checked before quality and security, with evidence p
   assert.match(report, /never print a task-level ✅/);
 
   assert.match(delegation, /Workers do not read the board\nagain/);
+  assert.match(delegation, /merge\s+an MR, move a Gantus card/);
+  assert.match(delegation, /explicit merge-menu consent/);
   assert.match(delegation, /the task requirement map with evidence/);
   assert.match(delegation, /do not inherit an earlier Spec ✅/);
+});
+
+test('start, review-merge and post-merge transitions keep their order and safety gates documented', () => {
+  const reference = read('reference/workflow.md');
+  const mr = fs.readFileSync(path.join(root, 'skills/git-flow/reference/mr.md'), 'utf8');
+
+  const start = reference.slice(
+    reference.indexOf('## Start'),
+    reference.indexOf('## Edit and comment')
+  );
+  assertOrder(start, ['todo', 'inprogress', 'already', 'source-not-allowed', 'never rolled']);
+  assert.match(start, /no write/);
+  assert.match(start, /branch-only card stays in todo/);
+
+  const post = reference.slice(
+    reference.indexOf('## Review merge and testing move'),
+    reference.indexOf('## Review-ready')
+  );
+  assertOrder(post, [
+    '`review-merge`',
+    '`--mr-url`',
+    '`--expected-sha`',
+    '`--card-id`',
+    '`--name-sha256`',
+    '`editProtected`',
+    'state:"opened"',
+    'PUT .../merge',
+    'state:"merged"',
+    '`post-merge` repeats the identity',
+    'GANTUS_TESTING_COLUMN_ID',
+    '{moved:false,reason:"already"}',
+    'column-changed',
+    'fresh board snapshot',
+    'orderedIds',
+    'never retried'
+  ]);
+  assert.match(post, /never sends the\s+merge PUT/);
+  assert.match(post, /`assignee` and `teamComments` are not\s+gates/);
+  assert.match(post, /nothing is commented or\s+rewritten/);
+  assert.match(post, /Gantus failure is\s+separate/);
+  assert.match(reference, /`sync` targets the review column 144/);
+  assert.match(reference, /`review-merge` merges the reviewed MR/);
+  assert.match(mr, /`sync` moves the card to review, never to testing/);
+  assert.match(mr, /Testing is a later `review-merge` step/s);
+});
+
+test('a clean MR merge is consented, pinned and rechecked before one conditional PUT', () => {
+  const review = fs.readFileSync(path.join(root, 'skills/review/SKILL.md'), 'utf8');
+  const gitlab = fs.readFileSync(path.join(root, 'skills/review/reference/gitlab.md'), 'utf8');
+  const report = fs.readFileSync(path.join(root, 'skills/review/reference/report.md'), 'utf8');
+  const merge = gitlab.slice(
+    gitlab.indexOf('## Merge a clean MR'),
+    gitlab.indexOf('## Drafts')
+  );
+
+  assertOrder(merge, [
+    'Selecting the MR in `mr` mode',
+    'The authoritative MR URL',
+    'review-merge',
+    '`--name-sha256`',
+    'reads every discussion',
+    'PUT .../merge_requests/<iid>/merge',
+    'compare-and-swap for the source HEAD only',
+    'post-merge',
+    'no comments and no drafts'
+  ]);
+  assert.doesNotMatch(merge, /review-lookup --branch/);
+  assert.match(merge, /`400`, `401`, `403`, `405`, `409`\s+or `422`/);
+  assert.match(merge, /never\s+repeat the write yourself/);
+  assert.match(merge, /never re-run `review-merge` or send a second PUT/);
+  assert.match(merge, /open resolvable thread blocks/);
+  assert.match(merge, /not for `target_branch`/);
+  assert.match(review, /Selecting the MR\s+is not merge authorization/);
+  assert.match(review, /`nameSha256`\/`descSha256`/);
+  assert.match(report, /Merge \(Recommended\)/);
+  assert.match(report, /Оставить без действий/);
+  assert.match(report, /A later\s+card `name`\/`desc` edit invalidates that ✅/);
 });
 
 test('selected MR review stays read-only even after a separate draft authorization', () => {
@@ -301,5 +380,5 @@ test('selected MR review stays read-only even after a separate draft authorizati
   assert.match(gitlab, /`\/review` alone is\nread-only/);
   assert.match(gitlab, /Delivery always means private draft notes/);
   assert.match(gitlab, /Never call `draft_notes\/bulk_publish`/);
-  assert.doesNotMatch(gitlab, /review-lookup.*--desc/s);
+  assert.doesNotMatch(gitlab, /review-lookup[^\n]*--desc\s/);
 });

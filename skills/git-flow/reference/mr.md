@@ -260,6 +260,14 @@ encoded, written out in full.
    missing optional integration is not an active configuration error. A
    project publication ban is stronger than this flow.
 
+   `sync` moves the card to review, never to testing; that history is
+   deliberate. Testing is a later `review-merge` step in the `/review` clean-MR
+   flow, only after the user confirmed the merge of that exact MR and the fresh
+   board/digest/discussion gates passed; an ambiguous merge outcome is
+   reconciled read-only by `post-merge`. An explicit start request
+   uses `start --key <STR>` and is unrelated to publication; branch-only cards
+   stay in todo until it is requested. This flow never merges an MR itself.
+
 Legacy `review-ready` is used only when the installed CLI has no `sync`
 command; never run it together with step 8 for one MR. Only after the caller's
 own confirmed MR **create** POST on this branch — never for PUT/update, draft,

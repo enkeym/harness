@@ -212,6 +212,54 @@ export function git(cwd, args) {
   }).trim();
 }
 
+export async function gitlabServer(t, handler) {
+  const server = await startServer(handler);
+  t.after(() => server.close());
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gantus-glab-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const bin = path.join(directory, 'bin');
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, 'glab'), `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+let host = '';
+let method = 'GET';
+let input = null;
+const rest = [];
+for (let index = 0; index < args.length; index += 1) {
+  if (args[index] === '--hostname') host = args[++index];
+  else if (args[index] === '--method') method = args[++index];
+  else if (args[index] === '--input') input = args[++index];
+  else if (args[index] === '--header') index += 1;
+  else if (args[index] === '--single-attempt') continue;
+  else if (args[index] === 'api' && rest.length === 0) continue;
+  else rest.push(args[index]);
+}
+(async () => {
+  const body = input ? fs.readFileSync(input) : undefined;
+  const response = await fetch('http://' + host + '/api/v4/' + rest[0], {
+    method,
+    ...(body ? { body, headers: { 'content-type': 'application/json' } } : {})
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    process.stderr.write('HTTP ' + response.status + ': request failed\\n');
+    process.exit(1);
+  }
+  process.stdout.write(text);
+})().catch((error) => {
+  process.stderr.write(String(error && error.message));
+  process.exit(1);
+});
+`, { mode: 0o755 });
+  return {
+    url: server.url,
+    host: server.url.replace(/^http:\/\//, ''),
+    requests: server.requests,
+    env: { PATH: `${bin}:${process.env.PATH}` }
+  };
+}
+
 export function initRepo(t, { branch = 'wip', upstream = remote } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gantus-git-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));

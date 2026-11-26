@@ -3,6 +3,7 @@ import { GantusError } from './config.mjs';
 const COMMAND_FLAGS = new Map([
   ['get', ['key']],
   ['create', ['name', 'desc', 'priority', 'start', 'end']],
+  ['start', ['key']],
   ['edit', ['key', 'name', 'desc', 'priority']],
   ['comment', ['key', 'body']],
   ['move', ['key', 'column', 'to']],
@@ -14,6 +15,15 @@ const COMMAND_FLAGS = new Map([
     'expected-card-id', 'replaced-desc', 'replaced-desc-file'
   ]],
   ['review-ready', ['key', 'mr']],
+  ['review-merge', [
+    'mr-url', 'project-id', 'key', 'card-id', 'source-branch',
+    'target-branch', 'base-sha', 'start-sha', 'head-sha', 'gitlab-user-id',
+    'name-sha256', 'desc-sha256'
+  ]],
+  ['post-merge', [
+    'mr-url', 'project-id', 'key', 'card-id', 'source-branch',
+    'expected-target-branch', 'expected-sha', 'gitlab-user-id'
+  ]],
   ['rename-branch', ['key', 'branch']]
 ]);
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { apiFixture, boardFixture, initRepo, remote, runCli, task } from './helpers.mjs';
 
@@ -31,6 +32,9 @@ test('review lookup reads one card by the source branch without ownership, comme
   assert.equal(result.card.id, '12');
   assert.equal(result.card.desc, 'Требования карточки');
   assert.equal(result.card.assignee, 'emp-2');
+  const sha = (value) => createHash('sha256').update(value, 'utf8').digest('hex');
+  assert.equal(result.card.nameSha256, sha('STR-99 не ключ заголовка'));
+  assert.equal(result.card.descSha256, sha('Требования карточки'));
   assert.equal('review' in result, false);
   assert.deepEqual(api.writes(), []);
 });

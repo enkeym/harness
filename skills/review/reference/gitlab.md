@@ -1,6 +1,6 @@
-# /review — open MRs and draft notes
+# /review — open MRs, merge and draft notes
 
-GitLab API for MR mode: list, pick, scope, drafts. Use
+GitLab API for MR mode: list, pick, scope, merge, drafts. Use
 `node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host>`;
 host and encoded project: [../../git-flow/reference/mr.md](../../git-flow/reference/mr.md).
 The endpoint replaces `<api>` with `projects/<encoded-project>`.
@@ -60,6 +60,106 @@ node ~/.config/harness/repo/bin/gitlab-api.mjs --hostname <host> 'projects/<enco
 5. Scope = `git diff <base_sha> <head_sha>` — the diff GitLab shows, so the
    line anchors land. Files as `git show <head_sha>:<path>`. Header mode
    `MR !<iid> <title>`; ticket commits do not apply.
+
+## Merge a clean MR
+
+A merge is offered only after a complete pass with no findings at any severity,
+a confirmed task-level ✅ when a card applies, no unresolved resolvable
+discussion and no uncovered required manual check. Findings, `changes
+requested`, `соответствие задаче не проверено`, a partial batch, an unread file,
+a stale approval or CI state, or any unknown field → no merge; report the
+reason and stop.
+
+Selecting the MR in `mr` mode, including a queue pick, is not authorization.
+After the full report, ask through the client's interactive question tool:
+`Merge` (Recommended) and `Оставить без действий`. An explicit «merge !<iid>»
+for that exact MR is also authorization. Reuse permission only for the same
+pinned MR; a queue binds each MR and its consent separately. Never merge
+because findings were approved, drafts were authorized, or the review is clean.
+
+1. The authoritative MR URL, the pinned card `id` and the requirement
+   fingerprints come from the completed pass; do not run another
+   `review-lookup`. `review-merge` itself re-reads one fresh board snapshot
+   immediately before the irreversible write and requires the same single key,
+   the same card `id`, and the same `name`/`desc` SHA-256. A changed
+   requirement, replaced card or reassigned key invalidates the task-first ✅
+   and blocks the merge; no task data goes into chat, the MR or a draft. Do not
+   skip this because the code diff did not change: the card can be edited after
+   the pass.
+2. Run exactly one
+   `node <gantus-base>/scripts/gantus.mjs review-merge` with `--mr-url` (the
+   reviewed MR URL), `--project-id` (the origin `project.id` pinned with the
+   metadata), `--key`, the pinned `--card-id`, `--source-branch`,
+   `--target-branch`, `--base-sha`, `--start-sha`, `--head-sha`,
+   `--name-sha256`, `--desc-sha256` and `--gitlab-user-id`. The command is the
+   only merge actor. It re-proves the card id and fingerprints, the edit ACL and
+   the review→testing route, and after every discussion page has been read it
+   repeats that same route, key and fingerprint check on one fresh snapshot
+   before the final MR read and PUT; it pins the source and testing target ids
+   from that internal route, not from a parameter. It reads every discussion
+   page (`.../discussions?per_page=100&page=<n>`, bounded at 50 pages):
+   an open resolvable thread blocks. Standalone non-resolvable notes are not
+   unresolved threads; the reviewer already reads them, and an actionable
+   comment blocks the clean verdict in the report. A malformed note or
+   discussion — including an empty `notes` array or a missing/contradictory
+   `resolvable`/`resolved` flag — is never treated as complete and blocks.
+   It then takes a fresh `GET .../merge_requests/<iid>` requiring equal numeric
+   project/source/target ids (no fork) equal to `--project-id`, `state:"opened"`,
+   `draft:false`, `source_branch`/`target_branch` as pinned,
+   `detailed_merge_status:"mergeable"`,
+   `blocking_discussions_resolved:true`, `has_conflicts:false`,
+   `force_remove_source_branch:false`, and every present source-head field
+   (`diff_refs.head_sha` and `sha`) equal to the reviewed value; a stale or
+   mismatched one blocks even when the other matches. Do not infer resolved
+   discussions from `blocking_discussions_resolved` alone. Required approvals
+   and pipelines are covered by `mergeable`; any other status blocks. Never
+   approve or request changes to make it mergeable.
+3. The command sends one `PUT .../merge_requests/<iid>/merge` with exactly
+   `{"sha":"<reviewed head_sha>","should_remove_source_branch":false}` through
+   the strict single-attempt transport. Never add `auto_merge`,
+   `merge_when_pipeline_succeeds`, `squash`, `force_remove_source_branch`,
+   labels or a branch deletion, and never repeat the write yourself. `sha` is a
+   compare-and-swap for the source HEAD only, not for `target_branch` or its
+   base; a concurrent target move is not excluded, so the fresh GET and the
+   response check are mandatory. GitLab server guards remain final; this is not
+   a cross-service CAS.
+4. Outcome handling is owned by the command: `400`, `401`, `403`, `405`, `409`
+   or `422` → no merge and no board move (`409` means the source SHA changed).
+   A 2xx body is accepted only when it proves the same `iid`, project ids,
+   branches, reviewed source head, `state:"merged"`, `draft:false`, a parseable
+   `merged_at` and, when present, the same merger; a 2xx with an incomplete or
+   malformed receipt is replaced by one authoritative GET of the same `iid`,
+   and only a merge proven that way proceeds to the guarded board move.
+   A genuinely ambiguous transport — timeout, network failure or `5xx` — is
+   never replayed: at most one read-only GET of the same `iid` may prove the
+   merge, and a proven merge then returns `merged:true` with
+   `testMove:{moved:false,reason:"ambiguous-merge"}` and **zero board writes**;
+   recovery needs a new explicit consent. If that GET does not prove the merge,
+   report the GitLab outcome as unconfirmed and check it only through the
+   separate read-only `post-merge`; never re-run `review-merge` or send a second PUT.
+   A fast-forward or squash merge keeps the source head, so
+   `merge_commit_sha` is not required.
+5. The merge scope is only a linked clean MR whose pinned lookup produced the
+   task ✅ for this same MR and project. A missing card, another project, a
+   contradictory card or absent configuration → stay read-only and report the
+   merge as not attempted; never fall back to a receipt, local `HEAD`, a title
+   or a plain-MR merge.
+6. Only after a confirmed merge does `review-merge` consider the exact pinned
+   card for review→testing (or report `already`/`column-changed` without a
+   write), re-checking on a fresh snapshot the same key/id, requirements,
+   source and target ids and ACL pinned before the PUT. Load `gantus` by exact
+   id first if it is not loaded. The result always reports `merged:true`
+   separately from `testMove`: a board PATCH, ACL, route or read-back error
+   becomes `testMove:{moved:false,reason:"failed"|"unconfirmed"}` with no
+   secrets, never invalidates the confirmed merge and never triggers a second
+   merge. Recovery is a separate action that requires fresh explicit consent
+   and is never automatic. The read-only `post-merge` re-verifies the merged MR
+   by `iid` and reports the actual card column and status; it sends no PATCH
+   and does not move the card.
+7. A clean path has no comments and no drafts: do not create a positive,
+   summary, approval or "merged" note and do not call any `draft_notes`
+   endpoint. The report in chat and the merge menu are the whole output.
+   Findings keep the draft-only delivery below, unchanged.
 
 ## Drafts
 

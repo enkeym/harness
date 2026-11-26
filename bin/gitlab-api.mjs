@@ -9,11 +9,13 @@ const JSON_CONTENT_TYPE_HEADER = 'Content-Type: application/json';
 const args = process.argv.slice(2);
 let host, input;
 let method = 'GET';
+let singleAttempt = false;
 const endpoints = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--hostname') host = args[++i];
   else if (args[i] === '--method') method = args[++i];
   else if (args[i] === '--input') input = args[++i];
+  else if (args[i] === '--single-attempt') singleAttempt = true;
   else endpoints.push(args[i]);
 }
 
@@ -50,9 +52,26 @@ if (!glab.error && glab.status === 0) {
 const problem = String(glab.stderr || '');
 // Повтор записи после таймаута или ответа сервера может создать дубликат.
 const httpFailure = /HTTP[ /:]*(?:[45]\d\d)/i.test(problem);
-const localFailure = !httpFailure && (['ENOENT', 'EACCES'].includes(glab.error?.code)
-  || /failed to read configuration|read-only file system|permission denied|not logged into|no token provided|not authenticated/i.test(problem));
+const spawnImpossible = ['ENOENT', 'EACCES'].includes(glab.error?.code);
+const localFailure = !httpFailure && (singleAttempt
+  ? spawnImpossible
+  : (spawnImpossible
+    || /failed to read configuration|read-only file system|permission denied|not logged into|no token provided|not authenticated/i.test(problem)));
 if (!localFailure || !token) {
+  if (singleAttempt && !spawnImpossible) {
+    if (glab.error?.code === 'ETIMEDOUT') {
+      fail('таймаут; результат запроса неизвестен, повтор запрещён');
+    }
+    const rejected = /HTTP[ \/:]*(400|401|403|404|405|409|422)\b/i.exec(problem);
+    if (rejected) {
+      if (rejected[1] === '401') fail('HTTP 401: авторизация отклонена');
+      if (rejected[1] === '403') fail('HTTP 403: недостаточно прав');
+      fail(`HTTP ${rejected[1]}: запрос отклонён сервером`);
+    }
+    fail(method === 'GET'
+      ? 'glab завершился с ошибкой; GET не выполнен'
+      : 'glab завершился с ошибкой; результат записи неизвестен, повтор запрещён');
+  }
   if (glab.error?.code === 'ETIMEDOUT') fail('таймаут; результат записи неизвестен, не повторяй POST вслепую');
   if (/\b401\b/.test(problem)) fail('HTTP 401: авторизация отклонена');
   if (/\b403\b/.test(problem)) fail('HTTP 403: недостаточно прав');
@@ -63,7 +82,8 @@ if (!localFailure || !token) {
   fail('запрос glab не выполнен; проверь доступность клиента и авторизацию нужного host. Автоматический login не выполняется');
 }
 const url = `https://${host}/api/v4/${endpoints[0]}`;
-const curl = spawnSync('curl', ['--silent', '--show-error', '--connect-timeout', '10',
+const curl = spawnSync('curl', [...(singleAttempt ? ['-q'] : []),
+  '--silent', '--show-error', '--connect-timeout', '10',
   '--max-time', '60', '--header', '@-', '--request', method,
   ...(input ? ['--header', JSON_CONTENT_TYPE_HEADER, '--data-binary', `@${input}`] : []),
   '--write-out', '\n%{http_code}', url], { ...options, input: `PRIVATE-TOKEN: ${token}\n` });

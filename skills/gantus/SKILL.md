@@ -1,6 +1,6 @@
 ---
 name: gantus
-description: "Optional opt-in Gantus board integration: read, create, edit, comment and move tasks on one configured board, rename the local branch to an exact user-supplied name, run a read-only pre-publication preflight for an explicit MR create or update, read one task by a confirmed MR source branch during review, and reconcile the shared MR description and QA before moving a task to review after a confirmed own non-draft MR create or update. Uses an owner-provided session cookie; no browser capture, Bearer fallback, retries or automatic login."
+description: "Optional opt-in Gantus board integration: read, create, edit, comment and move tasks on one configured board, start explicit work, rename the local branch to an exact user-supplied name, run a read-only pre-publication preflight for an explicit MR create or update, read one task by a confirmed MR source branch during review, reconcile the shared MR description and QA before moving a task to review after a confirmed own non-draft MR create or update, merge a reviewed clean MR and move it from review to testing, and reconcile that post-merge move read-only after an ambiguous outcome. Uses an owner-provided session cookie; no browser capture, Bearer fallback, retries or automatic login."
 ---
 
 # Gantus
@@ -8,12 +8,14 @@ description: "Optional opt-in Gantus board integration: read, create, edit, comm
 Load this skill only when the user explicitly asks to work with a Gantus task,
 explicitly asks to create working branches or cards for completed local
 changes, when an explicit MR create/update request on a configured project
-reaches the mandatory pre-publication preflight, or when an explicitly selected
-MR review needs its one read-only source-branch lookup. Run `preflight` before
-any GitLab or Gantus write; it derives the single strict branch key, with
-optional `--key` only as an equality check. The post-MR `sync` is a separate
-later step, not a substitute and not optional once preflight says the
-integration applies.
+reaches the mandatory pre-publication preflight, when an explicit start, merge
+of a reviewed clean MR, or post-merge reconcile is requested, or when an
+explicitly selected MR review
+needs its one read-only source-branch lookup. Run `preflight` before any GitLab
+or Gantus write; it derives the single strict branch key, with optional `--key`
+only as an equality check. The post-MR `sync` and post-merge `review-merge` are
+separate later steps, not substitutes and not optional once their confirmed
+GitLab write exists.
 The integration is off without the environment in `reference/workflow.md`;
 when it is absent, GitLab and review behaviour stays unchanged. A missing
 optional integration is not an active configuration error, but a partial or
@@ -78,9 +80,46 @@ instructions.
   for updates and never runs together with `sync` for one MR. Both commands
   reuse the caller's receipt, never make a second MR request and report a
   Gantus failure separately from the successful MR.
+- `start --key <STR>` is the explicit todo-to-inprogress transition. It resolves
+  one card and its edit ACL plus the single `todo` and single `inprogress`
+  status columns. Already inprogress is a no-op; review, testing, done, paused,
+  blocked or unknown columns are `source-not-allowed` and never rolled back.
+  Branch-only cards stay in todo until this is requested.
+- `review-merge` is the one executable merge path for a reviewed clean MR. It
+  pins the MR by `--mr-url` and `--project-id`, the reviewed source/target
+  branches, the three `diff_refs` SHAs and the card `name`/`desc` SHA-256, proves the
+  board route and edit ACL, reads every discussion page (an open resolvable
+  thread or a malformed note/discussion blocks; standalone non-resolvable notes
+  are read by the reviewer and an actionable one blocks the clean report
+  verdict), repeats the route/key/fingerprint/ACL check on a fresh snapshot
+  after the page reads, and re-reads the MR as open, non-draft, `mergeable`,
+  conflict-free and non-force-deleting before one SHA-conditional `PUT`. Every
+  present source-head field must match the pin. It never sends a second
+  outbound write; a 2xx body without merged proof is settled by one
+  authoritative GET of the same `iid` before the normal move, while a timeout,
+  network failure or `5xx` allows only one read-only GET and, even when that
+  proves the merge, returns `merged:true` with
+  `testMove:{moved:false,reason:"ambiguous-merge"}` and sends no board request.
+  Neither a fast-forward nor a squash merge requires `merge_commit_sha`. Only a
+  confirmed merge considers the exact card `id` for review → the configured or
+  single-`testing` status column.
+- `post-merge` is the read-only reconcile after that merge: it re-verifies the
+  same project, `iid`, branches, reviewed source head and merger on an
+  authoritative GET, never sends the merge PUT, sends no card PATCH and reports
+  the confirmed MR plus the actual card column/status. `review-merge` returns
+  `merged:true` separately from `testMove`; a board PATCH, ACL, route or
+  read-back error is `testMove:{moved:false,reason:"failed"|"unconfirmed"}` and
+  never causes a second merge. The move only starts from review, needs the edit
+  ACL (no assignee or team-comments gate), is a no-op when already testing,
+  never rolls back another column, sends one PATCH and reports an unconfirmed
+  move without retrying. Moving a card after a confirmed merge needs fresh
+  explicit consent; `post-merge` never does it.
 - `/review` reads one card only through `review-lookup --branch <source_branch>`
   for an explicitly selected MR; an ordinary review never reads a card
-  automatically. Both paths are read-only and never publish task data.
+  automatically. The lookup and an ordinary review write nothing. The only
+  board writes on a review path are `review-merge` after the user explicitly
+  confirmed merging that clean MR, and the separate read-only `post-merge`
+  reconcile.
 
 ## Removal
 

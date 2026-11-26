@@ -141,13 +141,13 @@ export function resolveCard(board, key) {
   return matches[0];
 }
 
-export function reviewColumn(board) {
-  const matches = board.columns.filter((column) => column.status === 'review');
+export function statusColumn(board, status, label) {
+  const matches = board.columns.filter((column) => column.status === status);
   if (matches.length === 0) {
-    throw new GantusError('в настроенной доске нет колонки со статусом review', 'ambiguous');
+    throw new GantusError(`в настроенной доске нет колонки со статусом ${label}`, 'ambiguous');
   }
   if (matches.length > 1) {
-    throw new GantusError('в настроенной доске несколько колонок со статусом review; перенос отменён', 'ambiguous');
+    throw new GantusError(`в настроенной доске несколько колонок со статусом ${label}; перенос отменён`, 'ambiguous');
   }
   return matches[0];
 }

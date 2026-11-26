@@ -8,6 +8,7 @@ const key = ['--key', 'STR-12'];
 const edit = ['edit', ...key, '--priority', 'P3'];
 const comment = ['comment', ...key, '--body', 'Готово к проверке'];
 const move = ['move', ...key, '--to', 'review'];
+const start = ['start', ...key];
 const rename = ['rename-branch', ...key, '--branch', 'feature/STR-12-from-gantus'];
 
 function resultOf(result) {
@@ -122,6 +123,83 @@ test('protected tasks and disabled team comments do not bypass browser access ru
 
   const owner = await apiFixture(t, { tasks: [task(12, { editProtected: true, assignee: 'emp-1' })] });
   assert.equal(resultOf(await owner.run(edit)).updated, true);
+});
+
+test('start moves todo into the unique inprogress column once', async (t) => {
+  const tasks = [
+    task(12),
+    task(22, { kanbanColumnId: 'col-progress', kanbanOrder: 1 }),
+    task(123, { kanbanColumnId: 'col-progress', kanbanOrder: 2 })
+  ];
+  const api = await apiFixture(t, { tasks, board: boardFixture(tasks) });
+
+  assert.deepEqual(resultOf(await api.run(start)), {
+    moved: true, taskKey: 'STR-12', fromColumnId: 'col-todo', columnId: 'col-progress'
+  });
+
+  assert.deepEqual(api.writes().map(({ method, url, body }) => [method, url, JSON.parse(body)]), [
+    ['PATCH', '/api/kanban/cards/12', {
+      columnId: 'col-progress', orderedIds: ['22', '123', '12']
+    }]
+  ]);
+});
+
+test('start is a no-op when already inprogress and never rolls back other columns', async (t) => {
+  for (const [columnId, reason] of [
+    ['col-progress', 'already'],
+    ['col-done', 'source-not-allowed'],
+    ['col-review', 'source-not-allowed']
+  ]) {
+    const tasks = [task(12, { kanbanColumnId: columnId })];
+    const api = await apiFixture(t, { tasks, board: boardFixture(tasks) });
+
+    const result = resultOf(await api.run(start));
+
+    assert.equal(result.moved, false);
+    assert.equal(result.reason, reason);
+    assert.deepEqual(api.writes(), []);
+  }
+
+  const paused = boardFixture([task(12, { kanbanColumnId: 'col-paused' })]);
+  paused.columns.push({ id: 'col-paused', boardId: 'b1', status: 'paused', name: 'На паузе' });
+  paused.cards.find((card) => card.id === '12').columnId = 'col-paused';
+  const pausedApi = await apiFixture(t, { board: paused });
+  const pausedResult = resultOf(await pausedApi.run(start));
+  assert.equal(pausedResult.reason, 'source-not-allowed');
+  assert.equal(pausedResult.columnId, 'col-paused');
+  assert.deepEqual(pausedApi.writes(), []);
+
+  const unknown = boardFixture([task(12, { kanbanColumnId: 'col-unknown' })]);
+  unknown.columns.push({ id: 'col-unknown', boardId: 'b1', status: null, name: 'Неизвестно' });
+  unknown.cards.find((card) => card.id === '12').columnId = 'col-unknown';
+  const unknownApi = await apiFixture(t, { board: unknown });
+  assert.equal(resultOf(await unknownApi.run(start)).reason, 'source-not-allowed');
+  assert.deepEqual(unknownApi.writes(), []);
+});
+
+test('start blocks ambiguous status columns and keeps the edit ACL', async (t) => {
+  const duplicate = boardFixture([task(12)]);
+  duplicate.columns.push({ id: 'col-progress-2', boardId: 'b1', status: 'inprogress', name: 'В работе 2' });
+  const ambiguous = await apiFixture(t, { board: duplicate });
+  assert.match((await ambiguous.run(start)).stderr, /несколько колонок/);
+  assert.deepEqual(ambiguous.writes(), []);
+
+  const missing = boardFixture([task(12)]);
+  missing.columns = missing.columns.filter((column) => column.status !== 'inprogress');
+  const absent = await apiFixture(t, { board: missing });
+  assert.match((await absent.run(start)).stderr, /нет колонки/);
+  assert.deepEqual(absent.writes(), []);
+
+  const locked = await apiFixture(t, {
+    tasks: [task(12, { editProtected: true })]
+  });
+  assert.match((await locked.run(start)).stderr, /недоступна/);
+  assert.deepEqual(locked.writes(), []);
+
+  const colleague = await apiFixture(t, {
+    tasks: [task(12, { assignee: 'emp-2', editProtected: false })]
+  });
+  assert.equal(resultOf(await colleague.run(start)).moved, true);
 });
 
 test('review move appends once and keeps the order of all target cards', async (t) => {

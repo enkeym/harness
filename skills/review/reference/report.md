@@ -48,7 +48,10 @@ standards/security findings:
   confirmed extra is listed separately and never replaces a missed criterion.
 - A manual criterion not actually run stays `не проверено`.
 - No card or no confirmed key/access → `Соответствие задаче не проверено:
-  <причина>`; never print a task-level ✅.
+  <причина>`; never print a task-level ✅. A merge offer requires a confirmed
+  task-level ✅ when a card applies; ❌ or `не проверено` blocks it. A later
+  card `name`/`desc` edit invalidates that ✅; the merge gate rechecks the
+  same card on a fresh board snapshot before the irreversible write.
 
 ## MR comments
 
@@ -138,8 +141,9 @@ One block per finding, Critical and Important:
 - **Не проверено:** <что и почему — тесты не запускались, нужен контекст задачи>
 ~~~
 
-Empty section = "нет". Nothing found → the summary only, no menu, no drafts.
-An unread file on the coverage line → never `approved`.
+Empty section = "нет". Nothing found → the summary, then no menu and no drafts
+for a local review; an MR review continues with the merge menu below. An unread
+file on the coverage line → never `approved` and no merge offer.
 
 ## Menu
 
@@ -166,7 +170,20 @@ A colleague's:
 ```
 
 - Target is another ref → no fix options, no menu: a colleague's branch goes
-  straight to Only review. MR mode (1.2) has no menu at all.
+  straight to Only review. MR mode (1.2) has no findings/fix menu; findings
+  offer drafts, and only a clean MR gets the merge menu:
+
+```
+MR !<iid> готов к merge?
+- Merge (Recommended)
+- Оставить без действий
+```
+
+- The merge menu appears only after the full report and every gate of
+  [gitlab.md](gitlab.md#merge-a-clean-mr) is satisfied. `Merge` authorizes
+  exactly that pinned MR, which the coordinator merges through one
+  `review-merge`; `Оставить без действий` → one line, no recap. A queue
+  asks for each MR separately, after its own report.
 - Only review → *Drafts* of [gitlab.md](gitlab.md) into the MR of
   *Current branch with an open MR*; no MR fits → the MR comments in chat,
   one line why.

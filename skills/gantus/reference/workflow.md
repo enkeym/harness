@@ -24,6 +24,7 @@ cookie. The CLI reads the process environment and never the file itself.
 | `GANTUS_GIT_REMOTE` | Exact `git remote get-url origin` for this repository. Required by `sync`, `review-lookup`, `review-ready` and `rename-branch`; another project cannot feed its STR into them. |
 | `GANTUS_REVIEW_COLUMN_ID` | Optional exact id of the one review column on the configured board. Set together with the source list; absent means `sync` updates text and QA but skips the move. |
 | `GANTUS_REVIEW_FROM_COLUMN_IDS` | Comma-separated unique ids of the source columns from which `sync` may move a card. Required when the review column is set. A later column is not rolled back. |
+| `GANTUS_TESTING_COLUMN_ID` | Optional exact id of the one testing column for `review-merge`; absent falls back to the single board column whose observed status is `testing`. The source is always the review column, so no separate source list exists. `post-merge` only reads the board and reports the actual card column. |
 
 Validation happens before any request. Missing or invalid values exit 2 and
 send nothing. HTTP redirects are not followed, proxies are disabled, and the
@@ -47,9 +48,13 @@ Ids of the configured board (827, «Веб Гроза»), read from
 | 148 | Готово к релизу  | done       |
 | 271 | Обновлено        | done       |
 
-`sync` targets the review column 144 from the source columns 142 and 143. If
-the board is changed, take the new ids from a board read and update this table
-and the environment together.
+`sync` targets the review column 144 from the source columns 142 and 143;
+`review-merge` merges the reviewed MR and then moves 144 → 145, while
+`post-merge` only reconciles that move by reading GitLab and the board. If the
+board is changed, take the new ids from a board read and update this table and
+the environment together. A local fixture may report the testing column with a
+`null` status, so tests and a board without the machine status use the explicit
+ids; neither the table nor a fixture proves live placement.
 
 ## Commands
 
@@ -62,10 +67,13 @@ get --key STR-12
 preflight [--key STR-12]
 review-lookup --branch feature/STR-12
 create --name TEXT --desc TEXT --start YYYY-MM-DD --end YYYY-MM-DD --priority P0|P1|P2|P3
+start --key STR-12
 edit --key STR-12 [--name TEXT] [--desc TEXT] [--priority P0|P1|P2|P3]
 comment --key STR-12 --body TEXT
 move --key STR-12 (--column COLUMN_ID | --to review)
 sync --key STR-12 --mr RECEIPT_FILE_OR_JSON --desc TEXT --qa TEXT --gitlab-user-id ID --expected-desc TEXT --expected-card-id ID [--expected-mr-desc TEXT] [--replaced-desc TEXT]
+review-merge --mr-url URL --project-id PROJECT_ID --key STR-12 --card-id ID --source-branch BRANCH --target-branch BRANCH --base-sha SHA --start-sha SHA --head-sha SHA --name-sha256 SHA256 --desc-sha256 SHA256 --gitlab-user-id ID
+post-merge --mr-url URL --project-id PROJECT_ID --key STR-12 --card-id ID --source-branch BRANCH --expected-target-branch BRANCH --expected-sha SHA --gitlab-user-id ID
 review-ready --key STR-12 --mr RECEIPT_FILE_OR_JSON
 rename-branch --key STR-12 --branch EXACT_BRANCH_NAME
 ```
@@ -115,11 +123,27 @@ assignee = identity.employeeId
 assignee is always the authenticated account: `employeeId` comes from
 `/api/auth/me`, whose `id` was already checked against `GANTUS_USER_ID`. A
 missing `employeeId` blocks the create instead of leaving the task unassigned.
-A
-2xx response must contain a safe `taskKey` and `id`. A 2xx without them, a 5xx
-or a timeout is an ambiguous write: report it, never repeat the POST. A single
-POST does not promise placement in a manually chosen column; Kanban placement
-may need its own card PATCH.
+The POST is the only write: it sends no card or column id and makes no follow-up
+card PATCH. A 2xx response must contain a safe `taskKey` and `id`. A 2xx without
+them, a 5xx or a timeout is an ambiguous write: report it, never repeat the
+POST. `status:"todo"` is the task field observed in this contract; the live
+board's physical placement of a newly created card in column 142 is not proven
+by the request or by a fixture, so do not promise it without a live read.
+
+## Start
+
+`start --key STR-12` is the explicit transition from todo to work. One board
+snapshot resolves the exact card and its edit ACL, the single column whose
+machine status is `todo` and the single column whose status is `inprogress`;
+zero or several status columns block before any write, as does a missing card.
+`editProtected`, creator and assignee rules are the normal edit guard; no new
+permission is invented. A card already in the inprogress column is
+`{moved:false,reason:"already"}` with no write. A card in review, testing, done,
+paused, blocked or any other column is `source-not-allowed` and is never rolled
+back. Only a card in the todo column is PATCHed once with the target column id
+and the full target order; the successful response is
+`{moved:true,taskKey,fromColumnId,columnId}`. A branch-only card stays in todo
+until this command is explicitly requested.
 
 ## Edit and comment
 
@@ -293,6 +317,114 @@ Compare the observed body, author, description, assignee and column with the
 attempted values, then run only the missing step with a fresh `sync` receipt.
 Never replay a blind POST/PATCH and never claim a no-op comment or move from an
 equal description alone.
+
+## Review merge and testing move
+
+`review-merge` is the one executable path that merges a reviewed clean MR
+through `bin/gitlab-api.mjs` and then considers the single board transition
+review → testing. `post-merge` is its read-only reconcile: it never sends the
+merge PUT, never patches the card, and only re-verifies an already merged MR by
+`iid` and reports the actual card column and status.
+
+Both commands take the authoritative MR URL (`--mr-url`) from the review
+report, not a local receipt, local `HEAD` or branch, plus the numeric
+`--project-id` pinned from the origin project during review. The URL must be
+HTTPS (a loopback fixture reaches it through the fake client) and must contain
+no credentials, query or fragment, and must resolve to the project of
+`GANTUS_GIT_REMOTE` and that `iid`. `--source-branch` must contain exactly one strict key equal to
+`--key`; the target equal the MR target. `post-merge` names them
+`--source-branch` and `--expected-target-branch`, and `--expected-sha` is the
+reviewed `head_sha`.
+
+Before any merge request `review-merge` proves, in this order:
+
+- board identity and route: the card resolves from `--key` alone and its `id`
+  equals `--card-id`; its `name` and `desc` SHA-256 equal `--name-sha256` and
+  `--desc-sha256`, so a late requirement edit blocks the merge; `editProtected`
+  allows the authenticated user; the resolved review column and testing target
+  exist and differ (their ids are pinned internally, not passed in); the card
+  is in review or already in testing.
+- discussions: every page of `GET .../discussions` (100 per page, bounded at 50
+  pages) is read. An open resolvable thread blocks. Standalone non-resolvable
+  notes are not threads; the reviewer reads them and an actionable comment
+  blocks the clean verdict in the report. A malformed note or discussion —
+  including an empty `notes` array or a missing/contradictory
+  `resolvable`/`resolved` flag — is never complete and blocks.
+- the same route, key, `id`, fingerprints and ACL are re-checked on one fresh
+  board snapshot after all discussion pages, immediately before the final MR
+  GET and PUT, so drift during page reads blocks the merge.
+- MR state from a fresh `GET .../merge_requests/:iid`: `iid`, equal numeric
+  project/source/target ids equal to `--project-id` (a fork or a re-resolved
+  project blocks), `web_url`, source and target branches match the pins;
+  `state:"opened"`, `draft:false`, `detailed_merge_status:"mergeable"`,
+  `blocking_discussions_resolved:true`, `has_conflicts:false`,
+  `force_remove_source_branch:false`; every present source-head field
+  (`diff_refs.head_sha`, `sha`) equals the reviewed pin — one stale or
+  mismatched field blocks even when the other matches.
+
+Only then is one `PUT .../merge` sent with
+`{sha:<head_sha>,should_remove_source_branch:false}` through the strict
+single-attempt transport: a second outbound write is never attempted. A
+definitive 4xx rejection (400/401/405/409/422) is reported as failed and not
+retried. A 2xx body is accepted only when it already proves
+`state:"merged"`, `draft:false`, a parseable `merged_at`, the reviewed source
+head, and, when present, `merge_user.id` equal to `--gitlab-user-id`; a
+complete-looking 2xx with an incomplete or malformed receipt is settled by one
+authoritative `GET` of the same `iid`, and only a proven merge then uses the
+normal board move. A genuinely ambiguous transport — timeout, network failure
+or 5xx — is different: the PUT is never repeated, at most one read-only `GET`
+of the same `iid` is allowed, and **no board write ever follows** even when that
+GET proves the merge. The result is then `merged:true` with
+`testMove:{moved:false,reason:"ambiguous-merge"}`; recovery needs fresh explicit
+consent. If the GET does not prove the merge, the GitLab outcome is reported as
+unconfirmed and only the separate read-only `post-merge` may check it. A
+legitimate fast-forward or squash merge keeps the source head, so
+`merge_commit_sha` is not required. An open, draft, foreign, re-revised or
+otherwise unproven MR is never moved.
+
+`post-merge` repeats the identity, branch, project, `web_url` and reviewed-head
+checks on the authoritative GET, requires `state:"merged"`, and never sends the
+merge PUT or any card PATCH. It returns the confirmed MR plus the actual card
+`columnId`, column name and status. Use it after an ambiguous merge outcome or
+a restart; recovery only re-reads `GET .../merge_requests/:iid` for that `iid`.
+Moving a card after a confirmed merge is a separate action that requires fresh
+explicit consent; it is never automatic and `post-merge` does not perform it.
+
+The board move belongs to `review-merge` and runs only after the merge is
+confirmed. `--card-id` must match the card resolved from the key; a missing,
+replaced, duplicate or reassigned card blocks and is never guessed from a title
+or local `HEAD`. Only `editProtected` is enforced: admin, creator or assignee
+may move, so a reviewer's colleague is allowed when the existing ACL allows it.
+`assignee` and `teamComments` are not gates here because this step only moves a
+card; nothing is commented or rewritten.
+
+The testing target is the exact `GANTUS_TESTING_COLUMN_ID`, otherwise the one
+board column whose observed machine status is `testing`; zero or several, or a
+configured id whose observed status contradicts `testing`, block. The allowed
+source is only the review column (configured `GANTUS_REVIEW_COLUMN_ID` or the
+one `review` status column); there is no separate testing-source list. A card
+already in testing is `{moved:false,reason:"already"}` with no write. A card
+whose current column differs from review is `column-changed`; both return
+without a write, so a later, paused, blocked or unrelated column is never rolled
+back.
+
+Only the expected card in review is moved. The source and target ids, key, card
+`id`, requirement fingerprints and ACL are the ones computed before the merge
+PUT; after the confirmed merge one fresh board snapshot must still contain the
+same unique key and id, the same unchanged requirements, the same source and
+target ids and a passing edit ACL. Another target, a duplicate key, a changed
+description or a column that moved on all block without a PATCH. Exactly one
+card PATCH with `{columnId,orderedIds}` is sent, then one read confirms the new
+column and the same card key. An unconfirmed or ambiguous move is reported and
+never retried.
+Success is
+`{merged:true,taskKey,mr:{iid,sha},testMove:{moved,reason?,columnId?}}`;
+`merged:true` is returned independently of `testMove`. A Gantus failure is
+separate from the successful GitLab merge: report the merge as done and the
+move as `{moved:false,reason:"failed"|"unconfirmed"}`, never re-merge and never
+send another PATCH automatically; recovery is read-only `post-merge` and a
+separate explicitly consented action. An ambiguous merge outcome uses
+`{moved:false,reason:"ambiguous-merge"}` and never reaches any board request.
 
 ## Review-ready
 

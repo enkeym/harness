@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Reviews a change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings and manual check steps, then an offer to fix on the user's own branch or MR draft notes on a colleague's. User-invoked as /review."
+description: "Reviews a change without touching the code — uncommitted changes first, else the commits of the branch's ticket, else a scope the user picks, or the project's open GitLab merge requests — with review-standards and review-security findings and manual check steps, then an offer to fix on the user's own branch, draft notes on a colleague's, or—for a clean pinned MR after explicit consent—merge it and move the linked Gantus card to testing. User-invoked as /review."
 ---
 
 # /review
@@ -26,6 +26,15 @@ is a manual user action in GitLab; offer no agent publication option.
 The exact delivery and failure rules are in
 [reference/gitlab.md](reference/gitlab.md#drafts).
 
+A clean pinned MR is the one exception to "no write", and it is not a
+publication: after the full report and the explicit merge menu choice, the
+review may merge that exact MR through the linked Gantus `review-merge`, which
+then moves the pinned card from review to testing. The gates, conditional PUT,
+response check and no-retry rule are in
+[reference/gitlab.md](reference/gitlab.md#merge-a-clean-mr). Findings,
+an incomplete pass, a changed task or any unclear state keep the path
+read-only and draft-only.
+
 With `gantus` in the active skill catalog, an ordinary local review never
 fetches a card automatically; only an explicit request uses `get --key <STR>`
 with the reviewed repository as the unchanged cwd. An explicitly selected MR
@@ -46,7 +55,10 @@ through `git-flow`, including the read-only Gantus preflight before the GitLab
 write and the post-confirmation sync; that path is not an automatic review
 fallback. A standalone `/review` keeps its draft-only delivery and never
 becomes publication merely because the Gantus catalog entry exists. `/review`
-never writes MR notes, Gantus descriptions, comments or testing moves.
+never writes MR notes, approvals or Gantus descriptions and comments. Its only
+possible state write is the explicitly confirmed `review-merge` of a clean
+pinned MR and the review→testing move it performs; an ambiguous merge outcome
+is reconciled only by the read-only `post-merge`.
 
 **Start at once: the first commands are `git status --short` and
 `git branch --show-current`.** No `git fetch`, `pull` or `remote update` —
@@ -176,6 +188,18 @@ and `review-security`. If the key, card or access is not confirmed, the code rev
 may finish but the report says `соответствие задаче не проверено` with the
 reason and no task-level ✅.
 
+A fully clean pass — no findings, every inventory file read, task-level ✅ when
+a card applies — ends with the merge menu of
+[reference/report.md](reference/report.md), not with drafts. Selecting the MR
+is not merge authorization; only the explicit menu choice or «merge !<iid>»
+for that pinned MR is. Pass the pinned card `id`, `nameSha256`/`descSha256`,
+branches and SHAs, plus `--project-id` from the origin `project.id`, to one
+`review-merge`; its internal fresh-snapshot preflight rereads the same card and
+requires the same key, card `id` and fingerprints, so a changed requirement
+invalidates the earlier Spec ✅ and blocks the merge. Do not repeat
+`review-lookup` for this check. The full gates are in
+[reference/gitlab.md](reference/gitlab.md#merge-a-clean-mr).
+
 Only when the user explicitly requests delegation, follow
 [reference/mr-delegation.md](reference/mr-delegation.md). A requested worker
 owns the pass; the coordinator reuses its evidence without repeating it.
@@ -250,11 +274,14 @@ summary and the closing menu. Shapes, MR comments and menu:
 [reference/report.md](reference/report.md); read it before the first finding.
 A batch report keeps that shape for the files read so far: the summary's
 coverage line names the rest, plus one line with the next group instead of the
-closing menu. The menu comes only with the last batch; MR mode (1.2) has none.
+closing menu. The menu comes only with the last batch; MR mode (1.2) has no
+findings/fix menu, and a clean MR gets its merge menu only after the full
+report.
 
 The branch is the user's when every reviewed commit is authored by
 `git config user.email`. Uncommitted scope: the commits of
 `git log HEAD..@{u}` — what a soft reset took off; none, or no upstream →
 the user's. Audit → the user's. Anything else is a colleague's.
-MR mode (1.2): the report, then draft notes only when their delivery has been
-explicitly authorized; otherwise offer to create them.
+MR mode (1.2): the report, then the merge menu for a clean MR or draft notes
+for findings when their delivery has been explicitly authorized; otherwise
+offer to create them.

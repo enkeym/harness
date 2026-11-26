@@ -14,8 +14,11 @@ For explicitly requested delegation, give each worker exactly one pinned MR,
 the coordinator's single `review-lookup` result or a safe criteria summary,
 necessary evidence and the required review skills. Never send the entire parent
 history, the whole queue or board credentials. Workers do not read the board
-again, delegate, fetch, switch branches, edit files, run tests/typecheck or
-write external notes.
+again, delegate, fetch, switch branches, edit files, run tests/typecheck, merge
+an MR, move a Gantus card or write external notes. Only the coordinator, after
+the user's explicit merge-menu consent and the fresh card recheck, may run
+`review-merge`; the read-only `post-merge` reconcile stays with the coordinator
+too.
 
 The worker performs full review mode in shared review-pass and returns pinned
 identity, the task requirement map with evidence, findings with path/line,
