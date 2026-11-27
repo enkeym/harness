@@ -159,6 +159,7 @@ if (!isDeepStrictEqual(state, preferences)) {
 const links = [
   [path.join(directory, "plugins/harness"), "opencode"],
   [path.join(directory, "agents/ask.md"), "opencode/agent/ask.md"],
+  [path.join(directory, "commands/impact-map.md"), "opencode/commands/impact-map.md"],
   ...harnessLinks(home),
   ...skillLinks(root, path.join(directory, "skills"), { shared: true })
 ]
