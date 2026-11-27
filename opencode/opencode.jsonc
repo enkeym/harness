@@ -325,12 +325,12 @@
       }
     }
   },
-  "model": "opencode-go/deepseek-v4.1-flash",
+  "model": "{env:OPENCODE_DEFAULT_MODEL}",
   "instructions": [],
   "commands": {},
   "agents": {
     "compaction": {
-      "model": "deepseek/deepseek-flash#low"
+      "model": "{env:OPENCODE_DEFAULT_MODEL}"
     },
     "plan": {
       "disabled": true

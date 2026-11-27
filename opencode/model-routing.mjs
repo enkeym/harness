@@ -1,6 +1,8 @@
 import { deepseekTokenRates } from "./cost-policy.mjs"
 
 const previousBundledInputLimit = 120000
+const formerBundledDefault = "opencode-go/deepseek-v4.1-flash"
+const executorModelReference = "{env:OPENCODE_DEFAULT_MODEL}"
 
 export const deepseekModels = {
   flash: { providerID: "deepseek", id: "deepseek-flash" },
@@ -23,6 +25,7 @@ const trimEffort = (model, source) => {
 }
 
 export function migrateBundledModels(config, defaults) {
+  if (config.model === formerBundledDefault) config.model = executorModelReference
   const bundled = defaults?.providers?.deepseek?.models
   if (!bundled) return
   const aliases = new Map()
@@ -62,19 +65,22 @@ export function migrateBundledModels(config, defaults) {
   }
 }
 
+const bundledModelID = (model) => {
+  const id = typeof model === "string" ? model.split("#")[0] : model?.providerID === "deepseek" ? `deepseek/${model.id}` : null
+  return id === "deepseek/deepseek-flash" || id === "deepseek/deepseek-v4-pro" ? id : null
+}
+
 export function configureModelRouting(config) {
   const specialists = ["harness-brief", "harness-plan", "harness-review", "harness-review-flash"]
-  const legacy = specialists.some(name => config.agents?.[name] || config.commands?.[name])
   for (const name of specialists) {
     if (config.agents) delete config.agents[name]
     if (config.commands) delete config.commands[name]
   }
-  const inherited = ["build", "plan", "general"]
-  const names = legacy ? [...inherited, "explore", "ask", "title", "summary", "compaction"] : inherited
-  for (const name of names) {
+  const inherited = ["build", "plan", "general", "explore", "ask", "title", "summary"]
+  for (const name of inherited) {
     const agent = config.agents?.[name]
-    const model = agent?.model
-    const id = typeof model === "string" ? model.split("#")[0] : model?.providerID === "deepseek" ? `deepseek/${model.id}` : null
-    if (id === "deepseek/deepseek-flash" || id === "deepseek/deepseek-v4-pro") delete agent.model
+    if (agent && bundledModelID(agent.model)) delete agent.model
   }
+  const compaction = config.agents?.compaction
+  if (compaction) compaction.model = executorModelReference
 }
