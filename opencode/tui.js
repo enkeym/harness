@@ -102,6 +102,33 @@ function formatCost({ totals, groups }, now = new Date()) {
   return parts.join("; ")
 }
 
+const activeSubagents = (context, sessionID) =>
+  context.data.session
+    .list()
+    .filter(
+      (session) =>
+        session.parentID === sessionID &&
+        (context.data.session.status(session.id) === "running" ||
+          (context.data.job?.list(session.id)?.length ?? 0) > 0)
+    )
+    .sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
+
+const cycleSubagent = (context, direction) => {
+  const current = context.ui.router.current()
+  if (current.type !== "session") return
+  const sessions = activeSubagents(context, current.sessionID)
+  if (!sessions.length) return
+  const index = sessions.findIndex(
+    (session) => session.id === current.sessionID
+  )
+  const next =
+    index === -1
+      ? sessions[direction > 0 ? 0 : sessions.length - 1]
+      : sessions[(index + direction + sessions.length) % sessions.length]
+  if (next.id !== current.sessionID)
+    context.ui.router.navigate({ type: "session", sessionID: next.id })
+}
+
 export default {
   id: "harness",
   setup: async (context) => {
@@ -133,6 +160,38 @@ export default {
               duration: 8000
             })
           }
+        },
+        {
+          id: "harness.agent.next",
+          title: "Next subagent",
+          group: "Harness",
+          palette: true,
+          bind: "alt+[",
+          run: () => cycleSubagent(context, 1)
+        },
+        {
+          id: "harness.agent.previous",
+          title: "Previous subagent",
+          group: "Harness",
+          palette: true,
+          bind: "alt+]",
+          run: () => cycleSubagent(context, -1)
+        },
+        {
+          bind: "alt+х",
+          run: () => cycleSubagent(context, 1)
+        },
+        {
+          bind: "alt+ъ",
+          run: () => cycleSubagent(context, -1)
+        },
+        {
+          bind: "alt+{",
+          run: () => cycleSubagent(context, 1)
+        },
+        {
+          bind: "alt+}",
+          run: () => cycleSubagent(context, -1)
         }
       ]
     }))
