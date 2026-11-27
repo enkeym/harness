@@ -82,5 +82,5 @@ export function configureModelRouting(config) {
     if (agent && bundledModelID(agent.model)) delete agent.model
   }
   const compaction = config.agents?.compaction
-  if (compaction) compaction.model = executorModelReference
+  if (compaction) compaction.model = `${executorModelReference}#low`
 }

@@ -330,7 +330,7 @@
   "commands": {},
   "agents": {
     "compaction": {
-      "model": "{env:OPENCODE_DEFAULT_MODEL}"
+      "model": "{env:OPENCODE_DEFAULT_MODEL}#low"
     },
     "plan": {
       "disabled": true

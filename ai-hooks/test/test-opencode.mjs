@@ -374,7 +374,7 @@ test("model routing removes legacy overrides and preserves user configuration", 
   assert.equal(loaded.model, "deepseek/deepseek-v4-pro#max")
   assert.equal(loaded.agents.plan.model, undefined)
   assert.equal(loaded.agents.plan.description, "Preserve me")
-  assert.equal(loaded.agents.compaction.model, "{env:OPENCODE_DEFAULT_MODEL}")
+  assert.equal(loaded.agents.compaction.model, "{env:OPENCODE_DEFAULT_MODEL}#low")
   assert.equal(loaded.agents.explore.model, "custom/model")
   assert.equal(loaded.agents.custom.model, "deepseek/deepseek-v4-pro#max")
   assert.equal(loaded.agents["harness-review"], undefined)
@@ -405,7 +405,7 @@ test("model routing removes legacy overrides and preserves user configuration", 
   configureModelRouting(stale)
   assert.equal(stale.agents.ask.model, undefined)
   assert.equal(stale.agents.build.model, undefined)
-  assert.equal(stale.agents.compaction.model, "{env:OPENCODE_DEFAULT_MODEL}")
+  assert.equal(stale.agents.compaction.model, "{env:OPENCODE_DEFAULT_MODEL}#low")
   const empty = {}
   configureModelRouting(empty)
   assert.deepEqual(empty, {})
